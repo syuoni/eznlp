@@ -2,6 +2,23 @@
 import torch
 import torch.nn as nn
 
+from ..trainers import Trainer
+
+
+class NERTrainer(Trainer):
+    def __init__(self, model: nn.Module, optimizer=None, scheduler=None, 
+                 device=None, grad_clip=1.0):
+        super().__init__(model, optimizer=optimizer, scheduler=scheduler, 
+                         device=device, grad_clip=grad_clip)
+        
+    def forward_batch(self, batch):
+        batch = batch.to(self.device)
+        losses, hidden = self.model(batch, return_hidden=True)
+        loss = losses.mean()
+        acc = calc_acc(self.model, batch, hidden)
+        return loss, acc
+        
+        
 
 def calc_acc(model, batch, hidden):
     best_paths = model.decode(batch, hidden)

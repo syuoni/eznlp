@@ -21,11 +21,11 @@ def count_trainable_params(model_or_params: Union[nn.Module, list], verbose=True
     return num_params
 
 
-def build_param_groups_with_keyword2lr(model: nn.Module, keyword2lr: dict):
+def build_param_groups_with_keyword2lr(model: nn.Module, keyword2lr: dict, verbose=True):
     keyword2params = defaultdict(list)
     for name, params in model.named_parameters():
         for keyword in keyword2lr:
-            if keyword in name:
+            if name.startswith(keyword):
                 keyword2params[keyword].append(params)
                 break
         else:
@@ -36,6 +36,11 @@ def build_param_groups_with_keyword2lr(model: nn.Module, keyword2lr: dict):
     for keyword, params in keyword2params.items():
         param_groups.append({'params': params})
         lr_lambdas.append(keyword2lr[keyword])
+        
+    if verbose:
+        print(f"{len(param_groups)} parameter groups have been built")
+        for keyword, params in keyword2params.items():
+            print(f"Keyword: {keyword} | Parameters: {len(params)}")
         
     return param_groups, lr_lambdas
 

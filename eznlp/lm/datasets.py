@@ -1,35 +1,80 @@
 # -*- coding: utf-8 -*-
-import string
-import json
 import random
-from collections import Counter, OrderedDict
-from tqdm import tqdm
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, IterableDataset
 from torch.nn.utils.rnn import pad_sequence
-from torchtext.experimental.vocab import Vocab
-from torchtext.experimental.functional import sequential_transforms, vocab_func, totensor
 
 from ..datasets_utils import TensorWrapper, Batch
 
 
-class COVID19MLMDataset(Dataset):
-    """
-    Masked Language Modeling Dataset. 
-    """
-    def __init__(self, data, bert_tokenizer):
-        super().__init__()
-        self.data = data
-        self.bert_tokenizer = bert_tokenizer
+
+class MLMHelper(object):
+    def __init__(self, tokenizer, MLM_prob=0.15):
+        self.cls_id = tokenizer.cls_token_id
+        self.sep_id = tokenizer.sep_token_id
+        self.unk_id = tokenizer.unk_token_id
+        self.pad_id = tokenizer.pad_token_id
+        self.mask_id = tokenizer.mask_token_id
         
-        self.wp2idx = bert_tokenizer.get_vocab()
-        self.idx2wp = {idx: wp for wp, idx in self.wp2idx.items()}
-        assert min(self.wp2idx.values()) == 0
-        assert max(self.wp2idx.values()) == len(self.wp2idx) - 1
+        self.stoi = tokenizer.get_vocab()
+        self.special_ids = list(set(tokenizer.all_special_ids))
+        self.non_special_ids = [idx for idx in range(len(self.stoi)) if idx not in self.special_ids]
         
         # Tokens with indices set to ``-100`` are ignored (masked), the loss is only 
         # computed for the tokens with labels in ``[0, ..., config.vocab_size]
         self.MLM_label_mask_id = -100
+        self.MLM_prob = MLM_prob
+        
+        
+    def build_example(self, token_list):
+        MLM_tok_ids = [self.cls_id] + [self.stoi[tok] for tok in token_list] + [self.sep_id]
+        MLM_lab_ids = []
+        for k, tok_id in enumerate(MLM_tok_ids):
+            if (tok_id not in self.special_ids) and (random.random() < self.MLM_prob):
+                random_v = random.random()
+                if random_v < 0.8:
+                    # Replace with `[MASK]`
+                    MLM_tok_ids[k] = self.mask_id
+                elif random_v < 0.9:
+                    # Replace with a random token
+                    MLM_tok_ids[k] = random.choice(self.non_special_ids)
+                else:
+                    # Retain the original token
+                    pass
+                MLM_lab_ids.append(tok_id)
+            else:
+                MLM_lab_ids.append(self.MLM_label_mask_id)
+                
+        return TensorWrapper(MLM_tok_ids=torch.tensor(MLM_tok_ids), 
+                             MLM_lab_ids=torch.tensor(MLM_lab_ids))
+
+    
+    def collate(self, batch_examples):
+        batch_MLM_tok_ids = []
+        batch_MLM_lab_ids = []
+        
+        for ex in batch_examples:
+            batch_MLM_tok_ids.append(ex.MLM_tok_ids)
+            batch_MLM_lab_ids.append(ex.MLM_lab_ids)
+        
+        seq_lens = torch.tensor([s.size(0) for s in batch_MLM_tok_ids])
+        batch_MLM_tok_ids = pad_sequence(batch_MLM_tok_ids, batch_first=True, padding_value=self.pad_id)
+        batch_MLM_lab_ids = pad_sequence(batch_MLM_lab_ids, batch_first=True, padding_value=self.MLM_label_mask_id)
+        
+        batch = Batch(seq_lens=seq_lens, MLM_tok_ids=batch_MLM_tok_ids, MLM_lab_ids=batch_MLM_lab_ids)
+        batch.build_masks({'attention_mask': (batch_MLM_tok_ids.size(), seq_lens)})
+        return batch
+
+
+class COVID19MLMDataset(Dataset):
+    """
+    COVID19 Dataset for Masked Language Modeling. 
+    """
+    def __init__(self, data, tokenizer, MLM_prob=0.15):
+        super().__init__()
+        self.data = data
+        self.tokenizer = tokenizer
+        self.mlm_helper = MLMHelper(tokenizer, MLM_prob=MLM_prob)
         
         
     def summary(self):
@@ -48,49 +93,55 @@ class COVID19MLMDataset(Dataset):
         Dynamic Masking.
         """
         tokens = self.data[i]['tokens']
-        tokens.build_word_pieces(self.bert_tokenizer)
-        
-        MLM_wp_ids = [self.bert_tokenizer.cls_token_id] \
-                   + [self.wp2idx[wp] for wp in tokens.word_pieces] \
-                   + [self.bert_tokenizer.sep_token_id]
-        MLM_lb_ids = []
-        for k, wp_id in enumerate(MLM_wp_ids):
-            if (wp_id not in self.bert_tokenizer.all_special_ids) and (random.random() < 0.15):
-                random_v = random.random()
-                if random_v < 0.8:
-                    # Replace with `[MASK]`
-                    MLM_wp_ids[k] = self.bert_tokenizer.mask_token_id
-                elif random_v < 0.9:
-                    # Replace with a random word-piece
-                    MLM_wp_ids[k] = random.randint(0, len(self.idx2wp)-1)
-                else:
-                    # Retain the original word-piece
-                    pass
-                MLM_lb_ids.append(wp_id)
-            else:
-                MLM_lb_ids.append(self.MLM_label_mask_id)
-                
-        return TensorWrapper(MLM_wp_ids=torch.tensor(MLM_wp_ids), 
-                             MLM_lb_ids=torch.tensor(MLM_lb_ids))
-    
+        tokens.build_word_pieces(self.tokenizer)
+        return self.mlm_helper.build_example(tokens.word_pieces)
     
     def collate(self, batch_examples):
-        batch_MLM_wp_ids = []
-        batch_MLM_lb_ids = []
-        
-        for ex in batch_examples:
-            batch_MLM_wp_ids.append(ex.MLM_wp_ids)
-            batch_MLM_lb_ids.append(ex.MLM_lb_ids)
-        
-        seq_lens = torch.tensor([s.size(0) for s in batch_MLM_wp_ids])
-        batch_MLM_wp_ids = pad_sequence(batch_MLM_wp_ids, batch_first=True, padding_value=self.bert_tokenizer.pad_token_id)
-        batch_MLM_lb_ids = pad_sequence(batch_MLM_lb_ids, batch_first=True, padding_value=self.MLM_label_mask_id)
-        
-        batch = Batch(seq_lens=seq_lens, MLM_wp_ids=batch_MLM_wp_ids, MLM_lb_ids=batch_MLM_lb_ids)
-        batch.build_masks({'attention_mask': (batch_MLM_wp_ids.size(), seq_lens)})
-        return batch
+        return self.mlm_helper.collate(batch_examples)
         
     
-# class PMCMLMDataset(Dataset):
-#     def __
+class PMCMLMDataset(IterableDataset):
+    def __init__(self, files, tokenizer, MLM_prob=0.15, max_len=512, shuffle=True):
+        super().__init__()
+        self.files = files
+        if shuffle:
+            random.shuffle(self.files)
+        self.tokenizer = tokenizer
+        self.mlm_helper = MLMHelper(tokenizer, MLM_prob=MLM_prob)
+        self.max_len = max_len
+        
+        
+    def __iter__(self):
+        cut_len = self.max_len - 2
+        
+        worker_info = torch.utils.data.get_worker_info()
+        if worker_info is None:
+            # single-process data loading, return the full iterator
+            start, end = 0, len(self.files)
+        else:
+            # in a worker process -> split workload
+            n_files = len(self.files) / worker_info.num_workers
+            start = int(n_files*worker_info.id + 0.5)
+            end = int(n_files*(worker_info.id+1) + 0.5)
+            
+        for i in range(start, end):
+            try:
+                with open(self.files[i], encoding='utf-8') as f:
+                    text = f.read()
+            except:
+                continue
+            
+            token_list = self.tokenizer.tokenize(text)
+            n_examples = len(token_list) // cut_len
+            if len(token_list) % cut_len >= (cut_len / 10):
+                n_examples += 1
+            
+            for k in range(n_examples):
+                this_token_list = token_list[(cut_len*k):(cut_len*(k+1))]
+                yield self.mlm_helper.build_example(this_token_list)
+                
+                
+    def collate(self, batch_examples):
+        return self.mlm_helper.collate(batch_examples)
     
+

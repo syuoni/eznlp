@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import unittest
+import glob
 import pickle
 import numpy as np
 import spacy
@@ -9,18 +10,20 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchtext.experimental.vectors import GloVe
+from transformers import BertTokenizer, BertModel, BertForMaskedLM
+from transformers import RobertaTokenizer, RobertaModel, RobertaForMaskedLM
+
 
 from eznlp import Token, TokenSequence, build_token_sequence, count_trainable_params
 from eznlp.token import Full2Half
-import eznlp.ner as ner
 from eznlp.ner import COVID19Dataset
 from eznlp.ner import ConfigHelper
 from eznlp.ner import build_tagger_by_config
+from eznlp.ner import NERTrainer
 from eznlp.ner import entities2tags, tags2entities
 from eznlp.ner.datasets import TagHelper
 from eznlp.ner.data_utils import find_ascending, tags2simple_entities
-import eznlp.lm as lm
-from eznlp.lm import COVID19MLMDataset
+from eznlp.lm import COVID19MLMDataset, PMCMLMDataset, MLMTrainer
 
 
 class TestFindAscending(unittest.TestCase):
@@ -390,11 +393,11 @@ class TestBatching(unittest.TestCase):
         
     def test_batches(self):
         train_loader = DataLoader(train_set, batch_size=8, shuffle=True, 
-                                  collate_fn=train_set.collate, pin_memory=True)
+                                  collate_fn=train_set.collate)
         val_loader   = DataLoader(val_set,   batch_size=8, shuffle=False, 
-                                  collate_fn=val_set.collate,   pin_memory=True)
+                                  collate_fn=val_set.collate)
         test_loader  = DataLoader(test_set,  batch_size=8, shuffle=False, 
-                                  collate_fn=test_set.collate,  pin_memory=True)
+                                  collate_fn=test_set.collate)
         for batch in train_loader:
             break
         for batch in val_loader:
@@ -425,8 +428,9 @@ class TestTagger(unittest.TestCase):
         self.assertTrue(best_paths012[1:] == best_paths123[:-1])
         
         optimizer = optim.AdamW(tagger.parameters())
-        ner.train_epoch(tagger, [batch012], device, optimizer, clip=5)
-        ner.eval_epoch(tagger, [batch012], device)
+        trainer = NERTrainer(tagger, optimizer=optimizer, device=device)
+        trainer.train_epoch([batch012])
+        trainer.eval_epoch([batch012])
         
         
     def test_word_embedding_init(self):
@@ -434,6 +438,19 @@ class TestTagger(unittest.TestCase):
         config = ConfigHelper.load_default_config(config, enc_arch='LSTM', dec_arch='CRF')
         tagger = build_tagger_by_config(config, tag_helper, train_set.tok_vocab.get_itos(), glove).to(device)
         self.one_tagger_pass(tagger, train_set)
+        
+        
+    def test_train_steps(self):
+        config, tag_helper = train_set.get_model_config()
+        config = ConfigHelper.load_default_config(config, enc_arch='LSTM', dec_arch='CRF')
+        tagger = build_tagger_by_config(config, tag_helper)
+        batch = train_set.collate([train_set[i] for i in range(0, 4)]).to(device)
+        
+        optimizer = optim.AdamW(tagger.parameters())
+        trainer = NERTrainer(tagger, optimizer=optimizer, device=device)
+        trainer.train_steps(train_loader=[batch, batch], 
+                            eval_loader=[batch, batch], 
+                            n_epochs=10, disp_every_steps=2, eval_every_steps=6)
         
         
     def test_tagger_base(self):
@@ -445,7 +462,6 @@ class TestTagger(unittest.TestCase):
                 self.one_tagger_pass(tagger, train_set)
                 
     def test_tagger_bert(self):
-        from transformers import BertTokenizer, BertModel
         tokenizer = BertTokenizer.from_pretrained("assets/transformers_cache/bert-base-cased")
         bert = BertModel.from_pretrained("assets/transformers_cache/bert-base-cased").to(device)
         
@@ -459,8 +475,8 @@ class TestTagger(unittest.TestCase):
         config = ConfigHelper.update_full_dims(config)
         tagger = build_tagger_by_config(config, tag_helper, bert=bert).to(device)
         self.one_tagger_pass(tagger, train_set_bert)
-            
-            
+        
+        
     def test_tagger_shortcut(self):
         config, tag_helper = train_set.get_model_config()
         for enc_arch in ['LSTM', 'CNN', 'Transformer']:
@@ -498,8 +514,7 @@ class TestTagger(unittest.TestCase):
             
 
 class TestMLM(unittest.TestCase):
-    def test_mix_within_batch(self):
-        from transformers import BertTokenizer, BertForMaskedLM
+    def test_covid19_mlm(self):
         tokenizer = BertTokenizer.from_pretrained("assets/transformers_cache/bert-base-cased")
         bert4mlm = BertForMaskedLM.from_pretrained("assets/transformers_cache/bert-base-cased").to(device)
         
@@ -513,24 +528,61 @@ class TestMLM(unittest.TestCase):
         batch012 = train_set.collate(batch[:3]).to(device)
         batch123 = train_set.collate(batch[1:]).to(device)
         
-        loss012, MLM_scores012 = bert4mlm(input_ids=batch012.MLM_wp_ids, 
+        loss012, MLM_scores012 = bert4mlm(input_ids=batch012.MLM_tok_ids, 
                                           attention_mask=(~batch012.attention_mask).type(torch.long), 
-                                          labels=batch012.MLM_wp_ids)
-        loss123, MLM_scores123 = bert4mlm(input_ids=batch123.MLM_wp_ids, 
+                                          labels=batch012.MLM_lab_ids)
+        loss123, MLM_scores123 = bert4mlm(input_ids=batch123.MLM_tok_ids, 
                                           attention_mask=(~batch123.attention_mask).type(torch.long), 
-                                          labels=batch123.MLM_wp_ids)
+                                          labels=batch123.MLM_lab_ids)
         
         min_step = min(MLM_scores012.size(1), MLM_scores123.size(1))
         delta_MLM_scores = MLM_scores012[1:, :min_step] - MLM_scores123[:-1, :min_step]
         self.assertTrue(delta_MLM_scores.abs().max().item() < 1e-4)
         
-        
         optimizer = optim.AdamW(bert4mlm.parameters())
-        lm.train_epoch(bert4mlm, [batch012], device, optimizer, clip=5)
-        lm.eval_epoch(bert4mlm, [batch012], device)
+        trainer = MLMTrainer(bert4mlm, optimizer=optimizer, device=device)
+        trainer.train_epoch([batch012])
+        trainer.eval_epoch([batch012])
+        
+        
+    def test_PMC_mlm(self):
+        tokenizer = RobertaTokenizer.from_pretrained("assets/transformers_cache/roberta-base")
+        roberta4mlm = RobertaForMaskedLM.from_pretrained("assets/transformers_cache/roberta-base").to(device)
+        
+        files = glob.glob("assets/data/PMC/comm_use/Cells/*.txt")
+        train_set = PMCMLMDataset(files=files, tokenizer=tokenizer)
+        train_loader = DataLoader(train_set, batch_size=4, 
+                                  collate_fn=train_set.collate)
+        for batch in train_loader:
+            batch = batch.to(device)
+            break
+        
+        loss012, MLM_scores012 = roberta4mlm(input_ids=batch.MLM_tok_ids[:3], 
+                                             attention_mask=(~batch.attention_mask[:3]).type(torch.long), 
+                                             labels=batch.MLM_lab_ids[:3])
+        loss123, MLM_scores123 = roberta4mlm(input_ids=batch.MLM_tok_ids[1:], 
+                                             attention_mask=(~batch.attention_mask[1:]).type(torch.long), 
+                                             labels=batch.MLM_lab_ids[1:])
+        
+        min_step = min(MLM_scores012.size(1), MLM_scores123.size(1))
+        delta_MLM_scores = MLM_scores012[1:, :min_step] - MLM_scores123[:-1, :min_step]
+        self.assertTrue(delta_MLM_scores.abs().max().item() < 1e-4)
+        
+        optimizer = optim.AdamW(roberta4mlm.parameters(), lr=1e-4)
+        trainer = MLMTrainer(roberta4mlm, optimizer=optimizer, device=device)
+        trainer.train_epoch([batch])
+        trainer.eval_epoch([batch])
+        
+        # trainer.train_steps(train_loader=[batch, batch], 
+        #                     eval_loader=[batch, batch], 
+        #                     n_epochs=10, disp_every_steps=2, eval_every_steps=6)
+        
+        
         
         
 if __name__ == '__main__':
     unittest.main(verbosity=2)
+    
+    
     
     
