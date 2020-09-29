@@ -100,16 +100,30 @@ class COVID19MLMDataset(Dataset):
         return self.mlm_helper.collate(batch_examples)
         
     
+    
+def _slice_chunk(chunk_id, num_chunks, num_items):
+    assert chunk_id >= 0 and num_chunks > 0 and chunk_id < num_chunks
+    
+    chunk_size = num_items / num_chunks
+    start = int(chunk_size* chunk_id    + 0.5)
+    end   = int(chunk_size*(chunk_id+1) + 0.5)
+    return slice(start, end)
+
+
 class PMCMLMDataset(IterableDataset):
-    def __init__(self, files, tokenizer, MLM_prob=0.15, max_len=512, shuffle=True):
+    def __init__(self, files, tokenizer, MLM_prob=0.15, max_len=512, shuffle=True, 
+                 mp_rank=0, mp_world_size=0, verbose=True):
         super().__init__()
+        if mp_rank >= 0 and mp_world_size > 0 and mp_rank < mp_world_size:
+            files = files[_slice_chunk(mp_rank, mp_world_size, len(files))]
+        if verbose:
+            print(f"Totally {len(files)} files in the {mp_rank}-th process...")
+            
         self.files = files
-        if shuffle:
-            random.shuffle(self.files)
         self.tokenizer = tokenizer
         self.mlm_helper = MLMHelper(tokenizer, MLM_prob=MLM_prob)
         self.max_len = max_len
-        
+        self.shuffle = shuffle
         
     def __iter__(self):
         cut_len = self.max_len - 2
@@ -117,16 +131,17 @@ class PMCMLMDataset(IterableDataset):
         worker_info = torch.utils.data.get_worker_info()
         if worker_info is None:
             # single-process data loading, return the full iterator
-            start, end = 0, len(self.files)
+            this_files = self.files[:]
         else:
             # in a worker process -> split workload
-            n_files = len(self.files) / worker_info.num_workers
-            start = int(n_files*worker_info.id + 0.5)
-            end = int(n_files*(worker_info.id+1) + 0.5)
+            this_files = self.files[_slice_chunk(worker_info.id, worker_info.num_workers, len(self.files))]
             
-        for i in range(start, end):
+        if self.shuffle:
+            random.shuffle(this_files)
+            
+        for file_name in this_files:
             try:
-                with open(self.files[i], encoding='utf-8') as f:
+                with open(file_name, encoding='utf-8') as f:
                     text = f.read()
             except:
                 continue

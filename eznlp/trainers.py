@@ -75,8 +75,9 @@ class Trainer(object):
             return np.mean(epoch_losses), None
     
     
-    def train_steps(self, train_loader, eval_loader=None, n_epochs=10, 
-                    disp_every_steps=500, eval_every_steps=1000, save_fn=None, save_by_loss=True):
+    def train_steps(self, train_loader, eval_loader=None, n_epochs=10, max_steps=np.inf, 
+                    disp_every_steps=500, eval_every_steps=1000, verbose=True, 
+                    save_fn=None, save_by_loss=True):
         assert eval_every_steps % disp_every_steps == 0
         self.model.train()
         
@@ -84,6 +85,7 @@ class Trainer(object):
         best_eval_acc = 0.0
         train_losses, train_accs = [], []
         eidx, sidx = 0, 0
+        done_training = False
         t0 = time.time()
         
         while eidx < n_epochs:
@@ -96,10 +98,11 @@ class Trainer(object):
                 
                 if (sidx+1) % disp_every_steps == 0:
                     elapsed_secs = int(time.time() - t0)
-                    disp_training_info(eidx=eidx, sidx=sidx, elapsed_secs=elapsed_secs, 
-                                       loss=np.mean(train_losses),
-                                       acc=np.mean(train_accs) if any(train_accs) else None,
-                                       partition='train')
+                    if verbose:
+                        disp_running_info(eidx=eidx, sidx=sidx, elapsed_secs=elapsed_secs, 
+                                          loss=np.mean(train_losses),
+                                          acc=np.mean(train_accs) if any(train_accs) else None,
+                                          partition='train')
                     train_losses, train_accs = [], []
                     t0 = time.time()
                 
@@ -107,10 +110,11 @@ class Trainer(object):
                     if eval_loader is not None:
                         eval_loss, possible_eval_acc = self.eval_epoch(eval_loader)
                         elapsed_secs = int(time.time() - t0)
-                        disp_training_info(elapsed_secs=elapsed_secs, 
-                                           loss=eval_loss, 
-                                           acc=possible_eval_acc, 
-                                           partition='eval')
+                        if verbose:
+                            disp_running_info(elapsed_secs=elapsed_secs, 
+                                              loss=eval_loss, 
+                                              acc=possible_eval_acc, 
+                                              partition='eval')
                         
                         if eval_loss < best_eval_loss:
                             best_eval_loss = eval_loss
@@ -125,12 +129,18 @@ class Trainer(object):
                         self.model.train()
                         t0 = time.time()
                     
+                if (sidx+1) >= max_steps:
+                    done_training = True
+                    break
                 sidx += 1
+            
+            if done_training:
+                break
             eidx += 1
             
             
 
-def disp_training_info(eidx=None, sidx=None, elapsed_secs=None, loss=None, acc=None, partition='train'):
+def disp_running_info(eidx=None, sidx=None, elapsed_secs=None, loss=None, acc=None, partition='train'):
     disp_text = []
     if eidx is not None:
         disp_text.append(f"Epoch: {eidx+1}")
