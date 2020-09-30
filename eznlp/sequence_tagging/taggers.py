@@ -5,7 +5,7 @@ import torch.nn as nn
 
 from ..datasets_utils import Batch
 from .datasets import TagHelper
-from .encoders import Encoder, RNNEncoder, CNNEncoder, TransformerEncoder, BERTEncoder
+from ..encoders import Encoder, RNNEncoder, CNNEncoder, TransformerEncoder, BERTEncoder
 from .decoders import Decoder, SoftMaxDecoder, CRFDecoder, CascadeDecoder
 
 

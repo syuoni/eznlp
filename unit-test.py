@@ -16,14 +16,14 @@ from transformers import RobertaTokenizer, RobertaModel, RobertaForMaskedLM
 
 from eznlp import Token, TokenSequence, build_token_sequence, count_trainable_params
 from eznlp.token import Full2Half
-from eznlp.ner import COVID19Dataset
-from eznlp.ner import ConfigHelper
-from eznlp.ner import build_tagger_by_config
-from eznlp.ner import NERTrainer
-from eznlp.ner import entities2tags, tags2entities
-from eznlp.ner.datasets import TagHelper
-from eznlp.ner.data_utils import find_ascending, tags2simple_entities
-from eznlp.lm import COVID19MLMDataset, PMCMLMDataset, MLMTrainer
+from eznlp.sequence_tagging import COVID19Dataset
+from eznlp.sequence_tagging import ConfigHelper
+from eznlp.sequence_tagging import build_tagger_by_config
+from eznlp.sequence_tagging import NERTrainer
+from eznlp.sequence_tagging import entities2tags, tags2entities
+from eznlp.sequence_tagging.datasets import TagHelper
+from eznlp.sequence_tagging.data_utils import find_ascending, tags2simple_entities
+from eznlp.language_modeling import COVID19MLMDataset, PMCMLMDataset, MLMTrainer
 
 
 class TestFindAscending(unittest.TestCase):

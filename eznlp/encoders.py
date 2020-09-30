@@ -5,8 +5,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, pad_sequence
 
-from ..datasets_utils import Batch
-from ..nn_utils import reinit_embedding_, reinit_layer_, reinit_lstm_, reinit_gru_, reinit_transformer_encoder_layer_
+from .datasets_utils import Batch
+from .nn_utils import reinit_embedding_, reinit_layer_, reinit_lstm_, reinit_gru_, reinit_transformer_encoder_layer_
 
 
 class CharCNN(nn.Module):
