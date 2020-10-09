@@ -77,7 +77,7 @@ class Trainer(object):
     
     def train_steps(self, train_loader, eval_loader=None, n_epochs=10, max_steps=np.inf, 
                     disp_every_steps=500, eval_every_steps=1000, verbose=True, 
-                    save_fn=None, save_by_loss=True):
+                    save_callback=None, save_by_loss=True, save_every_steps=np.inf):
         assert eval_every_steps % disp_every_steps == 0
         self.model.train()
         
@@ -118,16 +118,20 @@ class Trainer(object):
                         
                         if eval_loss < best_eval_loss:
                             best_eval_loss = eval_loss
-                            if (save_fn is not None) and save_by_loss:
-                                torch.save(self.model, save_fn)
+                            if (save_callback is not None) and save_by_loss:
+                                save_callback(self.model)
                             
                         if possible_eval_acc and possible_eval_acc > best_eval_acc:
                             best_eval_acc = possible_eval_acc
-                            if (save_fn is not None) and (not save_by_loss):
-                                torch.save(self.model, save_fn)
+                            if (save_callback is not None) and (not save_by_loss):
+                                save_callback(self.model)
                         
                         self.model.train()
                         t0 = time.time()
+                    
+                if (sidx+1) % save_every_steps == 0:
+                    if save_callback is not None:
+                        save_callback(self.model)
                     
                 if (sidx+1) >= max_steps:
                     done_training = True
