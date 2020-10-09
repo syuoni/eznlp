@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from torchtext.experimental.vectors import GloVe
 from transformers import BertTokenizer, BertModel
 
-from eznlp.sequence_tagging import COVID19Dataset
+from eznlp.sequence_tagging import SequenceTaggingDataset
 from eznlp.sequence_tagging import ConfigHelper
 from eznlp.sequence_tagging import build_tagger_by_config
 from eznlp.sequence_tagging import NERTrainer
@@ -25,15 +25,12 @@ def load_demo_data(labeling='BIOES', seed=515):
 
 def build_demo_datasets(train_data, val_data, test_data, enum_fields=None, val_fields=None, 
                         cascade=False, labeling='BIOES'):
-    train_set = COVID19Dataset(train_data, train=True,  labeled=True,  
-                               enum_fields=enum_fields, val_fields=val_fields, 
-                               cascade=cascade, labeling=labeling)
-    val_set   = COVID19Dataset(val_data,   train=False, labeled=True,  
-                               enum_fields=enum_fields, val_fields=val_fields,
-                               cascade=cascade, labeling=labeling, vocabs=train_set.get_vocabs())
-    test_set  = COVID19Dataset(test_data,  train=False, labeled=False, 
-                               enum_fields=enum_fields, val_fields=val_fields,
-                               cascade=cascade, labeling=labeling, vocabs=train_set.get_vocabs())
+    train_set = SequenceTaggingDataset(train_data, enum_fields=enum_fields, val_fields=val_fields, 
+                                       cascade=cascade, labeling=labeling)
+    val_set   = SequenceTaggingDataset(val_data,   enum_fields=enum_fields, val_fields=val_fields,
+                                       cascade=cascade, labeling=labeling, vocabs=train_set.get_vocabs())
+    test_set  = SequenceTaggingDataset(test_data,  enum_fields=enum_fields, val_fields=val_fields,
+                                       cascade=cascade, labeling=labeling, vocabs=train_set.get_vocabs())
     return train_set, val_set, test_set
 
 @pytest.fixture
@@ -52,6 +49,12 @@ def BIOES_datasets(BIOES_data):
 @pytest.fixture
 def BIOES_datasets_nofields(BIOES_data):
     return build_demo_datasets(*BIOES_data, enum_fields=[], val_fields=[])
+
+@pytest.fixture
+def BIOES_datasets_morefields(BIOES_data):
+    return build_demo_datasets(*BIOES_data, 
+                               enum_fields=SequenceTaggingDataset._pre_enum_fields+['upos', 'detailed_pos', 'dep', 'ent_tag'], 
+                               val_fields=SequenceTaggingDataset._pre_val_fields+['covid19tag'])
 
 @pytest.fixture
 def BIOES_datasets_cascade(BIOES_data):
@@ -173,8 +176,8 @@ class TestTagger(object):
         train_data, *_ = BIOES_data
         bert, tokenizer = BERT_with_tokenizer
         
-        train_set_bert = COVID19Dataset(train_data, train=True, labeled=True, bert_tokenizer=tokenizer,
-                                        enum_fields=[], val_fields=[], cascade=False, labeling='BIOES')
+        train_set_bert = SequenceTaggingDataset(train_data, enum_fields=[], val_fields=[], 
+                                                sub_tokenizer=tokenizer, cascade=False, labeling='BIOES')
         config, tag_helper = train_set_bert.get_model_config()
         config = ConfigHelper.load_default_config(config, bert=bert, dec_arch='CRF')
         del config['tok'], config['char']
@@ -213,6 +216,16 @@ class TestTagger(object):
                 config = ConfigHelper.load_default_config(config, enc_arch=enc_arch, dec_arch=dec_arch)
                 tagger = build_tagger_by_config(config, tag_helper).to(device)
                 self.one_tagger_pass(tagger, train_set_nofields, device)
+                
+                
+    def test_tagger_morefields(self, BIOES_datasets_morefields, device):
+        train_set_morefields, *_ = BIOES_datasets_morefields
+        config, tag_helper = train_set_morefields.get_model_config()
+        for enc_arch in ['LSTM', 'CNN', 'Transformer']:
+            for dec_arch in ['softmax', 'CRF']:
+                config = ConfigHelper.load_default_config(config, enc_arch=enc_arch, dec_arch=dec_arch)
+                tagger = build_tagger_by_config(config, tag_helper).to(device)
+                self.one_tagger_pass(tagger, train_set_morefields, device)
                 
 
     def test_tagger_BIO(self, BIO_datasets, device):

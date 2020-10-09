@@ -2,7 +2,7 @@
 import pytest
 import spacy
 
-from eznlp import build_token_sequence
+from eznlp import TokenSequence
 from eznlp.sequence_tagging.data_utils import find_ascending, tags2simple_entities
 from eznlp.sequence_tagging import entities2tags, tags2entities
 from eznlp.sequence_tagging.datasets import TagHelper
@@ -63,7 +63,7 @@ class TestTags2Entities(object):
     def test_tags2entities(self):
         nlp = spacy.load("en_core_web_sm")
         raw_text = "This is a -3.14 demo. Those are an APPLE and some glass bottles."
-        tokens = build_token_sequence(raw_text, nlp)
+        tokens = TokenSequence.from_raw_text(raw_text, nlp)
         
         entities = [{'entity': 'demo', 'type': 'Ent', 'start': 16, 'end': 20},
                     {'entity': 'APPLE', 'type': 'Ent', 'start': 35, 'end': 40},

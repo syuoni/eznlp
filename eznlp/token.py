@@ -292,20 +292,27 @@ class TokenSequence(object):
         return repr(self.token_list)
     
     
-def build_token_sequence(raw_text, spacy_nlp, additional_tok2tags=None, max_len=None, **kwargs):
-    """
-    `additional_tok2tags`: [(tag_name: str, tok2tag: dict), ...]
-    """
-    token_list = [Token(tok.text, start=tok.idx, end=tok.idx+len(tok.text), lemma=tok.lemma_, 
-                        upos=tok.pos_, detailed_pos=tok.tag_, ent_tag='-'.join([tok.ent_iob_, tok.ent_type_]), 
-                        dep=tok.dep_, **kwargs) for tok in spacy_nlp(raw_text)]
+    @classmethod
+    def from_tokenized_text(cls, tokenized_text: list, **kwargs):
+        token_list = [Token(tok_text, **kwargs) for tok_text in tokenized_text]
+        return cls(token_list)
     
-    if additional_tok2tags is not None:
-        for tag_name, tok2tag in additional_tok2tags:
-            for tok in token_list:
-                setattr(tok, tag_name, tok2tag.get(tok.text, tok2tag['<unk>']))
     
-    return TokenSequence(token_list)
+    @classmethod
+    def from_raw_text(cls, raw_text: str, spacy_nlp, additional_tok2tags=None, **kwargs):
+        """
+        `additional_tok2tags`: [(tag_name: str, tok2tag: dict), ...]
+        """
+        token_list = [Token(tok.text, start=tok.idx, end=tok.idx+len(tok.text), lemma=tok.lemma_, 
+                            upos=tok.pos_, detailed_pos=tok.tag_, ent_tag='-'.join([tok.ent_iob_, tok.ent_type_]), 
+                            dep=tok.dep_, **kwargs) for tok in spacy_nlp(raw_text)]
+        
+        if additional_tok2tags is not None:
+            for tag_name, tok2tag in additional_tok2tags:
+                for tok in token_list:
+                    setattr(tok, tag_name, tok2tag.get(tok.text, tok2tag['<unk>']))
+        
+        return cls(token_list)
 
 
 def custom_spacy_tokenizer(nlp, custom_prefixes=None, custom_suffixes=None, custom_infixes=None):

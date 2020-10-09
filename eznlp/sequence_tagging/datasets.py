@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import string
-import json
 from collections import Counter, OrderedDict
 from tqdm import tqdm
 import torch
@@ -13,66 +12,45 @@ from ..datasets_utils import TensorWrapper, Batch
 from .data_utils import tags2simple_entities
 
 
-def parse_covid19_data(path):
-    data = []
-    with open(path, encoding='utf-8') as f:
-        for ex_idx, line in enumerate(f):
-            ex = json.loads(line)
-            ex['raw_idx'] = ex_idx
-            data.append(ex)
-    return data
 
-
-class COVID19Dataset(Dataset):
-    _pre_enum_fields = ['upos', 'detailed_pos', 'dep', 'ent_tag', 'en_pattern', 'en_pattern_sum', 
-                        'bigram', 'trigram', 
+class SequenceTaggingDataset(Dataset):
+    _pre_enum_fields = ['bigram', 'trigram', 'en_pattern', 'en_pattern_sum', 
                         'prefix_2', 'prefix_3', 'prefix_4', 'prefix_5', 
                         'suffix_2', 'suffix_3', 'suffix_4', 'suffix_5']
-    _pre_val_fields = ['en_shape_features', 'num_features', 'covid19tag']
+    _pre_val_fields = ['en_shape_features', 'num_features']
     
-    def __init__(self, data, train=True, labeled=True, bert_tokenizer=None, 
-                 enum_fields=None, val_fields=None, 
-                 vocabs=None, cascade=False, labeling='BIOES'):
+    def __init__(self, data, enum_fields=None, val_fields=None, 
+                 vocabs=None, sub_tokenizer=None, cascade=False, labeling='BIOES'):
+        """
+        Parameters
+        ----------
+        data : list of dict 
+            Each dict contains `tokens` and optionally `tags`. 
+        """
         super().__init__()
         self.data = data
-        self.train = train
-        self.labeled = labeled
+        self._is_labeled = ('tags' in data[0])
+        self._building_vocabs = (vocabs is None)
         
-        self.bert_tokenizer = bert_tokenizer
-        if bert_tokenizer is not None:
-            self.wp2idx = bert_tokenizer.get_vocab()
-            self.idx2wp = {idx: wp for wp, idx in self.wp2idx.items()}
-            assert min(self.wp2idx.values()) == 0
-            assert max(self.wp2idx.values()) == len(self.wp2idx) - 1
+        self.enum_fields = enum_fields if enum_fields is not None else self._pre_enum_fields
+        self.val_fields = val_fields if val_fields is not None else self._pre_val_fields
         
-        if enum_fields is None:
-            self.enum_fields = COVID19Dataset._pre_enum_fields
+        if self._building_vocabs:
+            assert self._is_labeled
+            self.tag_helper = TagHelper(cascade=cascade, labeling=labeling)
+            self._build_vocabs()
         else:
-            assert set(enum_fields).issubset(set(COVID19Dataset._pre_enum_fields))
-            self.enum_fields = enum_fields
-            
-        if val_fields is None:
-            self.val_fields = COVID19Dataset._pre_val_fields
-        else:
-            assert set(val_fields).issubset(set(COVID19Dataset._pre_val_fields))
-            self.val_fields = val_fields
-            
-        if vocabs is not None:
             self.char_vocab = vocabs[0]
             self.tok_vocab = vocabs[1]
             self.enum_fields_vocabs = vocabs[2]
             self.tag_helper = vocabs[3]
             assert self.tag_helper.cascade == cascade
             assert self.tag_helper.labeling == labeling
-            if labeled:
+            if self._is_labeled:
                 self._check_vocabs()
                 
-        elif train and labeled:
-            self.tag_helper = TagHelper(cascade=cascade, labeling=labeling)
-            self._build_vocabs()
-        else:
-            raise ValueError(f"Invalid parameters: {train}, {labeled}, {vocabs}")
-        
+        self.sub_tokenizer = sub_tokenizer
+                
         # It is generally recommended to return cpu tensors in multi-process loading. 
         # See https://pytorch.org/docs/stable/data.html#single-and-multi-process-data-loading
         self.char_trans = sequential_transforms(vocab_func(self.char_vocab), totensor(torch.long))
@@ -82,19 +60,8 @@ class COVID19Dataset(Dataset):
         self.val_fields_trans = {f: sequential_transforms(totensor(torch.float), lambda x: (x*2-1) / 10) \
                                  for f in self.val_fields}
         
-        
-    def summary(self):
-        n_seqs = len(self.data)
-        n_raws = len({curr_data['raw_idx'] for curr_data in self.data})
-        max_len = max([len(curr_data['tokens']) for curr_data in self.data])
-        print(f"The dataset consists {n_seqs} sequences built from {n_raws} raw entries")
-        print(f"The max sequence length is {max_len}")
-        
-        
+            
     def _build_vocabs(self):
-        assert self.train
-        assert self.labeled
-        
         char_counter = Counter()
         tok_counter = Counter()
         enum_fields_counters = {f: Counter() for f in self.enum_fields}
@@ -134,19 +101,30 @@ class COVID19Dataset(Dataset):
         
         
     def _check_vocabs(self):
-        assert not self.train
-        assert self.labeled
-        
         tag_counter = Counter()
         for curr_data in self.data:
             tag_counter.update(curr_data['tags'])
-             
+            
         oov_tags = [tag for tag in tag_counter if tag not in self.tag_helper.tag2idx]
         if len(oov_tags) > 0:
             raise ValueError(f"OOV tags exist: {oov_tags}")
-        
+            
+            
     def get_vocabs(self):
         return self.char_vocab, self.tok_vocab, self.enum_fields_vocabs, self.tag_helper
+    
+    
+    def set_cascade(self, cascade):
+        self.tag_helper.set_cascade(cascade)
+        
+            
+    def summary(self):
+        n_seqs = len(self.data)
+        n_raws = len({curr_data['raw_idx'] for curr_data in self.data})
+        max_len = max([len(curr_data['tokens']) for curr_data in self.data])
+        print(f"The dataset consists {n_seqs} sequences built from {n_raws} raw entries")
+        print(f"The max sequence length is {max_len}")
+        
         
     def get_model_config(self):
         config = {'char': {'pad_idx': self.char_vocab['<pad>'], 
@@ -158,16 +136,11 @@ class COVID19Dataset(Dataset):
                   'val': {f: {'in_dim': len(getattr(self.data[0]['tokens'], f)[0])} for f in self.val_fields}}
         return config, self.tag_helper
     
-    def set_cascade(self, cascade):
-        self.tag_helper.set_cascade(cascade)
     
     def __len__(self):
         return len(self.data)
         
     def __getitem__(self, i):
-        """
-        This returns a list of `Example` with lengths shorter than `max_len`.
-        """
         curr_data = self.data[i]
         
         char_ids = [self.char_trans(tok) for tok in curr_data['tokens'].raw_text]
@@ -175,19 +148,19 @@ class COVID19Dataset(Dataset):
         enum_feats = {f: trans(getattr(curr_data['tokens'], f)) for f, trans in self.enum_fields_trans.items()}
         val_feats = {f: trans(getattr(curr_data['tokens'], f)) for f, trans in self.val_fields_trans.items()}
         
-        if self.bert_tokenizer is not None:
+        if self.sub_tokenizer is not None:
             tokens = curr_data['tokens']
-            tokens.build_word_pieces(self.bert_tokenizer)
+            tokens.build_word_pieces(self.sub_tokenizer)
             
-            wp_ids = [self.bert_tokenizer.cls_token_id] \
-                   + [self.wp2idx[wp] for wp in tokens.word_pieces] \
-                   + [self.bert_tokenizer.sep_token_id]
+            wp_ids = [self.sub_tokenizer.cls_token_id] \
+                   +  self.sub_tokenizer.convert_tokens_to_ids(tokens.word_pieces) \
+                   + [self.sub_tokenizer.sep_token_id]
             wp_feats = {'wp_ids': torch.tensor(wp_ids), 
                         'wp_tok_pos': torch.tensor(tokens.word_piece_tok_pos)}
         else:
             wp_feats = None
         
-        tags_obj = Tags(curr_data['tags'], self.tag_helper) if self.labeled else None
+        tags_obj = Tags(curr_data['tags'], self.tag_helper) if self._is_labeled else None
         return TensorWrapper(char_ids=char_ids, tok_ids=tok_ids, enum=enum_feats, val=val_feats, 
                              wp=wp_feats, tags_obj=tags_obj)
     
@@ -196,7 +169,7 @@ class COVID19Dataset(Dataset):
         batch_tok_ids = []
         batch_enum = {f: [] for f in self.enum_fields}
         batch_val = {f: [] for f in self.val_fields}
-        batch_wp = {'wp_ids': [], 'wp_tok_pos': []} if self.bert_tokenizer is not None else {}
+        batch_wp = {'wp_ids': [], 'wp_tok_pos': []} if self.sub_tokenizer is not None else {}
         batch_tags_objs = []
         
         for ex in batch_examples:
@@ -225,16 +198,16 @@ class COVID19Dataset(Dataset):
             batch_val[f] = pad_sequence(batch_val[f], batch_first=True, 
                                         padding_value=0.0)
             
-        if self.bert_tokenizer is not None:
+        if self.sub_tokenizer is not None:
             wp_lens = torch.tensor([wps.size(0) for wps in batch_wp['wp_ids']])
             batch_wp = {'wp_ids': pad_sequence(batch_wp['wp_ids'], batch_first=True, 
-                                               padding_value=self.bert_tokenizer.pad_token_id), 
+                                               padding_value=self.sub_tokenizer.pad_token_id), 
                         'wp_tok_pos': pad_sequence(batch_wp['wp_tok_pos'], batch_first=True, 
                                                    padding_value=-1)}
         else:
             wp_lens, batch_wp = None, None
             
-        batch_tags_objs = batch_tags_objs if self.labeled else None
+        batch_tags_objs = batch_tags_objs if self._is_labeled else None
         
         
         batch = Batch(tok_lens=tok_lens, char_ids=batch_char_ids, 
@@ -243,10 +216,11 @@ class COVID19Dataset(Dataset):
                       tags_objs=batch_tags_objs)
         batch.build_masks({'char_mask': (batch_char_ids.size(), tok_lens), 
                            'tok_mask': (batch_tok_ids.size(), seq_lens)})
-        if self.bert_tokenizer is not None:
+        if self.sub_tokenizer is not None:
             batch.build_masks({'wp_mask': (batch_wp['wp_ids'].size(), wp_lens)})
             
         return batch
+    
     
     
 class TagHelper(object):
