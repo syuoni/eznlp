@@ -291,28 +291,44 @@ class TokenSequence(object):
     def __repr__(self):
         return repr(self.token_list)
     
+    def attach_additional_tags(self, additional_tags: dict=None, additional_tok2tags: list=None):
+        """
+        Parameters
+        ----------
+        additional_tags : dict of lists, optional
+            {tag_name: tags, ...}. 
+        additional_tok2tags : list of tuples, optional
+            [(tag_name: str, tok2tag: dict), ...]. 
+        """
+        if additional_tags is not None:
+            for tag_name, tags in additional_tags.items():
+                for tok, tag in zip(self.token_list, tags):
+                    setattr(tok, tag_name, tag)
+                    
+        if additional_tok2tags is not None:
+            for tag_name, tok2tag in additional_tok2tags:
+                for tok in self.token_list:
+                    setattr(tok, tag_name, tok2tag.get(tok.text, tok2tag['<unk>']))
+                    
+        return self
+    
     
     @classmethod
-    def from_tokenized_text(cls, tokenized_text: list, **kwargs):
+    def from_tokenized_text(cls, tokenized_text: list, additional_tags=None, additional_tok2tags=None, **kwargs):
         token_list = [Token(tok_text, **kwargs) for tok_text in tokenized_text]
-        return cls(token_list)
+        tokens = cls(token_list)
+        tokens.attach_additional_tags(additional_tags=additional_tags, additional_tok2tags=additional_tok2tags)
+        return tokens
     
     
     @classmethod
     def from_raw_text(cls, raw_text: str, spacy_nlp, additional_tok2tags=None, **kwargs):
-        """
-        `additional_tok2tags`: [(tag_name: str, tok2tag: dict), ...]
-        """
         token_list = [Token(tok.text, start=tok.idx, end=tok.idx+len(tok.text), lemma=tok.lemma_, 
                             upos=tok.pos_, detailed_pos=tok.tag_, ent_tag='-'.join([tok.ent_iob_, tok.ent_type_]), 
                             dep=tok.dep_, **kwargs) for tok in spacy_nlp(raw_text)]
-        
-        if additional_tok2tags is not None:
-            for tag_name, tok2tag in additional_tok2tags:
-                for tok in token_list:
-                    setattr(tok, tag_name, tok2tag.get(tok.text, tok2tag['<unk>']))
-        
-        return cls(token_list)
+        tokens = cls(token_list)
+        tokens.attach_additional_tags(additional_tok2tags=additional_tok2tags)
+        return tokens
 
 
 def custom_spacy_tokenizer(nlp, custom_prefixes=None, custom_suffixes=None, custom_infixes=None):

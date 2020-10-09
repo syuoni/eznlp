@@ -120,20 +120,29 @@ class SequenceTaggingDataset(Dataset):
             
     def summary(self):
         n_seqs = len(self.data)
-        n_raws = len({curr_data['raw_idx'] for curr_data in self.data})
+        if 'raw_idx' in self.data[0]:
+            n_raws = len({curr_data['raw_idx'] for curr_data in self.data})
+        else:
+            n_raws = n_seqs
+            
         max_len = max([len(curr_data['tokens']) for curr_data in self.data])
         print(f"The dataset consists {n_seqs} sequences built from {n_raws} raw entries")
         print(f"The max sequence length is {max_len}")
         
         
     def get_model_config(self):
-        config = {'char': {'pad_idx': self.char_vocab['<pad>'], 
-                           'voc_dim': len(self.char_vocab)}, 
-                  'tok': {'pad_idx': self.tok_vocab['<pad>'], 
-                          'voc_dim': len(self.tok_vocab)}, 
-                  'enum': {f: {'pad_idx': vocab['<pad>'], 
-                               'voc_dim': len(vocab)} for f, vocab in self.enum_fields_vocabs.items()}, 
-                  'val': {f: {'in_dim': len(getattr(self.data[0]['tokens'], f)[0])} for f in self.val_fields}}
+        emb_config = {'char': {'pad_idx': self.char_vocab['<pad>'], 
+                               'voc_dim': len(self.char_vocab)}, 
+                      'tok': {'pad_idx': self.tok_vocab['<pad>'], 
+                              'voc_dim': len(self.tok_vocab)}}
+        if len(self.enum_fields) > 0:
+            emb_config['enum'] = {f: {'pad_idx': vocab['<pad>'], 
+                                      'voc_dim': len(vocab)} for f, vocab in self.enum_fields_vocabs.items()}
+        if len(self.val_fields) > 0:
+            emb_config['val'] = {f: {'in_dim': len(getattr(self.data[0]['tokens'], f)[0])} for f in self.val_fields}
+            
+        config = {'emb': emb_config}
+        
         return config, self.tag_helper
     
     

@@ -7,8 +7,8 @@ from torchcrf import CRF
 from ..datasets_utils import Batch, unpad_seqs
 from ..nn_utils import reinit_layer_
 from .datasets import TagHelper
-    
-    
+
+
 class Decoder(nn.Module):
     def __init__(self, config: dict, tag_helper: TagHelper):
         """
@@ -17,7 +17,7 @@ class Decoder(nn.Module):
         super().__init__()
         self.config = config
         self.tag_helper = tag_helper
-        self.dropout = nn.Dropout(config['dec']['dropout'])
+        self.dropout = nn.Dropout(config['dropout'])
         
     def forward(self, batch: Batch, full_hidden: Tensor):
         raise NotImplementedError("Not Implemented `forward`")

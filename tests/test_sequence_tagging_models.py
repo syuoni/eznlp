@@ -9,7 +9,7 @@ from transformers import BertTokenizer, BertModel
 
 from eznlp.sequence_tagging import SequenceTaggingDataset
 from eznlp.sequence_tagging import ConfigHelper
-from eznlp.sequence_tagging import build_tagger_by_config
+from eznlp.sequence_tagging import Tagger
 from eznlp.sequence_tagging import NERTrainer
 
 
@@ -143,16 +143,16 @@ class TestTagger(object):
     def test_word_embedding_init(self, BIOES_datasets, glove100, device):
         train_set, val_set, test_set = BIOES_datasets
         config, tag_helper = train_set.get_model_config()
-        config = ConfigHelper.load_default_config(config, enc_arch='LSTM', dec_arch='CRF')
-        tagger = build_tagger_by_config(config, tag_helper, train_set.tok_vocab.get_itos(), glove100).to(device)
+        config = ConfigHelper.load_default_config(config, enc_arches=['LSTM'], dec_arch='CRF')
+        tagger = Tagger(config, tag_helper, train_set.tok_vocab.get_itos(), glove100).to(device)
         self.one_tagger_pass(tagger, train_set, device)
         
         
     def test_train_steps(self, BIOES_datasets, device):
         train_set, val_set, test_set = BIOES_datasets
         config, tag_helper = train_set.get_model_config()
-        config = ConfigHelper.load_default_config(config, enc_arch='LSTM', dec_arch='CRF')
-        tagger = build_tagger_by_config(config, tag_helper)
+        config = ConfigHelper.load_default_config(config, enc_arches=['GRU'], dec_arch='CRF')
+        tagger = Tagger(config, tag_helper)
         batch = train_set.collate([train_set[i] for i in range(0, 4)]).to(device)
         
         optimizer = optim.AdamW(tagger.parameters())
@@ -167,8 +167,8 @@ class TestTagger(object):
         config, tag_helper = train_set.get_model_config()
         for enc_arch in ['LSTM', 'CNN', 'Transformer']:
             for dec_arch in ['softmax', 'CRF']:
-                config = ConfigHelper.load_default_config(config, enc_arch=enc_arch, dec_arch=dec_arch)
-                tagger = build_tagger_by_config(config, tag_helper).to(device)
+                config = ConfigHelper.load_default_config(config, enc_arches=[enc_arch], dec_arch=dec_arch)
+                tagger = Tagger(config, tag_helper).to(device)
                 self.one_tagger_pass(tagger, train_set, device)
                 
                 
@@ -179,10 +179,10 @@ class TestTagger(object):
         train_set_bert = SequenceTaggingDataset(train_data, enum_fields=[], val_fields=[], 
                                                 sub_tokenizer=tokenizer, cascade=False, labeling='BIOES')
         config, tag_helper = train_set_bert.get_model_config()
-        config = ConfigHelper.load_default_config(config, bert=bert, dec_arch='CRF')
-        del config['tok'], config['char']
-        config = ConfigHelper.update_full_dims(config)
-        tagger = build_tagger_by_config(config, tag_helper, bert=bert).to(device)
+        config = ConfigHelper.load_default_config(config, ptm=bert, dec_arch='CRF')
+        del config['emb']
+        config = ConfigHelper.update_dims(config)
+        tagger = Tagger(config, tag_helper, ptm=bert).to(device)
         self.one_tagger_pass(tagger, train_set_bert, device)
         
         
@@ -191,10 +191,9 @@ class TestTagger(object):
         config, tag_helper = train_set.get_model_config()
         for enc_arch in ['LSTM', 'CNN', 'Transformer']:
             for dec_arch in ['softmax', 'CRF']:
-                config = ConfigHelper.load_default_config(config, enc_arch=enc_arch, dec_arch=dec_arch)
-                config['shortcut'] = True
-                config = ConfigHelper.update_full_dims(config)
-                tagger = build_tagger_by_config(config, tag_helper).to(device)
+                config = ConfigHelper.load_default_config(config, enc_arches=[enc_arch, 'Shortcut'], dec_arch=dec_arch)
+                config = ConfigHelper.update_dims(config)
+                tagger = Tagger(config, tag_helper).to(device)
                 self.one_tagger_pass(tagger, train_set, device)
                 
                 
@@ -203,8 +202,8 @@ class TestTagger(object):
         config, tag_helper = train_set_cascade.get_model_config()
         for enc_arch in ['LSTM', 'CNN', 'Transformer']:
             for dec_arch in ['softmax-cascade', 'CRF-cascade']:
-                config = ConfigHelper.load_default_config(config, enc_arch=enc_arch, dec_arch=dec_arch)
-                tagger = build_tagger_by_config(config, tag_helper).to(device)
+                config = ConfigHelper.load_default_config(config, enc_arches=[enc_arch], dec_arch=dec_arch)
+                tagger = Tagger(config, tag_helper).to(device)
                 self.one_tagger_pass(tagger, train_set_cascade, device)
             
             
@@ -213,8 +212,8 @@ class TestTagger(object):
         config, tag_helper = train_set_nofields.get_model_config()
         for enc_arch in ['LSTM', 'CNN', 'Transformer']:
             for dec_arch in ['softmax', 'CRF']:
-                config = ConfigHelper.load_default_config(config, enc_arch=enc_arch, dec_arch=dec_arch)
-                tagger = build_tagger_by_config(config, tag_helper).to(device)
+                config = ConfigHelper.load_default_config(config, enc_arches=[enc_arch], dec_arch=dec_arch)
+                tagger = Tagger(config, tag_helper).to(device)
                 self.one_tagger_pass(tagger, train_set_nofields, device)
                 
                 
@@ -223,8 +222,8 @@ class TestTagger(object):
         config, tag_helper = train_set_morefields.get_model_config()
         for enc_arch in ['LSTM', 'CNN', 'Transformer']:
             for dec_arch in ['softmax', 'CRF']:
-                config = ConfigHelper.load_default_config(config, enc_arch=enc_arch, dec_arch=dec_arch)
-                tagger = build_tagger_by_config(config, tag_helper).to(device)
+                config = ConfigHelper.load_default_config(config, enc_arches=[enc_arch], dec_arch=dec_arch)
+                tagger = Tagger(config, tag_helper).to(device)
                 self.one_tagger_pass(tagger, train_set_morefields, device)
                 
 
@@ -233,8 +232,8 @@ class TestTagger(object):
         config, tag_helper = train_set_BIO.get_model_config()
         for enc_arch in ['LSTM', 'CNN', 'Transformer']:
             for dec_arch in ['softmax', 'CRF']:
-                config = ConfigHelper.load_default_config(config, enc_arch=enc_arch, dec_arch=dec_arch)
-                tagger = build_tagger_by_config(config, tag_helper).to(device)
+                config = ConfigHelper.load_default_config(config, enc_arches=[enc_arch], dec_arch=dec_arch)
+                tagger = Tagger(config, tag_helper).to(device)
                 self.one_tagger_pass(tagger, train_set_BIO, device)
                 
                 
