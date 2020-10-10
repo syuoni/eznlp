@@ -46,12 +46,17 @@ class Tagger(nn.Module):
             decoder = SoftMaxDecoder(dec_config, tag_helper)
         elif dec_config['arch'].lower() == 'crf':
             decoder = CRFDecoder(dec_config, tag_helper)
-        elif dec_config['arch'].lower() == 'softmax-cascade':
-            decoder = CascadeDecoder(SoftMaxDecoder(dec_config, tag_helper))
-        elif dec_config['arch'].lower() == 'crf-cascade':
-            decoder = CascadeDecoder(CRFDecoder(dec_config, tag_helper))
         else:
             raise ValueError(f"Invalid decoder architecture {dec_config['arch']}")
+            
+        if ('cascade' not in dec_config) or (dec_config['cascade'].lower() == 'none'):
+            pass
+        elif dec_config['cascade'].lower() == 'no_redundant':
+            decoder = CascadeDecoder(decoder, redundant=False)
+        elif dec_config['cascade'].lower() == 'redundant':
+            decoder = CascadeDecoder(decoder, redundant=True)
+        else:
+            raise ValueError(f"Invalid cascade specification {dec_config['cascade']}")
         self.decoder = decoder
         
         

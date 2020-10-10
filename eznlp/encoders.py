@@ -7,7 +7,7 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from .datasets_utils import Batch
 from .nn_utils import reinit_layer_, reinit_lstm_, reinit_gru_, reinit_transformer_encoder_layer_
-
+from .functional import aggregate_tensor_by_group
 
     
 class Encoder(nn.Module):
@@ -169,17 +169,11 @@ class PreTrainedEncoder(nn.Module):
         
     def forward(self, batch: Batch):
         # ptm_outs: (batch, wp_step+2, hid_dim)
-        wp_ids, wp_tok_pos = batch.wp['wp_ids'], batch.wp['wp_tok_pos']
-        ptm_outs, *_ = self.ptm(wp_ids, attention_mask=(~batch.wp_mask).type(torch.long))
+        ptm_outs, *_ = self.ptm(batch.wp['wp_ids'], attention_mask=(~batch.wp_mask).type(torch.long))
         ptm_outs = ptm_outs[:, 1:-1]
         
-        # pos_proj: (tok_step, wp_step)
-        pos_proj = torch.arange(batch.tok_ids.size(1), device=batch.tok_ids.device).unsqueeze(1).repeat(1, wp_tok_pos.size(1))
-        # pos_proj: (batch, tok_step, wp_step)
-        pos_proj = F.normalize((pos_proj.unsqueeze(0) == wp_tok_pos.unsqueeze(1)).type(torch.float), p=1, dim=2)
-        
-        # collapsed_ptm_outs: (batch, tok_step, hid_dim)
-        collapsed_ptm_outs = pos_proj.bmm(ptm_outs)
-        return collapsed_ptm_outs
+        # agg_ptm_outs: (batch, tok_step, hid_dim)
+        agg_ptm_outs = aggregate_tensor_by_group(ptm_outs, batch.wp['wp_tok_pos'], agg_step=batch.tok_ids.size(1))
+        return agg_ptm_outs
     
     

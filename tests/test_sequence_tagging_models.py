@@ -201,8 +201,19 @@ class TestTagger(object):
         train_set_cascade, *_ = BIOES_datasets_cascade
         config, tag_helper = train_set_cascade.get_model_config()
         for enc_arch in ['LSTM', 'CNN', 'Transformer']:
-            for dec_arch in ['softmax-cascade', 'CRF-cascade']:
+            for dec_arch in ['softmax', 'CRF']:
                 config = ConfigHelper.load_default_config(config, enc_arches=[enc_arch], dec_arch=dec_arch)
+                config['dec']['cascade'] = 'no_redundant'
+                tagger = Tagger(config, tag_helper).to(device)
+                self.one_tagger_pass(tagger, train_set_cascade, device)
+            
+    def test_tagger_cascade_redundant(self, BIOES_datasets_cascade, device):
+        train_set_cascade, *_ = BIOES_datasets_cascade
+        config, tag_helper = train_set_cascade.get_model_config()
+        for enc_arch in ['LSTM', 'CNN', 'Transformer']:
+            for dec_arch in ['softmax', 'CRF']:
+                config = ConfigHelper.load_default_config(config, enc_arches=[enc_arch], dec_arch=dec_arch)
+                config['dec']['cascade'] = 'redundant'
                 tagger = Tagger(config, tag_helper).to(device)
                 self.one_tagger_pass(tagger, train_set_cascade, device)
             

@@ -40,15 +40,21 @@ def reinit_layer_(layer: nn.Module, nonlinearity='relu'):
     Refs: 
     [1] Xavier Glorot and Yoshua Bengio. 2010. Understanding the difficulty of 
     training deep feedforward neural networks. 
+    [2] Kaiming He, et al. 2015. Delving deep into rectifiers: Surpassing human-level
+    performance on ImageNet classification.
     """
     for name, param in layer.named_parameters():
         if name.startswith('bias'):
             nn.init.zeros_(param.data)
         elif name.startswith('weight'):
-            nn.init.xavier_uniform_(param.data, 
-                                    gain=nn.init.calculate_gain(nonlinearity))
+            if nonlinearity.lower() in ('relu', 'leaky_relu'):
+                nn.init.kaiming_uniform_(param.data, nonlinearity=nonlinearity)
+            else:
+                nn.init.xavier_uniform_(param.data, 
+                                        gain=nn.init.calculate_gain(nonlinearity))
+            
         else:
-            raise TypeError(f"Invalid NN {nn}")
+            raise TypeError(f"Invalid Layer {layer}")
     
     
 def reinit_transformer_encoder_layer_(tf_encoder_layer: nn.TransformerEncoderLayer):
