@@ -1,32 +1,33 @@
 # -*- coding: utf-8 -*-
 from tqdm import tqdm
 import pandas as pd
+import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 
 from .data_utils import tags2entities
 
 
-def _align_data(dataset: Dataset, raw_data: list):
-    data_df = pd.DataFrame(dataset.data)
-    raw_data_df = pd.DataFrame(raw_data)
-    aligned_df = pd.merge(raw_data_df, data_df, on='raw_idx', how='left')
-    return aligned_df, raw_data_df
+def _align_data(dataset: Dataset, gold_entities_data: list):
+    df = pd.DataFrame(dataset.data)
+    gold_entities_df = pd.DataFrame(gold_entities_data)
+    aligned_df = pd.merge(gold_entities_df, df, on='raw_idx', how='left')
+    return aligned_df, gold_entities_df
 
 
-def _build_covid19_data(aligned_df: pd.DataFrame, raw_data_df: pd.DataFrame, entities_list: list):
+def _build_entities_data(aligned_df: pd.DataFrame, gold_entities_df: pd.DataFrame, entities_list: list):
     aligned_df['entities_to_build'] = entities_list
-    raw_data_df = pd.merge(raw_data_df, aligned_df.groupby('raw_idx')['entities_to_build'].sum(), 
+    entities_df = pd.merge(gold_entities_df, aligned_df.groupby('raw_idx')['entities_to_build'].sum(), 
                            left_on='raw_idx', right_index=True, how='left')
     
-    covid19_data = []
-    for raw_text, entities_to_build in zip(raw_data_df['text'].tolist(), 
-                                           raw_data_df['entities_to_build'].tolist()):
+    entities_data = []
+    for raw_text, entities_to_build in zip(entities_df['text'].tolist(), 
+                                           entities_df['entities_to_build'].tolist()):
         if len(entities_to_build) == 0:
             entities_to_build = Predictor.default_entities
-        covid19_data.append({'text': raw_text, 
-                             'entities': entities_to_build})
-    return covid19_data
+        entities_data.append({'text': raw_text, 
+                              'entities': entities_to_build})
+    return entities_data
 
 
 class Predictor(object):
@@ -35,32 +36,61 @@ class Predictor(object):
                          'start': 1, 
                          'end': 2}]
     
-    def __init__(self, tagger: nn.Module):
+    def __init__(self, tagger: nn.Module, device):
         self.tagger = tagger
+        self.device = device
+        
 
-    def predict_tags(self, dataset: Dataset):
-        dataloader = DataLoader(dataset, batch_size=64, shuffle=False, collate_fn=dataset.collate)
-        for batch in dataloader:
-            for path in self.tagger.decode(batch):
-                yield path
+    def predict_tags(self, dataset: Dataset, batch_size=4):
+        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, collate_fn=dataset.collate)
+        
+        self.tagger.eval()
+        paths = []
+        with torch.no_grad():
+            with tqdm(total=len(dataloader)) as t:
+                for batch in dataloader:
+                    batch.to(self.device)
+                    paths.extend(self.tagger.decode(batch))
+                    t.update(1)
+        return paths
     
-    def predict_covid19_data(self, dataset: Dataset, raw_data: list):
-        df, raw_data_df = _align_data(dataset, raw_data)
+    
+    def predict_entities_data(self, dataset: Dataset, gold_entities_data: list, **kwargs):
+        """
+        Parameters
+        ----------
+        entities_data : list of dicts
+            [{'text': raw_text, 
+              'entities': [{'entity': entity_text, 
+                            'type': entity_type, 
+                            'start': entity_start, 
+                            'end': entity_end}]}, ...]
+        """
+        df, gold_entities_df = _align_data(dataset, gold_entities_data)
         
         entities_pred_list = []
-        with tqdm(total=len(dataset)) as t:
-            for tokens, raw_text, tags_pred in zip(df['tokens'].tolist(), 
-                                                   df['text'].tolist(),
-                                                   self.predict_tags(dataset)):
-                entities_pred = tags2entities(raw_text, tokens, tags_pred, 
-                                              labeling=self.tagger.decoder.tag_helper.labeling)
-                entities_pred_list.append(entities_pred)
-                t.update(1)
-                
-        return _build_covid19_data(df, raw_data_df, entities_pred_list)
+        for tokens, raw_text, tags_pred in zip(df['tokens'].tolist(), 
+                                               df['text'].tolist(),
+                                               self.predict_tags(dataset, **kwargs)):
+            entities_pred = tags2entities(raw_text, tokens, tags_pred, 
+                                          labeling=self.tagger.decoder.tag_helper.labeling)
+            entities_pred_list.append(entities_pred)
+            
+        return _build_entities_data(df, gold_entities_df, entities_pred_list)
+    
 
-    def retrieve_covid19_data(self, dataset: Dataset, raw_data: list):
-        df, raw_data_df = _align_data(dataset, raw_data)
+    def retrieve_entities_data(self, dataset: Dataset, gold_entities_data: list):
+        """
+        Parameters
+        ----------
+        entities_data : list of dicts
+            [{'text': raw_text, 
+              'entities': [{'entity': entity_text, 
+                            'type': entity_type, 
+                            'start': entity_start, 
+                            'end': entity_end}]}, ...]
+        """
+        df, gold_entities_df = _align_data(dataset, gold_entities_data)
         
         entities_retr_list = []
         for tokens, raw_text, tags_gold in zip(df['tokens'].tolist(), 
@@ -70,6 +100,6 @@ class Predictor(object):
                                           labeling=self.tagger.decoder.tag_helper.labeling)
             entities_retr_list.append(entities_retr)
                 
-        return _build_covid19_data(df, raw_data_df, entities_retr_list)
+        return _build_entities_data(df, gold_entities_df, entities_retr_list)
     
     

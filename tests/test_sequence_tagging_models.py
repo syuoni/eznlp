@@ -85,7 +85,7 @@ class TestBatching(object):
             break
         
         assert batch.tok_ids.is_pinned()
-        assert batch.enum['ent_tag'].is_pinned()
+        assert batch.enum['en_pattern'].is_pinned()
         assert batch.val['en_shape_features'].is_pinned()
         assert batch.seq_lens.is_pinned()
         assert batch.tags_objs[0].tag_ids.is_pinned()
@@ -152,7 +152,7 @@ class TestTagger(object):
         train_set, val_set, test_set = BIOES_datasets
         config, tag_helper = train_set.get_model_config()
         config = ConfigHelper.load_default_config(config, enc_arches=['GRU'], dec_arch='CRF')
-        tagger = Tagger(config, tag_helper)
+        tagger = Tagger(config, tag_helper).to(device)
         batch = train_set.collate([train_set[i] for i in range(0, 4)]).to(device)
         
         optimizer = optim.AdamW(tagger.parameters())
