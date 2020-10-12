@@ -39,7 +39,6 @@ class Tagger(nn.Module):
             assert ptm is not None
             self.pt_encoder = PreTrainedEncoder(ptm)
         
-        
         assert 'dec' in config
         dec_config = config['dec']
         if dec_config['arch'].lower() == 'softmax':
@@ -48,15 +47,8 @@ class Tagger(nn.Module):
             decoder = CRFDecoder(dec_config, tag_helper)
         else:
             raise ValueError(f"Invalid decoder architecture {dec_config['arch']}")
-            
-        if ('cascade' not in dec_config) or (dec_config['cascade'].lower() == 'none'):
-            pass
-        elif dec_config['cascade'].lower() == 'no_redundant':
-            decoder = CascadeDecoder(decoder, redundant=False)
-        elif dec_config['cascade'].lower() == 'redundant':
-            decoder = CascadeDecoder(decoder, redundant=True)
-        else:
-            raise ValueError(f"Invalid cascade specification {dec_config['cascade']}")
+        if tag_helper.cascade_mode.lower() != 'none':
+            decoder = CascadeDecoder(decoder, mode=tag_helper.cascade_mode)
         self.decoder = decoder
         
         

@@ -20,7 +20,7 @@ class SequenceTaggingDataset(Dataset):
     _pre_val_fields = ['en_shape_features', 'num_features']
     
     def __init__(self, data, enum_fields=None, val_fields=None, 
-                 vocabs=None, sub_tokenizer=None, cascade=False, labeling='BIOES'):
+                 vocabs=None, sub_tokenizer=None, cascade_mode='none', labeling='BIOES'):
         """
         Parameters
         ----------
@@ -37,14 +37,14 @@ class SequenceTaggingDataset(Dataset):
         
         if self._building_vocabs:
             assert self._is_labeled
-            self.tag_helper = TagHelper(cascade=cascade, labeling=labeling)
+            self.tag_helper = TagHelper(cascade_mode=cascade_mode, labeling=labeling)
             self._build_vocabs()
         else:
             self.char_vocab = vocabs[0]
             self.tok_vocab = vocabs[1]
             self.enum_fields_vocabs = vocabs[2]
             self.tag_helper = vocabs[3]
-            assert self.tag_helper.cascade == cascade
+            assert self.tag_helper.cascade_mode == cascade_mode
             assert self.tag_helper.labeling == labeling
             if self._is_labeled:
                 self._check_vocabs()
@@ -114,8 +114,8 @@ class SequenceTaggingDataset(Dataset):
         return self.char_vocab, self.tok_vocab, self.enum_fields_vocabs, self.tag_helper
     
     
-    def set_cascade(self, cascade):
-        self.tag_helper.set_cascade(cascade)
+    def set_cascade_mode(self, cascade_mode: str):
+        self.tag_helper.set_cascade_mode(cascade_mode)
         
             
     def summary(self):
@@ -231,14 +231,17 @@ class SequenceTaggingDataset(Dataset):
         return batch
     
     
-    
 class TagHelper(object):
-    def __init__(self, cascade=False, labeling='BIOES'):
-        self.cascade = cascade
+    def __init__(self, cascade_mode: str='none', labeling='BIOES'):
+        self.set_cascade_mode(cascade_mode)
         self.labeling = labeling
         
-    def set_cascade(self, cascade):
-        self.cascade = cascade
+    def set_cascade_mode(self, cascade_mode: str):
+        if cascade_mode.lower() not in ('none', 'straight', 'sliced'):
+            raise ValueError(f"Invalid cascade mode {cascade_mode}")
+        self.cascade_mode = cascade_mode
+        self._is_cascade = (cascade_mode.lower() != 'none')
+        
         
     def set_vocabs(self, idx2tag, tag2idx, idx2cas_tag, cas_tag2idx, idx2cas_type, cas_type2idx):
         self.idx2tag = idx2tag
@@ -294,10 +297,10 @@ class TagHelper(object):
         return self.cas_type2idx['<pad>']
     
     def get_modeling_tag_voc_dim(self):
-        return len(self.cas_tag2idx) if self.cascade else len(self.tag2idx)
+        return len(self.cas_tag2idx) if self._is_cascade else len(self.tag2idx)
         
     def get_modeling_tag_pad_idx(self):
-        return self.cas_tag2idx['<pad>'] if self.cascade else self.tag2idx['<pad>']
+        return self.cas_tag2idx['<pad>'] if self._is_cascade else self.tag2idx['<pad>']
         
     def ids2tags(self, tag_ids):
         return [self.idx2tag[idx] for idx in tag_ids]
@@ -318,13 +321,13 @@ class TagHelper(object):
         return [self.cas_type2idx[typ] for typ in cas_types]
     
     def ids2modeling_tags(self, tag_ids):
-        if self.cascade:
+        if self._is_cascade:
             return self.ids2cas_tags(tag_ids)
         else:
             return self.ids2tags(tag_ids)
         
     def modeling_tags2ids(self, tags):
-        if self.cascade:
+        if self._is_cascade:
             return self.cas_tags2ids(tags)
         else:
             return self.tags2ids(tags)
@@ -337,7 +340,7 @@ class TagHelper(object):
         return [tags_obj.cas_tags for tags_obj in batch_tags_objs]
     
     def fetch_batch_modeling_tags(self, batch_tags_objs: list):
-        if self.cascade:
+        if self._is_cascade:
             return self.fetch_batch_cas_tags(batch_tags_objs)
         else:
             return self.fetch_batch_tags(batch_tags_objs)
@@ -355,7 +358,7 @@ class TagHelper(object):
         return batch_cas_tag_ids
         
     def fetch_batch_modeling_tag_ids(self, batch_tags_objs: list, padding: bool=False):
-        if self.cascade:
+        if self._is_cascade:
             return self.fetch_batch_cas_tag_ids(batch_tags_objs, padding=padding)
         else:
             return self.fetch_batch_tag_ids(batch_tags_objs, padding=padding)

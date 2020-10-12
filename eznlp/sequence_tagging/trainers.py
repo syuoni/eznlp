@@ -5,7 +5,7 @@ import torch.nn as nn
 from ..trainers import Trainer
 
 
-class NERTrainer(Trainer):
+class SequenceTaggingTrainer(Trainer):
     def __init__(self, model: nn.Module, optimizer=None, scheduler=None, 
                  device=None, grad_clip=1.0):
         super().__init__(model, optimizer=optimizer, scheduler=scheduler, 

@@ -27,7 +27,6 @@ def _default_encoder_config(arch):
 
 def _default_decoder_config(arch):
     return {'arch': arch, 
-            'cascade': 'none', 
             'dropout': 0.5}
 
 
@@ -87,7 +86,7 @@ class ConfigHelper(object):
     
 
     @staticmethod
-    def model_name(config):
+    def model_name(config, tag_helper):
         name_elements = []
         if 'enc' in config:
             name_elements.extend([enc_config['arch'] for enc_config in config['enc']])
@@ -96,8 +95,9 @@ class ConfigHelper(object):
             name_elements.append(config['pt_enc']['arch'])
             
         name_elements.append(config['dec']['arch'])
-        if ('cascade' in config['dec']) and (config['dec']['cascade'].lower() != 'none'):
-            name_elements.append(config['dec']['cascade'])
+        
+        if tag_helper.cascade_mode.lower() != 'none':
+            name_elements.append(tag_helper.cascade_mode)
         
         return '-'.join(name_elements)
         

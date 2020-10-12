@@ -41,7 +41,7 @@ def BIOES_tag_helper_example():
     cas_tag2idx = {t: i for i, t in enumerate(idx2cas_tag)}
     idx2cas_type = ['<pad>', 'O', 'A', 'B', 'C']
     cas_type2idx = {t: i for i, t in enumerate(idx2cas_type)}
-    tag_helper = TagHelper(cascade=False, labeling='BIOES')
+    tag_helper = TagHelper(cascade_mode='None', labeling='BIOES')
     tag_helper.set_vocabs(idx2tag, tag2idx, idx2cas_tag, cas_tag2idx, idx2cas_type, cas_type2idx)
     return tag_helper
 
@@ -92,7 +92,7 @@ class TestTagHelper(object):
         assert tag_helper.modeling_tags2ids(tags) == tag_ids
         assert tag_helper.ids2modeling_tags(tag_ids) == tags
         
-        tag_helper.cascade = True
+        tag_helper.set_cascade_mode('Sliced')
         assert tag_helper.cas_tags2ids(cas_tags) == cas_tag_ids
         assert tag_helper.ids2cas_tags(cas_tag_ids) == cas_tags
         assert tag_helper.modeling_tags2ids(cas_tags) == cas_tag_ids
@@ -114,9 +114,6 @@ class TestTagHelper(object):
         assert tag_helper.build_cas_ent_slices_by_cas_tags(cas_tags) == cas_ent_slices
         assert tag_helper.build_tags_by_cas_tags_and_types(cas_tags, cas_types) == tags
         assert tag_helper.build_tags_by_cas_tags_and_ent_slices_and_types(cas_tags, cas_ent_slices, cas_ent_types) == tags
-        
-        
-        
         
         
         

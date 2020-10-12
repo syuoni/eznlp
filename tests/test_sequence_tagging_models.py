@@ -10,7 +10,7 @@ from transformers import BertTokenizer, BertModel
 from eznlp.sequence_tagging import SequenceTaggingDataset
 from eznlp.sequence_tagging import ConfigHelper
 from eznlp.sequence_tagging import Tagger
-from eznlp.sequence_tagging import NERTrainer
+from eznlp.sequence_tagging import SequenceTaggingTrainer
 
 
 def load_demo_data(labeling='BIOES', seed=515):
@@ -23,14 +23,10 @@ def load_demo_data(labeling='BIOES', seed=515):
     return train_data, val_data, test_data
 
 
-def build_demo_datasets(train_data, val_data, test_data, enum_fields=None, val_fields=None, 
-                        cascade=False, labeling='BIOES'):
-    train_set = SequenceTaggingDataset(train_data, enum_fields=enum_fields, val_fields=val_fields, 
-                                       cascade=cascade, labeling=labeling)
-    val_set   = SequenceTaggingDataset(val_data,   enum_fields=enum_fields, val_fields=val_fields,
-                                       cascade=cascade, labeling=labeling, vocabs=train_set.get_vocabs())
-    test_set  = SequenceTaggingDataset(test_data,  enum_fields=enum_fields, val_fields=val_fields,
-                                       cascade=cascade, labeling=labeling, vocabs=train_set.get_vocabs())
+def build_demo_datasets(train_data, val_data, test_data, **kwargs):
+    train_set = SequenceTaggingDataset(train_data, **kwargs)
+    val_set   = SequenceTaggingDataset(val_data,  vocabs=train_set.get_vocabs(), **kwargs)
+    test_set  = SequenceTaggingDataset(test_data, vocabs=train_set.get_vocabs(), **kwargs)
     return train_set, val_set, test_set
 
 @pytest.fixture
@@ -55,10 +51,6 @@ def BIOES_datasets_morefields(BIOES_data):
     return build_demo_datasets(*BIOES_data, 
                                enum_fields=SequenceTaggingDataset._pre_enum_fields+['upos', 'detailed_pos', 'dep', 'ent_tag'], 
                                val_fields=SequenceTaggingDataset._pre_val_fields+['covid19tag'])
-
-@pytest.fixture
-def BIOES_datasets_cascade(BIOES_data):
-    return build_demo_datasets(*BIOES_data, cascade=True)
 
 @pytest.fixture
 def BIO_data():
@@ -135,7 +127,7 @@ class TestTagger(object):
         assert best_paths012[1:] == best_paths123[:-1]
         
         optimizer = optim.AdamW(tagger.parameters())
-        trainer = NERTrainer(tagger, optimizer=optimizer, device=device)
+        trainer = SequenceTaggingTrainer(tagger, optimizer=optimizer, device=device)
         trainer.train_epoch([batch012])
         trainer.eval_epoch([batch012])
         
@@ -156,7 +148,7 @@ class TestTagger(object):
         batch = train_set.collate([train_set[i] for i in range(0, 4)]).to(device)
         
         optimizer = optim.AdamW(tagger.parameters())
-        trainer = NERTrainer(tagger, optimizer=optimizer, device=device)
+        trainer = SequenceTaggingTrainer(tagger, optimizer=optimizer, device=device)
         trainer.train_steps(train_loader=[batch, batch], 
                             eval_loader=[batch, batch], 
                             n_epochs=10, disp_every_steps=2, eval_every_steps=6)
@@ -176,8 +168,7 @@ class TestTagger(object):
         train_data, *_ = BIOES_data
         bert, tokenizer = BERT_with_tokenizer
         
-        train_set_bert = SequenceTaggingDataset(train_data, enum_fields=[], val_fields=[], 
-                                                sub_tokenizer=tokenizer, cascade=False, labeling='BIOES')
+        train_set_bert = SequenceTaggingDataset(train_data, enum_fields=[], val_fields=[], sub_tokenizer=tokenizer)
         config, tag_helper = train_set_bert.get_model_config()
         config = ConfigHelper.load_default_config(config, ptm=bert, dec_arch='CRF')
         del config['emb']
@@ -197,25 +188,25 @@ class TestTagger(object):
                 self.one_tagger_pass(tagger, train_set, device)
                 
                 
-    def test_tagger_cascade(self, BIOES_datasets_cascade, device):
-        train_set_cascade, *_ = BIOES_datasets_cascade
-        config, tag_helper = train_set_cascade.get_model_config()
+    def test_tagger_cascade_sliced(self, BIOES_datasets, device):
+        train_set, val_set, test_set = BIOES_datasets
+        train_set.set_cascade_mode('Sliced')
+        config, tag_helper = train_set.get_model_config()
         for enc_arch in ['LSTM', 'CNN', 'Transformer']:
             for dec_arch in ['softmax', 'CRF']:
                 config = ConfigHelper.load_default_config(config, enc_arches=[enc_arch], dec_arch=dec_arch)
-                config['dec']['cascade'] = 'no_redundant'
                 tagger = Tagger(config, tag_helper).to(device)
-                self.one_tagger_pass(tagger, train_set_cascade, device)
+                self.one_tagger_pass(tagger, train_set, device)
             
-    def test_tagger_cascade_redundant(self, BIOES_datasets_cascade, device):
-        train_set_cascade, *_ = BIOES_datasets_cascade
-        config, tag_helper = train_set_cascade.get_model_config()
+    def test_tagger_cascade_redundant(self, BIOES_datasets, device):
+        train_set, val_set, test_set = BIOES_datasets
+        train_set.set_cascade_mode('Straight')
+        config, tag_helper = train_set.get_model_config()
         for enc_arch in ['LSTM', 'CNN', 'Transformer']:
             for dec_arch in ['softmax', 'CRF']:
                 config = ConfigHelper.load_default_config(config, enc_arches=[enc_arch], dec_arch=dec_arch)
-                config['dec']['cascade'] = 'redundant'
                 tagger = Tagger(config, tag_helper).to(device)
-                self.one_tagger_pass(tagger, train_set_cascade, device)
+                self.one_tagger_pass(tagger, train_set, device)
             
             
     def test_tagger_nofields(self, BIOES_datasets_nofields, device):

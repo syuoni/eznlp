@@ -83,7 +83,7 @@ class CRFDecoder(Decoder):
     
     
 class CascadeDecoder(Decoder):
-    def __init__(self, base_decoder: Decoder, redundant: bool=False):
+    def __init__(self, base_decoder: Decoder, mode: str='straight'):
         super().__init__(base_decoder.config, base_decoder.tag_helper)
         
         self.base_decoder = base_decoder
@@ -91,7 +91,9 @@ class CascadeDecoder(Decoder):
         self.cas_criterion = nn.CrossEntropyLoss(ignore_index=self.tag_helper.get_cas_type_pad_idx(), reduction='sum')
         reinit_layer_(self.cas_hid2type, 'sigmoid')
         
-        self.redundant = redundant
+        if mode.lower() not in ('straight', 'sliced'):
+            raise ValueError(f"Invalid cascade mode {mode}")
+        self.mode = mode
         
         
     def forward(self, batch: Batch, full_hidden: Tensor):
@@ -100,10 +102,9 @@ class CascadeDecoder(Decoder):
         # type_feats: (batch, step, type_dim)
         type_feats = self.cas_hid2type(full_hidden)
         
-        if self.redundant:
+        if self.mode.lower() == 'straight':
             batch_type_ids = self.tag_helper.fetch_batch_cas_type_ids(batch.tags_objs)
             type_losses = [self.cas_criterion(tfeats[:slen], tids) for tfeats, tids, slen in zip(type_feats, batch_type_ids, batch.seq_lens.cpu().tolist())]
-            
         else:
             # TODO: Teacher-forcing?
             type_losses = []
@@ -113,7 +114,6 @@ class CascadeDecoder(Decoder):
                 else:
                     ent_type_feats = torch.stack([tfeats[sli].mean(dim=0) for sli in ent_slices], dim=0)
                     type_losses.append(self.cas_criterion(ent_type_feats, ent_type_ids))
-            
         return tag_losses + torch.stack(type_losses, dim=0)
     
     
@@ -124,7 +124,7 @@ class CascadeDecoder(Decoder):
         type_feats = self.cas_hid2type(full_hidden)
         
         batch_tags = []
-        if self.redundant:
+        if self.mode.lower() == 'straight':
             batch_type_ids = type_feats.argmax(dim=-1)
             batch_type_ids = unpad_seqs(batch_type_ids, batch.seq_lens)
             for cas_tags, cas_type_ids in zip(batch_cas_tags, batch_type_ids):
