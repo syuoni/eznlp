@@ -9,7 +9,7 @@ from torchtext.experimental.vocab import Vocab
 from torchtext.experimental.functional import sequential_transforms, vocab_func, totensor
 
 from ..datasets_utils import TensorWrapper, Batch
-from .data_utils import tags2simple_entities
+from .transitions import tags2slices_and_types
 
 
 
@@ -258,17 +258,17 @@ class TagHelper(object):
         return [tag.split('-')[1] if '-' in tag else tag for tag in tags]
         
     def build_cas_ent_slices_and_types_by_tags(self, tags: list):
-        simple_entities = tags2simple_entities(tags, labeling=self.labeling)
-        cas_ent_slices = [slice(ent['start'], ent['stop']) for ent in simple_entities]
-        cas_ent_types = [ent['type'] for ent in simple_entities]
+        slices_and_types = tags2slices_and_types(tags, labeling=self.labeling)
+        cas_ent_slices = [sli for sli, typ in slices_and_types]
+        cas_ent_types = [typ for sli, typ in slices_and_types]
         return cas_ent_slices, cas_ent_types
         
     def build_cas_ent_slices_by_cas_tags(self, cas_tags: list):
         """
         This functions is used for decoding. 
         """
-        simple_entities = tags2simple_entities(cas_tags, labeling=self.labeling)
-        cas_ent_slices = [slice(ent['start'], ent['stop']) for ent in simple_entities]
+        slices_and_types = tags2slices_and_types(cas_tags, labeling=self.labeling)
+        cas_ent_slices = [sli for sli, typ in slices_and_types]
         return cas_ent_slices
     
     def build_tags_by_cas_tags_and_types(self, cas_tags: list, cas_types: list):

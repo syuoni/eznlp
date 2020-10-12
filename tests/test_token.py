@@ -207,6 +207,8 @@ class TestTokenSequence(object):
         
         assert tokens.raw_text == ["This", "is", "a", "-3.14", "demo", "."]
         assert tokens.text == ["this", "is", "a", "<-real1>", "demo", "."]
+        assert [e-s for s, e in zip(tokens.start, tokens.end)] == [len(tok) for tok in tokens.token_list]
+        
         
     def test_ngrams(self):
         token_list = [Token(tok) for tok in "This is a -3.14 demo .".split()]
@@ -217,4 +219,5 @@ class TestTokenSequence(object):
         assert tokens.trigram == ["this-<sep>-is-<sep>-a", "is-<sep>-a-<sep>-<-real1>", 
                                   "a-<sep>-<-real1>-<sep>-demo", "<-real1>-<sep>-demo-<sep>-.", 
                                   "demo-<sep>-.-<sep>-<pad>", ".-<sep>-<pad>-<sep>-<pad>"]
-    
+        
+        

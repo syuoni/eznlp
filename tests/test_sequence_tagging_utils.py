@@ -3,7 +3,7 @@ import pytest
 import spacy
 
 from eznlp import TokenSequence
-from eznlp.sequence_tagging.data_utils import find_ascending, tags2simple_entities
+from eznlp.sequence_tagging.transitions import find_ascending, tags2slices_and_types
 from eznlp.sequence_tagging import entities2tags, tags2entities
 from eznlp.sequence_tagging.datasets import TagHelper
 
@@ -47,17 +47,17 @@ def BIOES_tag_helper_example():
 
 
 class TestTags2Entities(object):
-    def test_tags2simple_entities(self, BIOES_tags_example):
+    def test_tags2slices_and_types(self, BIOES_tags_example):
         tags, cas_tags, _ = BIOES_tags_example
-        simple_entities = tags2simple_entities(tags, labeling='BIOES')
-        assert len(simple_entities) == 5
-        for ent in simple_entities:
-            assert all(tag.split('-')[1] == ent['type'] for tag in tags[ent['start']:ent['stop']])
+        slices_and_types = tags2slices_and_types(tags, labeling='BIOES')
+        assert len(slices_and_types) == 5
+        for sli, typ in slices_and_types:
+            assert all(tag.split('-')[1] == typ for tag in tags[sli.start:sli.stop])
             
-        simple_entities = tags2simple_entities(cas_tags, labeling='BIOES')
-        assert len(simple_entities) == 5
-        for ent in simple_entities:
-            assert ent['type'] == '<pseudo-entity>'
+        slices_and_types = tags2slices_and_types(cas_tags, labeling='BIOES')
+        assert len(slices_and_types) == 5
+        for sli, typ in slices_and_types:
+            assert typ == '<pseudo-entity>'
             
             
     def test_tags2entities(self):
@@ -65,13 +65,15 @@ class TestTags2Entities(object):
         raw_text = "This is a -3.14 demo. Those are an APPLE and some glass bottles."
         tokens = TokenSequence.from_raw_text(raw_text, nlp)
         
-        entities = [{'entity': 'demo', 'type': 'Ent', 'start': 16, 'end': 20},
-                    {'entity': 'APPLE', 'type': 'Ent', 'start': 35, 'end': 40},
-                    {'entity': 'glass bottles', 'type': 'Ent', 'start': 50, 'end': 63}]
-        tags = ['O', 'O', 'O', 'O', 'S-Ent', 'O', 'O', 'O', 'O', 'S-Ent', 'O', 'O', 'B-Ent', 'E-Ent', 'O']
+        entities = [{'entity': 'demo', 'type': 'EntA', 'start': 16, 'end': 20},
+                    {'entity': 'APPLE', 'type': 'EntA', 'start': 35, 'end': 40},
+                    {'entity': 'glass bottles', 'type': 'EntB', 'start': 50, 'end': 63}]
+        tags = ['O', 'O', 'O', 'O', 'S-EntA', 'O', 'O', 'O', 'O', 'S-EntA', 'O', 'O', 'B-EntB', 'E-EntC', 'O']
         
         tags_built, *_ = entities2tags(raw_text, tokens, entities, labeling='BIOES')
         entities_retr = tags2entities(raw_text, tokens, tags, labeling='BIOES')
+        assert tags_built[-2] == 'E-EntB'
+        tags_built[-2] = 'E-EntC'
         assert tags_built == tags
         assert entities_retr == entities
         
@@ -79,6 +81,11 @@ class TestTags2Entities(object):
         for span in tokens.spans_within_max_length(10):
             entities_retr_spans.extend(tags2entities(raw_text, tokens[span], tags[span], labeling='BIOES'))
         assert entities_retr_spans == entities
+        
+        entities_retr = tags2entities(raw_text, tokens, tags, labeling='BIOES', how_different_types='breaking')
+        assert entities_retr[:2] == entities[:2]
+        assert entities_retr[2]['type'] == 'EntB'
+        assert entities_retr[3]['type'] == 'EntC'
         
         
 class TestTagHelper(object):
@@ -100,6 +107,7 @@ class TestTagHelper(object):
         
         assert tag_helper.cas_types2ids(cas_types) == cas_type_ids
         assert tag_helper.ids2cas_types(cas_type_ids) == cas_types
+        
         
     def test_cascade_transform(self, BIOES_tags_example):
         tags, cas_tags, cas_types = BIOES_tags_example

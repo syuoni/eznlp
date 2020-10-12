@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 
-from .data_utils import tags2entities
+from .transitions import tags2entities
 
 
 def _align_data(dataset: Dataset, gold_entities_data: list):

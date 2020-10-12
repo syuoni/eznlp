@@ -28,7 +28,7 @@ setup(name='eznlp',
                         "numpy",
                         "tqdm",
                         "pytest"],
-      package_data={'eznlp': ["sequence_tagging/transitions/*"]}, 
+      package_data={'eznlp': ["sequence_tagging/transitions.xlsx"]}, 
       include_package_data=True, 
       python_requires ='>=3.8,<4')
 
