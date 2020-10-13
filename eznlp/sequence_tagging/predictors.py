@@ -5,8 +5,6 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 
-from .transitions import tags2entities
-
 
 def _align_data(dataset: Dataset, gold_entities_data: list):
     df = pd.DataFrame(dataset.data)
@@ -72,8 +70,7 @@ class Predictor(object):
         for tokens, raw_text, tags_pred in zip(df['tokens'].tolist(), 
                                                df['text'].tolist(),
                                                self.predict_tags(dataset, **kwargs)):
-            entities_pred = tags2entities(raw_text, tokens, tags_pred, 
-                                          labeling=self.tagger.decoder.tag_helper.labeling)
+            entities_pred = self.tagger.decoder.tag_helper.translator.tags2text_chunks(tags_pred, raw_text, tokens)
             entities_pred_list.append(entities_pred)
             
         return _build_entities_data(df, gold_entities_df, entities_pred_list)
@@ -96,8 +93,7 @@ class Predictor(object):
         for tokens, raw_text, tags_gold in zip(df['tokens'].tolist(), 
                                                df['text'].tolist(),
                                                df['tags'].tolist()):
-            entities_retr = tags2entities(raw_text, tokens, tags_gold, 
-                                          labeling=self.tagger.decoder.tag_helper.labeling)
+            entities_retr = self.tagger.decoder.tag_helper.translator.tags2text_chunks(tags_gold, raw_text, tokens)
             entities_retr_list.append(entities_retr)
                 
         return _build_entities_data(df, gold_entities_df, entities_retr_list)

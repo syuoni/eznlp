@@ -1,11 +1,15 @@
 # -*- coding: utf-8 -*-
 import pytest
 import spacy
+import numpy as np
 
 from eznlp import TokenSequence
-from eznlp.sequence_tagging.transitions import find_ascending, tags2slices_and_types
-from eznlp.sequence_tagging import entities2tags, tags2entities
+from eznlp.sequence_tagging import parse_conll_file
+from eznlp.sequence_tagging import ChunksTagsTranslator
+from eznlp.sequence_tagging import precision_recall_f1_report
+from eznlp.sequence_tagging.transitions import find_ascending
 from eznlp.sequence_tagging.datasets import TagHelper
+
 
 
 def test_find_ascending():
@@ -46,21 +50,23 @@ def BIOES_tag_helper_example():
     return tag_helper
 
 
-class TestTags2Entities(object):
-    def test_tags2slices_and_types(self, BIOES_tags_example):
+class TestChunksTagsTranslator(object):
+    def test_tags2chunks(self, BIOES_tags_example):
         tags, cas_tags, _ = BIOES_tags_example
-        slices_and_types = tags2slices_and_types(tags, labeling='BIOES')
-        assert len(slices_and_types) == 5
-        for sli, typ in slices_and_types:
-            assert all(tag.split('-')[1] == typ for tag in tags[sli.start:sli.stop])
+        
+        translator = ChunksTagsTranslator(labeling='BIOES')
+        chunks = translator.tags2chunks(tags)
+        assert len(chunks) == 5
+        for chunk_type, chunk_start, chunk_end in chunks:
+            assert all(tag.split('-')[1] == chunk_type for tag in tags[chunk_start:chunk_end])
             
-        slices_and_types = tags2slices_and_types(cas_tags, labeling='BIOES')
-        assert len(slices_and_types) == 5
-        for sli, typ in slices_and_types:
-            assert typ == '<pseudo-entity>'
+        chunks = translator.tags2chunks(cas_tags)
+        assert len(chunks) == 5
+        for chunk_type, chunk_start, chunk_end in chunks:
+            assert chunk_type == '<pseudo-type>'
             
             
-    def test_tags2entities(self):
+    def test_tags2text_chunks(self):
         nlp = spacy.load("en_core_web_sm")
         raw_text = "This is a -3.14 demo. Those are an APPLE and some glass bottles."
         tokens = TokenSequence.from_raw_text(raw_text, nlp)
@@ -68,24 +74,28 @@ class TestTags2Entities(object):
         entities = [{'entity': 'demo', 'type': 'EntA', 'start': 16, 'end': 20},
                     {'entity': 'APPLE', 'type': 'EntA', 'start': 35, 'end': 40},
                     {'entity': 'glass bottles', 'type': 'EntB', 'start': 50, 'end': 63}]
+        text_chunks = [(ent['entity'], ent['type'], ent['start'], ent['end']) for ent in entities]
         tags = ['O', 'O', 'O', 'O', 'S-EntA', 'O', 'O', 'O', 'O', 'S-EntA', 'O', 'O', 'B-EntB', 'E-EntC', 'O']
         
-        tags_built, *_ = entities2tags(raw_text, tokens, entities, labeling='BIOES')
-        entities_retr = tags2entities(raw_text, tokens, tags, labeling='BIOES')
+        translator = ChunksTagsTranslator(labeling='BIOES')
+        tags_built, *_ = translator.text_chunks2tags(text_chunks, raw_text, tokens)
+        text_chunks_retr = translator.tags2text_chunks(tags, raw_text, tokens, breaking_for_types=False)
+        
         assert tags_built[-2] == 'E-EntB'
         tags_built[-2] = 'E-EntC'
         assert tags_built == tags
-        assert entities_retr == entities
+        assert text_chunks_retr == text_chunks
         
-        entities_retr_spans = []
+        text_chunks_retr_spans = []
         for span in tokens.spans_within_max_length(10):
-            entities_retr_spans.extend(tags2entities(raw_text, tokens[span], tags[span], labeling='BIOES'))
-        assert entities_retr_spans == entities
+            text_chunks_retr_spans.extend(translator.tags2text_chunks(tags[span], raw_text, tokens[span], breaking_for_types=False))
+        assert text_chunks_retr_spans == text_chunks
         
-        entities_retr = tags2entities(raw_text, tokens, tags, labeling='BIOES', how_different_types='breaking')
-        assert entities_retr[:2] == entities[:2]
-        assert entities_retr[2]['type'] == 'EntB'
-        assert entities_retr[3]['type'] == 'EntC'
+        
+        text_chunks_retr = translator.tags2text_chunks(tags, raw_text, tokens, breaking_for_types=True)
+        assert text_chunks_retr[:2] == text_chunks[:2]
+        assert text_chunks_retr[2][1] == 'EntB'
+        assert text_chunks_retr[3][1] == 'EntC'
         
         
 class TestTagHelper(object):
@@ -122,6 +132,65 @@ class TestTagHelper(object):
         assert tag_helper.build_cas_ent_slices_by_cas_tags(cas_tags) == cas_ent_slices
         assert tag_helper.build_tags_by_cas_tags_and_types(cas_tags, cas_types) == tags
         assert tag_helper.build_tags_by_cas_tags_and_ent_slices_and_types(cas_tags, cas_ent_slices, cas_ent_types) == tags
+        
+        
+class TestMetrics(object):
+    def one_pair_pass(self, tags_gold_data, tags_pred_data, expected_ave_scores):
+        translator = ChunksTagsTranslator(labeling='BIO')
+        chunks_gold_data = [translator.tags2chunks(tags, False) for tags in tags_gold_data]
+        chunks_pred_data = [translator.tags2chunks(tags, False) for tags in tags_pred_data]
+        
+        scores, ave_scores = precision_recall_f1_report(chunks_gold_data, chunks_pred_data)
+        
+        for key in ave_scores:
+            for score_key in ['precision', 'recall', 'f1']:
+                assert np.abs(ave_scores[key][score_key] - expected_ave_scores[key][score_key]) < 1e-6
+                
+        
+    def test_example1(self):
+        tags_gold_data = [['B-A', 'B-B', 'O', 'B-A']]
+        tags_pred_data = [['O', 'B-B', 'B-C', 'B-A']]
+        expected_ave_scores = {'macro': {'f1': 5/9, 
+                                         'precision': 2/3,
+                                         'recall': 1/2}, 
+                               'micro': {'f1': 2/3, 
+                                         'precision': 2/3, 
+                                         'recall': 2/3}}
+        self.one_pair_pass(tags_gold_data, tags_pred_data, expected_ave_scores)
+        
+        
+    def test_example2(self):
+        tags_gold_data = [['O', 'O', 'O', 'B-MISC', 'I-MISC', 'I-MISC', 'O'], ['B-PER', 'I-PER', 'O']]
+        tags_pred_data = [['O', 'O', 'B-MISC', 'I-MISC', 'I-MISC', 'I-MISC', 'O'], ['B-PER', 'I-PER', 'O']]
+        expected_ave_scores = {'macro': {'f1': 0.5, 
+                                         'precision': 0.5,
+                                         'recall': 0.5}, 
+                               'micro': {'f1': 0.5, 
+                                         'precision': 0.5, 
+                                         'recall': 0.5}}
+        self.one_pair_pass(tags_gold_data, tags_pred_data, expected_ave_scores)
+        
+        
+    def test_conll2000(self):
+        # https://www.clips.uantwerpen.be/conll2000/chunking/output.html
+        # https://github.com/chakki-works/seqeval
+        gold_data = parse_conll_file("assets/conlleval/output.txt", 
+                                     columns=['text', 'pos_tag', 'chunking_tag_gold', 'chunking_tag_pred'], 
+                                     trg_col='chunking_tag_gold')
+        pred_data = parse_conll_file("assets/conlleval/output.txt", 
+                                     columns=['text', 'pos_tag', 'chunking_tag_gold', 'chunking_tag_pred'], 
+                                     trg_col='chunking_tag_pred')
+        
+        tags_gold_data = [ex['tags'] for ex in gold_data]
+        tags_pred_data = [ex['tags'] for ex in pred_data]
+        expected_ave_scores = {'macro': {'f1': 0.55249368, 
+                                         'precision': 0.54708338,
+                                         'recall': 0.58664937}, 
+                               'micro': {'f1': 0.73983740, 
+                                         'precision': 0.68421053, 
+                                         'recall': 0.80530973}}
+        self.one_pair_pass(tags_gold_data, tags_pred_data, expected_ave_scores)
+        
         
         
         

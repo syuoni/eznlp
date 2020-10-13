@@ -9,8 +9,7 @@ from torchtext.experimental.vocab import Vocab
 from torchtext.experimental.functional import sequential_transforms, vocab_func, totensor
 
 from ..datasets_utils import TensorWrapper, Batch
-from .transitions import tags2slices_and_types
-
+from .transitions import ChunksTagsTranslator
 
 
 class SequenceTaggingDataset(Dataset):
@@ -235,6 +234,7 @@ class TagHelper(object):
     def __init__(self, cascade_mode: str='none', labeling='BIOES'):
         self.set_cascade_mode(cascade_mode)
         self.labeling = labeling
+        self.translator = ChunksTagsTranslator(labeling=labeling)
         
     def set_cascade_mode(self, cascade_mode: str):
         if cascade_mode.lower() not in ('none', 'straight', 'sliced'):
@@ -258,17 +258,17 @@ class TagHelper(object):
         return [tag.split('-')[1] if '-' in tag else tag for tag in tags]
         
     def build_cas_ent_slices_and_types_by_tags(self, tags: list):
-        slices_and_types = tags2slices_and_types(tags, labeling=self.labeling)
-        cas_ent_slices = [sli for sli, typ in slices_and_types]
-        cas_ent_types = [typ for sli, typ in slices_and_types]
+        chunks = self.translator.tags2chunks(tags)
+        cas_ent_types = [typ for typ, start, end in chunks]
+        cas_ent_slices = [slice(start, end) for typ, start, end in chunks]
         return cas_ent_slices, cas_ent_types
         
     def build_cas_ent_slices_by_cas_tags(self, cas_tags: list):
         """
         This functions is used for decoding. 
         """
-        slices_and_types = tags2slices_and_types(cas_tags, labeling=self.labeling)
-        cas_ent_slices = [sli for sli, typ in slices_and_types]
+        chunks = self.translator.tags2chunks(cas_tags)
+        cas_ent_slices = [slice(start, end) for typ, start, end in chunks]
         return cas_ent_slices
     
     def build_tags_by_cas_tags_and_types(self, cas_tags: list, cas_types: list):

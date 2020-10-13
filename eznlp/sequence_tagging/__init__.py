@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-from .transitions import entities2tags, tags2entities, check_tags_legal
-from .metrics import f1_score
+from .transitions import ChunksTagsTranslator
+from .raw_data import parse_conll_file
 from .datasets import SequenceTaggingDataset
 from .config_utils import ConfigHelper
 from .taggers import Tagger
 from .trainers import SequenceTaggingTrainer
 from .predictors import Predictor
-
+from .metrics import precision_recall_f1_report
