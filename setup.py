@@ -10,7 +10,6 @@ with open(os.path.join(here, 'eznlp', '__init__.py')) as f:
     version = re.search(r'__version__ = (["\'])([^"\']*)\1', f.read())[2]
 
 
-
 setup(name='eznlp',
       version=version,
       description='Natural Language Processing by Enwei Zhu',
@@ -22,10 +21,12 @@ setup(name='eznlp',
       keywords='torch',
       packages=find_packages(include=["eznlp", "eznlp.*"]),
       install_requires=["torch>=1.6.0",
+                        "torchtext>=0.7.0",
                         "pytorch-crf>=0.7.2", 
                         "transformers>=3.0.2",
                         "spacy>=2.3.2",
-                        "numpy",
+                        "numpy>=1.18.5",
+                        "pandas>=1.0.5",
                         "tqdm",
                         "pytest"],
       package_data={'eznlp': ["sequence_tagging/transitions.xlsx"]}, 

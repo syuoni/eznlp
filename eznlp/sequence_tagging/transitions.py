@@ -147,11 +147,12 @@ class ChunksTagsTranslator(object):
                     this_tag, this_type = tag, '<pseudo-type>'
                     
             this_trans = self.trans[(prev_tag, this_tag)]
-            # Breaking because of different types, is holding only in case of `append_types` being True. 
-            # In such case, the `prev_tag` must be `B` or `I`. 
-            # The breaking operation is equivalent to treating `prev_tag` as `E`. 
+            # Breaking because of different types, is holding only in case of ``append_types`` being True. 
+            # In such case, the ``prev_tag`` must be ``B`` or ``I`` and 
+            #               the ``this_tag`` must be ``I`` or ``E``. 
+            # The breaking operation is equivalent to treating ``this_tag`` as ``B``. 
             if breaking_for_types and this_trans['append_types'] and (this_type != prev_type):
-                this_trans = self.trans[('E', this_tag)]
+                this_trans = self.trans[(prev_tag, 'B')]
             
             if this_trans['pre_create_entity']:
                 chunks.append((self._vote_in_types(chunk_types, breaking_for_types), 

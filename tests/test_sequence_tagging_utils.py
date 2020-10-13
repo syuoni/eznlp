@@ -11,7 +11,6 @@ from eznlp.sequence_tagging.transitions import find_ascending
 from eznlp.sequence_tagging.datasets import TagHelper
 
 
-
 def test_find_ascending():
     for v in [-3, 2, 2.5, 9]:
         x = list(range(5))
@@ -150,24 +149,24 @@ class TestMetrics(object):
     def test_example1(self):
         tags_gold_data = [['B-A', 'B-B', 'O', 'B-A']]
         tags_pred_data = [['O', 'B-B', 'B-C', 'B-A']]
-        expected_ave_scores = {'macro': {'f1': 5/9, 
-                                         'precision': 2/3,
-                                         'recall': 1/2}, 
-                               'micro': {'f1': 2/3, 
-                                         'precision': 2/3, 
-                                         'recall': 2/3}}
+        expected_ave_scores = {'macro': {'precision': 2/3,
+                                         'recall': 1/2, 
+                                         'f1': 5/9}, 
+                               'micro': {'precision': 2/3, 
+                                         'recall': 2/3, 
+                                         'f1': 2/3}}
         self.one_pair_pass(tags_gold_data, tags_pred_data, expected_ave_scores)
         
         
     def test_example2(self):
         tags_gold_data = [['O', 'O', 'O', 'B-MISC', 'I-MISC', 'I-MISC', 'O'], ['B-PER', 'I-PER', 'O']]
         tags_pred_data = [['O', 'O', 'B-MISC', 'I-MISC', 'I-MISC', 'I-MISC', 'O'], ['B-PER', 'I-PER', 'O']]
-        expected_ave_scores = {'macro': {'f1': 0.5, 
-                                         'precision': 0.5,
-                                         'recall': 0.5}, 
-                               'micro': {'f1': 0.5, 
-                                         'precision': 0.5, 
-                                         'recall': 0.5}}
+        expected_ave_scores = {'macro': {'precision': 0.5,
+                                         'recall': 0.5, 
+                                         'f1': 0.5}, 
+                               'micro': {'precision': 0.5,
+                                         'recall': 0.5, 
+                                         'f1': 0.5}}
         self.one_pair_pass(tags_gold_data, tags_pred_data, expected_ave_scores)
         
         
@@ -183,14 +182,13 @@ class TestMetrics(object):
         
         tags_gold_data = [ex['tags'] for ex in gold_data]
         tags_pred_data = [ex['tags'] for ex in pred_data]
-        expected_ave_scores = {'macro': {'f1': 0.55249368, 
-                                         'precision': 0.54708338,
-                                         'recall': 0.58664937}, 
-                               'micro': {'f1': 0.73983740, 
-                                         'precision': 0.68421053, 
-                                         'recall': 0.80530973}}
+        
+        expected_ave_scores = {'macro': {'precision': 0.54880502,
+                                         'recall': 0.58776420, 
+                                         'f1': 0.55397552}, 
+                               'micro': {'precision': 0.68831169, 
+                                         'recall': 0.80827887, 
+                                         'f1': 0.74348697}}
         self.one_pair_pass(tags_gold_data, tags_pred_data, expected_ave_scores)
-        
-        
         
         
