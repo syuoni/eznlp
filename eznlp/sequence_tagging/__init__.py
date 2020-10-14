@@ -5,5 +5,4 @@ from .datasets import SequenceTaggingDataset
 from .config_utils import ConfigHelper
 from .taggers import Tagger
 from .trainers import SequenceTaggingTrainer
-from .predictors import Predictor
 from .metrics import precision_recall_f1_report
