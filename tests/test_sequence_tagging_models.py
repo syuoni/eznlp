@@ -120,7 +120,7 @@ class TestTagger(object):
         assert delta_hidden.abs().max().item() < 1e-4
         
         delta_losses = losses012[1:] - losses123[:-1]
-        assert delta_losses.abs().max().item() < 1e-4
+        assert delta_losses.abs().max().item() < 2e-4
         
         best_paths012 = tagger.decode(batch012)
         best_paths123 = tagger.decode(batch123)

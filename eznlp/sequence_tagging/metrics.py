@@ -48,10 +48,10 @@ def _prf_scores_over_samples(chunks_gold_data: list, chunks_pred_data: list, **k
 
 
 def _prf_scores_over_types(chunks_gold_data: list, chunks_pred_data: list, **kwargs):
-    if len(chunks_gold_data) == 0 or len(chunks_pred_data) == 0:
-        return {}
-        
     chunks_set = {ck for chunks_data in [chunks_gold_data, chunks_pred_data] for chunks in chunks_data for ck in chunks}
+    if len(chunks_set) == 0:
+        return {}
+    
     TYPE_POS = len(next(iter(chunks_set))) - 3
     types_set = {ck[TYPE_POS] for ck in chunks_set}
     

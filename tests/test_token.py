@@ -15,29 +15,30 @@ class TestToken(object):
         assert tok.chunking == 'B-NP'
     
     def test_adaptive_lower(self):
-        tok = Token("Of")
+        tok = Token("Of", lower_case_mode='Adaptive')
         assert tok.text == "of"
         
-        tok = Token("THE")
+        tok = Token("THE", lower_case_mode='Adaptive')
         assert tok.text == "the"
         
-        tok = Token("marry")
+        tok = Token("marry", lower_case_mode='Adaptive')
         assert tok.text == "marry"
         
-        tok = Token("MARRY")
+        tok = Token("MARRY", lower_case_mode='Adaptive')
         assert tok.text == "MARRY"
         
-        tok = Token("WATERMELON")
+        tok = Token("WATERMELON", lower_case_mode='Adaptive')
         assert tok.text == "watermelon"
         
-        tok = Token("WATERMELON-")
+        tok = Token("WATERMELON-", lower_case_mode='Adaptive')
         assert tok.text == "WATERMELON-"
         
-        tok = Token("Jack")
+        tok = Token("Jack", lower_case_mode='Adaptive')
         assert tok.text == "jack"
         
-        tok = Token("jACK")
+        tok = Token("jACK", lower_case_mode='Adaptive')
         assert tok.text == "jACK"
+        
         
     def test_en_shapes(self):
         tok = Token("Jack")
@@ -202,7 +203,7 @@ class TestToken(object):
 
 class TestTokenSequence(object):
     def test_text(self):
-        token_list = [Token(tok) for tok in "This is a -3.14 demo .".split()]
+        token_list = [Token(tok, lower_case_mode='All') for tok in "This is a -3.14 demo .".split()]
         tokens = TokenSequence(token_list)
         
         assert tokens.raw_text == ["This", "is", "a", "-3.14", "demo", "."]
@@ -211,7 +212,7 @@ class TestTokenSequence(object):
         
         
     def test_ngrams(self):
-        token_list = [Token(tok) for tok in "This is a -3.14 demo .".split()]
+        token_list = [Token(tok, lower_case_mode='All') for tok in "This is a -3.14 demo .".split()]
         tokens = TokenSequence(token_list)
         
         assert tokens.bigram == ["this-<sep>-is", "is-<sep>-a", "a-<sep>-<-real1>", 

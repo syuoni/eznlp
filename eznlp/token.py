@@ -95,7 +95,7 @@ class Full2Half(object):
         return text.translate(Full2Half._h2f)
     
     
-def adaptive_lower(text):
+def _adaptive_lower(text):
     if len(text) <= 1 or text.islower():
         return text
     
@@ -116,17 +116,17 @@ class Token(object):
     en_shape_feature_names = list(en_shape2criterion.keys())
     num_feature_names = list(num_mark2re.keys()) + [mark[0] + '-' + mark[1:] for mark in num_mark2re.keys()]
     
-    def __init__(self, raw_text, to_lower='adaptive_lower', to_half=True, to_zh_simplified=False, 
+    def __init__(self, raw_text, lower_case_mode='None', to_half=True, to_zh_simplified=False, 
                  to_num_marks=True, **kwargs):
         self.raw_text = raw_text
-        if to_lower == 'adaptive_lower':
-            self.text = adaptive_lower(raw_text)
-        elif to_lower == 'all_lower':
-            self.text = raw_text.lower()
-        elif to_lower == 'not_lower':
+        if lower_case_mode.lower() == 'none':
             self.text = raw_text
+        elif lower_case_mode.lower() == 'all':
+            self.text = raw_text.lower()
+        elif lower_case_mode.lower() == 'adaptive':
+            self.text = _adaptive_lower(raw_text)
         else:
-            raise ValueError(f"Invalid value of to_lower parameter: {to_lower}")
+            raise ValueError(f"Invalid value of lower_case_mode: {lower_case_mode}")
             
         self.text = Full2Half.full2half(self.text) if to_half else self.text
         self.text = HanziConv.toSimplified(self.text) if to_zh_simplified else self.text
