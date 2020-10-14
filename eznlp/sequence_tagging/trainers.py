@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import torch
 import torch.nn as nn
 
 from ..trainers import Trainer
@@ -29,7 +28,6 @@ def calc_acc(model, batch, hidden):
     
     pred_paths = [t for path in pred_paths for t in path]
     gold_paths = [t for path in gold_paths for t in path]
-    
     return sum(pt==gt for pt, gt in zip(pred_paths, gold_paths)) / len(gold_paths)
 
 
@@ -43,50 +41,4 @@ def calc_f1(model, batch, hidden):
     scores, ave_scores = precision_recall_f1_report(chunks_gold_data, chunks_pred_data)
     # According to https://www.clips.uantwerpen.be/conll2000/chunking/output.html
     return ave_scores['micro']['f1']
-
-
-    
-# def train_epoch(model, dataloader, device, optimizer, scheduler=None, clip=5):
-#     model.train()
-#     epoch_loss = 0
-#     epoch_acc = 0
-#     for batch in dataloader:
-#         # Forward pass & Calculate loss
-#         batch = batch.to(device)
-#         losses, hidden = model(batch, return_hidden=True)
-#         loss = losses.mean()
-        
-#         # Backward propagation
-#         optimizer.zero_grad()
-#         loss.backward()
-#         # nn.utils.clip_grad_value_(model.parameters(), clip)
-#         nn.utils.clip_grad_norm_(model.parameters(), clip)
-        
-#         # Update weights
-#         optimizer.step()
-#         if scheduler is not None:
-#             scheduler.step()
-#         # Accumulate loss and acc
-#         epoch_loss += loss.item()
-#         epoch_acc  += calc_acc(model, batch, hidden)
-        
-#     return epoch_loss/len(dataloader), epoch_acc/len(dataloader)
-    
-
-# def eval_epoch(model, dataloader, device):
-#     model.eval()
-#     epoch_loss = 0
-#     epoch_acc = 0
-#     with torch.no_grad():
-#         for batch in dataloader:
-#             # Forward pass & Calculate loss
-#             batch = batch.to(device)
-#             losses, hidden = model(batch, return_hidden=True)
-#             loss = losses.mean()
-            
-#             # Accumulate loss and acc
-#             epoch_loss += loss.item()
-#             epoch_acc  += calc_acc(model, batch, hidden)
-            
-#     return epoch_loss/len(dataloader), epoch_acc/len(dataloader)
 

@@ -8,6 +8,9 @@ def _agg_scores_by_key(scores, key, agg='mean'):
     scores: list/dict
         list/dict of {'precision': ..., 'recall': ..., 'f1': ...}
     """
+    if len(scores) == 0:
+        return 0
+    
     if isinstance(scores, list):
         sum_value = sum(sub_scores[key] for sub_scores in scores)
     else:
@@ -45,8 +48,12 @@ def _prf_scores_over_samples(chunks_gold_data: list, chunks_pred_data: list, **k
 
 
 def _prf_scores_over_types(chunks_gold_data: list, chunks_pred_data: list, **kwargs):
-    TYPE_POS = len(chunks_gold_data[0][0]) - 3
-    types_set = {ck[TYPE_POS] for chunks_data in [chunks_gold_data, chunks_pred_data] for chunks in chunks_data for ck in chunks}
+    if len(chunks_gold_data) == 0 or len(chunks_pred_data) == 0:
+        return {}
+        
+    chunks_set = {ck for chunks_data in [chunks_gold_data, chunks_pred_data] for chunks in chunks_data for ck in chunks}
+    TYPE_POS = len(next(iter(chunks_set))) - 3
+    types_set = {ck[TYPE_POS] for ck in chunks_set}
     
     scores = {}
     for chunk_type in types_set:
@@ -100,5 +107,4 @@ def precision_recall_f1_report(chunks_gold_data: list, chunks_pred_data: list, m
                                 'f1': micro_f1})
     
     return scores, ave_scores
-    
 
