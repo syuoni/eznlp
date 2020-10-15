@@ -35,7 +35,8 @@ class ConfigHelper(object):
     def load_default_config(config, enc_arches=None, dec_arch=None, ptm=None):
         emb_config = config['emb']
         emb_config['tok'].update({'emb_dim': 100, 
-                                  'max_len': 300})
+                                  'max_len': 300, 
+                                  'use_pos_emb': False})
         emb_config['char'].update({'emb_dim': 25, 
                                    'out_dim': 32, 
                                    'kernel_size': 3, 

@@ -186,12 +186,15 @@ class TestMetrics(object):
     def test_conll2000(self):
         # https://www.clips.uantwerpen.be/conll2000/chunking/output.html
         # https://github.com/chakki-works/seqeval
-        gold_data = parse_conll_file("assets/conlleval/output.txt", 
-                                     columns=['text', 'pos_tag', 'chunking_tag_gold', 'chunking_tag_pred'], 
-                                     trg_col='chunking_tag_gold')
-        pred_data = parse_conll_file("assets/conlleval/output.txt", 
-                                     columns=['text', 'pos_tag', 'chunking_tag_gold', 'chunking_tag_pred'], 
-                                     trg_col='chunking_tag_pred')
+        conll_config = {'raw_scheme': 'BIO1', 
+                        'scheme': 'BIO2', 
+                        'columns': ['text', 'pos_tag', 'chunking_tag_gold', 'chunking_tag_pred'], 
+                        'attach_additional_tags': False, 
+                        'skip_docstart': False, 
+                        'lower_case_mode': 'None'}
+        
+        gold_data = parse_conll_file("assets/conlleval/output.txt", trg_col='chunking_tag_gold', **conll_config)
+        pred_data = parse_conll_file("assets/conlleval/output.txt", trg_col='chunking_tag_pred', **conll_config)
         
         tags_gold_data = [ex['tags'] for ex in gold_data]
         tags_pred_data = [ex['tags'] for ex in pred_data]

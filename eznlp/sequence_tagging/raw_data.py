@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-from eznlp import TokenSequence
+from ..token import TokenSequence
+from .transitions import SchemeTranslator
 
 
 def _build_data_entry(example, columns, text_col, trg_col, attach_additional_tags, **kwargs):
@@ -18,9 +19,11 @@ def _build_data_entry(example, columns, text_col, trg_col, attach_additional_tag
 
 
 
-def parse_conll_file(file_path, 
+def parse_conll_file(file_path, raw_scheme='BIO1', scheme='BIOES', 
                      columns=['text', 'pos_tag', 'chunking_tag'], text_col='text', trg_col='chunking_tag', 
                      attach_additional_tags=False, skip_docstart=True, **kwargs):
+    scheme_translator = SchemeTranslator(from_scheme=raw_scheme, to_scheme=scheme)
+    
     data = []
     example = [[] for c in columns]
     with open(file_path, 'r') as f:
@@ -33,6 +36,7 @@ def parse_conll_file(file_path,
             if line == '':
                 curr_data = _build_data_entry(example, columns, text_col, trg_col, attach_additional_tags, **kwargs)
                 if curr_data is not None:
+                    curr_data['tags'] = scheme_translator.translate(curr_data['tags'])
                     data.append(curr_data)
                 example = [[] for c in columns]
             else:

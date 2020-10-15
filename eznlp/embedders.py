@@ -78,9 +78,10 @@ class Embedder(nn.Module):
         
         if 'tok' in config:
             self.word_emb = nn.Embedding(config['tok']['voc_dim'], config['tok']['emb_dim'], padding_idx=config['tok']['pad_idx'])
-            self.pos_emb = nn.Embedding(config['tok']['max_len'], config['tok']['emb_dim'])
             reinit_embedding_(self.word_emb, itos=itos, pretrained_vectors=pretrained_vectors)
-            reinit_embedding_(self.pos_emb)
+            if config['tok']['use_pos_emb']:
+                self.pos_emb = nn.Embedding(config['tok']['max_len'], config['tok']['emb_dim'])
+                reinit_embedding_(self.pos_emb)
             
         if 'char' in config:
             self.char_cnn = CharCNN(**config['char'])
@@ -96,11 +97,14 @@ class Embedder(nn.Module):
         if hasattr(self, 'word_emb'):
             # word_embedded: (batch, step, emb_dim)
             word_embedded = self.word_emb(batch.tok_ids)
-            # pos_embedded: (batch, step, emb_dim)
-            pos = torch.arange(word_embedded.size(1), device=word_embedded.device).repeat(word_embedded.size(0), 1)
-            pos_embedded = self.pos_emb(pos)
             
-            return (word_embedded + pos_embedded) * (0.5**0.5)
+            if hasattr(self, 'pos_emb'):
+                # pos_embedded: (batch, step, emb_dim)
+                pos = torch.arange(word_embedded.size(1), device=word_embedded.device).repeat(word_embedded.size(0), 1)
+                pos_embedded = self.pos_emb(pos)
+                return (word_embedded + pos_embedded) * (0.5**0.5)
+            else:
+                return word_embedded
         else:
             return None
         
