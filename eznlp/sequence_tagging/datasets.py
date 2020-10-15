@@ -19,7 +19,7 @@ class SequenceTaggingDataset(Dataset):
     _pre_val_fields = ['en_shape_features', 'num_features']
     
     def __init__(self, data, enum_fields=None, val_fields=None, 
-                 vocabs=None, sub_tokenizer=None, cascade_mode='none', labeling='BIOES'):
+                 vocabs=None, sub_tokenizer=None, cascade_mode='none', scheme='BIOES'):
         """
         Parameters
         ----------
@@ -36,7 +36,7 @@ class SequenceTaggingDataset(Dataset):
         
         if self._building_vocabs:
             assert self._is_labeled
-            self.tag_helper = TagHelper(cascade_mode=cascade_mode, labeling=labeling)
+            self.tag_helper = TagHelper(cascade_mode=cascade_mode, scheme=scheme)
             self._build_vocabs()
         else:
             self.char_vocab = vocabs[0]
@@ -44,7 +44,7 @@ class SequenceTaggingDataset(Dataset):
             self.enum_fields_vocabs = vocabs[2]
             self.tag_helper = vocabs[3]
             assert self.tag_helper.cascade_mode == cascade_mode
-            assert self.tag_helper.labeling == labeling
+            assert self.tag_helper.scheme == scheme
             if self._is_labeled:
                 self._check_vocabs()
                 
@@ -231,10 +231,10 @@ class SequenceTaggingDataset(Dataset):
     
     
 class TagHelper(object):
-    def __init__(self, cascade_mode: str='none', labeling='BIOES'):
+    def __init__(self, cascade_mode: str='none', scheme='BIOES'):
         self.set_cascade_mode(cascade_mode)
-        self.labeling = labeling
-        self.translator = ChunksTagsTranslator(labeling=labeling)
+        self.scheme = scheme
+        self.translator = ChunksTagsTranslator(scheme=scheme)
         
     def set_cascade_mode(self, cascade_mode: str):
         if cascade_mode.lower() not in ('none', 'straight', 'sliced'):

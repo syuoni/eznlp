@@ -52,6 +52,7 @@ def find_ascending(sequence: list, value, start=None, end=None):
         return find_ascending(sequence, value, start=start, end=mid)
 
 
+
 class ChunksTagsTranslator(object):
     """
     The translator between chunks and tags. 
@@ -74,12 +75,13 @@ class ChunksTagsTranslator(object):
     ----------
     https://github.com/chakki-works/seqeval
     """
-    def __init__(self, labeling='BIOES'):
-        assert labeling in ('BIO', 'BIOES')
-        self.labeling = labeling
+    def __init__(self, scheme='BIOES'):
+        assert scheme in ('BIO1', 'BIO2', 'BIOES')
+        self.scheme = scheme
         
         dirname = os.path.dirname(__file__)
-        trans = pd.read_excel(f"{dirname}/transitions.xlsx", labeling, index_col=[0, 1])
+        trans = pd.read_excel(f"{dirname}/transitions.xlsx", scheme, index_col=[0, 1], 
+                              use_cols=['legal', 'end_of_chunk', 'start_of_chunk'])
         self.trans = {tr: trans.loc[tr].to_dict() for tr in trans.index.tolist()}
         
         
@@ -99,15 +101,26 @@ class ChunksTagsTranslator(object):
         chunks = sorted(chunks, key=lambda ck: ck[2]-ck[1], reverse=True)
         
         for chunk_type, chunk_start, chunk_end in chunks:
+            # Make sure the target slice has NOT been labeled
             if not all(tags[k] == 'O' for k in range(chunk_start, chunk_end)):
                 continue
             
-            if self.labeling == 'BIO':
+            if self.scheme == 'BIO1':
+                if chunk_start == 0 or tags[chunk_start-1] == 'O':
+                    tags[chunk_start] = 'I-' + chunk_type
+                else:
+                    tags[chunk_start] = 'B-' + chunk_type
+                for k in range(chunk_start+1, chunk_end):
+                    tags[k] = 'I-' + chunk_type
+                if chunk_end < len(tags) and tags[chunk_end].startswith('I-'):
+                    tags[chunk_end] = tags[chunk_end].replace('I-', 'B-', 1)
+                    
+            elif self.scheme == 'BIO2':
                 tags[chunk_start] = 'B-' + chunk_type
                 for k in range(chunk_start+1, chunk_end):
                     tags[k] = 'I-' + chunk_type
                     
-            elif self.labeling == 'BIOES':
+            elif self.scheme == 'BIOES':
                 if chunk_end - chunk_start == 1:
                     tags[chunk_start] = 'S-' + chunk_type
                 else:
@@ -134,7 +147,7 @@ class ChunksTagsTranslator(object):
         chunks = []
         
         prev_tag, prev_type = 'O', 'O'
-        chunk_start, chunk_end, chunk_types = -1, -1, []
+        chunk_start, chunk_types = -1, []
         
         for k, tag in enumerate(tags):
             if tag in ('O', '<pad>'):
@@ -147,31 +160,32 @@ class ChunksTagsTranslator(object):
                     this_tag, this_type = tag, '<pseudo-type>'
                     
             this_trans = self.trans[(prev_tag, this_tag)]
-            # Breaking because of different types, is holding only in case of ``append_types`` being True. 
+            is_in_chunk = (prev_tag != 'O') and (this_tag != 'O') and \
+                          (not this_trans['end_of_chunk']) and (not this_trans['start_of_chunk'])
+            
+            # Breaking because of different types, is holding only in case of ``is_in_chunk`` being True. 
             # In such case, the ``prev_tag`` must be ``B`` or ``I`` and 
             #               the ``this_tag`` must be ``I`` or ``E``. 
             # The breaking operation is equivalent to treating ``this_tag`` as ``B``. 
-            if breaking_for_types and this_trans['append_types'] and (this_type != prev_type):
+            if is_in_chunk and breaking_for_types and (this_type != prev_type):
                 this_trans = self.trans[(prev_tag, 'B')]
-            
-            if this_trans['pre_create_entity']:
-                chunks.append((self._vote_in_types(chunk_types, breaking_for_types), 
-                               chunk_start, chunk_end))
-            if this_trans['update_start']:
+                is_in_chunk = False
+                
+            if this_trans['end_of_chunk']:
+                chunks.append((self._vote_in_types(chunk_types, breaking_for_types), chunk_start, k))
+                
+            if this_trans['start_of_chunk']:
                 chunk_start = k
-            if this_trans['update_end']:
-                chunk_end = k + 1
-            if this_trans['create_types']:
                 chunk_types = [this_type]
-            if this_trans['append_types']:
+                
+            if is_in_chunk:
                 chunk_types.append(this_type)
                 
-            prev_tag, prev_type = this_trans['leave_tag'], this_type
+            prev_tag, prev_type = this_tag, this_type
             
             
         if prev_tag != 'O':
-            chunks.append((self._vote_in_types(chunk_types, breaking_for_types), 
-                           chunk_start, chunk_end))
+            chunks.append((self._vote_in_types(chunk_types, breaking_for_types), chunk_start, len(tags)))
             
         return chunks
         
@@ -247,120 +261,23 @@ class ChunksTagsTranslator(object):
         chunks, errors, mismatches = self.text_chunks2chunks(text_chunks, raw_text, tokens, **kwargs)
         return self.chunks2tags(chunks, len(tokens), **kwargs), errors, mismatches
     
+    
+class SchemeTranslator(object):
+    """
+    The translator between tags of different tagging schemes. 
+    """
+    def __init__(self, from_scheme: str, to_scheme: str, breaking_for_types: bool=True):
+        self.from_ct_translator = ChunksTagsTranslator(scheme=from_scheme)
+        self.to_ct_translator   = ChunksTagsTranslator(scheme=to_scheme)
+        self.breaking_for_types = breaking_for_types
         
         
-#     def entities2tags(self, raw_text: str, tokens: TokenSequence, entities: list):
-#         """
-#         Translate entities to tags. 
-#         """
-#         tags = ['O' for _ in range(len(tokens))]
-#         starts, ends = tokens.start, tokens.end
+    def translate(self, tags):
+        chunks = self.from_ct_translator.tags2chunks(tags, breaking_for_types=self.breaking_for_types)
+        to_tags = self.to_ct_translator.chunks2tags(chunks, len(tags))
+        return to_tags
         
-#         # Longer entities are of higher priority
-#         entities = sorted(entities, key=lambda ent: len(ent), reverse=True)
-#         errors = []
-#         mismatches = []
-#         for ent in entities:
-#             # NOTE: ent_start / ent_end may be modified temporarily
-#             ent_text, ent_type = ent['entity'], ent['type']
-#             ent_start, ent_end = ent['start'], ent['start']
-            
-#             # Error data
-#             if ent_text != raw_text[ent_start:ent_end]:
-#                 if re.sub('[-–]', '-', ent_text) == re.sub('[-–]', '-', raw_text[ent_start:ent_end]):
-#                     pass
-#                 elif re.sub('\s', ' ', ent_text) == re.sub('\s', ' ', raw_text[ent_start:ent_end]):
-#                     pass
-#                 elif ent_text == raw_text[ent_start:ent_start+len(ent_text)]:
-#                     ent_end = ent_start + len(ent_text)
-#                 else:
-#                     errors.append([ent_text, raw_text[ent_start:ent_end]])
-#                     continue
-            
-#             find_start, idx_start = find_ascending(starts, ent_start)
-#             find_end, idx_end = find_ascending(ends, ent_end)
-            
-#             # Mis-matched data
-#             if not find_start:
-#                 mismatches.append([raw_text[starts[idx_start-1]:ends[idx_start-1]], 
-#                                    raw_text[starts[idx_start-1]:ent_start], 
-#                                    raw_text[ent_start:ends[idx_start-1]]])
-#             if not find_end:
-#                 mismatches.append([raw_text[starts[idx_end]:ends[idx_end]], 
-#                                    raw_text[starts[idx_end]:ent_end], 
-#                                    raw_text[ent_end:ends[idx_end]]])
-                
-#             do_labeling = (find_start and find_end)
-            
-#             # Exceptions: If it is almost found... 
-#             if (not find_start) and find_end and (ent_start - starts[idx_start-1] <= 2):
-#                 # ent_start = starts[idx_start-1]
-#                 idx_start = idx_start - 1
-#                 do_labeling = True
-#             if find_start and (not find_end) and (ends[idx_end] - ent_end <= 2):
-#                 # ent_end = ends[idx_end]
-#                 do_labeling = True
-            
-#             # Check if the target slice is unlabeled...
-#             if not all([tags[k] == 'O' for k in range(idx_start, idx_end+1)]):
-#                 do_labeling = False
-            
-#             if do_labeling and self.labeling == 'BIO':
-#                 tags[idx_start] = 'B-' + ent_type
-#                 for k in range(idx_start+1, idx_end+1):
-#                     tags[k] = 'I-' + ent_type
-                    
-#             if do_labeling and self.labeling == 'BIOES':
-#                 if idx_start==idx_end:
-#                     tags[idx_start] = 'S-' + ent_type
-#                 else:
-#                     tags[idx_start] = 'B-' + ent_type
-#                     tags[idx_end] = 'E-' + ent_type
-#                     for k in range(idx_start+1, idx_end):
-#                         tags[k] = 'I-' + ent_type
-                
-#         return tags, errors, mismatches
-    
-    
-# def tags2entities(raw_text: str, tokens: TokenSequence, tags: list, labeling='BIOES', **kwargs):
-#     """
-#     Translate tags to entities. 
-    
-#     Parameters
-#     ----------
-#     raw_text : str
-#         DESCRIPTION.
-#     tokens : `TokenSequence`
-#         DESCRIPTION.
-#     tags : list of str
-#         DESCRIPTION.
-#     labeling : TYPE, optional
-#         DESCRIPTION. The default is 'BIOES'.
-#     **kwargs : TYPE
-#         Passed to `tags2slices_and_types`.
-
-#     Returns
-#     -------
-#     entities : list of dict. 
-#         [{'entity': ...,
-#           'type': ...,
-#           'start': ...,
-#           'end': ...}, ...]
-
-#     """
-#     starts, ends = tokens.start, tokens.end
-#     slices_and_types = tags2slices_and_types(tags, labeling=labeling, **kwargs)
-    
-#     entities = []
-#     for ent_slice, ent_type in slices_and_types:
-#         ent_start = starts[ent_slice.start]
-#         ent_end = ends[ent_slice.stop-1]
-#         entity = {'entity': raw_text[ent_start:ent_end], 
-#                   'type': ent_type, 
-#                   'start': ent_start, 
-#                   'end': ent_end}
-#         entities.append(entity)
-#     return entities
-
+        
+        
 
 

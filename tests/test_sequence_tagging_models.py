@@ -13,12 +13,12 @@ from eznlp.sequence_tagging import Tagger
 from eznlp.sequence_tagging import SequenceTaggingTrainer
 
 
-def load_demo_data(labeling='BIOES', seed=515):
-    with open(f"assets/data/covid19/{labeling}-train-demo-data-{seed}.pkl", 'rb') as f:
+def load_demo_data(scheme='BIOES', seed=515):
+    with open(f"assets/data/covid19/{scheme}-train-demo-data-{seed}.pkl", 'rb') as f:
         train_data = pickle.load(f)
-    with open(f"assets/data/covid19/{labeling}-val-demo-data-{seed}.pkl", 'rb') as f:
+    with open(f"assets/data/covid19/{scheme}-val-demo-data-{seed}.pkl", 'rb') as f:
         val_data = pickle.load(f)
-    with open(f"assets/data/covid19/{labeling}-test-demo-data-{seed}.pkl", 'rb') as f:
+    with open(f"assets/data/covid19/{scheme}-test-demo-data-{seed}.pkl", 'rb') as f:
         test_data = pickle.load(f)
     return train_data, val_data, test_data
 
@@ -36,7 +36,7 @@ def glove100():
 
 @pytest.fixture
 def BIOES_data():
-    return load_demo_data(labeling='BIOES', seed=515)
+    return load_demo_data(scheme='BIOES', seed=515)
 
 @pytest.fixture
 def BIOES_datasets(BIOES_data):
@@ -53,12 +53,12 @@ def BIOES_datasets_morefields(BIOES_data):
                                val_fields=SequenceTaggingDataset._pre_val_fields+['covid19tag'])
 
 @pytest.fixture
-def BIO_data():
-    return load_demo_data(labeling='BIO', seed=515)
+def BIO2_data():
+    return load_demo_data(scheme='BIO2', seed=515)
 
 @pytest.fixture
-def BIO_datasets(BIO_data):
-    return build_demo_datasets(*BIO_data, labeling='BIO')
+def BIO2_datasets(BIO2_data):
+    return build_demo_datasets(*BIO2_data, scheme='BIO2')
 
 @pytest.fixture
 def BERT_with_tokenizer():
@@ -229,13 +229,13 @@ class TestTagger(object):
                 self.one_tagger_pass(tagger, train_set_morefields, device)
                 
 
-    def test_tagger_BIO(self, BIO_datasets, device):
-        train_set_BIO, *_ = BIO_datasets
-        config, tag_helper = train_set_BIO.get_model_config()
+    def test_tagger_BIO2(self, BIO2_datasets, device):
+        train_set_BIO2, *_ = BIO2_datasets
+        config, tag_helper = train_set_BIO2.get_model_config()
         for enc_arch in ['LSTM', 'CNN', 'Transformer']:
             for dec_arch in ['softmax', 'CRF']:
                 config = ConfigHelper.load_default_config(config, enc_arches=[enc_arch], dec_arch=dec_arch)
                 tagger = Tagger(config, tag_helper).to(device)
-                self.one_tagger_pass(tagger, train_set_BIO, device)
+                self.one_tagger_pass(tagger, train_set_BIO2, device)
                 
                 

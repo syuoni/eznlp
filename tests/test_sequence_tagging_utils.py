@@ -5,7 +5,7 @@ import numpy as np
 
 from eznlp import TokenSequence
 from eznlp.sequence_tagging import parse_conll_file
-from eznlp.sequence_tagging import ChunksTagsTranslator
+from eznlp.sequence_tagging import ChunksTagsTranslator, SchemeTranslator
 from eznlp.sequence_tagging import precision_recall_f1_report
 from eznlp.sequence_tagging.transitions import find_ascending
 from eznlp.sequence_tagging.datasets import TagHelper
@@ -44,7 +44,7 @@ def BIOES_tag_helper_example():
     cas_tag2idx = {t: i for i, t in enumerate(idx2cas_tag)}
     idx2cas_type = ['<pad>', 'O', 'A', 'B', 'C']
     cas_type2idx = {t: i for i, t in enumerate(idx2cas_type)}
-    tag_helper = TagHelper(cascade_mode='None', labeling='BIOES')
+    tag_helper = TagHelper(cascade_mode='None', scheme='BIOES')
     tag_helper.set_vocabs(idx2tag, tag2idx, idx2cas_tag, cas_tag2idx, idx2cas_type, cas_type2idx)
     return tag_helper
 
@@ -53,7 +53,7 @@ class TestChunksTagsTranslator(object):
     def test_tags2chunks(self, BIOES_tags_example):
         tags, cas_tags, _ = BIOES_tags_example
         
-        translator = ChunksTagsTranslator(labeling='BIOES')
+        translator = ChunksTagsTranslator(scheme='BIOES')
         chunks = translator.tags2chunks(tags)
         assert len(chunks) == 5
         for chunk_type, chunk_start, chunk_end in chunks:
@@ -76,7 +76,7 @@ class TestChunksTagsTranslator(object):
         text_chunks = [(ent['entity'], ent['type'], ent['start'], ent['end']) for ent in entities]
         tags = ['O', 'O', 'O', 'O', 'S-EntA', 'O', 'O', 'O', 'O', 'S-EntA', 'O', 'O', 'B-EntB', 'E-EntC', 'O']
         
-        translator = ChunksTagsTranslator(labeling='BIOES')
+        translator = ChunksTagsTranslator(scheme='BIOES')
         tags_built, *_ = translator.text_chunks2tags(text_chunks, raw_text, tokens)
         text_chunks_retr = translator.tags2text_chunks(tags, raw_text, tokens, breaking_for_types=False)
         
@@ -97,6 +97,19 @@ class TestChunksTagsTranslator(object):
         assert text_chunks_retr[3][1] == 'EntC'
         
         
+class TestSchemeTranslator(object):
+    def test_scheme_translator(self):
+        tags_dic = {'BIO1':  ['O', 'I-EntA', 'I-EntA', 'I-EntA', 'B-EntA', 'B-EntB', 'O', 'I-EntC', 'I-EntC', 'O'], 
+                    'BIO2':  ['O', 'B-EntA', 'I-EntA', 'I-EntA', 'B-EntA', 'B-EntB', 'O', 'B-EntC', 'I-EntC', 'O'], 
+                    'BIOES': ['O', 'B-EntA', 'I-EntA', 'E-EntA', 'S-EntA', 'S-EntB', 'O', 'B-EntC', 'E-EntC', 'O']}
+        
+        for from_scheme in tags_dic:
+            for to_scheme in tags_dic:
+                from_tags_translated = SchemeTranslator(from_scheme=from_scheme, to_scheme=to_scheme, 
+                                                        breaking_for_types=True).translate(tags_dic[from_scheme])
+                assert from_tags_translated == tags_dic[to_scheme]
+                
+                
 class TestTagHelper(object):
     def test_dictionary(self, BIOES_tags_example, BIOES_tag_ids_example, BIOES_tag_helper_example):
         tags, cas_tags, cas_types = BIOES_tags_example
@@ -122,7 +135,7 @@ class TestTagHelper(object):
         tags, cas_tags, cas_types = BIOES_tags_example
         cas_ent_slices = [slice(2, 3), slice(3, 5), slice(6, 7), slice(8, 12), slice(12, 13)]
         cas_ent_types = ['A', 'B', 'B', 'C', 'C']
-        tag_helper = TagHelper(labeling='BIOES')
+        tag_helper = TagHelper(scheme='BIOES')
         
         assert tag_helper.build_cas_tags_by_tags(tags) == cas_tags
         assert tag_helper.build_cas_types_by_tags(tags) == cas_types
@@ -135,7 +148,7 @@ class TestTagHelper(object):
         
 class TestMetrics(object):
     def one_pair_pass(self, tags_gold_data, tags_pred_data, expected_ave_scores):
-        translator = ChunksTagsTranslator(labeling='BIO')
+        translator = ChunksTagsTranslator(scheme='BIO2')
         chunks_gold_data = [translator.tags2chunks(tags, False) for tags in tags_gold_data]
         chunks_pred_data = [translator.tags2chunks(tags, False) for tags in tags_pred_data]
         
