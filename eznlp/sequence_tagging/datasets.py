@@ -8,7 +8,7 @@ from torch.nn.utils.rnn import pad_sequence
 from torchtext.experimental.vocab import Vocab
 from torchtext.experimental.functional import sequential_transforms, vocab_func, totensor
 
-from ..datasets_utils import TensorWrapper, Batch
+from ..datasets_utils import TensorWrapper, Batch, _fetch_token_id
 from .transitions import ChunksTagsTranslator
 
 
@@ -23,8 +23,10 @@ class SequenceTaggingDataset(Dataset):
         """
         Parameters
         ----------
-        data : list of dict 
-            Each dict contains `tokens` and optionally `tags`. 
+        data : list
+            [{'tokens': TokenSequence, 'tags': list of str}, ...]
+            
+            ``tags`` is an optional key, which does not exist if the data are unlabeled. 
         """
         super().__init__()
         self.data = data
@@ -49,7 +51,7 @@ class SequenceTaggingDataset(Dataset):
                 self._check_vocabs()
                 
         self.sub_tokenizer = sub_tokenizer
-                
+        
         # It is generally recommended to return cpu tensors in multi-process loading. 
         # See https://pytorch.org/docs/stable/data.html#single-and-multi-process-data-loading
         self.char_trans = sequential_transforms(vocab_func(self.char_vocab), totensor(torch.long))
@@ -59,7 +61,7 @@ class SequenceTaggingDataset(Dataset):
         self.val_fields_trans = {f: sequential_transforms(totensor(torch.float), lambda x: (x*2-1) / 10) \
                                  for f in self.val_fields}
         
-            
+        
     def _build_vocabs(self):
         char_counter = Counter()
         tok_counter = Counter()
@@ -87,7 +89,7 @@ class SequenceTaggingDataset(Dataset):
         self.char_vocab = Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + [(c, 100) for c in preserve_chars] + \
                                             char_counter.most_common()), min_freq=5)
         self.tok_vocab = Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + tok_counter.most_common()), min_freq=2)
-        self.enum_fields_vocabs = {f: Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + c.most_common()), min_freq=10) \
+        self.enum_fields_vocabs = {f: Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + c.most_common()), min_freq=5) \
                                    for f, c in enum_fields_counters.items()}
         
         idx2tag = ['<pad>'] + list(tag_counter.keys())

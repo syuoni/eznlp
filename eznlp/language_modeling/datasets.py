@@ -111,6 +111,9 @@ def _slice_chunk(chunk_id, num_chunks, num_items):
 
 
 class PMCMLMDataset(IterableDataset):
+    """
+    PMC Dataset for Masked Language Modeling. 
+    """
     def __init__(self, files, tokenizer, MLM_prob=0.15, max_len=512, shuffle=True, 
                  mp_rank=0, mp_world_size=0, verbose=True):
         super().__init__()
