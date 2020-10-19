@@ -175,7 +175,7 @@ class Token(object):
                 if num_re.fullmatch(text4match) is not None:
                     offset = len(num_mark2re) if negative else 0
                     features[k + offset] = True
-                    if float(self.text) not in preserve_nums:
+                    if to_num_marks and (float(self.text) not in preserve_nums):
                         self.text = mark[0] + '-' + mark[1:] if negative else mark
                     break
                 

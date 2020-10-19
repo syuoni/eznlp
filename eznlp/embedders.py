@@ -5,13 +5,12 @@ import torch.nn as nn
 from torch.nn.utils.rnn import pad_sequence
 
 from .datasets_utils import Batch
-from .nn_utils import reinit_embedding_, reinit_layer_
+from .nn_utils import reinit_embedding_, reinit_lstm_, reinit_gru_, reinit_layer_
 
 
 
 class CharCNN(nn.Module):
-    def __init__(self, voc_dim: int, emb_dim: int, out_dim: int, kernel_size: int, 
-                 dropout: float, pad_idx: int):
+    def __init__(self, voc_dim: int, emb_dim: int, out_dim: int, kernel_size: int, dropout: float, pad_idx: int):
         super().__init__()
         self.emb = nn.Embedding(voc_dim, emb_dim, padding_idx=pad_idx)
         self.conv = nn.Conv1d(emb_dim, out_dim*2, kernel_size=kernel_size, padding=(kernel_size-1)//2)
@@ -43,6 +42,27 @@ class CharCNN(nn.Module):
                              batch_first=True, padding_value=0.0)
         return feats
     
+
+# TODO: 
+class CharRNN(nn.Module):
+    def __init__(self, voc_dim: int, emb_dim: int, out_dim: int, arch: str, dropout: float, pad_idx: int):
+        super().__init__()
+        self.emb = nn.Embedding(voc_dim, emb_dim, padding_idx=pad_idx)
+        
+        rnn_config = {'input_size': emb_dim, 
+                      'hidden_size': out_dim // 2, 
+                      'batch_first': True, 
+                      'bidirectional': True}
+        if arch.lower() == 'lstm':
+            self.rnn = nn.LSTM(**rnn_config)
+            reinit_lstm_(self.rnn)
+        elif arch.lower() == 'gru':
+            self.rnn = nn.GRU(**rnn_config)
+            reinit_gru_(self.rnn)
+        else:
+            raise ValueError(f"Invalid RNN architecture: {arch}")
+            
+            
     
 class EnumEmbedding(nn.Module):
     def __init__(self, voc_dim: int, emb_dim: int, pad_idx: int):

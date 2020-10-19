@@ -82,6 +82,37 @@ class CRFDecoder(Decoder):
     
     
     
+from .linear_crf_inferencer import LinearCRF
+class CRFDecoder_v2(Decoder):
+    def __init__(self, config: dict, tag_helper: TagHelper):
+        super().__init__(config, tag_helper)
+        self.hid2tag = nn.Linear(config['hid_full_dim'], self.tag_helper.get_modeling_tag_voc_dim())
+        self.crf = LinearCRF(self.tag_helper.get_modeling_tag_voc_dim())
+        reinit_layer_(self.hid2tag, 'sigmoid')
+        
+        
+    def forward(self, batch: Batch, full_hidden: Tensor):
+        # tag_feats: (batch, step, tag_dim)
+        tag_feats = self.hid2tag(self.dropout(full_hidden))
+        
+        batch_tag_ids = self.tag_helper.fetch_batch_modeling_tag_ids(batch.tags_objs, padding=True)
+        # losses = -self.crf(tag_feats, batch_tag_ids, mask=(~batch.tok_mask).type(torch.uint8), reduction='none')
+        # return losses
+        
+        unlabed_score, labeled_score = self.crf(tag_feats, batch.seq_lens, batch_tag_ids, batch.tok_mask)
+        return unlabed_score - labeled_score
+    
+        
+    def decode(self, batch: Batch, full_hidden: Tensor):
+        # tag_feats: (batch, step, tag_dim)
+        tag_feats = self.hid2tag(full_hidden)
+        
+        # List of List of predicted-tag-ids
+        _, batch_tag_ids = self.crf.decode(tag_feats, batch.seq_lens)
+        return [self.tag_helper.ids2modeling_tags(tag_ids) for tag_ids in batch_tag_ids]
+
+    
+    
 class CascadeDecoder(Decoder):
     def __init__(self, base_decoder: Decoder, mode: str='straight'):
         super().__init__(base_decoder.config, base_decoder.tag_helper)

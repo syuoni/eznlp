@@ -83,13 +83,10 @@ class SequenceTaggingDataset(Dataset):
                 cas_type_counter.update(self.tag_helper.build_cas_types_by_tags(curr_data['tags']))
                 t.update(1)
                 
-        preserve_chars = string.ascii_letters + string.digits
-        for c in preserve_chars:
-            char_counter.pop(c)
-        self.char_vocab = Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + [(c, 100) for c in preserve_chars] + \
-                                            char_counter.most_common()), min_freq=5)
-        self.tok_vocab = Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + tok_counter.most_common()), min_freq=2)
-        self.enum_fields_vocabs = {f: Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + c.most_common()), min_freq=5) \
+        # TODO: Higher min_freq?
+        self.char_vocab = Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + char_counter.most_common()), min_freq=1)
+        self.tok_vocab = Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + tok_counter.most_common()), min_freq=1)
+        self.enum_fields_vocabs = {f: Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + c.most_common()), min_freq=1) \
                                    for f, c in enum_fields_counters.items()}
         
         idx2tag = ['<pad>'] + list(tag_counter.keys())

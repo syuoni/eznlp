@@ -39,7 +39,8 @@ def reinit_embedding_(emb: nn.Embedding, itos=None, pretrained_vectors=None):
                 acc_vec_abs += pretrained_vec.abs().mean().item()
                 emb.weight.data[idx].copy_(pretrained_vec)
         
-        nn.init.zeros_(emb.weight.data[emb.padding_idx])
+        if emb.padding_idx is not None:
+            nn.init.zeros_(emb.weight.data[emb.padding_idx])
         print(f"OOV tokens: {len(oov_tokens)} ({len(oov_tokens)/len(itos)*100:.2f}%)")
         ave_vec_abs = acc_vec_abs / (len(itos) - len(oov_tokens))
         print(f"Pretrained      vector average absolute value: {ave_vec_abs:.4f}")
@@ -48,7 +49,8 @@ def reinit_embedding_(emb: nn.Embedding, itos=None, pretrained_vectors=None):
     
     else:
         nn.init.uniform_(emb.weight.data, -uniform_range, uniform_range)
-        nn.init.zeros_(emb.weight.data[emb.padding_idx])
+        if emb.padding_idx is not None:
+            nn.init.zeros_(emb.weight.data[emb.padding_idx])
         return None
     
 
