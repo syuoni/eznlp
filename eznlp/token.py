@@ -116,17 +116,17 @@ class Token(object):
     en_shape_feature_names = list(en_shape2criterion.keys())
     num_feature_names = list(num_mark2re.keys()) + [mark[0] + '-' + mark[1:] for mark in num_mark2re.keys()]
     
-    def __init__(self, raw_text, lower_case_mode='None', to_half=True, to_zh_simplified=False, 
-                 to_num_marks=True, **kwargs):
+    def __init__(self, raw_text, case_mode='None', number_mode='None', 
+                 to_half=True, to_zh_simplified=False, **kwargs):
         self.raw_text = raw_text
-        if lower_case_mode.lower() == 'none':
+        if case_mode.lower() == 'none':
             self.text = raw_text
-        elif lower_case_mode.lower() == 'all':
+        elif case_mode.lower() == 'lower':
             self.text = raw_text.lower()
-        elif lower_case_mode.lower() == 'adaptive':
+        elif case_mode.lower() == 'adaptive-lower':
             self.text = _adaptive_lower(raw_text)
         else:
-            raise ValueError(f"Invalid value of lower_case_mode: {lower_case_mode}")
+            raise ValueError(f"Invalid value of case_mode: {case_mode}")
             
         self.text = Full2Half.full2half(self.text) if to_half else self.text
         self.text = HanziConv.toSimplified(self.text) if to_zh_simplified else self.text
@@ -138,8 +138,18 @@ class Token(object):
         self._build_prefix_features()
         self._build_suffix_features()
         self._build_en_shape_features()
-        self._build_num_features(to_num_marks)
         
+        num_mark_text = self._build_num_features()
+        if number_mode.lower() == 'none':
+            pass
+        elif number_mode.lower() == 'marks':
+            self.text = num_mark_text
+        elif number_mode.lower() == 'zeros':
+            self.text = digit_re.sub('0', self.text)
+        else:
+            raise ValueError(f"invalid value of num_mode: {number_mode}")
+            
+            
     def _build_prefix_features(self, min_win=2, max_win=5):
         """
         Prefix features, built on text.
@@ -154,11 +164,12 @@ class Token(object):
         for win in range(min_win, max_win+1):
             setattr(self, f'suffix_{win}', self.text[-win:])
         
-    def _build_num_features(self, to_num_marks=True):
+    def _build_num_features(self):
         """
         Number features, built on text.
         """
         features = [False] * (2 * len(num_mark2re))
+        num_mark_text = self.text
         
         if digit_re.search(self.text) is not None:
             if self.text.startswith('-'):
@@ -175,11 +186,14 @@ class Token(object):
                 if num_re.fullmatch(text4match) is not None:
                     offset = len(num_mark2re) if negative else 0
                     features[k + offset] = True
-                    if to_num_marks and (float(self.text) not in preserve_nums):
-                        self.text = mark[0] + '-' + mark[1:] if negative else mark
+                    
+                    if float(self.text) not in preserve_nums:
+                        num_mark_text = mark[0] + '-' + mark[1:] if negative else mark
                     break
                 
         self.num_features = features
+        return num_mark_text
+        
         
     def get_num_feature(self, key):
         return self.num_features[Token.num_feature_names.index(key)]

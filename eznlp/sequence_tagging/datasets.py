@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import string
 from collections import Counter, OrderedDict
 from tqdm import tqdm
 import torch
@@ -70,19 +69,17 @@ class SequenceTaggingDataset(Dataset):
         cas_tag_counter = Counter()
         cas_type_counter = Counter()
         
-        with tqdm(total=len(self)) as t:
-            for curr_data in self.data:
-                for tok in curr_data['tokens'].raw_text:
-                    char_counter.update(tok)
-                tok_counter.update(curr_data['tokens'].text)
-                for f, c in enum_fields_counters.items():
-                    c.update(getattr(curr_data['tokens'], f))
-                
-                tag_counter.update(curr_data['tags'])
-                cas_tag_counter.update(self.tag_helper.build_cas_tags_by_tags(curr_data['tags']))
-                cas_type_counter.update(self.tag_helper.build_cas_types_by_tags(curr_data['tags']))
-                t.update(1)
-                
+        for curr_data in tqdm(self.data):
+            for tok in curr_data['tokens'].raw_text:
+                char_counter.update(tok)
+            tok_counter.update(curr_data['tokens'].text)
+            for f, c in enum_fields_counters.items():
+                c.update(getattr(curr_data['tokens'], f))
+            
+            tag_counter.update(curr_data['tags'])
+            cas_tag_counter.update(self.tag_helper.build_cas_tags_by_tags(curr_data['tags']))
+            cas_type_counter.update(self.tag_helper.build_cas_types_by_tags(curr_data['tags']))
+            
         # TODO: Higher min_freq?
         self.char_vocab = Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + char_counter.most_common()), min_freq=1)
         self.tok_vocab = Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + tok_counter.most_common()), min_freq=1)
@@ -98,6 +95,18 @@ class SequenceTaggingDataset(Dataset):
         self.tag_helper.set_vocabs(idx2tag, tag2idx, idx2cas_tag, cas_tag2idx, idx2cas_type, cas_type2idx)
         
         
+    def extend_token_vocab(self, *others):
+        tok_counter = Counter()
+        for data in others:
+            for curr_data in data:
+                tok_counter.update(curr_data['tokens'].text)
+                
+        existing_set = set(self.tok_vocab.get_itos())
+        for tok, freq in tok_counter.most_common():
+            if tok not in existing_set and freq >= 1:
+                self.tok_vocab.append_token(tok)
+                
+                
     def _check_vocabs(self):
         tag_counter = Counter()
         for curr_data in self.data:

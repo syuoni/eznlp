@@ -15,28 +15,28 @@ class TestToken(object):
         assert tok.chunking == 'B-NP'
     
     def test_adaptive_lower(self):
-        tok = Token("Of", lower_case_mode='Adaptive')
+        tok = Token("Of", case_mode='Adaptive-Lower')
         assert tok.text == "of"
         
-        tok = Token("THE", lower_case_mode='Adaptive')
+        tok = Token("THE", case_mode='Adaptive-Lower')
         assert tok.text == "the"
         
-        tok = Token("marry", lower_case_mode='Adaptive')
+        tok = Token("marry", case_mode='Adaptive-Lower')
         assert tok.text == "marry"
         
-        tok = Token("MARRY", lower_case_mode='Adaptive')
+        tok = Token("MARRY", case_mode='Adaptive-Lower')
         assert tok.text == "MARRY"
         
-        tok = Token("WATERMELON", lower_case_mode='Adaptive')
+        tok = Token("WATERMELON", case_mode='Adaptive-Lower')
         assert tok.text == "watermelon"
         
-        tok = Token("WATERMELON-", lower_case_mode='Adaptive')
+        tok = Token("WATERMELON-", case_mode='Adaptive-Lower')
         assert tok.text == "WATERMELON-"
         
-        tok = Token("Jack", lower_case_mode='Adaptive')
+        tok = Token("Jack", case_mode='Adaptive-Lower')
         assert tok.text == "jack"
         
-        tok = Token("jACK", lower_case_mode='Adaptive')
+        tok = Token("jACK", case_mode='Adaptive-Lower')
         assert tok.text == "jACK"
         
         
@@ -150,60 +150,69 @@ class TestToken(object):
         assert all(tok.get_en_shape_feature(key) == ans[key] for key in Token.en_shape_feature_names)
         
         
-    def test_numbers(self):
-        tok = Token("5.44")
+    def test_number_to_mark(self):
+        tok = Token("5.44", number_mode='Marks')
         assert tok.raw_text == "5.44"
         assert tok.text == '<real1>'
         assert tok.get_num_feature('<real1>')
         assert not any(tok.get_num_feature(mark) for mark in Token.num_feature_names if mark != '<real1>')
         
-        tok = Token("-5.44")
+        tok = Token("-5.44", number_mode='Marks')
         assert tok.raw_text == "-5.44"
         assert tok.text == '<-real1>'
         assert tok.get_num_feature('<-real1>')
         assert not any(tok.get_num_feature(mark) for mark in Token.num_feature_names if mark != '<-real1>')
             
-        tok = Token("4")
+        tok = Token("4", number_mode='Marks')
         assert tok.raw_text == "4"
         assert tok.text == "4"
         assert tok.get_num_feature('<int1>')
         assert not any(tok.get_num_feature(mark) for mark in Token.num_feature_names if mark != '<int1>')
         
-        tok = Token("-4")
+        tok = Token("-4", number_mode='Marks')
         assert tok.raw_text == "-4"
         assert tok.text == "-4"
         assert tok.get_num_feature('<-int1>')
         assert not any(tok.get_num_feature(mark) for mark in Token.num_feature_names if mark != '<-int1>')
         
-        tok = Token("511")
+        tok = Token("511", number_mode='Marks')
         assert tok.raw_text == "511"
         assert tok.text == "<int3>"
         assert tok.get_num_feature('<int3>')
         assert not any(tok.get_num_feature(mark) for mark in Token.num_feature_names if mark != '<int3>')
         
-        tok = Token("-511")
+        tok = Token("-511", number_mode='Marks')
         assert tok.raw_text == "-511"
         assert tok.text == "<-int3>"
         assert tok.get_num_feature('<-int3>')
         assert not any(tok.get_num_feature(mark) for mark in Token.num_feature_names if mark != '<-int3>')
         
-        tok = Token("2011")
+        tok = Token("2011", number_mode='Marks')
         assert tok.raw_text == "2011"
         assert tok.text == "2011"
         assert tok.get_num_feature('<int4+>')
         assert not any(tok.get_num_feature(mark) for mark in Token.num_feature_names if mark != '<int4+>')
         
-        tok = Token("-2011")
+        tok = Token("-2011", number_mode='Marks')
         assert tok.raw_text == "-2011"
         assert tok.text == "<-int4+>"
         assert tok.get_num_feature('<-int4+>')
         assert not any(tok.get_num_feature(mark) for mark in Token.num_feature_names if mark != '<-int4+>')
         
         
+    def test_number_to_zero(self):
+        tok = Token("5.44", number_mode='Zeros')
+        assert tok.raw_text == "5.44"
+        assert tok.text == '0.00'
+        
+        tok = Token("Jack888_7John", number_mode='Zeros')
+        assert tok.raw_text == "Jack888_7John"
+        assert tok.text == "Jack000_0John"
+        
 
 class TestTokenSequence(object):
     def test_text(self):
-        token_list = [Token(tok, lower_case_mode='All') for tok in "This is a -3.14 demo .".split()]
+        token_list = [Token(tok, case_mode='Lower', number_mode='Marks') for tok in "This is a -3.14 demo .".split()]
         tokens = TokenSequence(token_list)
         
         assert tokens.raw_text == ["This", "is", "a", "-3.14", "demo", "."]
@@ -212,7 +221,7 @@ class TestTokenSequence(object):
         
         
     def test_ngrams(self):
-        token_list = [Token(tok, lower_case_mode='All') for tok in "This is a -3.14 demo .".split()]
+        token_list = [Token(tok, case_mode='Lower', number_mode='Marks') for tok in "This is a -3.14 demo .".split()]
         tokens = TokenSequence(token_list)
         
         assert tokens.bigram == ["this-<sep>-is", "is-<sep>-a", "a-<sep>-<-real1>", 
