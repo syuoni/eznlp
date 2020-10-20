@@ -56,7 +56,7 @@ class Tagger(nn.Module):
         full_hidden = []
         
         if hasattr(self, 'embedder') and hasattr(self, 'encoders'):
-            embedded = self.embedder(batch, word=True, char_cnn=True, enum=True, val=True)
+            embedded = self.embedder(batch, word=True, char=True, enum=True, val=True)
             for encoder in self.encoders:
                 full_hidden.append(encoder(batch, embedded))
                 

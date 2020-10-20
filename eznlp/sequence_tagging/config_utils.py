@@ -37,7 +37,8 @@ class ConfigHelper(object):
         emb_config['tok'].update({'emb_dim': 100, 
                                   'max_len': 300, 
                                   'use_pos_emb': False})
-        emb_config['char'].update({'emb_dim': 25, 
+        emb_config['char'].update({'arch': 'CNN', 
+                                   'emb_dim': 25, 
                                    'out_dim': 32, 
                                    'kernel_size': 3, 
                                    'dropout': 0.5})

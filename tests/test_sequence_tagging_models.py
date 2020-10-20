@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 from torchtext.experimental.vectors import GloVe
 from transformers import BertTokenizer, BertModel
 
+from eznlp.embedders import CharCNN, CharRNN
 from eznlp.sequence_tagging import SequenceTaggingDataset
 from eznlp.sequence_tagging import ConfigHelper
 from eznlp.sequence_tagging import Tagger
@@ -104,6 +105,41 @@ class TestBatching(object):
             break
         for batch in test_loader:
             break
+        
+        
+class TestCharEncoder(object):
+    def one_encoder_pass(self, encoder, batch):
+        encoder.eval()
+        
+        batch_seq_lens1 = batch.seq_lens.clone()
+        batch_seq_lens1[0] = batch_seq_lens1[0] - 1
+        char_feats1 = encoder(batch.char_ids[1:], batch.tok_lens[1:], batch.char_mask[1:], batch_seq_lens1)
+        
+        batch_seq_lens2 = batch.seq_lens.clone()
+        batch_seq_lens2[-1] = batch_seq_lens2[-1] - 1
+        char_feats2 = encoder(batch.char_ids[:-1], batch.tok_lens[:-1], batch.char_mask[:-1], batch_seq_lens2)
+        
+        
+        step = min(char_feats1.size(1), char_feats2.size(1))
+        last_step = batch_seq_lens2[-1].item()
+        assert (char_feats1[0, :step-1]  - char_feats2[0, 1:step]).abs().max() < 1e-4
+        assert (char_feats1[1:-1, :step] - char_feats2[1:-1, :step]).abs().max() < 1e-4
+        assert (char_feats1[-1, :last_step] - char_feats2[-1, :last_step]).abs().max() < 1e-4
+        
+        
+    def test_char_encoder(self, BIOES_datasets, device):
+        train_set, val_set, test_set = BIOES_datasets
+        config, tag_helper = train_set.get_model_config()
+        config = ConfigHelper.load_default_config(config, enc_arches=['LSTM'], dec_arch='CRF')
+        batch = train_set.collate([train_set[i] for i in range(0, 4)]).to(device)
+        
+        char_cnn = CharCNN(config['emb']['char'])
+        self.one_encoder_pass(char_cnn, batch)
+        
+        config['emb']['char']['arch'] = 'LSTM'
+        char_rnn = CharRNN(config['emb']['char'])
+        self.one_encoder_pass(char_rnn, batch)
+        
         
         
 class TestTagger(object):
