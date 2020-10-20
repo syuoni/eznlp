@@ -7,7 +7,7 @@ from ..datasets_utils import Batch
 from .datasets import TagHelper
 from ..embedders import Embedder
 from ..encoders import ShortcutEncoder, RNNEncoder, CNNEncoder, TransformerEncoder, PreTrainedEncoder
-from .decoders import SoftMaxDecoder, CRFDecoder, CascadeDecoder, CRFDecoder_v2
+from .decoders import SoftMaxDecoder, CRFDecoder, CascadeDecoder
 
 
 class Tagger(nn.Module):
