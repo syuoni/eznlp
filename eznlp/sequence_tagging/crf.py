@@ -54,12 +54,18 @@ class CRF(nn.Module):
         nn.init.uniform_(self.eos_transitions.data, -0.1, 0.1)
         
         if pad_idx is not None:
-            self.sos_transitions[pad_idx] = -1e4
-            self.transitions[pad_idx, :]  = -1e4
-            self.transitions[:, pad_idx]  = -1e4
-            self.eos_transitions[pad_idx] = -1e4
+            self.sos_transitions.data[pad_idx] = -1e4
+            self.transitions.data[pad_idx, :]  = -1e4
+            self.transitions.data[:, pad_idx]  = -1e4
+            self.eos_transitions.data[pad_idx] = -1e4
         
+        self.tag_dim = tag_dim
+        self.pad_idx = pad_idx
         self.batch_first = batch_first
+        
+        
+    def __repr__(self):
+        return f"CRF(tag_dim={self.tag_dim}, pad_idx={self.pad_idx}, batch_first={self.batch_first})"
         
         
     def forward(self, emissions: torch.Tensor, tag_ids: torch.LongTensor, mask: torch.BoolTensor):

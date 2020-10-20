@@ -7,14 +7,13 @@ import torch.nn as nn
 
 class Trainer(object):
     def __init__(self, model: nn.Module, optimizer=None, scheduler=None, 
-                 device=None, grad_clip=1.0):
+                 device=None, grad_clip=None):
         self.model = model
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.device = device
         self.grad_clip = grad_clip
         
-        assert optimizer is not None
         assert device is not None
         
         
@@ -36,8 +35,10 @@ class Trainer(object):
         # Backward propagation
         self.optimizer.zero_grad()
         loss.backward()
-        # nn.utils.clip_grad_value_(self.model.parameters(), self.grad_clip)
-        nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
+        
+        if self.grad_clip is not None:
+            # nn.utils.clip_grad_value_(self.model.parameters(), self.grad_clip)
+            nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
         
         # Update weights
         self.optimizer.step()

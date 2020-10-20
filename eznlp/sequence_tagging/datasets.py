@@ -101,12 +101,12 @@ class SequenceTaggingDataset(Dataset):
             for curr_data in data:
                 tok_counter.update(curr_data['tokens'].text)
                 
-        existing_set = set(self.tok_vocab.get_itos())
-        for tok, freq in tok_counter.most_common():
-            if tok not in existing_set and freq >= 1:
-                self.tok_vocab.append_token(tok)
-                
-                
+        existing_tokens = self.tok_vocab.get_itos()
+        existing_set = set(existing_tokens)
+        self.tok_vocab = Vocab(OrderedDict([(tok, 100) for tok in existing_tokens] + \
+                                           [(tok, freq) for tok, freq in tok_counter.most_common() if tok not in existing_set]), min_freq=1)
+        
+        
     def _check_vocabs(self):
         tag_counter = Counter()
         for curr_data in self.data:

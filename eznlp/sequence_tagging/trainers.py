@@ -18,7 +18,7 @@ class SequenceTaggingTrainer(Trainer):
     def forward_batch(self, batch):
         batch = batch.to(self.device)
         losses, hidden = self.model(batch, return_hidden=True)
-        loss = losses.mean()
+        loss = losses.sum()
         
         # acc = _calc_tagging_accuracy(self.model, batch, hidden)
         f1 = _calc_tagging_f1(self.model, batch, hidden)

@@ -59,7 +59,9 @@ class CRFDecoder(Decoder):
     def __init__(self, config: dict, tag_helper: TagHelper):
         super().__init__(config, tag_helper)
         self.hid2tag = nn.Linear(config['hid_full_dim'], self.tag_helper.get_modeling_tag_voc_dim())
-        self.crf = CRF(self.tag_helper.get_modeling_tag_voc_dim(), batch_first=True)
+        self.crf = CRF(tag_dim=self.tag_helper.get_modeling_tag_voc_dim(), 
+                       pad_idx=self.tag_helper.get_modeling_tag_pad_idx(), 
+                       batch_first=True)
         reinit_layer_(self.hid2tag, 'sigmoid')
         
         
