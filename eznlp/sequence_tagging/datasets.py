@@ -6,6 +6,8 @@ from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
 from torchtext.experimental.vocab import Vocab
 from torchtext.experimental.functional import sequential_transforms, vocab_func, totensor
+from allennlp.modules.elmo import batch_to_ids as batch_to_elmo_ids
+
 
 from ..datasets_utils import TensorWrapper, Batch, _fetch_token_id
 from .transitions import ChunksTagsTranslator
