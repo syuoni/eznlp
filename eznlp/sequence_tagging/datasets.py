@@ -11,16 +11,10 @@ from allennlp.modules.elmo import batch_to_ids as batch_to_elmo_ids
 
 from ..datasets_utils import TensorWrapper, Batch, _fetch_token_id
 from .transitions import ChunksTagsTranslator
-
+from .config import DecoderConfig, TaggerConfig
 
 class SequenceTaggingDataset(Dataset):
-    _pre_enum_fields = ['bigram', 'trigram', 'en_pattern', 'en_pattern_sum', 
-                        'prefix_2', 'prefix_3', 'prefix_4', 'prefix_5', 
-                        'suffix_2', 'suffix_3', 'suffix_4', 'suffix_5']
-    _pre_val_fields = ['en_shape_features', 'num_features']
-    
-    def __init__(self, data, enum_fields=None, val_fields=None, 
-                 vocabs=None, sub_tokenizer=None, cascade_mode='none', scheme='BIOES'):
+    def __init__(self, data: list, config: TaggerConfig):
         """
         Parameters
         ----------
@@ -31,27 +25,25 @@ class SequenceTaggingDataset(Dataset):
         """
         super().__init__()
         self.data = data
-        self._is_labeled = ('tags' in data[0])
-        self._building_vocabs = (vocabs is None)
+        self.config = config
         
-        self.enum_fields = enum_fields if enum_fields is not None else self._pre_enum_fields
-        self.val_fields = val_fields if val_fields is not None else self._pre_val_fields
+        self._is_labeled = ('tags' in data[0])
+        self._building_vocabs = (config.decoder.idx2tag is None)
+        
         
         if self._building_vocabs:
             assert self._is_labeled
-            self.tag_helper = TagHelper(cascade_mode=cascade_mode, scheme=scheme)
             self._build_vocabs()
         else:
-            self.char_vocab = vocabs[0]
-            self.tok_vocab = vocabs[1]
-            self.enum_fields_vocabs = vocabs[2]
-            self.tag_helper = vocabs[3]
-            assert self.tag_helper.cascade_mode == cascade_mode
-            assert self.tag_helper.scheme == scheme
+            # self.char_vocab = vocabs[0]
+            # self.tok_vocab = vocabs[1]
+            # self.enum_fields_vocabs = vocabs[2]
+            # self.tag_helper = vocabs[3]
+            # assert self.tag_helper.cascade_mode == cascade_mode
+            # assert self.tag_helper.scheme == scheme
             if self._is_labeled:
                 self._check_vocabs()
                 
-        self.sub_tokenizer = sub_tokenizer
         
         # It is generally recommended to return cpu tensors in multi-process loading. 
         # See https://pytorch.org/docs/stable/data.html#single-and-multi-process-data-loading
@@ -62,10 +54,24 @@ class SequenceTaggingDataset(Dataset):
         self.val_fields_trans = {f: sequential_transforms(totensor(torch.float), lambda x: (x*2-1) / 10) \
                                  for f in self.val_fields}
         
-        
+    def _build_token_vocab(self):
+        counter = Counter()
+        for curr_data in self.data:
+            counter.update(curr_data['tokens'].text)
+            
+        self.config.decoder.token.vocab = Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + counter.most_common()), min_freq=1)
+    
+    
+    
     def _build_vocabs(self):
         char_counter = Counter()
         tok_counter = Counter()
+        
+        self.config.embedder.token
+        self.config.embedder.char
+        self.config.embedder.enum
+        
+        
         enum_fields_counters = {f: Counter() for f in self.enum_fields}
         tag_counter = Counter()
         cas_tag_counter = Counter()
@@ -74,7 +80,7 @@ class SequenceTaggingDataset(Dataset):
         for curr_data in tqdm(self.data):
             for tok in curr_data['tokens'].raw_text:
                 char_counter.update(tok)
-            tok_counter.update(curr_data['tokens'].text)
+                
             for f, c in enum_fields_counters.items():
                 c.update(getattr(curr_data['tokens'], f))
             
@@ -84,7 +90,7 @@ class SequenceTaggingDataset(Dataset):
             
         # TODO: Higher min_freq?
         self.char_vocab = Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + char_counter.most_common()), min_freq=1)
-        self.tok_vocab = Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + tok_counter.most_common()), min_freq=1)
+        self.tok_
         self.enum_fields_vocabs = {f: Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + c.most_common()), min_freq=1) \
                                    for f, c in enum_fields_counters.items()}
         

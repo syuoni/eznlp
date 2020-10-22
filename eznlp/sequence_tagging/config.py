@@ -1,65 +1,71 @@
 # -*- coding: utf-8 -*-
+from .config import Config
 
-def _default_encoder_config(arch):
-    if arch.lower() == 'shortcut':
-        return {'arch': arch}
-    elif arch.lower() in ('lstm', 'gru'):
-        return {'arch': arch, 
-                'hid_dim': 128,
-                'n_layers': 2, 
-                'dropout': 0.5}
-    elif arch.lower() == 'cnn':
-        return {'arch': arch, 
-                'hid_dim': 128,
-                'kernel_size': 3,
-                'n_layers': 3, 
-                'dropout': 0.25}
-    elif arch.lower() == 'transformer':
-        return {'arch': arch, 
-                'hid_dim': 128,
-                'nhead': 8,
-                'pf_dim': 256, 
-                'n_layers': 3,
-                'dropout': 0.1}
-    else:
-        raise ValueError(f"Invalid encoder architecture {arch}")
-
-
-def _default_decoder_config(arch):
-    return {'arch': arch, 
-            'dropout': 0.5}
-
+class DecoderConfig(Config):
+    def __init__(self, **kwargs):
+        self.arch = kwargs.pop('arch', 'CRF')
+        self.in_dim = kwargs.pop('in_dim', None)
+        self.dropout = kwargs.pop('dropout', 0.5)
+        
+        self.scheme = kwargs.pop('scheme', 'BIOES')
+        self.cascade_mode = kwargs.pop('cascade_mode', 'None')
+        
+        self.idx2tag = kwargs.pop('idx2tag', None)
+        self.tag2idx = kwargs.pop('tag2idx', None)
+        self.idx2cas_tag = kwargs.pop('idx2cas_tag', None)
+        self.cas_tag2idx = kwargs.pop('cas_tag2idx', None)
+        self.idx2cas_type = kwargs.pop('idx2cas_type', None)
+        self.cas_type2idx = kwargs.pop('cas_type2idx', None)
+        
+        super().__init__(**kwargs)
+        
+        
+class TaggerConfig(Config):
+    def __init__(self, **kwargs):
+        self.embedder = kwargs.pop('embedder', None)
+        self.encoders = kwargs.pop('encoders', None)
+        self.ptm_encoder = kwargs.pop('ptm_encoder', None)
+        self.decoder = kwargs.pop('decoder', None)
+        
+        super().__init__(**kwargs)
+        
+    @property
+    def is_valid(self):
+        is_valid_enc = (self.embedder and self.encoders) or self.ptm_encoder
+        is_valid_dec = self.decoder
+        return is_valid_enc and is_valid_dec
+        
+    @property
+    def name(self):
+        name_elements = []
+        if self.embedder is not None and self.embedder.char is not None:
+            name_elements.append(self.embedder.char.arch)
+        
+        if self.encoders is not None:
+            name_elements.append(self.encoders.arch)
+            
+        if self.ptm_encoder is not None:
+            name_elements.append(self.ptm_encoder.arch)
+            
+        name_elements.append(self.decoder.arch)
+        return '-'.join(name_elements)
+        
+    
 
 class ConfigHelper(object):
     @staticmethod
     def load_default_config(config, enc_arches=None, dec_arch=None, ptm=None):
-        emb_config = config['emb']
-        emb_config['tok'].update({'emb_dim': 100, 
-                                  'max_len': 300, 
-                                  'use_pos_emb': False})
-        emb_config['char'].update({'arch': 'CNN', 
-                                   'emb_dim': 25, 
-                                   'out_dim': 32, 
-                                   'kernel_size': 3, 
-                                   'dropout': 0.5})
-        if 'enum' in emb_config:
-            for f, enum_config in emb_config['enum'].items():
-                enum_config['emb_dim'] = 15 if enum_config['voc_dim'] < 100 else 30
-        if 'val' in emb_config:
-            for f, val_config in emb_config['val'].items():
-                val_config['emb_dim'] = 20
-            
-            
+        
         assert (enc_arches is not None) or (ptm is not None)
-        if enc_arches is not None:
-            config['enc'] = [_default_encoder_config(enc_arch) for enc_arch in enc_arches]
+        # if enc_arches is not None:
+            # config['enc'] = [_default_encoder_config(enc_arch) for enc_arch in enc_arches]
         if ptm is not None:
             config['pt_enc'] = {'hid_dim': ptm.config.hidden_size, 
                                 'arch': 'PTM'}
             
             
         assert (dec_arch is not None)
-        config['dec'] = _default_decoder_config(dec_arch)
+        # config['dec'] = _default_decoder_config(dec_arch)
         
         return ConfigHelper.update_dims(config)
     
