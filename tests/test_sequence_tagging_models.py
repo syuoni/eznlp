@@ -92,7 +92,10 @@ class TestBatching(object):
     def test_batch_to_cuda(self, BIOES_data, device):
         train_data, val_data, test_data = BIOES_data
         
-        config = TaggerConfig()
+        enum_config = ConfigDict(OrderedDict([(f, EnumEmbeddingConfig(emb_dim=20)) for f in Token.basic_enum_fields]))
+        val_config = ConfigDict(OrderedDict([(f, ValEmbeddingConfig(emb_dim=20)) for f in Token.basic_val_fields]))
+        embedder_config = EmbedderConfig(enum=enum_config, val=val_config)
+        config = TaggerConfig(embedder=embedder_config)
         train_set = SequenceTaggingDataset(train_data, config)
         train_loader = DataLoader(train_set, batch_size=8, shuffle=True, collate_fn=train_set.collate, pin_memory=True)
         for batch in train_loader:
