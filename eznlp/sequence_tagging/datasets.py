@@ -5,12 +5,10 @@ import torch
 from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
 from torchtext.experimental.vocab import Vocab
-from torchtext.experimental.functional import sequential_transforms, vocab_func, totensor
 from allennlp.modules.elmo import batch_to_ids as batch_to_elmo_ids
 
 
 from ..datasets_utils import TensorWrapper, Batch, _fetch_token_id
-from .transitions import ChunksTagsTranslator
 from .config import DecoderConfig, TaggerConfig
 
 class SequenceTaggingDataset(Dataset):
@@ -30,109 +28,82 @@ class SequenceTaggingDataset(Dataset):
         self._is_labeled = ('tags' in data[0])
         self._building_vocabs = (config.decoder.idx2tag is None)
         
-        
         if self._building_vocabs:
             assert self._is_labeled
-            self._build_vocabs()
-        else:
-            # self.char_vocab = vocabs[0]
-            # self.tok_vocab = vocabs[1]
-            # self.enum_fields_vocabs = vocabs[2]
-            # self.tag_helper = vocabs[3]
-            # assert self.tag_helper.cascade_mode == cascade_mode
-            # assert self.tag_helper.scheme == scheme
-            if self._is_labeled:
-                self._check_vocabs()
+            
+            self._build_token_vocab()
+            self._build_tag_vocabs()
+            
+            if self.config.embedder.char is not None:
+                self._build_char_vocab()
+            
+            if self.config.embedder.enum is not None:
+                self._build_enum_vocabs()
                 
-        
-        # It is generally recommended to return cpu tensors in multi-process loading. 
-        # See https://pytorch.org/docs/stable/data.html#single-and-multi-process-data-loading
-        self.char_trans = sequential_transforms(vocab_func(self.char_vocab), totensor(torch.long))
-        self.tok_trans = sequential_transforms(vocab_func(self.tok_vocab), totensor(torch.long))
-        self.enum_fields_trans = {f: sequential_transforms(vocab_func(v), totensor(torch.long)) \
-                                  for f, v in self.enum_fields_vocabs.items()}
-        self.val_fields_trans = {f: sequential_transforms(totensor(torch.float), lambda x: (x*2-1) / 10) \
-                                 for f in self.val_fields}
+            self.config._update_dims(self.data[0]['tokens'][0])
+        else:
+            if self._is_labeled:
+                self._check_tag_vocabs()
+                
         
     def _build_token_vocab(self):
         counter = Counter()
         for curr_data in self.data:
             counter.update(curr_data['tokens'].text)
+        self.config.embedder.token.set_vocab(Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + counter.most_common()), min_freq=1))
+    
+    def extend_token_vocab(self, *others):
+        counter = Counter()
+        for data in others:
+            for curr_data in data:
+                counter.update(curr_data['tokens'].text)
+                
+        existing_tokens = self.config.embedder.token.vocab.get_itos()
+        existing_set = set(existing_tokens)
+        self.config.embedder.token.set_vocab(Vocab(OrderedDict([(tok, 100) for tok in existing_tokens] + \
+                                                   [(tok, freq) for tok, freq in counter.most_common() if tok not in existing_set]), min_freq=1))
+        
+    
+    def _build_char_vocab(self):
+        counter = Counter()
+        for curr_data in self.data:
+            for tok in curr_data['tokens'].raw_text:
+                counter.update(tok)
+        self.config.embedder.char.set_vocab(Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + counter.most_common()), min_freq=1))
+        
+    def _build_enum_vocabs(self):
+        counters = {f: Counter() for f in self.config.embedder.enum.keys()}
+        for curr_data in self.data:
+            for f, c in counters.items():
+                c.update(getattr(curr_data['tokens'], f))
+        
+        for f, enum_config in self.config.embedder.enum.items():
+            enum_config.set_vocab(Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + counters[f].most_common()), min_freq=1))
             
-        self.config.decoder.token.vocab = Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + counter.most_common()), min_freq=1)
-    
-    
-    
-    def _build_vocabs(self):
-        char_counter = Counter()
-        tok_counter = Counter()
-        
-        self.config.embedder.token
-        self.config.embedder.char
-        self.config.embedder.enum
-        
-        
-        enum_fields_counters = {f: Counter() for f in self.enum_fields}
+            
+    def _build_tag_vocabs(self):
         tag_counter = Counter()
         cas_tag_counter = Counter()
         cas_type_counter = Counter()
-        
-        for curr_data in tqdm(self.data):
-            for tok in curr_data['tokens'].raw_text:
-                char_counter.update(tok)
-                
-            for f, c in enum_fields_counters.items():
-                c.update(getattr(curr_data['tokens'], f))
-            
+        for curr_data in self.data:
             tag_counter.update(curr_data['tags'])
-            cas_tag_counter.update(self.tag_helper.build_cas_tags_by_tags(curr_data['tags']))
-            cas_type_counter.update(self.tag_helper.build_cas_types_by_tags(curr_data['tags']))
+            cas_tag_counter.update(self.config.decoder.build_cas_tags_by_tags(curr_data['tags']))
+            cas_type_counter.update(self.config.decoder.build_cas_types_by_tags(curr_data['tags']))
             
-        # TODO: Higher min_freq?
-        self.char_vocab = Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + char_counter.most_common()), min_freq=1)
-        self.tok_
-        self.enum_fields_vocabs = {f: Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + c.most_common()), min_freq=1) \
-                                   for f, c in enum_fields_counters.items()}
+        self.config.decoder.set_vocabs(idx2tag=['<pad>'] + list(tag_counter.keys()), 
+                                       idx2cas_tag=['<pad>'] + list(cas_tag_counter.keys()), 
+                                       idx2cas_type=['<pad>'] + list(cas_type_counter.keys()))
         
-        idx2tag = ['<pad>'] + list(tag_counter.keys())
-        tag2idx = {t: i for i, t in enumerate(idx2tag)}
-        idx2cas_tag = ['<pad>'] + list(cas_tag_counter.keys())
-        cas_tag2idx = {t: i for i, t in enumerate(idx2cas_tag)}
-        idx2cas_type = ['<pad>'] + list(cas_type_counter.keys())
-        cas_type2idx = {t: i for i, t in enumerate(idx2cas_type)}
-        self.tag_helper.set_vocabs(idx2tag, tag2idx, idx2cas_tag, cas_tag2idx, idx2cas_type, cas_type2idx)
-        
-        
-    def extend_token_vocab(self, *others):
-        tok_counter = Counter()
-        for data in others:
-            for curr_data in data:
-                tok_counter.update(curr_data['tokens'].text)
-                
-        existing_tokens = self.tok_vocab.get_itos()
-        existing_set = set(existing_tokens)
-        self.tok_vocab = Vocab(OrderedDict([(tok, 100) for tok in existing_tokens] + \
-                                           [(tok, freq) for tok, freq in tok_counter.most_common() if tok not in existing_set]), min_freq=1)
-        
-        
-    def _check_vocabs(self):
+    def _check_tag_vocabs(self):
         tag_counter = Counter()
         for curr_data in self.data:
             tag_counter.update(curr_data['tags'])
             
-        oov_tags = [tag for tag in tag_counter if tag not in self.tag_helper.tag2idx]
+        oov_tags = [tag for tag in tag_counter if tag not in self.config.decoder.tag2idx]
         if len(oov_tags) > 0:
             raise ValueError(f"OOV tags exist: {oov_tags}")
             
-            
-    def get_vocabs(self):
-        return self.char_vocab, self.tok_vocab, self.enum_fields_vocabs, self.tag_helper
-    
-    
-    def set_cascade_mode(self, cascade_mode: str):
-        self.tag_helper.set_cascade_mode(cascade_mode)
         
-            
     def summary(self):
         n_seqs = len(self.data)
         if 'raw_idx' in self.data[0]:
@@ -144,22 +115,6 @@ class SequenceTaggingDataset(Dataset):
         print(f"The dataset consists {n_seqs} sequences built from {n_raws} raw entries")
         print(f"The max sequence length is {max_len}")
         
-        
-    def get_model_config(self):
-        emb_config = {'char': {'pad_idx': self.char_vocab['<pad>'], 
-                               'voc_dim': len(self.char_vocab)}, 
-                      'tok': {'pad_idx': self.tok_vocab['<pad>'], 
-                              'voc_dim': len(self.tok_vocab)}}
-        if len(self.enum_fields) > 0:
-            emb_config['enum'] = {f: {'pad_idx': vocab['<pad>'], 
-                                      'voc_dim': len(vocab)} for f, vocab in self.enum_fields_vocabs.items()}
-        if len(self.val_fields) > 0:
-            emb_config['val'] = {f: {'in_dim': len(getattr(self.data[0]['tokens'], f)[0])} for f in self.val_fields}
-            
-        config = {'emb': emb_config}
-        
-        return config, self.tag_helper
-    
     
     def __len__(self):
         return len(self.data)
@@ -167,239 +122,105 @@ class SequenceTaggingDataset(Dataset):
     def __getitem__(self, i):
         curr_data = self.data[i]
         
-        char_ids = [self.char_trans(tok) for tok in curr_data['tokens'].raw_text]
-        tok_ids = self.tok_trans(curr_data['tokens'].text)
-        enum_feats = {f: trans(getattr(curr_data['tokens'], f)) for f, trans in self.enum_fields_trans.items()}
-        val_feats = {f: trans(getattr(curr_data['tokens'], f)) for f, trans in self.val_fields_trans.items()}
+        tok_ids = self.config.embedder.token.trans(curr_data['tokens'].text)
         
-        if self.sub_tokenizer is not None:
-            tokens = curr_data['tokens']
-            tokens.build_word_pieces(self.sub_tokenizer)
-            
-            wp_ids = [self.sub_tokenizer.cls_token_id] \
-                   +  self.sub_tokenizer.convert_tokens_to_ids(tokens.word_pieces) \
-                   + [self.sub_tokenizer.sep_token_id]
-            wp_feats = {'wp_ids': torch.tensor(wp_ids), 
-                        'wp_tok_pos': torch.tensor(tokens.word_piece_tok_pos)}
+        if self.config.embedder.char is not None:
+            char_ids = [self.config.embedder.char.trans(tok) for tok in curr_data['tokens'].raw_text]
         else:
-            wp_feats = None
+            char_ids = None
+        if self.config.embedder.enum is not None:
+            enum_feats = {f: enum_config.trans(getattr(curr_data['tokens'], f)) for f, enum_config in self.config.embedder.enum.items()}
+        else:
+            enum_feats = None
+        if self.config.embedder.val is not None:
+            val_feats = {f: val_config.trans(getattr(curr_data['tokens'], f)) for f, val_config in self.config.embedder.val.items()}
+        else:
+            val_feats = None
+            
+        if self.config.ptm_encoder is not None:
+            tokens = curr_data['tokens']
+            tokens.build_sub_tokens(self.config.ptm_encoder.tokenizer)
+            
+            sub_tok_ids = [self.config.ptm_encoder.tokenizer.cls_token_id] \
+                        +  self.config.ptm_encoder.tokenizer.convert_tokens_to_ids(tokens.sub_tokens) \
+                        + [self.config.ptm_encoder.tokenizer.sep_token_id]
+            sub_tok_ids = torch.tensor(sub_tok_ids)
+            ori_indexes = torch.tensor(tokens.ori_indexes)
+        else:
+            sub_tok_ids, ori_indexes = None, None
+            
         
-        tags_obj = Tags(curr_data['tags'], self.tag_helper) if self._is_labeled else None
+        tags_obj = Tags(curr_data['tags'], self.config.decoder) if self._is_labeled else None
+        
         return TensorWrapper(char_ids=char_ids, tok_ids=tok_ids, enum=enum_feats, val=val_feats, 
-                             wp=wp_feats, tags_obj=tags_obj)
+                             sub_tok_ids=sub_tok_ids, ori_indexes=ori_indexes, tags_obj=tags_obj)
+    
+    
     
     def collate(self, batch_examples):
-        batch_char_ids = []
-        batch_tok_ids = []
-        batch_enum = {f: [] for f in self.enum_fields}
-        batch_val = {f: [] for f in self.val_fields}
-        batch_wp = {'wp_ids': [], 'wp_tok_pos': []} if self.sub_tokenizer is not None else {}
-        batch_tags_objs = []
+        batch_tok_ids = [ex.tok_ids for ex in batch_examples]
+        seq_lens = torch.tensor([seq.size(0) for seq in batch_tok_ids])
+        batch_tok_ids = pad_sequence(batch_tok_ids, batch_first=True, padding_value=self.config.embedder.token.pad_idx)
         
-        for ex in batch_examples:
-            # batch_char_ids: List (batch*sentence) of 1D-tensors
-            batch_char_ids.extend(ex.char_ids)
-            batch_tok_ids.append(ex.tok_ids)
-            for f in batch_enum:
-                batch_enum[f].append(ex.enum[f])
-            for f in batch_val:
-                batch_val[f].append(ex.val[f])
-            for f in batch_wp:
-                batch_wp[f].append(ex.wp[f])
-            batch_tags_objs.append(ex.tags_obj)
-            
-        
-        tok_lens = torch.tensor([t.size(0) for t in batch_char_ids])
-        seq_lens = torch.tensor([s.size(0) for s in batch_tok_ids])
-        
-        batch_char_ids = pad_sequence(batch_char_ids, batch_first=True, padding_value=self.char_vocab['<pad>'])
-        batch_tok_ids = pad_sequence(batch_tok_ids, batch_first=True, padding_value=self.tok_vocab['<pad>'])
-        
-        for f in self.enum_fields:
-            batch_enum[f] = pad_sequence(batch_enum[f], batch_first=True,
-                                         padding_value=self.enum_fields_vocabs[f]['<pad>'])
-        for f in self.val_fields:
-            batch_val[f] = pad_sequence(batch_val[f], batch_first=True, 
-                                        padding_value=0.0)
-            
-        if self.sub_tokenizer is not None:
-            wp_lens = torch.tensor([wps.size(0) for wps in batch_wp['wp_ids']])
-            batch_wp = {'wp_ids': pad_sequence(batch_wp['wp_ids'], batch_first=True, 
-                                               padding_value=self.sub_tokenizer.pad_token_id), 
-                        'wp_tok_pos': pad_sequence(batch_wp['wp_tok_pos'], batch_first=True, 
-                                                   padding_value=-1)}
+        if self.config.embedder.char is not None:
+            batch_char_ids = [tok for ex in batch_examples for tok in ex.char_ids]
+            tok_lens = torch.tensor([tok.size(0) for tok in batch_char_ids])
+            batch_char_ids = pad_sequence(batch_char_ids, batch_first=True, padding_value=self.config.embedder.char.pad_idx)
         else:
-            wp_lens, batch_wp = None, None
+            batch_char_ids, tok_lens = None, None
             
-        batch_tags_objs = batch_tags_objs if self._is_labeled else None
+        if self.config.embedder.enum is not None:
+            batch_enum = {f: pad_sequence([ex.enum[f] for ex in batch_examples], batch_first=True, 
+                                          padding_value=enum_config.pad_idx) for f, enum_config in self.config.embedder.enum.items()}
+        else:
+            batch_enum = None
+            
+        if self.config.embedder.val is not None:
+            batch_val = {f: pad_sequence([ex.val[f] for ex in batch_examples], batch_first=True, 
+                                         padding_value=0.0) for f in self.config.embedder.val.keys()}
+        else:
+            batch_val = None
+        
+        if self.config.ptm_encoder is not None:
+            batch_sub_tok_ids = [ex.sub_tok_ids for ex in batch_examples]
+            sub_tok_seq_lens = torch.tensor([seq.size(0) for seq in batch_sub_tok_ids])
+            batch_sub_tok_ids = pad_sequence(batch_sub_tok_ids, batch_first=True, 
+                                             padding_value=self.config.ptm_encoder.tokenizer.pad_token_id)
+            batch_ori_indexes = pad_sequence([ex.ori_indexes for ex in batch_examples], batch_first=True, 
+                                             padding_value=-1)
+        else:
+            batch_sub_tok_ids, sub_tok_seq_lens, batch_ori_indexes = None, None, None
+            
+        batch_tags_objs = [ex.tags_obj for ex in batch_examples] if self._is_labeled else None
         
         
-        batch = Batch(tok_lens=tok_lens, char_ids=batch_char_ids, 
-                      seq_lens=seq_lens, tok_ids=batch_tok_ids, enum=batch_enum, val=batch_val, 
-                      wp_lens=wp_lens, wp=batch_wp, 
+        batch = Batch(tok_ids=batch_tok_ids, seq_lens=seq_lens, 
+                      char_ids=batch_char_ids, tok_lens=tok_lens, 
+                      enum=batch_enum, val=batch_val, 
+                      sub_tok_ids=batch_sub_tok_ids, ori_indexes=batch_ori_indexes, sub_tok_seq_lens=sub_tok_seq_lens, 
                       tags_objs=batch_tags_objs)
-        batch.build_masks({'char_mask': (batch_char_ids.size(), tok_lens), 
-                           'tok_mask': (batch_tok_ids.size(), seq_lens)})
-        if self.sub_tokenizer is not None:
-            batch.build_masks({'wp_mask': (batch_wp['wp_ids'].size(), wp_lens)})
+        batch.build_masks({'tok_mask': (batch_tok_ids.size(), seq_lens)})
+        if self.config.embedder.char is not None:
+            batch.build_masks({'char_mask': (batch_char_ids.size(), tok_lens)})
+        if self.config.ptm_encoder is not None:
+            batch.build_masks({'sub_tok_mask': (batch_sub_tok_ids.size(), sub_tok_seq_lens)})
             
         return batch
     
     
-class TagHelper(object):
-    def __init__(self, cascade_mode: str='none', scheme='BIOES'):
-        self.set_cascade_mode(cascade_mode)
-        self.scheme = scheme
-        self.translator = ChunksTagsTranslator(scheme=scheme)
-        
-    def set_cascade_mode(self, cascade_mode: str):
-        if cascade_mode.lower() not in ('none', 'straight', 'sliced'):
-            raise ValueError(f"Invalid cascade mode {cascade_mode}")
-        self.cascade_mode = cascade_mode
-        self._is_cascade = (cascade_mode.lower() != 'none')
-        
-        
-    def set_vocabs(self, idx2tag, tag2idx, idx2cas_tag, cas_tag2idx, idx2cas_type, cas_type2idx):
-        self.idx2tag = idx2tag
-        self.tag2idx = tag2idx
-        self.idx2cas_tag = idx2cas_tag
-        self.cas_tag2idx = cas_tag2idx
-        self.idx2cas_type = idx2cas_type
-        self.cas_type2idx = cas_type2idx
-        
-    def build_cas_tags_by_tags(self, tags: list):
-        return [tag.split('-')[0] for tag in tags]
-    
-    def build_cas_types_by_tags(self, tags: list):
-        return [tag.split('-')[1] if '-' in tag else tag for tag in tags]
-        
-    def build_cas_ent_slices_and_types_by_tags(self, tags: list):
-        chunks = self.translator.tags2chunks(tags)
-        cas_ent_types = [typ for typ, start, end in chunks]
-        cas_ent_slices = [slice(start, end) for typ, start, end in chunks]
-        return cas_ent_slices, cas_ent_types
-        
-    def build_cas_ent_slices_by_cas_tags(self, cas_tags: list):
-        """
-        This functions is used for decoding. 
-        """
-        chunks = self.translator.tags2chunks(cas_tags)
-        cas_ent_slices = [slice(start, end) for typ, start, end in chunks]
-        return cas_ent_slices
-    
-    def build_tags_by_cas_tags_and_types(self, cas_tags: list, cas_types: list):
-        tags = []
-        for cas_tag, cas_typ in zip(cas_tags, cas_types):
-            if cas_tag == '<pad>' or cas_typ == '<pad>':
-                tags.append('<pad>')
-            elif cas_tag == 'O' or cas_typ == 'O':
-                tags.append('O')
-            else:
-                tags.append(cas_tag + '-' + cas_typ)
-        return tags
-        
-    def build_tags_by_cas_tags_and_ent_slices_and_types(self, cas_tags: list, cas_ent_slices: list, cas_ent_types: list):
-        cas_types = ['O' for _ in cas_tags]
-        for sli, typ in zip(cas_ent_slices, cas_ent_types):
-            for k in range(sli.start, sli.stop):
-                cas_types[k] = typ
-        return self.build_tags_by_cas_tags_and_types(cas_tags, cas_types)
-    
-    
-    def get_cas_type_voc_dim(self):
-        return len(self.cas_type2idx)
-    
-    def get_cas_type_pad_idx(self):
-        return self.cas_type2idx['<pad>']
-    
-    def get_modeling_tag_voc_dim(self):
-        return len(self.cas_tag2idx) if self._is_cascade else len(self.tag2idx)
-        
-    def get_modeling_tag_pad_idx(self):
-        return self.cas_tag2idx['<pad>'] if self._is_cascade else self.tag2idx['<pad>']
-        
-    def ids2tags(self, tag_ids):
-        return [self.idx2tag[idx] for idx in tag_ids]
-    
-    def tags2ids(self, tags):
-        return [self.tag2idx[tag] for tag in tags]
-    
-    def ids2cas_tags(self, cas_tag_ids):
-        return [self.idx2cas_tag[idx] for idx in cas_tag_ids]
-    
-    def cas_tags2ids(self, cas_tags):
-        return [self.cas_tag2idx[tag] for tag in cas_tags]
-    
-    def ids2cas_types(self, cas_type_ids):
-        return [self.idx2cas_type[idx] for idx in cas_type_ids]
-    
-    def cas_types2ids(self, cas_types):
-        return [self.cas_type2idx[typ] for typ in cas_types]
-    
-    def ids2modeling_tags(self, tag_ids):
-        if self._is_cascade:
-            return self.ids2cas_tags(tag_ids)
-        else:
-            return self.ids2tags(tag_ids)
-        
-    def modeling_tags2ids(self, tags):
-        if self._is_cascade:
-            return self.cas_tags2ids(tags)
-        else:
-            return self.tags2ids(tags)
-        
-        
-    def fetch_batch_tags(self, batch_tags_objs: list):
-        return [tags_obj.tags for tags_obj in batch_tags_objs]
-    
-    def fetch_batch_cas_tags(self, batch_tags_objs: list):
-        return [tags_obj.cas_tags for tags_obj in batch_tags_objs]
-    
-    def fetch_batch_modeling_tags(self, batch_tags_objs: list):
-        if self._is_cascade:
-            return self.fetch_batch_cas_tags(batch_tags_objs)
-        else:
-            return self.fetch_batch_tags(batch_tags_objs)
-    
-    def fetch_batch_tag_ids(self, batch_tags_objs: list, padding: bool=False):
-        batch_tag_ids = [tags_obj.tag_ids for tags_obj in batch_tags_objs]
-        if padding:
-            batch_tag_ids = pad_sequence(batch_tag_ids, batch_first=True, padding_value=self.tag2idx['<pad>'])
-        return batch_tag_ids
-    
-    def fetch_batch_cas_tag_ids(self, batch_tags_objs: list, padding: bool=False):
-        batch_cas_tag_ids = [tags_obj.cas_tag_ids for tags_obj in batch_tags_objs]
-        if padding:
-            batch_cas_tag_ids = pad_sequence(batch_cas_tag_ids, batch_first=True, padding_value=self.cas_tag2idx['<pad>'])
-        return batch_cas_tag_ids
-        
-    def fetch_batch_modeling_tag_ids(self, batch_tags_objs: list, padding: bool=False):
-        if self._is_cascade:
-            return self.fetch_batch_cas_tag_ids(batch_tags_objs, padding=padding)
-        else:
-            return self.fetch_batch_tag_ids(batch_tags_objs, padding=padding)
-        
-    def fetch_batch_cas_type_ids(self, batch_tags_objs: list, padding: bool=False):
-        batch_cas_type_ids = [tags_obj.cas_type_ids for tags_obj in batch_tags_objs]
-        if padding:
-            batch_cas_type_ids = pad_sequence(batch_cas_type_ids, batch_first=True, padding_value=self.type2idx['<pad>'])
-        return batch_cas_type_ids
-        
-    def fetch_batch_ent_slices_and_type_ids(self, batch_tags_objs: list):
-        return [(tags_obj.cas_ent_slices, tags_obj.cas_ent_type_ids) for tags_obj in batch_tags_objs]
     
     
 class Tags(TensorWrapper):
-    def __init__(self, tags: list, tag_helper: TagHelper):
+    def __init__(self, tags: list, config: DecoderConfig):
         self.tags = tags
-        self.cas_tags = tag_helper.build_cas_tags_by_tags(tags)
-        self.cas_types = tag_helper.build_cas_types_by_tags(tags)
-        self.cas_ent_slices, self.cas_ent_types = tag_helper.build_cas_ent_slices_and_types_by_tags(tags)
+        self.cas_tags = config.build_cas_tags_by_tags(tags)
+        self.cas_types = config.build_cas_types_by_tags(tags)
+        self.cas_ent_slices, self.cas_ent_types = config.build_cas_ent_slices_and_types_by_tags(tags)
         
-        self.tag_ids = torch.tensor(tag_helper.tags2ids(self.tags))
-        self.cas_tag_ids = torch.tensor(tag_helper.cas_tags2ids(self.cas_tags))
-        self.cas_type_ids = torch.tensor(tag_helper.cas_types2ids(self.cas_types))
-        self.cas_ent_type_ids = torch.tensor(tag_helper.cas_types2ids(self.cas_ent_types))
+        self.tag_ids = torch.tensor(config.tags2ids(self.tags))
+        self.cas_tag_ids = torch.tensor(config.cas_tags2ids(self.cas_tags))
+        self.cas_type_ids = torch.tensor(config.cas_types2ids(self.cas_types))
+        self.cas_ent_type_ids = torch.tensor(config.cas_types2ids(self.cas_ent_types))
         
     def _apply_to_tensors(self, func):
         self.tag_ids = func(self.tag_ids)

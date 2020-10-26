@@ -41,7 +41,7 @@ class SequenceTaggingTrainer(Trainer):
     
     def predict_chunks(self, dataset: SequenceTaggingDataset, batch_size=32):
         paths = self.predict_tags(dataset, batch_size=batch_size)
-        chunks = [self.model.decoder.tag_helper.translator.tags2chunks(path) for path in paths]
+        chunks = [self.model.decoder.config.translator.tags2chunks(path) for path in paths]
         return chunks
         
     
@@ -49,7 +49,7 @@ class SequenceTaggingTrainer(Trainer):
 def _calc_tagging_accuracy(model, batch, hidden):
     pred_paths = model.decode(batch, hidden)
     # Here fetch the gold tags, instead of the modeling tags
-    gold_paths = model.decoder.tag_helper.fetch_batch_tags(batch.tags_objs)
+    gold_paths = model.decoder.config.fetch_batch_tags(batch.tags_objs)
     
     pred_paths = [t for path in pred_paths for t in path]
     gold_paths = [t for path in gold_paths for t in path]
@@ -59,10 +59,10 @@ def _calc_tagging_accuracy(model, batch, hidden):
 def _calc_tagging_f1(model, batch, hidden):
     pred_paths = model.decode(batch, hidden)
     # Here fetch the gold tags, instead of the modeling tags
-    gold_paths = model.decoder.tag_helper.fetch_batch_tags(batch.tags_objs)
+    gold_paths = model.decoder.config.fetch_batch_tags(batch.tags_objs)
     
-    chunks_pred_data = [model.decoder.tag_helper.translator.tags2chunks(path) for path in pred_paths]
-    chunks_gold_data = [model.decoder.tag_helper.translator.tags2chunks(path) for path in gold_paths]
+    chunks_pred_data = [model.decoder.config.translator.tags2chunks(path) for path in pred_paths]
+    chunks_gold_data = [model.decoder.config.translator.tags2chunks(path) for path in gold_paths]
     scores, ave_scores = precision_recall_f1_report(chunks_gold_data, chunks_pred_data)
     # According to https://www.clips.uantwerpen.be/conll2000/chunking/output.html
     return ave_scores['micro']['f1']

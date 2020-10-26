@@ -3,16 +3,19 @@ import torch
 from torch import Tensor
 import torch.nn as nn
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence
+from torchtext.experimental.vectors import Vectors
 
 from .datasets_utils import Batch
 from .nn_utils import reinit_embedding_, reinit_lstm_, reinit_gru_, reinit_layer_
+from .config import CharEncoderConfig, EnumEmbeddingConfig, ValEmbeddingConfig
+from .config import EmbedderConfig
 
 
 class CharEncoder(nn.Module):
-    def __init__(self, config: dict):
+    def __init__(self, config: CharEncoderConfig):
         super().__init__()
-        self.emb = nn.Embedding(config['voc_dim'], config['emb_dim'], padding_idx=config['pad_idx'])
-        self.dropout = nn.Dropout(config['dropout'])
+        self.emb = nn.Embedding(config.voc_dim, config.emb_dim, padding_idx=config.pad_idx)
+        self.dropout = nn.Dropout(config.dropout)
         
         reinit_embedding_(self.emb)
         
@@ -39,12 +42,10 @@ class CharEncoder(nn.Module):
     
 
 class CharCNN(CharEncoder):
-    def __init__(self, config: dict):
+    def __init__(self, config: CharEncoderConfig):
         super().__init__(config)
-        self.conv = nn.Conv1d(config['emb_dim'], 
-                              config['out_dim'], 
-                              kernel_size=config['kernel_size'], 
-                              padding=(config['kernel_size']-1)//2)
+        self.conv = nn.Conv1d(config.emb_dim, config.out_dim, 
+                              kernel_size=config.kernel_size, padding=(config.kernel_size-1)//2)
         self.relu = nn.ReLU()
         
         reinit_layer_(self.conv, 'relu')
@@ -61,28 +62,31 @@ class CharCNN(CharEncoder):
     
     
 class CharRNN(CharEncoder):
-    def __init__(self, config: dict):
+    def __init__(self, config: CharEncoderConfig):
         super().__init__(config)
         
-        rnn_config = {'input_size': config['emb_dim'], 
-                      'hidden_size': config['out_dim'] // 2, 
+        rnn_config = {'input_size': config.emb_dim, 
+                      'hidden_size': config.out_dim // 2, 
                       'batch_first': True, 
                       'bidirectional': True}
-        if config['arch'].lower() == 'lstm':
+        if config.arch.lower() == 'lstm':
             self.rnn = nn.LSTM(**rnn_config)
             reinit_lstm_(self.rnn)
-        elif config['arch'].lower() == 'gru':
+        elif config.arch.lower() == 'gru':
             self.rnn = nn.GRU(**rnn_config)
             reinit_gru_(self.rnn)
         else:
-            raise ValueError(f"Invalid RNN architecture: {config['arch']}")
+            raise ValueError(f"Invalid RNN architecture: {config.arch}")
             
             
     def embedded2hidden(self, embedded: Tensor, tok_lens: Tensor, char_mask: Tensor):
         packed_embedded = pack_padded_sequence(embedded, tok_lens, batch_first=True, enforce_sorted=False)
         
-        # hidden: (num_layers*num_directions=2, batch*tok_step, hid_dim=out_dim/2)
-        _, (hidden, _) = self.rnn(packed_embedded)
+        if isinstance(self.rnn, nn.LSTM):
+            # hidden: (num_layers*num_directions=2, batch*tok_step, hid_dim=out_dim/2)
+            _, (hidden, _) = self.rnn(packed_embedded)
+        else:
+            _, hidden = self.rnn(packed_embedded)
         
         # hidden: (2, batch*tok_step, out_dim/2) -> (batch*tok_step, out_dim)
         hidden = torch.cat([hidden[0], hidden[1]], dim=-1)
@@ -90,9 +94,9 @@ class CharRNN(CharEncoder):
     
     
 class EnumEmbedding(nn.Module):
-    def __init__(self, voc_dim: int, emb_dim: int, pad_idx: int):
+    def __init__(self, config: EnumEmbeddingConfig):
         super().__init__()
-        self.emb = nn.Embedding(voc_dim, emb_dim, padding_idx=pad_idx)
+        self.emb = nn.Embedding(config.voc_dim, config.emb_dim, padding_idx=config.pad_idx)
         reinit_embedding_(self.emb)
         
     def forward(self, enum_ids: Tensor):
@@ -100,12 +104,12 @@ class EnumEmbedding(nn.Module):
     
     
 class ValEmbedding(nn.Module):
-    def __init__(self, in_dim: int, emb_dim: int):
+    def __init__(self, config: ValEmbeddingConfig):
         super().__init__()
         # NOTE: Two reasons why this layer does not have activation. 
         # (1) Activation function should been applied after batch-norm / layer-norm. 
         # (2) This layer is semantically an embedding layer, which typically does NOT require activation. 
-        self.proj = nn.Linear(in_dim, emb_dim)
+        self.proj = nn.Linear(config.in_dim, config.emb_dim)
         reinit_layer_(self.proj, 'linear')
         
     def forward(self, val_ins: Tensor):
@@ -114,33 +118,31 @@ class ValEmbedding(nn.Module):
     
     
 class Embedder(nn.Module):
-    def __init__(self, config: dict, itos=None, pretrained_vectors=None):
+    def __init__(self, config: EmbedderConfig, pretrained_vectors: Vectors=None):
         """
         `Embedder` forwards from inputs to embeddings. 
         """
         super().__init__()
-        self.config = config
         
-        if 'tok' in config:
-            self.word_emb = nn.Embedding(config['tok']['voc_dim'], config['tok']['emb_dim'], padding_idx=config['tok']['pad_idx'])
-            reinit_embedding_(self.word_emb, itos=itos, pretrained_vectors=pretrained_vectors)
-            if config['tok']['use_pos_emb']:
-                self.pos_emb = nn.Embedding(config['tok']['max_len'], config['tok']['emb_dim'])
-                reinit_embedding_(self.pos_emb)
+        self.word_emb = nn.Embedding(config.token.voc_dim, config.token.emb_dim, padding_idx=config.token.pad_idx)
+        reinit_embedding_(self.word_emb, itos=config.token.vocab.get_itos(), pretrained_vectors=pretrained_vectors)
+        if config.token.use_pos_emb:
+            self.pos_emb = nn.Embedding(config.token.max_len, config.token.emb_dim)
+            reinit_embedding_(self.pos_emb)
             
-        if 'char' in config:
-            if config['char']['arch'].lower() == 'cnn':
-                self.char_encoder = CharCNN(config['char'])
+        if config.char is not None:
+            if config.char.arch.lower() == 'cnn':
+                self.char_encoder = CharCNN(config.char)
             else:
-                self.char_encoder = CharRNN(config['char'])
+                self.char_encoder = CharRNN(config.char)
             
-        if 'enum' in config:
-            self.enum_embs = nn.ModuleDict({f: EnumEmbedding(**enum_config) for f, enum_config in config['enum'].items()})
+        if config.enum is not None:
+            self.enum_embs = nn.ModuleDict([(f, EnumEmbedding(enum_config)) for f, enum_config in config.enum.items()])
                 
-        if 'val' in config:
-            self.val_embs = nn.ModuleDict({f: ValEmbedding(**val_config) for f, val_config in config['val'].items()})
+        if config.val is not None:
+            self.val_embs = nn.ModuleDict([(f, ValEmbedding(val_config)) for f, val_config in config.val.items()])
             
-        
+            
     def get_word_embedded(self, batch: Batch):
         if hasattr(self, 'word_emb'):
             # word_embedded: (batch, step, emb_dim)

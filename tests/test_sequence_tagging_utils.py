@@ -4,11 +4,11 @@ import spacy
 import numpy as np
 
 from eznlp import TokenSequence
+from eznlp.sequence_tagging import DecoderConfig
 from eznlp.sequence_tagging import parse_conll_file
 from eznlp.sequence_tagging import ChunksTagsTranslator, SchemeTranslator
 from eznlp.sequence_tagging import precision_recall_f1_report
 from eznlp.sequence_tagging.transitions import find_ascending
-from eznlp.sequence_tagging.datasets import TagHelper
 
 
 def test_find_ascending():
@@ -27,31 +27,29 @@ def BIOES_tags_example():
     tags = ['O', 'O', 'S-A', 'B-B', 'E-B', 'O', 'S-B', 'O', 'B-C', 'I-C', 'I-C', 'E-C', 'S-C', '<pad>']
     cas_tags = ['O', 'O', 'S', 'B', 'E', 'O', 'S', 'O', 'B', 'I', 'I', 'E', 'S', '<pad>']
     cas_types = ['O', 'O', 'A', 'B', 'B', 'O', 'B', 'O', 'C', 'C', 'C', 'C', 'C', '<pad>']
-    return tags, cas_tags, cas_types
-
-@pytest.fixture
-def BIOES_tag_ids_example():
+    
     tag_ids = [1, 1, 5, 6, 8, 1, 9, 1, 10, 11, 11, 12, 13, 0]
     cas_tag_ids = [1, 1, 5, 2, 4, 1, 5, 1, 2, 3, 3, 4, 5, 0]
     cas_type_ids = [1, 1, 2, 3, 3, 1, 3, 1, 4, 4, 4, 4, 4, 0]
-    return tag_ids, cas_tag_ids, cas_type_ids
+    return (tags, cas_tags, cas_types), (tag_ids, cas_tag_ids, cas_type_ids)
+
 
 @pytest.fixture
-def BIOES_tag_helper_example():
+def BIOES_dec_config_example():
     idx2tag = ['<pad>', 'O', 'B-A', 'I-A', 'E-A', 'S-A', 'B-B', 'I-B', 'E-B', 'S-B', 'B-C', 'I-C', 'E-C', 'S-C']
-    tag2idx = {t: i for i, t in enumerate(idx2tag)}
     idx2cas_tag = ['<pad>', 'O', 'B', 'I', 'E', 'S']
-    cas_tag2idx = {t: i for i, t in enumerate(idx2cas_tag)}
     idx2cas_type = ['<pad>', 'O', 'A', 'B', 'C']
-    cas_type2idx = {t: i for i, t in enumerate(idx2cas_type)}
-    tag_helper = TagHelper(cascade_mode='None', scheme='BIOES')
-    tag_helper.set_vocabs(idx2tag, tag2idx, idx2cas_tag, cas_tag2idx, idx2cas_type, cas_type2idx)
-    return tag_helper
+    
+    dec_config_nocas = DecoderConfig(scheme='BIOES', cascade_mode='None', 
+                                     idx2tag=idx2tag, idx2cas_tag=idx2cas_tag, idx2cas_type=idx2cas_type)
+    dec_config_sliced = DecoderConfig(scheme='BIOES', cascade_mode='Sliced', 
+                                   idx2tag=idx2tag, idx2cas_tag=idx2cas_tag, idx2cas_type=idx2cas_type)
+    return dec_config_nocas, dec_config_sliced
 
 
 class TestChunksTagsTranslator(object):
     def test_tags2chunks(self, BIOES_tags_example):
-        tags, cas_tags, _ = BIOES_tags_example
+        (tags, cas_tags, _), *_ = BIOES_tags_example
         
         translator = ChunksTagsTranslator(scheme='BIOES')
         chunks = translator.tags2chunks(tags)
@@ -111,39 +109,38 @@ class TestSchemeTranslator(object):
                 
                 
 class TestTagHelper(object):
-    def test_dictionary(self, BIOES_tags_example, BIOES_tag_ids_example, BIOES_tag_helper_example):
-        tags, cas_tags, cas_types = BIOES_tags_example
-        tag_ids, cas_tag_ids, cas_type_ids = BIOES_tag_ids_example
-        tag_helper = BIOES_tag_helper_example
+    def test_dictionary(self, BIOES_tags_example, BIOES_dec_config_example):
+        (tags, cas_tags, cas_types), (tag_ids, cas_tag_ids, cas_type_ids) = BIOES_tags_example
+        dec_config, _ = BIOES_dec_config_example
 
-        assert tag_helper.tags2ids(tags) == tag_ids
-        assert tag_helper.ids2tags(tag_ids) == tags
-        assert tag_helper.modeling_tags2ids(tags) == tag_ids
-        assert tag_helper.ids2modeling_tags(tag_ids) == tags
+        assert dec_config.tags2ids(tags) == tag_ids
+        assert dec_config.ids2tags(tag_ids) == tags
+        assert dec_config.modeling_tags2ids(tags) == tag_ids
+        assert dec_config.ids2modeling_tags(tag_ids) == tags
         
-        tag_helper.set_cascade_mode('Sliced')
-        assert tag_helper.cas_tags2ids(cas_tags) == cas_tag_ids
-        assert tag_helper.ids2cas_tags(cas_tag_ids) == cas_tags
-        assert tag_helper.modeling_tags2ids(cas_tags) == cas_tag_ids
-        assert tag_helper.ids2modeling_tags(cas_tag_ids) == cas_tags
+        _, dec_config = BIOES_dec_config_example
+        assert dec_config.cas_tags2ids(cas_tags) == cas_tag_ids
+        assert dec_config.ids2cas_tags(cas_tag_ids) == cas_tags
+        assert dec_config.modeling_tags2ids(cas_tags) == cas_tag_ids
+        assert dec_config.ids2modeling_tags(cas_tag_ids) == cas_tags
         
-        assert tag_helper.cas_types2ids(cas_types) == cas_type_ids
-        assert tag_helper.ids2cas_types(cas_type_ids) == cas_types
+        assert dec_config.cas_types2ids(cas_types) == cas_type_ids
+        assert dec_config.ids2cas_types(cas_type_ids) == cas_types
         
         
-    def test_cascade_transform(self, BIOES_tags_example):
-        tags, cas_tags, cas_types = BIOES_tags_example
+    def test_cascade_transform(self, BIOES_tags_example, BIOES_dec_config_example):
+        (tags, cas_tags, cas_types), *_ = BIOES_tags_example
+        dec_config, _ = BIOES_dec_config_example
         cas_ent_slices = [slice(2, 3), slice(3, 5), slice(6, 7), slice(8, 12), slice(12, 13)]
         cas_ent_types = ['A', 'B', 'B', 'C', 'C']
-        tag_helper = TagHelper(scheme='BIOES')
         
-        assert tag_helper.build_cas_tags_by_tags(tags) == cas_tags
-        assert tag_helper.build_cas_types_by_tags(tags) == cas_types
-        assert tag_helper.build_cas_ent_slices_and_types_by_tags(tags)[0] == cas_ent_slices
-        assert tag_helper.build_cas_ent_slices_and_types_by_tags(tags)[1] == cas_ent_types
-        assert tag_helper.build_cas_ent_slices_by_cas_tags(cas_tags) == cas_ent_slices
-        assert tag_helper.build_tags_by_cas_tags_and_types(cas_tags, cas_types) == tags
-        assert tag_helper.build_tags_by_cas_tags_and_ent_slices_and_types(cas_tags, cas_ent_slices, cas_ent_types) == tags
+        assert dec_config.build_cas_tags_by_tags(tags) == cas_tags
+        assert dec_config.build_cas_types_by_tags(tags) == cas_types
+        assert dec_config.build_cas_ent_slices_and_types_by_tags(tags)[0] == cas_ent_slices
+        assert dec_config.build_cas_ent_slices_and_types_by_tags(tags)[1] == cas_ent_types
+        assert dec_config.build_cas_ent_slices_by_cas_tags(cas_tags) == cas_ent_slices
+        assert dec_config.build_tags_by_cas_tags_and_types(cas_tags, cas_types) == tags
+        assert dec_config.build_tags_by_cas_tags_and_ent_slices_and_types(cas_tags, cas_ent_slices, cas_ent_types) == tags
         
         
 class TestMetrics(object):

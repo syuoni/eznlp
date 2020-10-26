@@ -8,18 +8,16 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from .datasets_utils import Batch
 from .nn_utils import reinit_layer_, reinit_lstm_, reinit_gru_, reinit_transformer_encoder_layer_
 from .functional import aggregate_tensor_by_group
+from .config import EncoderConfig
 
     
 class Encoder(nn.Module):
-    def __init__(self, config: dict):
+    def __init__(self, config: EncoderConfig):
         """
         `Encoder` forwards from embeddings to hidden states. 
         """
         super().__init__()
-        assert config['emb_dim'] > 0
-        self.config = config
-        if 'dropout' in config:
-            self.dropout = nn.Dropout(config['dropout'])
+        self.dropout = nn.Dropout(config.dropout)
         
         
     def embedded2hidden(self, batch: Batch, embedded: Tensor):
@@ -29,18 +27,17 @@ class Encoder(nn.Module):
     def forward(self, batch: Batch, embedded: Tensor):
         # embedded: (batch, step, emb_dim)
         # hidden: (batch, step, hid_dim)
-        if hasattr(self, 'dropout'):
-            embedded = self.dropout(embedded)
+        embedded = self.dropout(embedded)
         return self.embedded2hidden(batch, embedded)
     
     
     
 class ShortcutEncoder(Encoder):
-    def __init__(self, config: dict):
+    def __init__(self, config: EncoderConfig):
         super().__init__(config)
     
     def embedded2hidden(self, batch: Batch, embedded: Tensor):
-        # DO NOT apply dropout to shortcut
+        # DO NOT apply dropout to shortcut (dropout=0.0)
         return embedded
     
     
@@ -49,21 +46,21 @@ class RNNEncoder(Encoder):
     def __init__(self, config: dict):
         super().__init__(config)
         
-        rnn_config = {'input_size': config['emb_dim'], 
-                      'hidden_size': config['hid_dim']//2, 
-                      'num_layers': config['n_layers'], 
+        rnn_config = {'input_size': config.in_dim, 
+                      'hidden_size': config.hid_dim//2, 
+                      'num_layers': config.num_layers, 
                       'batch_first': True, 
                       'bidirectional': True, 
-                      'dropout': config['dropout']}
+                      'dropout': config.dropout}
         
-        if config['arch'].lower() == 'lstm':
+        if config.arch.lower() == 'lstm':
             self.rnn = nn.LSTM(**rnn_config)
             reinit_lstm_(self.rnn)
-        elif config['arch'].lower() == 'gru':
+        elif config.arch.lower() == 'gru':
             self.rnn = nn.GRU(**rnn_config)
             reinit_gru_(self.rnn)
         else:
-            raise ValueError(f"Invalid RNN architecture: {config['arch']}")
+            raise ValueError(f"Invalid RNN architecture: {config.arch}")
             
         
     def embedded2hidden(self, batch: Batch, embedded: Tensor):
@@ -102,14 +99,12 @@ class CNNEncoder(Encoder):
     """
     Gehring, J., et al. 2017. Convolutional Sequence to Sequence Learning. 
     """
-    def __init__(self, config: dict):
+    def __init__(self, config: EncoderConfig):
         super().__init__(config)
-        self.emb2init_hid = nn.Linear(config['emb_dim'], config['hid_dim']*2)
+        self.emb2init_hid = nn.Linear(config.in_dim, config.hid_dim*2)
         self.glu = nn.GLU(dim=-1)
-        self.conv_blocks = nn.ModuleList([ConvBlock(config['hid_dim'], 
-                                                    config['kernel_size'], 
-                                                    config['dropout']) \
-                                          for _ in range(config['n_layers'])])
+        self.conv_blocks = nn.ModuleList([ConvBlock(config.hid_dim, config.kernel_size, config.dropout) \
+                                          for _ in range(config.num_layers)])
         reinit_layer_(self.emb2init_hid, 'sigmoid')
         
         
@@ -131,16 +126,16 @@ class TransformerEncoder(Encoder):
     """
     Vaswani, A., et al. 2017. Attention is All You Need. 
     """
-    def __init__(self, config: dict):
+    def __init__(self, config: EncoderConfig):
         super().__init__(config)
-        self.emb2init_hid = nn.Linear(config['emb_dim'], config['hid_dim']*2)
+        self.emb2init_hid = nn.Linear(config.in_dim, config.hid_dim*2)
         self.glu = nn.GLU(dim=-1)
         
-        self.tf_layers = nn.ModuleList([nn.TransformerEncoderLayer(d_model=config['hid_dim'], 
-                                                                   nhead=config['nhead'], 
-                                                                   dim_feedforward=config['pf_dim'], 
-                                                                   dropout=config['dropout']) \
-                                        for _ in range(config['n_layers'])])
+        self.tf_layers = nn.ModuleList([nn.TransformerEncoderLayer(d_model=config.hid_dim, 
+                                                                   nhead=config.nhead, 
+                                                                   dim_feedforward=config.pf_dim, 
+                                                                   dropout=config.dropout) \
+                                        for _ in range(config.num_layers)])
         reinit_layer_(self.emb2init_hid, 'sigmoid')
         for tf_layer in self.tf_layers:
             reinit_transformer_encoder_layer_(tf_layer)
@@ -169,11 +164,11 @@ class PreTrainedEncoder(nn.Module):
         
     def forward(self, batch: Batch):
         # ptm_outs: (batch, wp_step+2, hid_dim)
-        ptm_outs, *_ = self.ptm(batch.wp['wp_ids'], attention_mask=(~batch.wp_mask).type(torch.long))
+        ptm_outs, *_ = self.ptm(batch.sub_tok_ids, attention_mask=(~batch.sub_tok_mask).type(torch.long))
         ptm_outs = ptm_outs[:, 1:-1]
         
         # agg_ptm_outs: (batch, tok_step, hid_dim)
-        agg_ptm_outs = aggregate_tensor_by_group(ptm_outs, batch.wp['wp_tok_pos'], agg_step=batch.tok_ids.size(1))
+        agg_ptm_outs = aggregate_tensor_by_group(ptm_outs, batch.ori_indexes, agg_step=batch.tok_ids.size(1))
         return agg_ptm_outs
     
     

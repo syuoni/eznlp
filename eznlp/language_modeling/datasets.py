@@ -66,9 +66,9 @@ class MLMHelper(object):
         return batch
 
 
-class COVID19MLMDataset(Dataset):
+class MLMDataset(Dataset):
     """
-    COVID19 Dataset for Masked Language Modeling. 
+    Dataset for Masked Language Modeling. 
     """
     def __init__(self, data, tokenizer, MLM_prob=0.15):
         super().__init__()
@@ -79,7 +79,11 @@ class COVID19MLMDataset(Dataset):
         
     def summary(self):
         n_seqs = len(self.data)
-        n_raws = len({curr_data['raw_idx'] for curr_data in self.data})
+        if 'raw_idx' in self.data[0]:
+            n_raws = len({curr_data['raw_idx'] for curr_data in self.data})
+        else:
+            n_raws = n_seqs
+            
         max_len = max([len(curr_data['tokens']) for curr_data in self.data])
         print(f"The dataset consists {n_seqs} sequences built from {n_raws} raw entries")
         print(f"The max sequence length is {max_len}")
@@ -93,8 +97,8 @@ class COVID19MLMDataset(Dataset):
         Dynamic Masking.
         """
         tokens = self.data[i]['tokens']
-        tokens.build_word_pieces(self.tokenizer)
-        return self.mlm_helper.build_example(tokens.word_pieces)
+        tokens.build_sub_tokens(self.tokenizer)
+        return self.mlm_helper.build_example(tokens.sub_tokens)
     
     def collate(self, batch_examples):
         return self.mlm_helper.collate(batch_examples)

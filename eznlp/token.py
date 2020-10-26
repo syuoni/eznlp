@@ -112,6 +112,11 @@ class Token(object):
     num_feature_names = num_feature_names + [f"<-{name[1:]}" for name in num_feature_names]
     en_shape_feature_names = list(en_shape2criterion.keys())
     
+    basic_enum_fields = ['bigram', 'trigram', 'en_pattern', 'en_pattern_sum', 
+                         'prefix_2', 'prefix_3', 'prefix_4', 'prefix_5', 
+                         'suffix_2', 'suffix_3', 'suffix_4', 'suffix_5']
+    basic_val_fields = ['en_shape_features', 'num_features']
+    
     def __init__(self, raw_text, case_mode='None', number_mode='None', to_half=True, to_zh_simplified=False, **kwargs):
         self.raw_text = raw_text
         if case_mode.lower() == 'none':

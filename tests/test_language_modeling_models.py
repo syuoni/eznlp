@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import pytest
-import pickle
 import glob
 import torch
 import torch.optim as optim
@@ -8,7 +7,8 @@ from torch.utils.data import DataLoader
 from transformers import BertTokenizer, BertForMaskedLM
 from transformers import RobertaTokenizer, RobertaForMaskedLM
 
-from eznlp.language_modeling import COVID19MLMDataset, PMCMLMDataset, MLMTrainer
+from eznlp.sequence_tagging import parse_conll_file
+from eznlp.language_modeling import MLMDataset, PMCMLMDataset, MLMTrainer
 
 
 @pytest.fixture
@@ -29,10 +29,17 @@ class TestMLM(object):
         bert4mlm, tokenizer = BERT4MLM_with_tokenizer
         bert4mlm = bert4mlm.to(device)
         
-        with open("assets/data/covid19/BIOES-train-demo-data-515.pkl", 'rb') as f:
-            train_data = pickle.load(f)
-            
-        train_set = COVID19MLMDataset(train_data, tokenizer)
+        conll_config = {'raw_scheme': 'BIO1', 
+                        'scheme': 'BIOES', 
+                        'columns': ['text', 'pos_tag', 'chunking_tag', 'ner_tag'], 
+                        'trg_col': 'ner_tag', 
+                        'attach_additional_tags': False, 
+                        'skip_docstart': False, 
+                        'lower_case_mode': 'None'}
+    
+        train_data = parse_conll_file("assets/data/conll2003/eng.train", max_examples=200, **conll_config)
+        
+        train_set = MLMDataset(train_data, tokenizer)
         batch = [train_set[i] for i in range(4)]
         batch012 = train_set.collate(batch[:3]).to(device)
         batch123 = train_set.collate(batch[1:]).to(device)

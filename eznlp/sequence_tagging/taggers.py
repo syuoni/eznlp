@@ -2,66 +2,63 @@
 import torch
 from torch import Tensor
 import torch.nn as nn
+from torchtext.experimental.vectors import Vectors
+from transformers import PreTrainedModel
 
 from ..datasets_utils import Batch
-from .datasets import TagHelper
+from .config import TaggerConfig
 from ..embedders import Embedder
 from ..encoders import ShortcutEncoder, RNNEncoder, CNNEncoder, TransformerEncoder, PreTrainedEncoder
 from .decoders import SoftMaxDecoder, CRFDecoder, CascadeDecoder
 
 
 class Tagger(nn.Module):
-    def __init__(self, config: dict, tag_helper: TagHelper, itos=None, pretrained_vectors=None, ptm=None):
+    def __init__(self, config: TaggerConfig, pretrained_vectors: Vectors=None, ptm: PreTrainedModel=None):
         super().__init__()
         self.config = config
+        self.embedder = Embedder(config.embedder, pretrained_vectors=pretrained_vectors)
         
-        assert ('emb' in config and 'enc' in config) or ('pt_enc' in config)
-        if 'emb' in config:
-            self.embedder = Embedder(config['emb'], itos, pretrained_vectors)
-            
-        if 'enc' in config:
+        if config.encoders is not None:
             encoders = []
-            for enc_config in config['enc']:
-                if enc_config['arch'].lower() == 'shortcut':
-                    encoder = ShortcutEncoder(enc_config)
-                elif enc_config['arch'].lower() in ('lstm', 'gru'):
-                    encoder = RNNEncoder(enc_config)
-                elif enc_config['arch'].lower() == 'cnn':
-                    encoder = CNNEncoder(enc_config)
-                elif enc_config['arch'].lower() == 'transformer':
-                    encoder = TransformerEncoder(enc_config)
+            for key, enc_config in config.encoders.items():
+                if enc_config.arch.lower() == 'shortcut':
+                    encoders.append((key, ShortcutEncoder(enc_config)))
+                elif enc_config.arch.lower() in ('lstm', 'gru'):
+                    encoders.append((key, RNNEncoder(enc_config)))
+                elif enc_config.arch.lower() == 'cnn':
+                    encoders.append((key, CNNEncoder(enc_config)))
+                elif enc_config.arch.lower() == 'transformer':
+                    encoders.append((key, TransformerEncoder(enc_config)))
                 else:
-                    raise ValueError(f"Invalid enocoder architecture {enc_config['arch']}")
-                encoders.append(encoder)
-            self.encoders = nn.ModuleList(encoders)
+                    raise ValueError(f"Invalid enocoder architecture {enc_config.arch}")
+            # NOTE: `torch.nn.ModuleDict` is an **ordered** dictionary
+            self.encoders = nn.ModuleDict(encoders)
         
-        if 'pt_enc' in config:
+        if config.ptm_encoder is not None:
             assert ptm is not None
-            self.pt_encoder = PreTrainedEncoder(ptm)
+            self.ptm_encoder = PreTrainedEncoder(ptm)
         
-        assert 'dec' in config
-        dec_config = config['dec']
-        if dec_config['arch'].lower() == 'softmax':
-            decoder = SoftMaxDecoder(dec_config, tag_helper)
-        elif dec_config['arch'].lower() == 'crf':
-            decoder = CRFDecoder(dec_config, tag_helper)
+        if config.decoder.cascade_mode.lower() == 'none':
+            if config.decoder.arch.lower() == 'softmax':
+                self.decoder = SoftMaxDecoder(config.decoder)
+            elif config.decoder.arch.lower() == 'crf':
+                self.decoder = CRFDecoder(config.decoder)
+            else:
+                raise ValueError(f"Invalid decoder architecture {config.decoder.arch}")
         else:
-            raise ValueError(f"Invalid decoder architecture {dec_config['arch']}")
-        if tag_helper.cascade_mode.lower() != 'none':
-            decoder = CascadeDecoder(decoder, mode=tag_helper.cascade_mode)
-        self.decoder = decoder
-        
-        
+            self.decoder = CascadeDecoder(config.decoder)
+            
+            
     def get_full_hidden(self, batch: Batch):
         full_hidden = []
         
         if hasattr(self, 'embedder') and hasattr(self, 'encoders'):
             embedded = self.embedder(batch, word=True, char=True, enum=True, val=True)
-            for encoder in self.encoders:
+            for encoder in self.encoders.values():
                 full_hidden.append(encoder(batch, embedded))
                 
-        if hasattr(self, 'pt_encoder'):
-            full_hidden.append(self.pt_encoder(batch))
+        if hasattr(self, 'ptm_encoder'):
+            full_hidden.append(self.ptm_encoder(batch))
             
         return torch.cat(full_hidden, dim=-1)
             

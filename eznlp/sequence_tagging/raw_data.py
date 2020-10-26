@@ -21,7 +21,7 @@ def _build_data_entry(example, columns, text_col, trg_col, attach_additional_tag
 
 def parse_conll_file(file_path, raw_scheme='BIO1', scheme='BIOES', 
                      columns=['text', 'pos_tag', 'chunking_tag'], text_col='text', trg_col='chunking_tag', 
-                     attach_additional_tags=False, skip_docstart=True, **kwargs):
+                     attach_additional_tags=False, skip_docstart=True, max_examples=None, **kwargs):
     scheme_translator = SchemeTranslator(from_scheme=raw_scheme, to_scheme=scheme)
     
     data = []
@@ -39,6 +39,9 @@ def parse_conll_file(file_path, raw_scheme='BIO1', scheme='BIOES',
                     curr_data['tags'] = scheme_translator.translate(curr_data['tags'])
                     data.append(curr_data)
                 example = [[] for c in columns]
+                
+                if max_examples is not None and len(data) >= max_examples:
+                    break
             else:
                 for ex_part, ex_part_to_append in zip(example, line.split(' ')):
                     ex_part.append(ex_part_to_append)
