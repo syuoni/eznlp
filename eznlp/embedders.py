@@ -7,12 +7,11 @@ from torchtext.experimental.vectors import Vectors
 
 from .datasets_utils import Batch
 from .nn_utils import reinit_embedding_, reinit_lstm_, reinit_gru_, reinit_layer_
-from .config import CharEncoderConfig, EnumEmbeddingConfig, ValEmbeddingConfig
-from .config import EmbedderConfig
+from .config import CharConfig, EnumConfig, ValConfig, EmbedderConfig
 
 
 class CharEncoder(nn.Module):
-    def __init__(self, config: CharEncoderConfig):
+    def __init__(self, config: CharConfig):
         super().__init__()
         self.emb = nn.Embedding(config.voc_dim, config.emb_dim, padding_idx=config.pad_idx)
         self.dropout = nn.Dropout(config.dropout)
@@ -42,7 +41,7 @@ class CharEncoder(nn.Module):
     
 
 class CharCNN(CharEncoder):
-    def __init__(self, config: CharEncoderConfig):
+    def __init__(self, config: CharConfig):
         super().__init__(config)
         self.conv = nn.Conv1d(config.emb_dim, config.out_dim, 
                               kernel_size=config.kernel_size, padding=(config.kernel_size-1)//2)
@@ -62,7 +61,7 @@ class CharCNN(CharEncoder):
     
     
 class CharRNN(CharEncoder):
-    def __init__(self, config: CharEncoderConfig):
+    def __init__(self, config: CharConfig):
         super().__init__(config)
         
         rnn_config = {'input_size': config.emb_dim, 
@@ -94,7 +93,7 @@ class CharRNN(CharEncoder):
     
     
 class EnumEmbedding(nn.Module):
-    def __init__(self, config: EnumEmbeddingConfig):
+    def __init__(self, config: EnumConfig):
         super().__init__()
         self.emb = nn.Embedding(config.voc_dim, config.emb_dim, padding_idx=config.pad_idx)
         reinit_embedding_(self.emb)
@@ -104,7 +103,7 @@ class EnumEmbedding(nn.Module):
     
     
 class ValEmbedding(nn.Module):
-    def __init__(self, config: ValEmbeddingConfig):
+    def __init__(self, config: ValConfig):
         super().__init__()
         # NOTE: Two reasons why this layer does not have activation. 
         # (1) Activation function should been applied after batch-norm / layer-norm. 
@@ -135,7 +134,9 @@ class Embedder(nn.Module):
                 self.char_encoder = CharCNN(config.char)
             else:
                 self.char_encoder = CharRNN(config.char)
-            
+                
+        # NOTE: `torch.nn.ModuleDict` is an **ordered** dictionary
+        # NOTE: The order should be preserved. 
         if config.enum is not None:
             self.enum_embs = nn.ModuleDict([(f, EnumEmbedding(enum_config)) for f, enum_config in config.enum.items()])
                 

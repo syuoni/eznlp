@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from typing import List, Mapping
 from collections import OrderedDict
 
 import torch
@@ -13,7 +14,7 @@ class Config(object):
         
     @property
     def is_valid(self):
-        for key, attr in self.__dict__.items():
+        for attr in self.__dict__.values():
             if isinstance(attr, (Config, ConfigDict)):
                 if not attr.is_valid:
                     return False
@@ -24,17 +25,62 @@ class Config(object):
     
     def __repr__(self):
         kwargs_str = ', \n'.join(f"{key}={attr}" for key, attr in self.__dict__.items() \
-                               if not (key == 'trans' or key == 'vocab' or key.startswith('idx2') or key.endswith('2idx')))
+                                 if not (key == 'trans' or key == 'vocab' or key.startswith('idx2') or key.endswith('2idx')))
         return f"{self.__class__.__name__}({kwargs_str})"
     
     
+    
+class ConfigList(object):
+    def __init__(self, config_list: List[Config]):
+        # NOTE: The order should be preserved. 
+        if isinstance(config_list, list):
+            assert all(isinstance(value, Config) for value in config_list)
+            self.config_list = config_list
+        else:
+            raise ValueError(f"Invalid type of config_list {config_list}")
+            
+    @property
+    def is_valid(self):
+        for config in self.config_list:
+            if not config.is_valid:
+                return False
+        return True
+    
+    def __iter__(self):
+        return iter(self.config_list)
+    
+    def __getitem__(self, i):
+        return self.config_list[i]
+    
+    def __getattr__(self, name):
+        if name.endswith('_dim'):
+            return sum(getattr(config, name) for config in self.config_list)
+        elif name == 'arch':
+            return '-'.join(getattr(config, name) for config in self.config_list)
+        else:
+            raise AttributeError(f"{self.__class__.__name__} object has no attribute {name}")
+    
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.config_list})"
+    
+    
+    
 class ConfigDict(object):
-    def __init__(self, config_dict: OrderedDict):
-        self.config_dict = config_dict
+    def __init__(self, config_dict: Mapping[str, Config]):
+        # NOTE: `torch.nn.ModuleDict` is an **ordered** dictionary
+        # NOTE: The order should be preserved. 
+        if isinstance(config_dict, OrderedDict):
+            assert all(isinstance(value, Config) for key, value in config_dict.items())
+            self.config_dict = config_dict
+        elif isinstance(config_dict, list):
+            assert all(isinstance(value, Config) for key, value in config_dict)
+            self.config_dict = OrderedDict(config_dict)
+        else:
+            raise ValueError(f"Invalid type of config_dict {config_dict}")
         
     @property
     def is_valid(self):
-        for key, config in self.config_dict.items():
+        for config in self.config_dict.values():
             if not config.is_valid:
                 return False
         return True
@@ -57,58 +103,19 @@ class ConfigDict(object):
         elif name == 'arch':
             return '-'.join(getattr(config, name) for config in self.config_dict.values())
         else:
-            raise AttributeError(f"{type(self)} object has no attribute {name}")
+            raise AttributeError(f"{self.__class__.__name__} object has no attribute {name}")
     
     def __repr__(self):
-        return f"{self.__class__.__name__}(config_dict={repr(self.config_dict)})"
+        return f"{self.__class__.__name__}({list(self.config_dict.items())})"
     
-        
-class CharEncoderConfig(Config):
-    def __init__(self, **kwargs):
-        self.arch = kwargs.pop('arch', 'CNN')
-        
-        vocab = kwargs.pop('vocab', None)
-        self.set_vocab(vocab)
-        
-        if self.arch.lower() not in ('lstm', 'gru', 'cnn'):
-            raise ValueError(f"Invalid char-level architecture {self.arch}")
-            
-        self.emb_dim = kwargs.pop('emb_dim', 25)
-        self.out_dim = kwargs.pop('out_dim', 50)
-        self.dropout = kwargs.pop('dropout', 0.5)
-        
-        if self.arch.lower() == 'cnn':
-            self.kernel_size = kwargs.pop('kernel_size', 3)
-            
-        super().__init__(**kwargs)
-        
-        
-    def set_vocab(self, vocab: Vocab):
-        self.vocab = vocab
-        self.trans = sequential_transforms(vocab_func(vocab), totensor(torch.long))
-        
-    @property
-    def voc_dim(self):
-        return len(self.vocab)
-        
-    @property
-    def pad_idx(self):
-        return self.vocab['<pad>']
-        
-    @property
-    def unk_idx(self):
-        return self.vocab['<unk>']
-        
-        
-class TokenEmbeddingConfig(Config):
+    
+    
+class VocabConfig(Config):
     def __init__(self, **kwargs):
         vocab = kwargs.pop('vocab', None)
         self.set_vocab(vocab)
-        
-        self.emb_dim = kwargs.pop('emb_dim', 100)
-        self.max_len = kwargs.pop('max_len', 300)
-        self.use_pos_emb = kwargs.pop('use_pop_emb', False)
         super().__init__(**kwargs)
+        
         
     def set_vocab(self, vocab: Vocab):
         # It is generally recommended to return cpu tensors in multi-process loading. 
@@ -129,33 +136,38 @@ class TokenEmbeddingConfig(Config):
         return self.vocab['<unk>']
     
     
-class EnumEmbeddingConfig(Config):
+    
+class CharConfig(VocabConfig):
     def __init__(self, **kwargs):
-        vocab = kwargs.pop('vocab', None)
-        self.set_vocab(vocab)
+        self.arch = kwargs.pop('arch', 'CNN')
         
-        self.emb_dim = kwargs.pop('emb_dim', 100)
+        if self.arch.lower() not in ('lstm', 'gru', 'cnn'):
+            raise ValueError(f"Invalid char-level architecture {self.arch}")
+            
+        if self.arch.lower() == 'cnn':
+            self.kernel_size = kwargs.pop('kernel_size', 3)
+            
+        self.emb_dim = kwargs.pop('emb_dim', 25)
+        self.out_dim = kwargs.pop('out_dim', 50)
+        self.dropout = kwargs.pop('dropout', 0.5)
         super().__init__(**kwargs)
         
-    def set_vocab(self, vocab: Vocab):
-        self.vocab = vocab
-        self.trans = sequential_transforms(vocab_func(vocab), totensor(torch.long))
         
-    @property
-    def voc_dim(self):
-        return len(self.vocab)
+class TokenConfig(VocabConfig):
+    def __init__(self, **kwargs):
+        self.emb_dim = kwargs.pop('emb_dim', 100)
+        self.max_len = kwargs.pop('max_len', 300)
+        self.use_pos_emb = kwargs.pop('use_pop_emb', False)
+        super().__init__(**kwargs)
         
-    @property
-    def pad_idx(self):
-        return self.vocab['<pad>']
         
-    @property
-    def unk_idx(self):
-        return self.vocab['<unk>']
+class EnumConfig(VocabConfig):
+    def __init__(self, **kwargs):
+        self.emb_dim = kwargs.pop('emb_dim', 25)
+        super().__init__(**kwargs)
         
-    
         
-class ValEmbeddingConfig(Config):
+class ValConfig(Config):
     def __init__(self, **kwargs):
         self.in_dim = kwargs.pop('in_dim', None)
         self.emb_dim = kwargs.pop('emb_dim', 25)
@@ -165,7 +177,15 @@ class ValEmbeddingConfig(Config):
         
 class EmbedderConfig(Config):
     def __init__(self, **kwargs):
-        self.token = kwargs.pop('token', TokenEmbeddingConfig())
+        """
+        Parameters
+        ----------
+        token: TokenConfig
+        char: CharConfig
+        enum: ConfigDict[str -> EnumConfig]
+        val: ConfigDict[str -> ValConfig]
+        """
+        self.token = kwargs.pop('token', TokenConfig())
         self.char = kwargs.pop('char', None)
         self.enum = kwargs.pop('enum', None)
         self.val = kwargs.pop('val', None)

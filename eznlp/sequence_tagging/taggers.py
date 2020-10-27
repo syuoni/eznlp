@@ -18,21 +18,21 @@ class Tagger(nn.Module):
         self.config = config
         self.embedder = Embedder(config.embedder, pretrained_vectors=pretrained_vectors)
         
+        # NOTE: The order should be preserved. 
         if config.encoders is not None:
             encoders = []
-            for key, enc_config in config.encoders.items():
+            for enc_config in config.encoders:
                 if enc_config.arch.lower() == 'shortcut':
-                    encoders.append((key, ShortcutEncoder(enc_config)))
+                    encoders.append(ShortcutEncoder(enc_config))
                 elif enc_config.arch.lower() in ('lstm', 'gru'):
-                    encoders.append((key, RNNEncoder(enc_config)))
+                    encoders.append(RNNEncoder(enc_config))
                 elif enc_config.arch.lower() == 'cnn':
-                    encoders.append((key, CNNEncoder(enc_config)))
+                    encoders.append(CNNEncoder(enc_config))
                 elif enc_config.arch.lower() == 'transformer':
-                    encoders.append((key, TransformerEncoder(enc_config)))
+                    encoders.append(TransformerEncoder(enc_config))
                 else:
                     raise ValueError(f"Invalid enocoder architecture {enc_config.arch}")
-            # NOTE: `torch.nn.ModuleDict` is an **ordered** dictionary
-            self.encoders = nn.ModuleDict(encoders)
+            self.encoders = nn.ModuleList(encoders)
         
         if config.ptm_encoder is not None:
             assert ptm is not None
@@ -54,7 +54,7 @@ class Tagger(nn.Module):
         
         if hasattr(self, 'embedder') and hasattr(self, 'encoders'):
             embedded = self.embedder(batch, word=True, char=True, enum=True, val=True)
-            for encoder in self.encoders.values():
+            for encoder in self.encoders:
                 full_hidden.append(encoder(batch, embedded))
                 
         if hasattr(self, 'ptm_encoder'):

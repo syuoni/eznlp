@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
-from collections import OrderedDict
 from torch.nn.utils.rnn import pad_sequence
 
 from ..token import Token
-from ..config import Config, ConfigDict, EmbedderConfig, EncoderConfig
+from ..config import Config, ConfigList, EmbedderConfig, EncoderConfig
 from .transitions import ChunksTagsTranslator
 
 
@@ -164,11 +163,18 @@ class DecoderConfig(Config):
         
 class TaggerConfig(Config):
     def __init__(self, **kwargs):
+        """
+        Parameters
+        ----------
+        embedder: EmbedderConfig
+        encoders: ConfigList[EncoderConfig]
+        ptm_encoder: PreTrainedModelConfig
+        decoder: DecoderConfig
+        """
         self.embedder = kwargs.pop('embedder', EmbedderConfig())
-        self.encoders = kwargs.pop('encoders', ConfigDict(OrderedDict([('LSTM', EncoderConfig(arch='LSTM'))])))
+        self.encoders = kwargs.pop('encoders', ConfigList([EncoderConfig(arch='LSTM')]))
         self.ptm_encoder = kwargs.pop('ptm_encoder', None)
         self.decoder = kwargs.pop('decoder', DecoderConfig())
-        
         super().__init__(**kwargs)
         
     @property
@@ -191,7 +197,7 @@ class TaggerConfig(Config):
                 val_config.in_dim = getattr(ex_token, f).shape[0]
                 
         if self.encoders is not None:
-            for enc_config in self.encoders.values():
+            for enc_config in self.encoders:
                 enc_config.in_dim = self.embedder.out_dim
                 if enc_config.arch.lower() == 'shortcut':
                     enc_config.hid_dim = self.embedder.out_dim
