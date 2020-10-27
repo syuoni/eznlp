@@ -1,10 +1,7 @@
 # -*- coding: utf-8 -*-
 from typing import List, Mapping
 from collections import OrderedDict
-
 import torch
-from torchtext.experimental.vocab import Vocab
-from torchtext.experimental.functional import sequential_transforms, vocab_func, totensor
 
 
 class Config(object):
@@ -24,10 +21,8 @@ class Config(object):
         return True
     
     def __repr__(self):
-        kwargs_str = ', \n'.join(f"{key}={attr}" for key, attr in self.__dict__.items() \
-                                 if not (key == 'trans' or key == 'vocab' or key.startswith('idx2') or key.endswith('2idx')))
-        return f"{self.__class__.__name__}({kwargs_str})"
-    
+        kwargs_repr = ', '.join(f"{key}={attr}" for key, attr in self.__dict__.items())
+        return f"{self.__class__.__name__}({kwargs_repr})"
     
     
 class ConfigList(object):
@@ -61,8 +56,8 @@ class ConfigList(object):
             raise AttributeError(f"{self.__class__.__name__} object has no attribute {name}")
     
     def __repr__(self):
-        return f"{self.__class__.__name__}({self.config_list})"
-    
+        config_repr = "".join(f"\t{repr(config)}\n" for config in self.config_list)
+        return f"{self.__class__.__name__}([\n{config_repr}])"
     
     
 class ConfigDict(object):
@@ -106,22 +101,19 @@ class ConfigDict(object):
             raise AttributeError(f"{self.__class__.__name__} object has no attribute {name}")
     
     def __repr__(self):
-        return f"{self.__class__.__name__}({list(self.config_dict.items())})"
-    
+        config_repr = "".join(f"\t{key}={repr(config)}\n" for key, config in self.config_dict.items())
+        return f"{self.__class__.__name__}([\n{config_repr}])"
     
     
 class VocabConfig(Config):
     def __init__(self, **kwargs):
-        vocab = kwargs.pop('vocab', None)
-        self.set_vocab(vocab)
+        self.vocab = kwargs.pop('vocab', None)
         super().__init__(**kwargs)
         
-        
-    def set_vocab(self, vocab: Vocab):
+    def trans(self, tok_iter):
         # It is generally recommended to return cpu tensors in multi-process loading. 
         # See https://pytorch.org/docs/stable/data.html#single-and-multi-process-data-loading
-        self.vocab = vocab
-        self.trans = sequential_transforms(vocab_func(vocab), totensor(torch.long))
+        return torch.tensor([self.vocab[tok] for tok in tok_iter], dtype=torch.long)
         
     @property
     def voc_dim(self):
@@ -171,8 +163,10 @@ class ValConfig(Config):
     def __init__(self, **kwargs):
         self.in_dim = kwargs.pop('in_dim', None)
         self.emb_dim = kwargs.pop('emb_dim', 25)
-        self.trans = sequential_transforms(totensor(torch.float), lambda x: (x*2-1) / 10)
         super().__init__(**kwargs)
+        
+    def trans(self, values):
+        return (torch.tensor(values, dtype=torch.float) * 2 - 1) / 10
         
         
 class EmbedderConfig(Config):
@@ -212,6 +206,12 @@ class EmbedderConfig(Config):
         out_dim += self.val.emb_dim if (self.val is not None) else 0
         return out_dim
     
+    def __repr__(self):
+        return (f"{self.__class__.__name__}(\n"
+                f"\ttoken={repr(self.token)}\n"
+                f"\tchar ={repr(self.char)}\n"
+                f"\tenum ={repr(self.enum)}\n"
+                f"\tval  ={repr(self.val)})")
     
 class EncoderConfig(Config):
     def __init__(self, **kwargs):

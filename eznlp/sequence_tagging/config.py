@@ -159,6 +159,9 @@ class DecoderConfig(Config):
     def fetch_batch_ent_slices_and_type_ids(self, batch_tags_objs: list):
         return [(tags_obj.cas_ent_slices, tags_obj.cas_ent_type_ids) for tags_obj in batch_tags_objs]
     
+    def __repr__(self):
+        kwargs_repr = ', '.join(f"{key}={self.__dict__[key]}" for key in ['arch', 'in_dim', 'dropout', 'scheme', 'cascade_mode'])
+        return f"{self.__class__.__name__}({kwargs_repr})"
         
         
 class TaggerConfig(Config):
@@ -222,5 +225,12 @@ class TaggerConfig(Config):
             
         name_elements.append(self.decoder.arch)
         return '-'.join(name_elements)
+    
+    def __repr__(self):
+        return (f"{self.__class__.__name__}(\n"
+                f"\tembedder   ={repr(self.embedder)}\n"
+                f"\tencoders   ={repr(self.encoders)}\n"
+                f"\tptm_encoder={repr(self.ptm_encoder)}\n"
+                f"\tdecoder    ={repr(self.decoder)})")
     
     

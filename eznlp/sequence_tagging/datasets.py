@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from collections import Counter, OrderedDict
-from tqdm import tqdm
 import torch
 from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
@@ -50,7 +49,7 @@ class SequenceTaggingDataset(Dataset):
         counter = Counter()
         for curr_data in self.data:
             counter.update(curr_data['tokens'].text)
-        self.config.embedder.token.set_vocab(Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + counter.most_common()), min_freq=1))
+        self.config.embedder.token.vocab = Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + counter.most_common()), min_freq=1)
     
     def extend_token_vocab(self, *others):
         counter = Counter()
@@ -60,8 +59,8 @@ class SequenceTaggingDataset(Dataset):
                 
         existing_tokens = self.config.embedder.token.vocab.get_itos()
         existing_set = set(existing_tokens)
-        self.config.embedder.token.set_vocab(Vocab(OrderedDict([(tok, 100) for tok in existing_tokens] + \
-                                                   [(tok, freq) for tok, freq in counter.most_common() if tok not in existing_set]), min_freq=1))
+        self.config.embedder.token.vocab = Vocab(OrderedDict([(tok, 100) for tok in existing_tokens] + \
+                                               [(tok, freq) for tok, freq in counter.most_common() if tok not in existing_set]), min_freq=1)
         
     
     def _build_char_vocab(self):
@@ -69,7 +68,7 @@ class SequenceTaggingDataset(Dataset):
         for curr_data in self.data:
             for tok in curr_data['tokens'].raw_text:
                 counter.update(tok)
-        self.config.embedder.char.set_vocab(Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + counter.most_common()), min_freq=1))
+        self.config.embedder.char.vocab = Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + counter.most_common()), min_freq=1)
         
     def _build_enum_vocabs(self):
         counters = {f: Counter() for f in self.config.embedder.enum.keys()}
@@ -78,7 +77,7 @@ class SequenceTaggingDataset(Dataset):
                 c.update(getattr(curr_data['tokens'], f))
         
         for f, enum_config in self.config.embedder.enum.items():
-            enum_config.set_vocab(Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + counters[f].most_common()), min_freq=1))
+            enum_config.vocab = Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + counters[f].most_common()), min_freq=1)
             
             
     def _build_tag_vocabs(self):
