@@ -41,6 +41,9 @@ class ConfigList(object):
                 return False
         return True
     
+    def __len__(self):
+        return len(self.config_list)
+    
     def __iter__(self):
         return iter(self.config_list)
     
@@ -79,6 +82,9 @@ class ConfigDict(object):
             if not config.is_valid:
                 return False
         return True
+    
+    def __len__(self):
+        return len(self.config_dict)
     
     def keys(self):
         return self.config_dict.keys()
@@ -150,6 +156,9 @@ class TokenConfig(VocabConfig):
         self.emb_dim = kwargs.pop('emb_dim', 100)
         self.max_len = kwargs.pop('max_len', 300)
         self.use_pos_emb = kwargs.pop('use_pop_emb', False)
+        
+        self.freeze = kwargs.pop('freeze', False)
+        self.scale_grad_by_freq = kwargs.pop('scale_grad_by_freq', False)
         super().__init__(**kwargs)
         
         
@@ -213,6 +222,7 @@ class EmbedderConfig(Config):
                 f"\tenum ={repr(self.enum)}\n"
                 f"\tval  ={repr(self.val)})")
     
+    
 class EncoderConfig(Config):
     def __init__(self, **kwargs):
         self.arch = kwargs.pop('arch', 'LSTM')
@@ -225,7 +235,7 @@ class EncoderConfig(Config):
         elif self.arch.lower() in ('lstm', 'gru'):
             self.hid_dim = kwargs.pop('hid_dim', 128)
             self.num_layers = kwargs.pop('num_layers', 1)
-            self.dropout = kwargs.pop('dropout', 0.5)
+            self.dropout = kwargs.pop('dropout', 0.0)
             
         elif self.arch.lower() == 'cnn':
             self.hid_dim = kwargs.pop('hid_dim', 128)
@@ -246,11 +256,20 @@ class EncoderConfig(Config):
         super().__init__(**kwargs)
         
         
-class PreTrainedModelConfig(Config):
+        
+class PreTrainedEmbedderConfig(Config):
     def __init__(self, **kwargs):
         self.arch = kwargs.pop('arch', 'PTM')
-        self.hid_dim = kwargs.pop('hid_dim')
-        self.tokenizer = kwargs.pop('tokenizer')
+        self.out_dim = kwargs.pop('out_dim')
+        self.freeze = kwargs.pop('freeze', False)
+        
+        if self.arch.lower() == 'elmo':
+            self.lstm_stateful = kwargs.pop('lstm_stateful', False)
+        elif self.arch.lower() in ('bert', 'roberta', 'albert'):
+            self.tokenizer = kwargs.pop('tokenizer')
+        else:
+            raise ValueError(f"Invalid pretrained embedder architecture {self.arch}")
         
         super().__init__(**kwargs)
+        
         

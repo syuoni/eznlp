@@ -46,9 +46,9 @@ class TensorWrapper(object):
             if possible_attr is None or isinstance(possible_attr, (Tensor, TensorWrapper)):
                 pass
             elif isinstance(possible_attr, list):
-                assert all(isinstance(sub_attr, (Tensor, TensorWrapper)) for sub_attr in possible_attr)
+                assert all(isinstance(sub_attr, (Tensor, TensorWrapper, str)) for sub_attr in possible_attr)
             elif isinstance(possible_attr, dict):
-                assert all(isinstance(sub_attr, (Tensor, TensorWrapper)) for sub_attr in possible_attr.values())
+                assert all(isinstance(sub_attr, (Tensor, TensorWrapper, str)) for sub_attr in possible_attr.values())
             else:
                 raise TypeError(f"Invalid input to `TensorWrapper`: {possible_attr}")
                 

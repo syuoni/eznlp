@@ -4,16 +4,19 @@ from torch import Tensor
 import torch.nn as nn
 from torchtext.experimental.vectors import Vectors
 from transformers import PreTrainedModel
+from allennlp.modules.elmo import Elmo
 
 from ..datasets_utils import Batch
 from .config import TaggerConfig
 from ..embedders import Embedder
-from ..encoders import ShortcutEncoder, RNNEncoder, CNNEncoder, TransformerEncoder, PreTrainedEncoder
+from ..encoders import ShortcutEncoder, RNNEncoder, CNNEncoder, TransformerEncoder
+from ..pretrained_embedders import BertLikeEmbedder, ELMoEmbedder
 from .decoders import SoftMaxDecoder, CRFDecoder, CascadeDecoder
 
 
 class Tagger(nn.Module):
-    def __init__(self, config: TaggerConfig, pretrained_vectors: Vectors=None, ptm: PreTrainedModel=None):
+    def __init__(self, config: TaggerConfig, 
+                 pretrained_vectors: Vectors=None, elmo: Elmo=None, bert_like: PreTrainedModel=None):
         super().__init__()
         self.config = config
         self.embedder = Embedder(config.embedder, pretrained_vectors=pretrained_vectors)
@@ -30,21 +33,23 @@ class Tagger(nn.Module):
                     encoders.append(CNNEncoder(enc_config))
                 elif enc_config.arch.lower() == 'transformer':
                     encoders.append(TransformerEncoder(enc_config))
-                else:
-                    raise ValueError(f"Invalid enocoder architecture {enc_config.arch}")
             self.encoders = nn.ModuleList(encoders)
         
-        if config.ptm_encoder is not None:
-            assert ptm is not None
-            self.ptm_encoder = PreTrainedEncoder(ptm)
         
+        if config.elmo_embedder is not None:
+            assert elmo is not None and isinstance(elmo, Elmo)
+            self.elmo_embedder = ELMoEmbedder(config.elmo_embedder, elmo)
+            
+        if config.bert_like_embedder is not None:
+            assert bert_like is not None and isinstance(bert_like, PreTrainedModel)
+            self.bert_like_embedder = BertLikeEmbedder(config.bert_like_embedder, bert_like)
+            
+            
         if config.decoder.cascade_mode.lower() == 'none':
             if config.decoder.arch.lower() == 'softmax':
                 self.decoder = SoftMaxDecoder(config.decoder)
             elif config.decoder.arch.lower() == 'crf':
                 self.decoder = CRFDecoder(config.decoder)
-            else:
-                raise ValueError(f"Invalid decoder architecture {config.decoder.arch}")
         else:
             self.decoder = CascadeDecoder(config.decoder)
             
@@ -53,12 +58,15 @@ class Tagger(nn.Module):
         full_hidden = []
         
         if hasattr(self, 'embedder') and hasattr(self, 'encoders'):
-            embedded = self.embedder(batch, word=True, char=True, enum=True, val=True)
+            embedded = self.embedder(batch)
             for encoder in self.encoders:
                 full_hidden.append(encoder(batch, embedded))
                 
-        if hasattr(self, 'ptm_encoder'):
-            full_hidden.append(self.ptm_encoder(batch))
+        if hasattr(self, 'elmo_embedder'):
+            full_hidden.append(self.elmo_embedder(batch))
+            
+        if hasattr(self, 'bert_like_embedder'):
+            full_hidden.append(self.bert_like_embedder(batch))
             
         return torch.cat(full_hidden, dim=-1)
             

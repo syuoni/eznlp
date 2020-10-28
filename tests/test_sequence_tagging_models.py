@@ -5,10 +5,13 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchtext.experimental.vectors import GloVe
 from transformers import BertTokenizer, BertModel
+from allennlp.modules.elmo import Elmo
 
 from eznlp import Token
-from eznlp import ConfigList, ConfigDict, CharConfig, EnumConfig, ValConfig
-from eznlp import EmbedderConfig, EncoderConfig, PreTrainedModelConfig
+from eznlp import ConfigList, ConfigDict
+from eznlp import TokenConfig, CharConfig, EnumConfig, ValConfig, EmbedderConfig
+from eznlp import EncoderConfig
+from eznlp import PreTrainedEmbedderConfig
 from eznlp.sequence_tagging import parse_conll_file
 from eznlp.sequence_tagging import DecoderConfig, TaggerConfig
 from eznlp.sequence_tagging import SequenceTaggingDataset
@@ -46,6 +49,12 @@ def BIOES_data():
 def BIO2_data():
     return load_demo_data(scheme='BIO2')
 
+@pytest.fixture
+def ELMo_model():
+    options_file = "assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_options.json"
+    weight_file = "assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_weights.hdf5"
+    return Elmo(options_file, weight_file, num_output_representations=1)
+    
 
 @pytest.fixture
 def BERT_with_tokenizer():
@@ -159,8 +168,10 @@ class TestTagger(object):
         trainer.eval_epoch([batch012])
         
     
-    def test_word_embedding_init(self, BIOES_data, glove100, device):
-        config = TaggerConfig()
+    @pytest.mark.parametrize("freeze", [False, True])
+    def test_word_embedding_initialization(self, BIOES_data, glove100, freeze, device):
+        embedder_config = EmbedderConfig(token=TokenConfig(emb_dim=100, freeze=freeze))
+        config = TaggerConfig(embedder=embedder_config)
         train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
         tagger = Tagger(config, pretrained_vectors=glove100).to(device)
         
@@ -196,17 +207,30 @@ class TestTagger(object):
         self.one_tagger_pass(tagger, train_set, device)
         
         
-    @pytest.mark.parametrize("dec_arch", ['softmax', 'CRF'])
-    def test_tagger_bert(self, BIOES_data, BERT_with_tokenizer, dec_arch, device):
-        bert, tokenizer = BERT_with_tokenizer
-        ptm_encoder_config = PreTrainedModelConfig(arch='BERT', hid_dim=bert.config.hidden_size, tokenizer=tokenizer)
-        
-        config = TaggerConfig(encoders=None, 
-                              ptm_encoder=ptm_encoder_config, 
-                              decoder=DecoderConfig(arch=dec_arch))
+    @pytest.mark.parametrize("freeze", [False, True])
+    def test_tagger_elmo(self, BIOES_data, ELMo_model, freeze, device):
+        elmo = ELMo_model
+        elmo_embedder_config = PreTrainedEmbedderConfig(arch='ELMo', 
+                                                        out_dim=elmo.get_output_dim(), 
+                                                        lstm_stateful=False, 
+                                                        freeze=freeze)
+        config = TaggerConfig(encoders=None, elmo_embedder=elmo_embedder_config)
         train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
-        tagger = Tagger(config, ptm=bert).to(device)
+        tagger = Tagger(config, elmo=elmo).to(device)
         
+        self.one_tagger_pass(tagger, train_set, device)
+    
+    
+    @pytest.mark.parametrize("freeze", [False, True])
+    def test_tagger_bert_like(self, BIOES_data, BERT_with_tokenizer, freeze, device):
+        bert, tokenizer = BERT_with_tokenizer
+        bert_like_embedder_config = PreTrainedEmbedderConfig(arch='BERT', 
+                                                             out_dim=bert.config.hidden_size, 
+                                                             tokenizer=tokenizer, 
+                                                             freeze=freeze)
+        config = TaggerConfig(encoders=None, bert_like_embedder=bert_like_embedder_config)
+        train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
+        tagger = Tagger(config, bert_like=bert).to(device)
         
         self.one_tagger_pass(tagger, train_set, device)
         
@@ -221,8 +245,7 @@ class TestTagger(object):
         self.one_tagger_pass(tagger, train_set, device)
         
         
-    @pytest.mark.parametrize("enc_arches", [['CNN'], 
-                                            ['LSTM', 'Shortcut']])
+    @pytest.mark.parametrize("enc_arches", [['CNN'], ['LSTM', 'Shortcut']])
     def test_tagger_morefields(self, BIOES_data, enc_arches, device):
         embedder_config = EmbedderConfig(enum=ConfigDict([(f, EnumConfig(emb_dim=20)) for f in Token.basic_enum_fields]), 
                                          val=ConfigDict([(f, ValConfig(emb_dim=20)) for f in Token.basic_val_fields]))
@@ -231,10 +254,9 @@ class TestTagger(object):
         train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
         tagger = Tagger(config).to(device)
         self.one_tagger_pass(tagger, train_set, device)
-                
-    
-    @pytest.mark.parametrize("enc_arches", [['CNN'], 
-                                            ['LSTM', 'Shortcut']])
+        
+        
+    @pytest.mark.parametrize("enc_arches", [['CNN'], ['LSTM', 'Shortcut']])
     def test_tagger_BIO2(self, BIO2_data, enc_arches, device):
         encoders_config = ConfigList([EncoderConfig(arch=arch) for arch in enc_arches])
         config = TaggerConfig(encoders=encoders_config)

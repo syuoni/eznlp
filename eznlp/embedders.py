@@ -7,7 +7,7 @@ from torchtext.experimental.vectors import Vectors
 
 from .datasets_utils import Batch
 from .nn_utils import reinit_embedding_, reinit_lstm_, reinit_gru_, reinit_layer_
-from .config import CharConfig, EnumConfig, ValConfig, EmbedderConfig
+from .config import TokenConfig, CharConfig, EnumConfig, ValConfig, EmbedderConfig
 
 
 class CharEncoder(nn.Module):
@@ -115,20 +115,53 @@ class ValEmbedding(nn.Module):
         return self.proj(val_ins)
     
     
-    
-class Embedder(nn.Module):
-    def __init__(self, config: EmbedderConfig, pretrained_vectors: Vectors=None):
-        """
-        `Embedder` forwards from inputs to embeddings. 
-        """
+class TokenEmbedding(nn.Module):
+    def __init__(self, config: TokenConfig, pretrained_vectors: Vectors=None):
         super().__init__()
+        self.word_emb = nn.Embedding(config.voc_dim, config.emb_dim, padding_idx=config.pad_idx, 
+                                     scale_grad_by_freq=config.scale_grad_by_freq)
+        reinit_embedding_(self.word_emb, itos=config.vocab.get_itos(), pretrained_vectors=pretrained_vectors)
+        self.freeze = config.freeze
         
-        self.word_emb = nn.Embedding(config.token.voc_dim, config.token.emb_dim, padding_idx=config.token.pad_idx)
-        reinit_embedding_(self.word_emb, itos=config.token.vocab.get_itos(), pretrained_vectors=pretrained_vectors)
-        if config.token.use_pos_emb:
-            self.pos_emb = nn.Embedding(config.token.max_len, config.token.emb_dim)
+        if config.use_pos_emb:
+            self.pos_emb = nn.Embedding(config.max_len, config.emb_dim)
             reinit_embedding_(self.pos_emb)
+        
+    @property
+    def freeze(self):
+        return self._freeze
+    
+    @freeze.setter
+    def freeze(self, value: bool):
+        assert isinstance(value, bool)
+        self._freeze = value
+        self.word_emb.requires_grad_(not self._freeze)
+        
+    def forward(self, tok_ids: Tensor):
+        # word_embedded: (batch, step, emb_dim)
+        if self.freeze:
+            with torch.no_grad():
+                word_embedded = self.word_emb(tok_ids)
+        else:
+            word_embedded = self.word_emb(tok_ids)
             
+        # pos_embedded: (batch, step, emb_dim)
+        if hasattr(self, 'pos_emb'):
+            pos = torch.arange(word_embedded.size(1), device=word_embedded.device).repeat(word_embedded.size(0), 1)
+            pos_embedded = self.pos_emb(pos)
+            return (word_embedded + pos_embedded) * (0.5**0.5)
+        else:
+            return word_embedded
+        
+        
+class Embedder(nn.Module):
+    """
+    `Embedder` forwards from inputs to embeddings. 
+    """
+    def __init__(self, config: EmbedderConfig, pretrained_vectors: Vectors=None):
+        super().__init__()
+        self.token_emb = TokenEmbedding(config.token)
+        
         if config.char is not None:
             if config.char.arch.lower() == 'cnn':
                 self.char_encoder = CharCNN(config.char)
@@ -144,55 +177,30 @@ class Embedder(nn.Module):
             self.val_embs = nn.ModuleDict([(f, ValEmbedding(val_config)) for f, val_config in config.val.items()])
             
             
-    def get_word_embedded(self, batch: Batch):
-        if hasattr(self, 'word_emb'):
-            # word_embedded: (batch, step, emb_dim)
-            word_embedded = self.word_emb(batch.tok_ids)
-            
-            if hasattr(self, 'pos_emb'):
-                # pos_embedded: (batch, step, emb_dim)
-                pos = torch.arange(word_embedded.size(1), device=word_embedded.device).repeat(word_embedded.size(0), 1)
-                pos_embedded = self.pos_emb(pos)
-                return (word_embedded + pos_embedded) * (0.5**0.5)
-            else:
-                return word_embedded
-        else:
-            return None
-        
-        
+    def get_token_embedded(self, batch: Batch):
+        return self.token_emb(batch.tok_ids)
+    
     def get_char_embedded(self, batch: Batch):
-        if hasattr(self, 'char_encoder'):
-            return self.char_encoder(batch.char_ids, batch.tok_lens, batch.char_mask, batch.seq_lens)
-        else:
-            return None
-        
-        
+        return self.char_encoder(batch.char_ids, batch.tok_lens, batch.char_mask, batch.seq_lens)
+    
     def get_enum_embedded(self, batch: Batch):
-        if hasattr(self, 'enum_embs'):
-            return torch.cat([self.enum_embs[f](batch.enum[f]) for f in self.enum_embs], dim=-1)
-        else:
-            return None
-        
+        return torch.cat([self.enum_embs[f](batch.enum[f]) for f in self.enum_embs], dim=-1)
         
     def get_val_embedded(self, batch: Batch):
-        if hasattr(self, 'val_embs'):
-            return torch.cat([self.val_embs[f](batch.val[f]) for f in self.val_embs], dim=-1)
-        else:
-            return None
-
+        return torch.cat([self.val_embs[f](batch.val[f]) for f in self.val_embs], dim=-1)
     
-    def forward(self, batch: Batch, word=True, char=True, enum=True, val=True):
+    def forward(self, batch: Batch):
         embedded = []
+        embedded.append(self.get_token_embedded(batch))
         
-        if word and hasattr(self, 'word_emb'):
-            embedded.append(self.get_word_embedded(batch))
-        if char and hasattr(self, 'char_encoder'):
+        if hasattr(self, 'char_encoder'):
             embedded.append(self.get_char_embedded(batch))
-        if enum and hasattr(self, 'enum_embs'):
+        if hasattr(self, 'enum_embs'):
             embedded.append(self.get_enum_embedded(batch))
-        if val and hasattr(self, 'val_embs'):
+        if hasattr(self, 'val_embs'):
             embedded.append(self.get_val_embedded(batch))
             
-        embedded = torch.cat(embedded, dim=-1)
-        return embedded
+        return torch.cat(embedded, dim=-1)
+    
+    
     

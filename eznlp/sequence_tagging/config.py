@@ -2,18 +2,22 @@
 from torch.nn.utils.rnn import pad_sequence
 
 from ..token import Token
-from ..config import Config, ConfigList, EmbedderConfig, EncoderConfig
+from ..config import Config, ConfigList, EmbedderConfig, EncoderConfig, PreTrainedEmbedderConfig
 from .transitions import ChunksTagsTranslator
 
 
 class DecoderConfig(Config):
     def __init__(self, **kwargs):
         self.arch = kwargs.pop('arch', 'CRF')
+        if self.arch.lower() not in ('softmax', 'crf'):
+            raise ValueError(f"Invalid decoder architecture {self.arch}")
+            
         self.in_dim = kwargs.pop('in_dim', None)
         self.dropout = kwargs.pop('dropout', 0.5)
         
         self.scheme = kwargs.pop('scheme', 'BIOES')
         self.translator = ChunksTagsTranslator(scheme=self.scheme)
+        
         self.cascade_mode = kwargs.pop('cascade_mode', 'None')
         if self.cascade_mode.lower() not in ('none', 'straight', 'sliced'):
             raise ValueError(f"Invalid cascade mode {self.cascade_mode}")
@@ -171,31 +175,39 @@ class TaggerConfig(Config):
         ----------
         embedder: EmbedderConfig
         encoders: ConfigList[EncoderConfig]
-        ptm_encoder: PreTrainedModelConfig
+        elmo_embedder: PreTrainedEmbedderConfig
+        bert_like_embedder: PreTrainedEmbedderConfig
         decoder: DecoderConfig
         """
         self.embedder = kwargs.pop('embedder', EmbedderConfig())
         self.encoders = kwargs.pop('encoders', ConfigList([EncoderConfig(arch='LSTM')]))
-        self.ptm_encoder = kwargs.pop('ptm_encoder', None)
+        
+        self.elmo_embedder = kwargs.pop('elmo_embedder', None)
+        self.bert_like_embedder = kwargs.pop('bert_like_embedder', None)
+        
         self.decoder = kwargs.pop('decoder', DecoderConfig())
         super().__init__(**kwargs)
+        
         
     @property
     def is_valid(self):
         if self.decoder is None or not self.decoder.is_valid:
             return False
+        if self.embedder is None or not self.embedder.is_valid:
+            return False
         
-        if (self.embedder is not None) and self.embedder.is_valid and (self.encoders is not None) and self.encoders.is_valid:
+        if self.encoders is not None and self.encoders.is_valid:
             return True
-        
-        if (self.ptm_encoder is not None) and self.ptm_encoder.is_valid:
+        if self.elmo_embedder is not None and self.elmo_embedder.is_valid:
+            return True
+        if self.bert_like_embedder is not None and self.bert_like_embedder.is_valid:
             return True
         
         return False
-    
         
-    def _update_dims(self, ex_token: Token):
-        if self.embedder.val is not None:
+    
+    def _update_dims(self, ex_token: Token=None):
+        if self.embedder.val is not None and ex_token is not None:
             for f, val_config in self.embedder.val.items():
                 val_config.in_dim = getattr(ex_token, f).shape[0]
                 
@@ -207,7 +219,8 @@ class TaggerConfig(Config):
         
         full_hid_dim = 0
         full_hid_dim += self.encoders.hid_dim if self.encoders is not None else 0
-        full_hid_dim += self.ptm_encoder.hid_dim if self.ptm_encoder is not None else 0
+        full_hid_dim += self.elmo_embedder.out_dim if self.elmo_embedder is not None else 0
+        full_hid_dim += self.bert_like_embedder.out_dim if self.bert_like_embedder is not None else 0
         self.decoder.in_dim = full_hid_dim
         
         
@@ -215,22 +228,28 @@ class TaggerConfig(Config):
     def name(self):
         name_elements = []
         if self.embedder is not None and self.embedder.char is not None:
-            name_elements.append(self.embedder.char.arch)
+            name_elements.append("Char" + self.embedder.char.arch)
         
         if self.encoders is not None:
             name_elements.append(self.encoders.arch)
             
-        if self.ptm_encoder is not None:
-            name_elements.append(self.ptm_encoder.arch)
+        if self.elmo_embedder is not None:
+            name_elements.append(self.elmo_embedder.arch)
+            
+        if self.bert_like_embedder is not None:
+            name_elements.append(self.bert_like_embedder.arch)
             
         name_elements.append(self.decoder.arch)
+        name_elements.append(self.decoder.cascade_mode)
         return '-'.join(name_elements)
+    
     
     def __repr__(self):
         return (f"{self.__class__.__name__}(\n"
-                f"\tembedder   ={repr(self.embedder)}\n"
-                f"\tencoders   ={repr(self.encoders)}\n"
-                f"\tptm_encoder={repr(self.ptm_encoder)}\n"
-                f"\tdecoder    ={repr(self.decoder)})")
+                f"\tembedder={repr(self.embedder)}\n"
+                f"\tencoders={repr(self.encoders)}\n"
+                f"\telmo_embedder={repr(self.elmo_embedder)}\n"
+                f"\tbert_like_embedder={repr(self.bert_like_embedder)}\n"
+                f"\tdecoder={repr(self.decoder)})")
     
     

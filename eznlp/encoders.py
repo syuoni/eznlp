@@ -7,15 +7,15 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from .datasets_utils import Batch
 from .nn_utils import reinit_layer_, reinit_lstm_, reinit_gru_, reinit_transformer_encoder_layer_
-from .functional import aggregate_tensor_by_group
 from .config import EncoderConfig
 
-    
+
+
 class Encoder(nn.Module):
+    """
+    `Encoder` forwards from embeddings to hidden states. 
+    """
     def __init__(self, config: EncoderConfig):
-        """
-        `Encoder` forwards from embeddings to hidden states. 
-        """
         super().__init__()
         self.dropout = nn.Dropout(config.dropout)
         
@@ -152,23 +152,5 @@ class TransformerEncoder(Encoder):
         # hidden: (step, batch, hid_dim) -> (batch, step, hid_dim) 
         return hidden.permute(1, 0, 2)
     
-    
-    
-class PreTrainedEncoder(nn.Module):
-    def __init__(self, ptm: nn.Module):
-        """
-        `PreTrainedEncoder` forwards from inputs to hidden states. 
-        """
-        super().__init__()
-        self.ptm = ptm
-        
-    def forward(self, batch: Batch):
-        # ptm_outs: (batch, wp_step+2, hid_dim)
-        ptm_outs, *_ = self.ptm(batch.sub_tok_ids, attention_mask=(~batch.sub_tok_mask).type(torch.long))
-        ptm_outs = ptm_outs[:, 1:-1]
-        
-        # agg_ptm_outs: (batch, tok_step, hid_dim)
-        agg_ptm_outs = aggregate_tensor_by_group(ptm_outs, batch.ori_indexes, agg_step=batch.tok_ids.size(1))
-        return agg_ptm_outs
     
     
