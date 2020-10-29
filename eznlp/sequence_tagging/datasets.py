@@ -7,7 +7,8 @@ from torchtext.experimental.vocab import Vocab
 from allennlp.modules.elmo import batch_to_ids as batch_to_elmo_char_ids
 
 from ..datasets_utils import TensorWrapper, Batch, _fetch_token_id
-from .config import DecoderConfig, TaggerConfig
+from .decoders import DecoderConfig
+from .taggers import TaggerConfig
 
 
 class SequenceTaggingDataset(Dataset):

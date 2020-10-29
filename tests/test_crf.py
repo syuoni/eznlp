@@ -4,6 +4,7 @@ from torchcrf import CRF as benchmarkCRF
 
 from eznlp.sequence_tagging.crf import CRF
 
+
 class TestCRF(object):
     def test_crf(self):
         

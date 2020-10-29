@@ -1,16 +1,58 @@
 # -*- coding: utf-8 -*-
-import torch
 from torch import Tensor
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from .datasets_utils import Batch
 from .nn_utils import reinit_layer_, reinit_lstm_, reinit_gru_, reinit_transformer_encoder_layer_
-from .config import EncoderConfig
+from .config import Config
 
 
-
+class EncoderConfig(Config):
+    def __init__(self, **kwargs):
+        self.arch = kwargs.pop('arch', 'LSTM')
+        self.in_dim = kwargs.pop('in_dim', None)
+        
+        if self.arch.lower() == 'shortcut':
+            self.hid_dim = kwargs.pop('hid_dim', None)
+            self.dropout = kwargs.pop('dropout', 0.0)
+        
+        elif self.arch.lower() in ('lstm', 'gru'):
+            self.hid_dim = kwargs.pop('hid_dim', 128)
+            self.num_layers = kwargs.pop('num_layers', 1)
+            self.dropout = kwargs.pop('dropout', 0.0)
+            
+        elif self.arch.lower() == 'cnn':
+            self.hid_dim = kwargs.pop('hid_dim', 128)
+            self.kernel_size = kwargs.pop('kernel_size', 3)
+            self.num_layers = kwargs.pop('num_layers', 3)
+            self.dropout = kwargs.pop('dropout', 0.25)
+            
+        elif self.arch.lower() == 'transformer':
+            self.hid_dim = kwargs.pop('hid_dim', 128)
+            self.nhead = kwargs.pop('nhead', 8)
+            self.pf_dim = kwargs.pop('pf_dim', 256)
+            self.num_layers = kwargs.pop('num_layers', 3)
+            self.dropout = kwargs.pop('dropout', 0.1)
+            
+        else:
+            raise ValueError(f"Invalid encoder architecture {self.arch}")
+        
+        super().__init__(**kwargs)
+        
+        
+    def instantiate(self):
+        if self.arch.lower() == 'shortcut':
+            return ShortcutEncoder(self)
+        elif self.arch.lower() in ('lstm', 'gru'):
+            return RNNEncoder(self)
+        elif self.arch.lower() == 'cnn':
+            return CNNEncoder(self)
+        elif self.arch.lower() == 'transformer':
+            return TransformerEncoder(self)
+        
+        
+        
 class Encoder(nn.Module):
     """
     `Encoder` forwards from embeddings to hidden states. 

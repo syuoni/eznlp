@@ -2,7 +2,17 @@
 from typing import List, Mapping
 from collections import OrderedDict
 import torch
+import torch.nn as nn
 
+
+def _add_indents(config_str: str, num_spaces: int=2):
+    lines = config_str.split('\n')
+    if len(lines) == 1:
+        return config_str
+    else:
+        lines = [lines[0]] + [' '*num_spaces + line for line in lines[1:]]
+        return '\n'.join(lines)
+    
 
 class Config(object):
     def __init__(self, **kwargs):
@@ -12,7 +22,7 @@ class Config(object):
     @property
     def is_valid(self):
         for attr in self.__dict__.values():
-            if isinstance(attr, (Config, ConfigDict)):
+            if isinstance(attr, Config):
                 if not attr.is_valid:
                     return False
             else:
@@ -20,12 +30,26 @@ class Config(object):
                     return False
         return True
     
+    def instantiate(self):
+        raise NotImplementedError("Not Implemented `instantiate`")
+        
     def __repr__(self):
-        kwargs_repr = ', '.join(f"{key}={attr}" for key, attr in self.__dict__.items())
-        return f"{self.__class__.__name__}({kwargs_repr})"
+        return self._repr_non_config_attrs(self.__dict__)
+        
+    def _repr_non_config_attrs(self, attr_dict: dict):
+        main_str = self.__class__.__name__ + '('
+        main_str += ', '.join(f"{key}={attr}" for key, attr in attr_dict.items())
+        main_str += ')'
+        return main_str
+    
+    def _repr_config_attrs(self, attr_dict: dict):
+        main_str = self.__class__.__name__ + '(\n'
+        main_str += '\n'.join(f"  ({key}): {_add_indents(repr(attr))}" for key, attr in attr_dict.items())
+        main_str += '\n)'
+        return main_str
     
     
-class ConfigList(object):
+class ConfigList(Config):
     def __init__(self, config_list: List[Config]):
         # NOTE: The order should be preserved. 
         if isinstance(config_list, list):
@@ -52,21 +76,24 @@ class ConfigList(object):
     
     def __getattr__(self, name):
         if name.endswith('_dim'):
-            return sum(getattr(config, name) for config in self.config_list)
+            return sum(getattr(config, name) for config in self)
         elif name == 'arch':
-            return '-'.join(getattr(config, name) for config in self.config_list)
+            return '-'.join(getattr(config, name) for config in self)
         else:
             raise AttributeError(f"{self.__class__.__name__} object has no attribute {name}")
     
+    def instantiate(self):
+        # NOTE: The order should be consistent here and in the corresponding `forward`. 
+        return nn.ModuleList([config.instantiate() for config in self])
+    
     def __repr__(self):
-        config_repr = "".join(f"\t{repr(config)}\n" for config in self.config_list)
-        return f"{self.__class__.__name__}([\n{config_repr}])"
+        return self._repr_config_attrs({i: config for i, config in enumerate(self)})
     
     
-class ConfigDict(object):
+class ConfigDict(Config):
     def __init__(self, config_dict: Mapping[str, Config]):
         # NOTE: `torch.nn.ModuleDict` is an **ordered** dictionary
-        # NOTE: The order should be preserved. 
+        # NOTE: The order should be consistent here and in the corresponding `forward`. 
         if isinstance(config_dict, OrderedDict):
             assert all(isinstance(value, Config) for key, value in config_dict.items())
             self.config_dict = config_dict
@@ -100,18 +127,22 @@ class ConfigDict(object):
     
     def __getattr__(self, name):
         if name.endswith('_dim'):
-            return sum(getattr(config, name) for config in self.config_dict.values())
+            return sum(getattr(config, name) for config in self.values())
         elif name == 'arch':
-            return '-'.join(getattr(config, name) for config in self.config_dict.values())
+            return '-'.join(getattr(config, name) for config in self.values())
         else:
             raise AttributeError(f"{self.__class__.__name__} object has no attribute {name}")
     
+    def instantiate(self):
+        # NOTE: `torch.nn.ModuleDict` is an **ordered** dictionary
+        # NOTE: The order should be preserved here. 
+        return nn.ModuleDict([(key, config.instantiate()) for key, config in self.items()])
+    
     def __repr__(self):
-        config_repr = "".join(f"\t{key}={repr(config)}\n" for key, config in self.config_dict.items())
-        return f"{self.__class__.__name__}([\n{config_repr}])"
+        return self._repr_config_attrs(self.config_dict)
     
     
-class VocabConfig(Config):
+class ConfigwithVocab(Config):
     def __init__(self, **kwargs):
         self.vocab = kwargs.pop('vocab', None)
         super().__init__(**kwargs)
@@ -135,141 +166,3 @@ class VocabConfig(Config):
     
     
     
-class CharConfig(VocabConfig):
-    def __init__(self, **kwargs):
-        self.arch = kwargs.pop('arch', 'CNN')
-        
-        if self.arch.lower() not in ('lstm', 'gru', 'cnn'):
-            raise ValueError(f"Invalid char-level architecture {self.arch}")
-            
-        if self.arch.lower() == 'cnn':
-            self.kernel_size = kwargs.pop('kernel_size', 3)
-            
-        self.emb_dim = kwargs.pop('emb_dim', 25)
-        self.out_dim = kwargs.pop('out_dim', 50)
-        self.dropout = kwargs.pop('dropout', 0.5)
-        super().__init__(**kwargs)
-        
-        
-class TokenConfig(VocabConfig):
-    def __init__(self, **kwargs):
-        self.emb_dim = kwargs.pop('emb_dim', 100)
-        self.max_len = kwargs.pop('max_len', 300)
-        self.use_pos_emb = kwargs.pop('use_pop_emb', False)
-        
-        self.freeze = kwargs.pop('freeze', False)
-        self.scale_grad_by_freq = kwargs.pop('scale_grad_by_freq', False)
-        super().__init__(**kwargs)
-        
-        
-class EnumConfig(VocabConfig):
-    def __init__(self, **kwargs):
-        self.emb_dim = kwargs.pop('emb_dim', 25)
-        super().__init__(**kwargs)
-        
-        
-class ValConfig(Config):
-    def __init__(self, **kwargs):
-        self.in_dim = kwargs.pop('in_dim', None)
-        self.emb_dim = kwargs.pop('emb_dim', 25)
-        super().__init__(**kwargs)
-        
-    def trans(self, values):
-        return (torch.tensor(values, dtype=torch.float) * 2 - 1) / 10
-        
-        
-class EmbedderConfig(Config):
-    def __init__(self, **kwargs):
-        """
-        Parameters
-        ----------
-        token: TokenConfig
-        char: CharConfig
-        enum: ConfigDict[str -> EnumConfig]
-        val: ConfigDict[str -> ValConfig]
-        """
-        self.token = kwargs.pop('token', TokenConfig())
-        self.char = kwargs.pop('char', None)
-        self.enum = kwargs.pop('enum', None)
-        self.val = kwargs.pop('val', None)
-        super().__init__(**kwargs)
-        
-    @property
-    def is_valid(self):
-        if self.token is None or not self.token.is_valid:
-            return False
-        if self.char is not None and not self.char.is_valid:
-            return False
-        if self.enum is not None and not self.enum.is_valid:
-            return False
-        if self.val is not None and not self.val.is_valid:
-            return False
-        return True
-        
-    @property
-    def out_dim(self):
-        out_dim = 0
-        out_dim += self.token.emb_dim if (self.token is not None) else 0
-        out_dim += self.char.out_dim if (self.char is not None) else 0
-        out_dim += self.enum.emb_dim if (self.enum is not None) else 0
-        out_dim += self.val.emb_dim if (self.val is not None) else 0
-        return out_dim
-    
-    def __repr__(self):
-        return (f"{self.__class__.__name__}(\n"
-                f"\ttoken={repr(self.token)}\n"
-                f"\tchar ={repr(self.char)}\n"
-                f"\tenum ={repr(self.enum)}\n"
-                f"\tval  ={repr(self.val)})")
-    
-    
-class EncoderConfig(Config):
-    def __init__(self, **kwargs):
-        self.arch = kwargs.pop('arch', 'LSTM')
-        self.in_dim = kwargs.pop('in_dim', None)
-        
-        if self.arch.lower() == 'shortcut':
-            self.hid_dim = kwargs.pop('hid_dim', None)
-            self.dropout = kwargs.pop('dropout', 0.0)
-        
-        elif self.arch.lower() in ('lstm', 'gru'):
-            self.hid_dim = kwargs.pop('hid_dim', 128)
-            self.num_layers = kwargs.pop('num_layers', 1)
-            self.dropout = kwargs.pop('dropout', 0.0)
-            
-        elif self.arch.lower() == 'cnn':
-            self.hid_dim = kwargs.pop('hid_dim', 128)
-            self.kernel_size = kwargs.pop('kernel_size', 3)
-            self.num_layers = kwargs.pop('num_layers', 3)
-            self.dropout = kwargs.pop('dropout', 0.25)
-            
-        elif self.arch.lower() == 'transformer':
-            self.hid_dim = kwargs.pop('hid_dim', 128)
-            self.nhead = kwargs.pop('nhead', 8)
-            self.pf_dim = kwargs.pop('pf_dim', 256)
-            self.num_layers = kwargs.pop('num_layers', 3)
-            self.dropout = kwargs.pop('dropout', 0.1)
-            
-        else:
-            raise ValueError(f"Invalid encoder architecture {self.arch}")
-        
-        super().__init__(**kwargs)
-        
-        
-        
-class PreTrainedEmbedderConfig(Config):
-    def __init__(self, **kwargs):
-        self.arch = kwargs.pop('arch', 'PTM')
-        self.out_dim = kwargs.pop('out_dim')
-        self.freeze = kwargs.pop('freeze', False)
-        
-        if self.arch.lower() == 'elmo':
-            self.lstm_stateful = kwargs.pop('lstm_stateful', False)
-        elif self.arch.lower() in ('bert', 'roberta', 'albert'):
-            self.tokenizer = kwargs.pop('tokenizer')
-        else:
-            raise ValueError(f"Invalid pretrained embedder architecture {self.arch}")
-        
-        super().__init__(**kwargs)
-        
-        

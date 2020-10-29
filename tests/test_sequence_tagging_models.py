@@ -15,7 +15,6 @@ from eznlp import PreTrainedEmbedderConfig
 from eznlp.sequence_tagging import parse_conll_file
 from eznlp.sequence_tagging import DecoderConfig, TaggerConfig
 from eznlp.sequence_tagging import SequenceTaggingDataset
-from eznlp.sequence_tagging import Tagger
 from eznlp.sequence_tagging import SequenceTaggingTrainer
 
 
@@ -79,7 +78,7 @@ class TestCharEncoder(object):
         assert config.is_valid
         
         batch = train_set.collate([train_set[i] for i in range(0, 4)]).to(device)
-        tagger = Tagger(config).to(device)
+        tagger = config.instantiate().to(device)
         char_encoder = tagger.embedder.char_encoder
         char_encoder.eval()
         
@@ -173,7 +172,7 @@ class TestTagger(object):
         embedder_config = EmbedderConfig(token=TokenConfig(emb_dim=100, freeze=freeze))
         config = TaggerConfig(embedder=embedder_config)
         train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
-        tagger = Tagger(config, pretrained_vectors=glove100).to(device)
+        tagger = config.instantiate(pretrained_vectors=glove100).to(device)
         
         self.one_tagger_pass(tagger, train_set, device)
         
@@ -181,7 +180,7 @@ class TestTagger(object):
     def test_train_steps(self, BIOES_data, device):
         config = TaggerConfig()
         train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
-        tagger = Tagger(config).to(device)
+        tagger = config.instantiate().to(device)
         
         batch = train_set.collate([train_set[i] for i in range(0, 4)]).to(device)
         
@@ -203,7 +202,14 @@ class TestTagger(object):
         config = TaggerConfig(encoders=encoders_config, 
                               decoder=DecoderConfig(arch=dec_arch))
         train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
-        tagger = Tagger(config).to(device)
+        tagger = config.instantiate().to(device)
+        self.one_tagger_pass(tagger, train_set, device)
+        
+        
+    def test_tagger_intermediate(self, BIOES_data, device):
+        config = TaggerConfig(intermediate=EncoderConfig())
+        train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
+        tagger = config.instantiate().to(device)
         self.one_tagger_pass(tagger, train_set, device)
         
         
@@ -216,7 +222,7 @@ class TestTagger(object):
                                                         freeze=freeze)
         config = TaggerConfig(encoders=None, elmo_embedder=elmo_embedder_config)
         train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
-        tagger = Tagger(config, elmo=elmo).to(device)
+        tagger = config.instantiate(elmo=elmo).to(device)
         
         self.one_tagger_pass(tagger, train_set, device)
     
@@ -230,7 +236,7 @@ class TestTagger(object):
                                                              freeze=freeze)
         config = TaggerConfig(encoders=None, bert_like_embedder=bert_like_embedder_config)
         train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
-        tagger = Tagger(config, bert_like=bert).to(device)
+        tagger = config.instantiate(bert_like=bert).to(device)
         
         self.one_tagger_pass(tagger, train_set, device)
         
@@ -241,7 +247,7 @@ class TestTagger(object):
         decoder_config = DecoderConfig(arch=dec_arch, cascade_mode=cascade_mode)
         config = TaggerConfig(decoder=decoder_config)
         train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
-        tagger = Tagger(config).to(device)
+        tagger = config.instantiate().to(device)
         self.one_tagger_pass(tagger, train_set, device)
         
         
@@ -252,7 +258,7 @@ class TestTagger(object):
         encoders_config = ConfigList([EncoderConfig(arch=arch) for arch in enc_arches])
         config = TaggerConfig(embedder=embedder_config, encoders=encoders_config)
         train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
-        tagger = Tagger(config).to(device)
+        tagger = config.instantiate().to(device)
         self.one_tagger_pass(tagger, train_set, device)
         
         
@@ -261,6 +267,6 @@ class TestTagger(object):
         encoders_config = ConfigList([EncoderConfig(arch=arch) for arch in enc_arches])
         config = TaggerConfig(encoders=encoders_config)
         train_set, val_set, test_set = build_demo_datasets(*BIO2_data, config)
-        tagger = Tagger(config).to(device)
+        tagger = config.instantiate().to(device)
         self.one_tagger_pass(tagger, train_set, device)
         

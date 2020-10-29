@@ -2,94 +2,20 @@
 import torch
 from torch import Tensor
 import torch.nn as nn
-from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence
 from torchtext.experimental.vectors import Vectors
 
 from .datasets_utils import Batch
-from .nn_utils import reinit_embedding_, reinit_lstm_, reinit_gru_, reinit_layer_
-from .config import TokenConfig, CharConfig, EnumConfig, ValConfig, EmbedderConfig
+from .nn_utils import reinit_embedding_, reinit_layer_
+from .config import Config, ConfigwithVocab
 
 
-class CharEncoder(nn.Module):
-    def __init__(self, config: CharConfig):
-        super().__init__()
-        self.emb = nn.Embedding(config.voc_dim, config.emb_dim, padding_idx=config.pad_idx)
-        self.dropout = nn.Dropout(config.dropout)
+class EnumConfig(ConfigwithVocab):
+    def __init__(self, **kwargs):
+        self.emb_dim = kwargs.pop('emb_dim', 25)
+        super().__init__(**kwargs)
         
-        reinit_embedding_(self.emb)
-        
-        
-    def embedded2hidden(self, embedded: Tensor, tok_lens: Tensor, char_mask: Tensor):
-        raise NotImplementedError("Not Implemented `embedded2hidden`")
-        
-        
-    def forward(self, char_ids: Tensor, tok_lens: Tensor, char_mask: Tensor, seq_lens: Tensor):
-        assert seq_lens.sum().item() == tok_lens.size(0)
-        
-        # embedded: (batch*tok_step, char_step, emb_dim)
-        embedded = self.emb(char_ids)
-        
-        # hidden: (batch*tok_step, out_dim)
-        hidden = self.embedded2hidden(self.dropout(embedded), tok_lens, char_mask)
-        
-        # Retrieve token-level steps
-        # hidden: (batch, tok_step, out_dim)
-        offsets = [0] + seq_lens.cumsum(dim=0).cpu().tolist()
-        hidden = pad_sequence([hidden[s:e] for s, e in zip(offsets[:-1], offsets[1:])], batch_first=True, padding_value=0.0)
-        return hidden
-    
-    
-
-class CharCNN(CharEncoder):
-    def __init__(self, config: CharConfig):
-        super().__init__(config)
-        self.conv = nn.Conv1d(config.emb_dim, config.out_dim, 
-                              kernel_size=config.kernel_size, padding=(config.kernel_size-1)//2)
-        self.relu = nn.ReLU()
-        
-        reinit_layer_(self.conv, 'relu')
-        
-        
-    def embedded2hidden(self, embedded: Tensor, tok_lens: Tensor, char_mask: Tensor):
-        # NOTE: ``embedded`` has been ensured to be zeros in padding positions.
-        hidden = self.conv(embedded.permute(0, 2, 1)).permute(0, 2, 1)
-        hidden = self.relu(hidden)
-        
-        # hidden: (batch*tok_step, char_step, out_dim) -> (batch*tok_step, out_dim)
-        hidden = hidden.masked_fill(char_mask.unsqueeze(-1), 0).sum(dim=1) / tok_lens.unsqueeze(1)
-        return hidden
-    
-    
-class CharRNN(CharEncoder):
-    def __init__(self, config: CharConfig):
-        super().__init__(config)
-        
-        rnn_config = {'input_size': config.emb_dim, 
-                      'hidden_size': config.out_dim // 2, 
-                      'batch_first': True, 
-                      'bidirectional': True}
-        if config.arch.lower() == 'lstm':
-            self.rnn = nn.LSTM(**rnn_config)
-            reinit_lstm_(self.rnn)
-        elif config.arch.lower() == 'gru':
-            self.rnn = nn.GRU(**rnn_config)
-            reinit_gru_(self.rnn)
-        else:
-            raise ValueError(f"Invalid RNN architecture: {config.arch}")
-            
-            
-    def embedded2hidden(self, embedded: Tensor, tok_lens: Tensor, char_mask: Tensor):
-        packed_embedded = pack_padded_sequence(embedded, tok_lens, batch_first=True, enforce_sorted=False)
-        
-        if isinstance(self.rnn, nn.LSTM):
-            # hidden: (num_layers*num_directions=2, batch*tok_step, hid_dim=out_dim/2)
-            _, (hidden, _) = self.rnn(packed_embedded)
-        else:
-            _, hidden = self.rnn(packed_embedded)
-        
-        # hidden: (2, batch*tok_step, out_dim/2) -> (batch*tok_step, out_dim)
-        hidden = torch.cat([hidden[0], hidden[1]], dim=-1)
-        return hidden
+    def instantiate(self):
+        return EnumEmbedding(self)
     
     
 class EnumEmbedding(nn.Module):
@@ -100,6 +26,19 @@ class EnumEmbedding(nn.Module):
         
     def forward(self, enum_ids: Tensor):
         return self.emb(enum_ids)
+    
+
+class ValConfig(Config):
+    def __init__(self, **kwargs):
+        self.in_dim = kwargs.pop('in_dim', None)
+        self.emb_dim = kwargs.pop('emb_dim', 25)
+        super().__init__(**kwargs)
+        
+    def trans(self, values):
+        return (torch.tensor(values, dtype=torch.float) * 2 - 1) / 10
+    
+    def instantiate(self):
+        return ValEmbedding(self)
     
     
 class ValEmbedding(nn.Module):
@@ -114,7 +53,21 @@ class ValEmbedding(nn.Module):
     def forward(self, val_ins: Tensor):
         return self.proj(val_ins)
     
+
+class TokenConfig(ConfigwithVocab):
+    def __init__(self, **kwargs):
+        self.emb_dim = kwargs.pop('emb_dim', 100)
+        self.max_len = kwargs.pop('max_len', 300)
+        self.use_pos_emb = kwargs.pop('use_pop_emb', False)
+        
+        self.freeze = kwargs.pop('freeze', False)
+        self.scale_grad_by_freq = kwargs.pop('scale_grad_by_freq', False)
+        super().__init__(**kwargs)
     
+    def instantiate(self, pretrained_vectors: Vectors=None):
+        return TokenEmbedding(self, pretrained_vectors=pretrained_vectors)
+    
+
 class TokenEmbedding(nn.Module):
     def __init__(self, config: TokenConfig, pretrained_vectors: Vectors=None):
         super().__init__()
@@ -152,29 +105,69 @@ class TokenEmbedding(nn.Module):
             return (word_embedded + pos_embedded) * (0.5**0.5)
         else:
             return word_embedded
+
+
+
+class EmbedderConfig(Config):
+    def __init__(self, **kwargs):
+        """
+        Parameters
+        ----------
+        token: TokenConfig
+        char: CharConfig
+        enum: ConfigDict[str -> EnumConfig]
+        val: ConfigDict[str -> ValConfig]
+        """
+        self.token = kwargs.pop('token', TokenConfig())
+        self.char = kwargs.pop('char', None)
+        self.enum = kwargs.pop('enum', None)
+        self.val = kwargs.pop('val', None)
+        super().__init__(**kwargs)
         
+    @property
+    def is_valid(self):
+        if self.token is None or not self.token.is_valid:
+            return False
+        if self.char is not None and not self.char.is_valid:
+            return False
+        if self.enum is not None and not self.enum.is_valid:
+            return False
+        if self.val is not None and not self.val.is_valid:
+            return False
+        return True
         
+    @property
+    def out_dim(self):
+        out_dim = 0
+        out_dim += self.token.emb_dim if (self.token is not None) else 0
+        out_dim += self.char.out_dim if (self.char is not None) else 0
+        out_dim += self.enum.emb_dim if (self.enum is not None) else 0
+        out_dim += self.val.emb_dim if (self.val is not None) else 0
+        return out_dim
+    
+    def instantiate(self, pretrained_vectors: Vectors=None):
+        return Embedder(self, pretrained_vectors)
+    
+    def __repr__(self):
+        return self._repr_config_attrs(self.__dict__)
+    
+    
 class Embedder(nn.Module):
     """
     `Embedder` forwards from inputs to embeddings. 
     """
     def __init__(self, config: EmbedderConfig, pretrained_vectors: Vectors=None):
         super().__init__()
-        self.token_emb = TokenEmbedding(config.token)
+        self.token_emb = config.token.instantiate(pretrained_vectors=pretrained_vectors)
         
         if config.char is not None:
-            if config.char.arch.lower() == 'cnn':
-                self.char_encoder = CharCNN(config.char)
-            else:
-                self.char_encoder = CharRNN(config.char)
-                
-        # NOTE: `torch.nn.ModuleDict` is an **ordered** dictionary
-        # NOTE: The order should be preserved. 
+            self.char_encoder = config.char.instantiate()
+            
         if config.enum is not None:
-            self.enum_embs = nn.ModuleDict([(f, EnumEmbedding(enum_config)) for f, enum_config in config.enum.items()])
+            self.enum_embs = config.enum.instantiate()
                 
         if config.val is not None:
-            self.val_embs = nn.ModuleDict([(f, ValEmbedding(val_config)) for f, val_config in config.val.items()])
+            self.val_embs = config.val.instantiate()
             
             
     def get_token_embedded(self, batch: Batch):

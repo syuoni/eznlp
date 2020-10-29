@@ -6,9 +6,32 @@ from allennlp.modules.elmo import Elmo
 
 from .datasets_utils import Batch
 from .functional import aggregate_tensor_by_group
-from .config import PreTrainedEmbedderConfig
+from .config import Config
 
 
+class PreTrainedEmbedderConfig(Config):
+    def __init__(self, **kwargs):
+        self.arch = kwargs.pop('arch')
+        self.out_dim = kwargs.pop('out_dim')
+        self.freeze = kwargs.pop('freeze', False)
+        
+        if self.arch.lower() == 'elmo':
+            self.lstm_stateful = kwargs.pop('lstm_stateful', False)
+        elif self.arch.lower() in ('bert', 'roberta', 'albert'):
+            self.tokenizer = kwargs.pop('tokenizer')
+        else:
+            raise ValueError(f"Invalid pretrained embedder architecture {self.arch}")
+        
+        super().__init__(**kwargs)
+        
+        
+    def instantiate(self, pretrained_model: nn.Module):
+        if self.arch.lower() == 'elmo':
+            return ELMoEmbedder(self, pretrained_model)
+        elif self.arch.lower() in ('bert', 'roberta', 'albert'):
+            return BertLikeEmbedder(self, pretrained_model)
+        
+        
 class PreTrainedEmbedder(nn.Module):
     """
     `PreTrainedEmbedder` forwards from inputs to hidden states. 
@@ -40,7 +63,6 @@ class PreTrainedEmbedder(nn.Module):
         return ptm_outs
     
     
-    
 class BertLikeEmbedder(PreTrainedEmbedder):
     def __init__(self, config: PreTrainedEmbedderConfig, bert_like: PreTrainedModel):
         super().__init__(config, bert_like)
@@ -63,6 +85,7 @@ class ELMoEmbedder(PreTrainedEmbedder):
     See: https://github.com/allenai/allennlp/issues/2398
     """
     def __init__(self, config: PreTrainedEmbedderConfig, elmo: Elmo):
+        # TODO: Layer weights?
         elmo._elmo_lstm._elmo_lstm.stateful = config.lstm_stateful
         super().__init__(config, elmo)
         
