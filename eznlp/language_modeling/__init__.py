@@ -1,3 +1,3 @@
 # -*- coding: utf-8 -*-
-from .datasets import COVID19MLMDataset, PMCMLMDataset
+from .datasets import MLMDataset, PMCMLMDataset
 from .trainers import MLMTrainer

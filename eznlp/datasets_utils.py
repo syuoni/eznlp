@@ -1,6 +1,23 @@
 # -*- coding: utf-8 -*-
 import torch
 from torch import Tensor
+from torchtext.experimental.vocab import Vocab
+    
+
+def _fetch_token_id(token: str, vocab: Vocab):
+    tried_set = set()
+    unk_id = vocab['<unk>']
+    for possible_token in [token, token.lower(), token.title(), token.upper()]:
+        if possible_token in tried_set:
+            continue
+        
+        token_id = vocab[possible_token]
+        if token_id != unk_id:
+            return token_id
+        tried_set.add(possible_token)
+        
+    return unk_id
+
 
 def pad_seqs(seqs, padding_value=0.0, length=None):
     # Alternative: `torch.nn.utils.rnn.pad_sequence` which pads a list of tensors.
@@ -29,9 +46,9 @@ class TensorWrapper(object):
             if possible_attr is None or isinstance(possible_attr, (Tensor, TensorWrapper)):
                 pass
             elif isinstance(possible_attr, list):
-                assert all(isinstance(sub_attr, (Tensor, TensorWrapper)) for sub_attr in possible_attr)
+                assert all(isinstance(sub_attr, (Tensor, TensorWrapper, str)) for sub_attr in possible_attr)
             elif isinstance(possible_attr, dict):
-                assert all(isinstance(sub_attr, (Tensor, TensorWrapper)) for sub_attr in possible_attr.values())
+                assert all(isinstance(sub_attr, (Tensor, TensorWrapper, str)) for sub_attr in possible_attr.values())
             else:
                 raise TypeError(f"Invalid input to `TensorWrapper`: {possible_attr}")
                 

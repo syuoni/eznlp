@@ -1,72 +1,59 @@
 # -*- coding: utf-8 -*-
 import pytest
-import pickle
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchtext.experimental.vectors import GloVe
 from transformers import BertTokenizer, BertModel
+from allennlp.modules.elmo import Elmo
 
+from eznlp import Token
+from eznlp import ConfigList, ConfigDict
+from eznlp import TokenConfig, CharConfig, EnumConfig, ValConfig, EmbedderConfig
+from eznlp import EncoderConfig
+from eznlp import PreTrainedEmbedderConfig
+from eznlp.sequence_tagging import parse_conll_file
+from eznlp.sequence_tagging import DecoderConfig, TaggerConfig
 from eznlp.sequence_tagging import SequenceTaggingDataset
-from eznlp.sequence_tagging import ConfigHelper
-from eznlp.sequence_tagging import Tagger
-from eznlp.sequence_tagging import NERTrainer
+from eznlp.sequence_tagging import SequenceTaggingTrainer
 
 
-def load_demo_data(labeling='BIOES', seed=515):
-    with open(f"assets/data/covid19/{labeling}-train-demo-data-{seed}.pkl", 'rb') as f:
-        train_data = pickle.load(f)
-    with open(f"assets/data/covid19/{labeling}-val-demo-data-{seed}.pkl", 'rb') as f:
-        val_data = pickle.load(f)
-    with open(f"assets/data/covid19/{labeling}-test-demo-data-{seed}.pkl", 'rb') as f:
-        test_data = pickle.load(f)
+def load_demo_data(scheme='BIOES'):
+    conll_config = {'raw_scheme': 'BIO1', 
+                    'scheme': scheme, 
+                    'columns': ['text', 'pos_tag', 'chunking_tag', 'ner_tag'], 
+                    'trg_col': 'ner_tag', 
+                    'attach_additional_tags': False, 
+                    'skip_docstart': False, 
+                    'lower_case_mode': 'None'}
+    
+    train_data = parse_conll_file("assets/data/conll2003/eng.train", max_examples=200, **conll_config)
+    val_data   = parse_conll_file("assets/data/conll2003/eng.testa", max_examples=10,  **conll_config)
+    test_data  = parse_conll_file("assets/data/conll2003/eng.testb", max_examples=10,  **conll_config)
     return train_data, val_data, test_data
 
 
-def build_demo_datasets(train_data, val_data, test_data, enum_fields=None, val_fields=None, 
-                        cascade=False, labeling='BIOES'):
-    train_set = SequenceTaggingDataset(train_data, enum_fields=enum_fields, val_fields=val_fields, 
-                                       cascade=cascade, labeling=labeling)
-    val_set   = SequenceTaggingDataset(val_data,   enum_fields=enum_fields, val_fields=val_fields,
-                                       cascade=cascade, labeling=labeling, vocabs=train_set.get_vocabs())
-    test_set  = SequenceTaggingDataset(test_data,  enum_fields=enum_fields, val_fields=val_fields,
-                                       cascade=cascade, labeling=labeling, vocabs=train_set.get_vocabs())
+def build_demo_datasets(train_data, val_data, test_data, config):
+    train_set = SequenceTaggingDataset(train_data, config)
+    val_set   = SequenceTaggingDataset(val_data,   train_set.config)
+    test_set  = SequenceTaggingDataset(test_data,  train_set.config)
     return train_set, val_set, test_set
 
-@pytest.fixture
-def glove100():
-    # https://nlp.stanford.edu/projects/glove/
-    return GloVe(name='6B', dim=100, root="assets/vector_cache", validate_file=False)
 
 @pytest.fixture
 def BIOES_data():
-    return load_demo_data(labeling='BIOES', seed=515)
+    return load_demo_data(scheme='BIOES')
 
 @pytest.fixture
-def BIOES_datasets(BIOES_data):
-    return build_demo_datasets(*BIOES_data)
+def BIO2_data():
+    return load_demo_data(scheme='BIO2')
+
+@pytest.fixture
+def ELMo_model():
+    options_file = "assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_options.json"
+    weight_file = "assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_weights.hdf5"
+    return Elmo(options_file, weight_file, num_output_representations=1)
     
-@pytest.fixture
-def BIOES_datasets_nofields(BIOES_data):
-    return build_demo_datasets(*BIOES_data, enum_fields=[], val_fields=[])
-
-@pytest.fixture
-def BIOES_datasets_morefields(BIOES_data):
-    return build_demo_datasets(*BIOES_data, 
-                               enum_fields=SequenceTaggingDataset._pre_enum_fields+['upos', 'detailed_pos', 'dep', 'ent_tag'], 
-                               val_fields=SequenceTaggingDataset._pre_val_fields+['covid19tag'])
-
-@pytest.fixture
-def BIOES_datasets_cascade(BIOES_data):
-    return build_demo_datasets(*BIOES_data, cascade=True)
-
-@pytest.fixture
-def BIO_data():
-    return load_demo_data(labeling='BIO', seed=515)
-
-@pytest.fixture
-def BIO_datasets(BIO_data):
-    return build_demo_datasets(*BIO_data, labeling='BIO')
 
 @pytest.fixture
 def BERT_with_tokenizer():
@@ -74,18 +61,57 @@ def BERT_with_tokenizer():
     bert = BertModel.from_pretrained("assets/transformers_cache/bert-base-cased")
     return bert, tokenizer
 
+@pytest.fixture
+def glove100():
+    # https://nlp.stanford.edu/projects/glove/
+    return GloVe(name='6B', dim=100, root="assets/vector_cache", validate_file=False)
 
+
+class TestCharEncoder(object):
+    @pytest.mark.parametrize("arch", ['CNN', 'LSTM', 'GRU'])
+    def test_char_encoder(self, BIOES_data, arch, device):
+        train_data, val_data, test_data = BIOES_data
+        
+        config = TaggerConfig(embedder=EmbedderConfig(char=CharConfig(arch=arch)))
+        assert not config.is_valid
+        train_set = SequenceTaggingDataset(train_data, config)
+        assert config.is_valid
+        
+        batch = train_set.collate([train_set[i] for i in range(0, 4)]).to(device)
+        tagger = config.instantiate().to(device)
+        char_encoder = tagger.embedder.char_encoder
+        char_encoder.eval()
+        
+        batch_seq_lens1 = batch.seq_lens.clone()
+        batch_seq_lens1[0] = batch_seq_lens1[0] - 1
+        char_feats1 = char_encoder(batch.char_ids[1:], batch.tok_lens[1:], batch.char_mask[1:], batch_seq_lens1)
+        
+        batch_seq_lens2 = batch.seq_lens.clone()
+        batch_seq_lens2[-1] = batch_seq_lens2[-1] - 1
+        char_feats2 = char_encoder(batch.char_ids[:-1], batch.tok_lens[:-1], batch.char_mask[:-1], batch_seq_lens2)
+        
+        step = min(char_feats1.size(1), char_feats2.size(1))
+        last_step = batch_seq_lens2[-1].item()
+        assert (char_feats1[0, :step-1]  - char_feats2[0, 1:step]).abs().max() < 1e-4
+        assert (char_feats1[1:-1, :step] - char_feats2[1:-1, :step]).abs().max() < 1e-4
+        assert (char_feats1[-1, :last_step] - char_feats2[-1, :last_step]).abs().max() < 1e-4
+        
+        
 class TestBatching(object):
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA available")
-    def test_batch_to_cuda(self, BIOES_datasets, device):
-        train_set, val_set, test_set = BIOES_datasets
-        train_loader = DataLoader(train_set, batch_size=8, shuffle=True, 
-                                  collate_fn=train_set.collate, pin_memory=True)
+    def test_batch_to_cuda(self, BIOES_data, device):
+        train_data, val_data, test_data = BIOES_data
+        
+        embedder_config = EmbedderConfig(enum=ConfigDict([(f, EnumConfig(emb_dim=20)) for f in Token.basic_enum_fields]), 
+                                         val=ConfigDict([(f, ValConfig(emb_dim=20)) for f in Token.basic_val_fields]))
+        config = TaggerConfig(embedder=embedder_config)
+        train_set = SequenceTaggingDataset(train_data, config)
+        train_loader = DataLoader(train_set, batch_size=8, shuffle=True, collate_fn=train_set.collate, pin_memory=True)
         for batch in train_loader:
             break
         
         assert batch.tok_ids.is_pinned()
-        assert batch.enum['ent_tag'].is_pinned()
+        assert batch.enum['en_pattern'].is_pinned()
         assert batch.val['en_shape_features'].is_pinned()
         assert batch.seq_lens.is_pinned()
         assert batch.tags_objs[0].tag_ids.is_pinned()
@@ -98,8 +124,9 @@ class TestBatching(object):
         assert not batch.tok_ids.is_pinned()
         
         
-    def test_batches(self, BIOES_datasets):
-        train_set, val_set, test_set = BIOES_datasets
+    def test_batches(self, BIOES_data):
+        config = TaggerConfig()
+        train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
         train_loader = DataLoader(train_set, batch_size=8, shuffle=True, 
                                   collate_fn=train_set.collate)
         val_loader   = DataLoader(val_set,   batch_size=8, shuffle=False, 
@@ -128,112 +155,118 @@ class TestTagger(object):
         assert delta_hidden.abs().max().item() < 1e-4
         
         delta_losses = losses012[1:] - losses123[:-1]
-        assert delta_losses.abs().max().item() < 1e-4
+        assert delta_losses.abs().max().item() < 2e-4
         
         best_paths012 = tagger.decode(batch012)
         best_paths123 = tagger.decode(batch123)
         assert best_paths012[1:] == best_paths123[:-1]
         
         optimizer = optim.AdamW(tagger.parameters())
-        trainer = NERTrainer(tagger, optimizer=optimizer, device=device)
+        trainer = SequenceTaggingTrainer(tagger, optimizer=optimizer, device=device)
         trainer.train_epoch([batch012])
         trainer.eval_epoch([batch012])
         
+    
+    @pytest.mark.parametrize("freeze", [False, True])
+    def test_word_embedding_initialization(self, BIOES_data, glove100, freeze, device):
+        embedder_config = EmbedderConfig(token=TokenConfig(emb_dim=100, freeze=freeze))
+        config = TaggerConfig(embedder=embedder_config)
+        train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
+        tagger = config.instantiate(pretrained_vectors=glove100).to(device)
         
-    def test_word_embedding_init(self, BIOES_datasets, glove100, device):
-        train_set, val_set, test_set = BIOES_datasets
-        config, tag_helper = train_set.get_model_config()
-        config = ConfigHelper.load_default_config(config, enc_arches=['LSTM'], dec_arch='CRF')
-        tagger = Tagger(config, tag_helper, train_set.tok_vocab.get_itos(), glove100).to(device)
         self.one_tagger_pass(tagger, train_set, device)
         
         
-    def test_train_steps(self, BIOES_datasets, device):
-        train_set, val_set, test_set = BIOES_datasets
-        config, tag_helper = train_set.get_model_config()
-        config = ConfigHelper.load_default_config(config, enc_arches=['GRU'], dec_arch='CRF')
-        tagger = Tagger(config, tag_helper)
+    def test_train_steps(self, BIOES_data, device):
+        config = TaggerConfig()
+        train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
+        tagger = config.instantiate().to(device)
+        
         batch = train_set.collate([train_set[i] for i in range(0, 4)]).to(device)
         
         optimizer = optim.AdamW(tagger.parameters())
-        trainer = NERTrainer(tagger, optimizer=optimizer, device=device)
+        trainer = SequenceTaggingTrainer(tagger, optimizer=optimizer, device=device)
         trainer.train_steps(train_loader=[batch, batch], 
                             eval_loader=[batch, batch], 
                             n_epochs=10, disp_every_steps=2, eval_every_steps=6)
+    
+    
+    @pytest.mark.parametrize("enc_arches", [['CNN'], 
+                                            ['LSTM'], 
+                                            ['GRU'], 
+                                            ['Transformer'], 
+                                            ['LSTM', 'Shortcut']])
+    @pytest.mark.parametrize("dec_arch", ['softmax', 'CRF'])
+    def test_tagger(self, BIOES_data, enc_arches, dec_arch, device):
+        encoders_config = ConfigList([EncoderConfig(arch=arch) for arch in enc_arches])
+        config = TaggerConfig(encoders=encoders_config, 
+                              decoder=DecoderConfig(arch=dec_arch))
+        train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
+        tagger = config.instantiate().to(device)
+        self.one_tagger_pass(tagger, train_set, device)
         
         
-    def test_tagger_base(self, BIOES_datasets, device):
-        train_set, val_set, test_set = BIOES_datasets
-        config, tag_helper = train_set.get_model_config()
-        for enc_arch in ['LSTM', 'CNN', 'Transformer']:
-            for dec_arch in ['softmax', 'CRF']:
-                config = ConfigHelper.load_default_config(config, enc_arches=[enc_arch], dec_arch=dec_arch)
-                tagger = Tagger(config, tag_helper).to(device)
-                self.one_tagger_pass(tagger, train_set, device)
-                
-                
-    def test_tagger_bert(self, BIOES_data, BERT_with_tokenizer, device):
-        train_data, *_ = BIOES_data
+    def test_tagger_intermediate(self, BIOES_data, device):
+        config = TaggerConfig(intermediate=EncoderConfig())
+        train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
+        tagger = config.instantiate().to(device)
+        self.one_tagger_pass(tagger, train_set, device)
+        
+        
+    @pytest.mark.parametrize("freeze", [False, True])
+    def test_tagger_elmo(self, BIOES_data, ELMo_model, freeze, device):
+        elmo = ELMo_model
+        elmo_embedder_config = PreTrainedEmbedderConfig(arch='ELMo', 
+                                                        out_dim=elmo.get_output_dim(), 
+                                                        lstm_stateful=False, 
+                                                        freeze=freeze)
+        config = TaggerConfig(encoders=None, elmo_embedder=elmo_embedder_config)
+        train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
+        tagger = config.instantiate(elmo=elmo).to(device)
+        
+        self.one_tagger_pass(tagger, train_set, device)
+    
+    
+    @pytest.mark.parametrize("freeze", [False, True])
+    def test_tagger_bert_like(self, BIOES_data, BERT_with_tokenizer, freeze, device):
         bert, tokenizer = BERT_with_tokenizer
+        bert_like_embedder_config = PreTrainedEmbedderConfig(arch='BERT', 
+                                                             out_dim=bert.config.hidden_size, 
+                                                             tokenizer=tokenizer, 
+                                                             freeze=freeze)
+        config = TaggerConfig(encoders=None, bert_like_embedder=bert_like_embedder_config)
+        train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
+        tagger = config.instantiate(bert_like=bert).to(device)
         
-        train_set_bert = SequenceTaggingDataset(train_data, enum_fields=[], val_fields=[], 
-                                                sub_tokenizer=tokenizer, cascade=False, labeling='BIOES')
-        config, tag_helper = train_set_bert.get_model_config()
-        config = ConfigHelper.load_default_config(config, ptm=bert, dec_arch='CRF')
-        del config['emb']
-        config = ConfigHelper.update_dims(config)
-        tagger = Tagger(config, tag_helper, ptm=bert).to(device)
-        self.one_tagger_pass(tagger, train_set_bert, device)
+        self.one_tagger_pass(tagger, train_set, device)
+        
+    
+    @pytest.mark.parametrize("dec_arch", ['softmax', 'CRF'])
+    @pytest.mark.parametrize("cascade_mode", ['Sliced', 'Straight'])
+    def test_tagger_cascade(self, BIOES_data, dec_arch, cascade_mode, device):
+        decoder_config = DecoderConfig(arch=dec_arch, cascade_mode=cascade_mode)
+        config = TaggerConfig(decoder=decoder_config)
+        train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
+        tagger = config.instantiate().to(device)
+        self.one_tagger_pass(tagger, train_set, device)
         
         
-    def test_tagger_shortcut(self, BIOES_datasets, device):
-        train_set, val_set, test_set = BIOES_datasets
-        config, tag_helper = train_set.get_model_config()
-        for enc_arch in ['LSTM', 'CNN', 'Transformer']:
-            for dec_arch in ['softmax', 'CRF']:
-                config = ConfigHelper.load_default_config(config, enc_arches=[enc_arch, 'Shortcut'], dec_arch=dec_arch)
-                config = ConfigHelper.update_dims(config)
-                tagger = Tagger(config, tag_helper).to(device)
-                self.one_tagger_pass(tagger, train_set, device)
-                
-                
-    def test_tagger_cascade(self, BIOES_datasets_cascade, device):
-        train_set_cascade, *_ = BIOES_datasets_cascade
-        config, tag_helper = train_set_cascade.get_model_config()
-        for enc_arch in ['LSTM', 'CNN', 'Transformer']:
-            for dec_arch in ['softmax-cascade', 'CRF-cascade']:
-                config = ConfigHelper.load_default_config(config, enc_arches=[enc_arch], dec_arch=dec_arch)
-                tagger = Tagger(config, tag_helper).to(device)
-                self.one_tagger_pass(tagger, train_set_cascade, device)
-            
-            
-    def test_tagger_nofields(self, BIOES_datasets_nofields, device):
-        train_set_nofields, *_ = BIOES_datasets_nofields
-        config, tag_helper = train_set_nofields.get_model_config()
-        for enc_arch in ['LSTM', 'CNN', 'Transformer']:
-            for dec_arch in ['softmax', 'CRF']:
-                config = ConfigHelper.load_default_config(config, enc_arches=[enc_arch], dec_arch=dec_arch)
-                tagger = Tagger(config, tag_helper).to(device)
-                self.one_tagger_pass(tagger, train_set_nofields, device)
-                
-                
-    def test_tagger_morefields(self, BIOES_datasets_morefields, device):
-        train_set_morefields, *_ = BIOES_datasets_morefields
-        config, tag_helper = train_set_morefields.get_model_config()
-        for enc_arch in ['LSTM', 'CNN', 'Transformer']:
-            for dec_arch in ['softmax', 'CRF']:
-                config = ConfigHelper.load_default_config(config, enc_arches=[enc_arch], dec_arch=dec_arch)
-                tagger = Tagger(config, tag_helper).to(device)
-                self.one_tagger_pass(tagger, train_set_morefields, device)
-                
-
-    def test_tagger_BIO(self, BIO_datasets, device):
-        train_set_BIO, *_ = BIO_datasets
-        config, tag_helper = train_set_BIO.get_model_config()
-        for enc_arch in ['LSTM', 'CNN', 'Transformer']:
-            for dec_arch in ['softmax', 'CRF']:
-                config = ConfigHelper.load_default_config(config, enc_arches=[enc_arch], dec_arch=dec_arch)
-                tagger = Tagger(config, tag_helper).to(device)
-                self.one_tagger_pass(tagger, train_set_BIO, device)
-                
-                
+    @pytest.mark.parametrize("enc_arches", [['CNN'], ['LSTM', 'Shortcut']])
+    def test_tagger_morefields(self, BIOES_data, enc_arches, device):
+        embedder_config = EmbedderConfig(enum=ConfigDict([(f, EnumConfig(emb_dim=20)) for f in Token.basic_enum_fields]), 
+                                         val=ConfigDict([(f, ValConfig(emb_dim=20)) for f in Token.basic_val_fields]))
+        encoders_config = ConfigList([EncoderConfig(arch=arch) for arch in enc_arches])
+        config = TaggerConfig(embedder=embedder_config, encoders=encoders_config)
+        train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
+        tagger = config.instantiate().to(device)
+        self.one_tagger_pass(tagger, train_set, device)
+        
+        
+    @pytest.mark.parametrize("enc_arches", [['CNN'], ['LSTM', 'Shortcut']])
+    def test_tagger_BIO2(self, BIO2_data, enc_arches, device):
+        encoders_config = ConfigList([EncoderConfig(arch=arch) for arch in enc_arches])
+        config = TaggerConfig(encoders=encoders_config)
+        train_set, val_set, test_set = build_demo_datasets(*BIO2_data, config)
+        tagger = config.instantiate().to(device)
+        self.one_tagger_pass(tagger, train_set, device)
+        

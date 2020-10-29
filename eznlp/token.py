@@ -7,19 +7,8 @@ import spacy
 from spacy.tokenizer import Tokenizer
 import numpy as np
 
-zh_punctuation = "！？｡。＂＃＄％＆＇（）＊＋，－——／：；＜＝＞＠［＼］＾＿｀｛｜｝～｟｠｢｣､、〃《》「」『』【】〔〕〖〗〘〙〚〛〜〝〞〟〰〾〿–—‘’‛“”„‟…‧﹏"
 
-num_mark2re = [('<int1>', '\d{1}'), 
-               ('<int2>', '\d{2}'), 
-               ('<int3>', '\d{3}'), 
-               ('<int4+>', '\d{4,}'), 
-               ('<real0>', '0\.\d*'), 
-               ('<real1>', '[1-9]\.\d*'), 
-               ('<real2>', '\d{2}\.\d*'), 
-               ('<real3>', '\d{3}\.\d*'), 
-               ('<real4+>', '\d{4,}\.\d*')]
-num_mark2re = OrderedDict([(mark, re.compile(re_expr)) for mark, re_expr in num_mark2re])
-preserve_nums = set(range(-10, 11)) | set(range(1900, 2101))
+zh_punctuation = "！？｡。＂＃＄％＆＇（）＊＋，－——／：；＜＝＞＠［＼］＾＿｀｛｜｝～｟｠｢｣､、〃《》「」『』【】〔〕〖〗〘〙〚〛〜〝〞〟〰〾〿–—‘’‛“”„‟…‧﹏"
 
 ascii_re = re.compile('[\x00-\xff]')
 lower_re = re.compile('[a-z]')
@@ -77,7 +66,7 @@ stopwords = {"a", "about", "above", "after", "again", "against", "all", "am",
              "who's", "whom", "why", "why's", "with", "won't", "would", 
              "wouldn't", "you", "you'd", "you'll", "you're", "you've", "your", 
              "yours", "yourself", "yourselves"}
-SHORT_LEN = 3
+
 
 class Full2Half(object):
     '''Translate full-width characters to half-widths
@@ -95,7 +84,10 @@ class Full2Half(object):
         return text.translate(Full2Half._h2f)
     
     
-def adaptive_lower(text):
+SHORT_LEN = 3
+MAX_DIGITS = 4
+
+def _adaptive_lower(text):
     if len(text) <= 1 or text.islower():
         return text
     
@@ -110,23 +102,40 @@ def adaptive_lower(text):
         return lowered
     
     return text
-    
+
 
 class Token(object):
+    """
+    A token with attributes. 
+    """
+    num_feature_names = [f"<{num_type}{digits}>" for num_type in ['int', 'real', 'percent'] for digits in range(MAX_DIGITS+1)]
+    num_feature_names = num_feature_names + [f"<-{name[1:]}" for name in num_feature_names]
     en_shape_feature_names = list(en_shape2criterion.keys())
-    num_feature_names = list(num_mark2re.keys()) + [mark[0] + '-' + mark[1:] for mark in num_mark2re.keys()]
     
-    def __init__(self, raw_text, to_lower='adaptive_lower', to_half=True, to_zh_simplified=False, 
-                 to_num_marks=True, **kwargs):
+    basic_enum_fields = ['bigram', 'trigram', 'en_pattern', 'en_pattern_sum', 
+                         'prefix_2', 'prefix_3', 'prefix_4', 'prefix_5', 
+                         'suffix_2', 'suffix_3', 'suffix_4', 'suffix_5']
+    basic_val_fields = ['en_shape_features', 'num_features']
+    
+    def __init__(self, raw_text, case_mode='None', number_mode='None', to_half=True, to_zh_simplified=False, **kwargs):
         self.raw_text = raw_text
-        if to_lower == 'adaptive_lower':
-            self.text = adaptive_lower(raw_text)
-        elif to_lower == 'all_lower':
-            self.text = raw_text.lower()
-        elif to_lower == 'not_lower':
+        if case_mode.lower() == 'none':
             self.text = raw_text
+        elif case_mode.lower() == 'lower':
+            self.text = raw_text.lower()
+        elif case_mode.lower() == 'adaptive-lower':
+            self.text = _adaptive_lower(raw_text)
         else:
-            raise ValueError(f"Invalid value of to_lower parameter: {to_lower}")
+            raise ValueError(f"Invalid value of case_mode: {case_mode}")
+            
+        if number_mode.lower() == 'none':
+            pass
+        elif number_mode.lower() == 'marks':
+            self.text = self.num_mark
+        elif number_mode.lower() == 'zeros':
+            self.text = digit_re.sub('0', self.text)
+        else:
+            raise ValueError(f"invalid value of num_mode: {number_mode}")
             
         self.text = Full2Half.full2half(self.text) if to_half else self.text
         self.text = HanziConv.toSimplified(self.text) if to_zh_simplified else self.text
@@ -134,94 +143,123 @@ class Token(object):
         for k, v in kwargs.items():
             setattr(self, k, v)
             
-        self._build_en_pattern_features()
-        self._build_prefix_features()
-        self._build_suffix_features()
-        self._build_en_shape_features()
-        self._build_num_features(to_num_marks)
-        
-    def _build_prefix_features(self, min_win=2, max_win=5):
-        """
-        Prefix features, built on text.
-        """
-        for win in range(min_win, max_win+1):
-            setattr(self, f'prefix_{win}', self.text[:win])
-            
-    def _build_suffix_features(self, min_win=2, max_win=5):
-        """
-        Suffix features, built on text. 
-        """
-        for win in range(min_win, max_win+1):
-            setattr(self, f'suffix_{win}', self.text[-win:])
-        
-    def _build_num_features(self, to_num_marks=True):
-        """
-        Number features, built on text.
-        """
-        features = [False] * (2 * len(num_mark2re))
-        
-        if digit_re.search(self.text) is not None:
-            if self.text.startswith('-'):
-                text4match = self.text[1:]
-                negative = True
-            elif self.text.startswith('+'):
-                text4match = self.text[1:]
-                negative = False
-            else:
-                text4match = self.text
-                negative = False
-                
-            for k, (mark, num_re) in enumerate(num_mark2re.items()):
-                if num_re.fullmatch(text4match) is not None:
-                    offset = len(num_mark2re) if negative else 0
-                    features[k + offset] = True
-                    if float(self.text) not in preserve_nums:
-                        self.text = mark[0] + '-' + mark[1:] if negative else mark
-                    break
-                
-        self.num_features = features
-        
-    def get_num_feature(self, key):
-        return self.num_features[Token.num_feature_names.index(key)]
-        
-    def _build_en_pattern_features(self):
-        """
-        English pattern features, built on raw_text.
-        """
-        feature = upper_re.sub('A', self.raw_text)
-        feature = lower_re.sub('a', feature)
-        feature = digit_re.sub('0', feature)
-        self.en_pattern = feature
-        
-        feature = re.sub('A+', 'A', feature)
-        feature = re.sub('a+', 'a', feature)
-        feature = re.sub('0+', '0', feature)
-        self.en_pattern_sum = feature
-        
-    def _build_en_shape_features(self):
-        """
-        English word shape features, built on raw_text.
-        """
-        features = [criterion(self.raw_text) for criterion in en_shape2criterion.values()]
-        self.en_shape_features = features
-        
-    def get_en_shape_feature(self, key):
-        return self.en_shape_features[Token.en_shape_feature_names.index(key)]
-        
-    def _build_zh_features(self):
-        pass
+    def __len__(self):
+        return len(self.raw_text)
         
     def __str__(self):
         return self.raw_text
     
     def __repr__(self):
         return self.raw_text
+            
+    @property    
+    def prefix_2(self):
+        return self.raw_text[:2]
+    
+    @property
+    def prefix_3(self):
+        return self.raw_text[:3]
+    
+    @property
+    def prefix_4(self):
+        return self.raw_text[:4]
+    
+    @property
+    def prefix_5(self):
+        return self.raw_text[:5]
+    
+    @property
+    def suffix_2(self):
+        return self.raw_text[-2:]
+    
+    @property
+    def suffix_3(self):
+        return self.raw_text[-3:]
+    
+    @property
+    def suffix_4(self):
+        return self.raw_text[-4:]
+    
+    @property
+    def suffix_5(self):
+        return self.raw_text[-5:]
+    
+    @property
+    def num_features(self):
+        features = np.zeros((MAX_DIGITS + 1) * 6, dtype=bool)
+        
+        if self.raw_text.endswith('%'):
+            text4num = self.raw_text[:-1]
+            is_percent = True
+        else:
+            text4num = self.raw_text
+            is_percent = False
+            
+        try:
+            possible_value = float(text4num)
+        except:
+            return features
+        else:
+            if abs(possible_value) < 1:
+                offset = 0
+            else:
+                offset = min(MAX_DIGITS, int(np.log10(abs(possible_value))) + 1)
+                
+            if is_percent:
+                offset += (MAX_DIGITS + 1) * 2
+            elif '.' in text4num:
+                offset += (MAX_DIGITS + 1)
+                
+            if possible_value < 0:
+                offset += (MAX_DIGITS + 1) * 3
+                
+            features[offset] = True
+            return features
+        
+        
+    @property
+    def num_mark(self):
+        num_features = self.num_features
+        if not num_features.any():
+            return self.text
+        else:
+            return self.num_feature_names[num_features.tolist().index(True)]
+        
+    @property
+    def en_pattern(self):
+        feature = upper_re.sub('A', self.raw_text)
+        feature = lower_re.sub('a', feature)
+        feature = digit_re.sub('0', feature)
+        return feature
+    
+    @property
+    def en_pattern_sum(self):
+        feature = self.en_pattern
+        feature = re.sub('A+', 'A', feature)
+        feature = re.sub('a+', 'a', feature)
+        feature = re.sub('0+', '0', feature)
+        return feature
+        
+    @property
+    def en_shape_features(self):
+        return np.array([criterion(self.raw_text) for criterion in en_shape2criterion.values()])
+        
+    @property
+    def zh_shape_features(self):
+        return None
+    
     
     
 class TokenSequence(object):
-    def __init__(self, token_list, max_len=None):
+    """
+    A wrapper of a token list, providing sequential attribute access to all tokens. 
+    """
+    def __init__(self, token_list):
         self.token_list = token_list
-        
+        if not hasattr(self.token_list[0], 'start'):
+            self._build_pseudo_boundaries()
+            
+            
     def __getattr__(self, name):
         # NOTE: `__attr__` method is only invoked if the attribute wasn't found the usual ways, so 
         # it is good for implementing a fallback for missing attributes. While, `__getattribute__`
@@ -231,16 +269,15 @@ class TokenSequence(object):
             return [getattr(tok, name) for tok in self.token_list]
         else:
             raise AttributeError(f"{type(self)} object has no attribute {name}")
+            
+    def __len__(self):
+        return len(self.token_list)
     
-    @property
-    def bigram(self):
-        unigram = self.text
-        return ['-<sep>-'.join(gram) for gram in zip(unigram, unigram[1:] + ['<pad>'])]
+    def __str__(self):
+        return str(self.token_list)
     
-    @property
-    def trigram(self):
-        unigram = self.text
-        return ['-<sep>-'.join(gram) for gram in zip(unigram, unigram[1:] + ['<pad>'], unigram[2:] + ['<pad>', '<pad>'])]
+    def __repr__(self):
+        return repr(self.token_list)
     
     def __getstate__(self):
         return self.token_list
@@ -256,14 +293,35 @@ class TokenSequence(object):
         else:
             raise TypeError(f"Invalid subscript type of {i}")
             
-    def build_word_pieces(self, tokenizer, rebuild=False):
-        if not hasattr(self, 'word_pieces') or rebuild:
-            nested_word_pieces = [tokenizer.tokenize(word) for word in self.raw_text]
-            self.word_pieces = [sub_word for i, word in enumerate(nested_word_pieces) for sub_word in word]
-            self.word_piece_tok_pos = [i for i, word in enumerate(nested_word_pieces) for sub_word in word]
-            # self.tok_word_piece_pos = [0] + np.cumsum([len(word) for word in nested_word_pieces[:-1]]).tolist()
+    def _build_pseudo_boundaries(self):
+        # Assign ``start`` and ``end`` at the token-level, to ensure consistency. 
+        token_lens = np.array([len(tok) for tok in self.token_list])
+        token_ends = np.cumsum(token_lens + 1) - 1
+        token_starts = token_ends - token_lens
         
-        
+        for tok, start, end in zip(self.token_list, token_starts, token_ends):
+            setattr(tok, 'start', start)
+            setattr(tok, 'end', end)
+            
+            
+    @property
+    def bigram(self):
+        unigram = self.text
+        return ['-<sep>-'.join(gram) for gram in zip(unigram, unigram[1:] + ['<pad>'])]
+    
+    @property
+    def trigram(self):
+        unigram = self.text
+        return ['-<sep>-'.join(gram) for gram in zip(unigram, unigram[1:] + ['<pad>'], unigram[2:] + ['<pad>', '<pad>'])]
+    
+    
+    def build_sub_tokens(self, tokenizer, rebuild=False):
+        if not hasattr(self, 'sub_tokens') or rebuild:
+            nested_sub_tokens = [tokenizer.tokenize(word) for word in self.raw_text]
+            self.sub_tokens = [sub_tok for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
+            self.ori_indexes = [i for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
+            
+            
     def spans_within_max_length(self, max_len):
         total_len = len(self.token_list)
         slice_start = 0
@@ -272,7 +330,7 @@ class TokenSequence(object):
             if total_len - slice_start <= max_len:
                 yield slice(slice_start, total_len)
                 break
-            else:    
+            else:
                 slice_end = slice_start + max_len
                 while not self.token_list[slice_end-1].text in ('.', '?', '!', ';'):
                     slice_end -= 1
@@ -280,17 +338,8 @@ class TokenSequence(object):
                         raise ValueError(f"Cannot find proper slices in {self.token_list[slice_start:slice_start+max_len]}")
                 yield slice(slice_start, slice_end)
                 slice_start = slice_end
-        
-    
-    def __len__(self):
-        return len(self.token_list)
-    
-    def __str__(self):
-        return str(self.token_list)
-    
-    def __repr__(self):
-        return repr(self.token_list)
-    
+                
+                
     def attach_additional_tags(self, additional_tags: dict=None, additional_tok2tags: list=None):
         """
         Parameters
@@ -329,8 +378,9 @@ class TokenSequence(object):
         tokens = cls(token_list)
         tokens.attach_additional_tags(additional_tok2tags=additional_tok2tags)
         return tokens
-
-
+    
+    
+    
 def custom_spacy_tokenizer(nlp, custom_prefixes=None, custom_suffixes=None, custom_infixes=None):
     """
     References:

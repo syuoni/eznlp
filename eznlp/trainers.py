@@ -7,20 +7,23 @@ import torch.nn as nn
 
 class Trainer(object):
     def __init__(self, model: nn.Module, optimizer=None, scheduler=None, 
-                 device=None, grad_clip=1.0):
+                 device=None, grad_clip=None):
         self.model = model
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.device = device
         self.grad_clip = grad_clip
         
-        assert optimizer is not None
         assert device is not None
         
         
     def forward_batch(self, batch):
         """
-        Forward to loss (scalar) and optionally compute accuracy.
+        Forward to loss (scalar) and optionally compute a metric (e.g, accuracy)
+        
+        Returns
+        -------
+        (loss, metric) or (loss, None). 
         """
         raise NotImplementedError("Not Implemented `forward_batch`")
         
@@ -32,8 +35,10 @@ class Trainer(object):
         # Backward propagation
         self.optimizer.zero_grad()
         loss.backward()
-        # nn.utils.clip_grad_value_(self.model.parameters(), self.grad_clip)
-        nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
+        
+        if self.grad_clip is not None:
+            # nn.utils.clip_grad_value_(self.model.parameters(), self.grad_clip)
+            nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
         
         # Update weights
         self.optimizer.step()
@@ -44,16 +49,16 @@ class Trainer(object):
     def train_epoch(self, dataloader):
         self.model.train()
         
-        epoch_losses, epoch_accs = [], []
+        epoch_losses, epoch_metrics = [], []
         for batch in dataloader:
-            loss, possible_acc = self.forward_batch(batch)
+            loss, possible_metric = self.forward_batch(batch)
             self.backward_batch(loss)
             
             epoch_losses.append(loss.item())
-            epoch_accs.append(possible_acc)
+            epoch_metrics.append(possible_metric)
             
-        if any(epoch_accs):
-            return np.mean(epoch_losses), np.mean(epoch_accs)
+        if any(epoch_metrics):
+            return np.mean(epoch_losses), np.mean(epoch_metrics)
         else:
             return np.mean(epoch_losses), None
     
@@ -61,16 +66,16 @@ class Trainer(object):
     def eval_epoch(self, dataloader):
         self.model.eval()
         
-        epoch_losses, epoch_accs = [], []
+        epoch_losses, epoch_metrics = [], []
         with torch.no_grad():
             for batch in dataloader:
-                loss, possible_acc = self.forward_batch(batch)
+                loss, possible_metric = self.forward_batch(batch)
                 
                 epoch_losses.append(loss.item())
-                epoch_accs.append(possible_acc)
+                epoch_metrics.append(possible_metric)
             
-        if any(epoch_accs):
-            return np.mean(epoch_losses), np.mean(epoch_accs)
+        if any(epoch_metrics):
+            return np.mean(epoch_losses), np.mean(epoch_metrics)
         else:
             return np.mean(epoch_losses), None
     
@@ -82,38 +87,40 @@ class Trainer(object):
         self.model.train()
         
         best_eval_loss = np.inf
-        best_eval_acc = 0.0
-        train_losses, train_accs = [], []
+        # The ``metric`` holds that it is better if higher, e.g., accuracy or F1. 
+        best_eval_metric = 0.0
+        
+        train_losses, train_metrics = [], []
         eidx, sidx = 0, 0
         done_training = False
         t0 = time.time()
         
         while eidx < n_epochs:
             for batch in train_loader:
-                loss, possible_acc = self.forward_batch(batch)
+                loss, possible_metric = self.forward_batch(batch)
                 self.backward_batch(loss)
                 
                 train_losses.append(loss.item())
-                train_accs.append(possible_acc)
+                train_metrics.append(possible_metric)
                 
                 if (sidx+1) % disp_every_steps == 0:
                     elapsed_secs = int(time.time() - t0)
                     if verbose:
                         disp_running_info(eidx=eidx, sidx=sidx, elapsed_secs=elapsed_secs, 
                                           loss=np.mean(train_losses),
-                                          acc=np.mean(train_accs) if any(train_accs) else None,
+                                          metric=np.mean(train_metrics) if any(train_metrics) else None,
                                           partition='train')
-                    train_losses, train_accs = [], []
+                    train_losses, train_metrics = [], []
                     t0 = time.time()
                 
                 if (sidx+1) % eval_every_steps == 0:
                     if eval_loader is not None:
-                        eval_loss, possible_eval_acc = self.eval_epoch(eval_loader)
+                        eval_loss, possible_eval_metric = self.eval_epoch(eval_loader)
                         elapsed_secs = int(time.time() - t0)
                         if verbose:
                             disp_running_info(elapsed_secs=elapsed_secs, 
                                               loss=eval_loss, 
-                                              acc=possible_eval_acc, 
+                                              metric=possible_eval_metric, 
                                               partition='eval')
                         
                         if eval_loss < best_eval_loss:
@@ -121,8 +128,8 @@ class Trainer(object):
                             if (save_callback is not None) and save_by_loss:
                                 save_callback(self.model)
                             
-                        if possible_eval_acc and possible_eval_acc > best_eval_acc:
-                            best_eval_acc = possible_eval_acc
+                        if possible_eval_metric and possible_eval_metric > best_eval_metric:
+                            best_eval_metric = possible_eval_metric
                             if (save_callback is not None) and (not save_by_loss):
                                 save_callback(self.model)
                         
@@ -144,7 +151,7 @@ class Trainer(object):
             
             
 
-def disp_running_info(eidx=None, sidx=None, elapsed_secs=None, loss=None, acc=None, partition='train'):
+def disp_running_info(eidx=None, sidx=None, elapsed_secs=None, loss=None, metric=None, partition='train'):
     disp_text = []
     if eidx is not None:
         disp_text.append(f"Epoch: {eidx+1}")
@@ -165,8 +172,8 @@ def disp_running_info(eidx=None, sidx=None, elapsed_secs=None, loss=None, acc=No
     disp_text = []
     assert loss is not None
     disp_text.append(f"\t{partition} Loss: {loss:.3f}")
-    if acc is not None:
-        disp_text.append(f"{partition} Acc.: {acc*100:.2f}%")
+    if metric is not None:
+        disp_text.append(f"{partition} Metric: {metric*100:.2f}%")
     else:
         disp_text.append(f"{partition} PPL: {np.exp(loss):.3f}")
     if elapsed_secs is not None:

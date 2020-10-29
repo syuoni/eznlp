@@ -1,5 +1,22 @@
 # -*- coding: utf-8 -*-
 import torch.nn as nn
+from torchtext.experimental.vectors import Vectors
+
+
+PRETRAINED_VEC_EPS = 1e-6
+
+def _fetch_token_pretrained_vector(token: str, pretrained_vectors: Vectors):
+    tried_set = set()
+    for possible_token in [token, token.lower(), token.title(), token.upper()]:
+        if possible_token in tried_set:
+            continue
+        
+        pretrained_vec = pretrained_vectors[possible_token]
+        if pretrained_vec.abs().max().item() > PRETRAINED_VEC_EPS:
+            return pretrained_vec
+        tried_set.add(possible_token)
+        
+    return None
 
 
 def reinit_embedding_(emb: nn.Embedding, itos=None, pretrained_vectors=None):
@@ -8,21 +25,22 @@ def reinit_embedding_(emb: nn.Embedding, itos=None, pretrained_vectors=None):
     
     if (itos is not None) and (pretrained_vectors is not None):
         assert emb.weight.size(0) == len(itos)
-        assert emb.weight.size(1) == pretrained_vectors['a'].size(0)
+        assert emb.weight.size(1) == pretrained_vectors['<unk>'].size(0)
         
         oov_tokens = []
         acc_vec_abs = 0
         for idx, tok in enumerate(itos):
-            pretrained_vec = pretrained_vectors[tok]
-            vec_abs = pretrained_vec.abs().mean().item()
-            if vec_abs < 1e-4:
+            pretrained_vec = _fetch_token_pretrained_vector(tok, pretrained_vectors)
+            
+            if pretrained_vec is None:
                 oov_tokens.append(tok)
                 nn.init.uniform_(emb.weight.data[idx], -uniform_range, uniform_range)
             else:
-                acc_vec_abs += vec_abs
+                acc_vec_abs += pretrained_vec.abs().mean().item()
                 emb.weight.data[idx].copy_(pretrained_vec)
         
-        nn.init.zeros_(emb.weight.data[emb.padding_idx])
+        if emb.padding_idx is not None:
+            nn.init.zeros_(emb.weight.data[emb.padding_idx])
         print(f"OOV tokens: {len(oov_tokens)} ({len(oov_tokens)/len(itos)*100:.2f}%)")
         ave_vec_abs = acc_vec_abs / (len(itos) - len(oov_tokens))
         print(f"Pretrained      vector average absolute value: {ave_vec_abs:.4f}")
@@ -31,7 +49,8 @@ def reinit_embedding_(emb: nn.Embedding, itos=None, pretrained_vectors=None):
     
     else:
         nn.init.uniform_(emb.weight.data, -uniform_range, uniform_range)
-        nn.init.zeros_(emb.weight.data[emb.padding_idx])
+        if emb.padding_idx is not None:
+            nn.init.zeros_(emb.weight.data[emb.padding_idx])
         return None
     
 
@@ -40,15 +59,21 @@ def reinit_layer_(layer: nn.Module, nonlinearity='relu'):
     Refs: 
     [1] Xavier Glorot and Yoshua Bengio. 2010. Understanding the difficulty of 
     training deep feedforward neural networks. 
+    [2] Kaiming He, et al. 2015. Delving deep into rectifiers: Surpassing human-level
+    performance on ImageNet classification.
     """
     for name, param in layer.named_parameters():
         if name.startswith('bias'):
             nn.init.zeros_(param.data)
         elif name.startswith('weight'):
-            nn.init.xavier_uniform_(param.data, 
-                                    gain=nn.init.calculate_gain(nonlinearity))
+            if nonlinearity.lower() in ('relu', 'leaky_relu'):
+                nn.init.kaiming_uniform_(param.data, nonlinearity=nonlinearity)
+            else:
+                nn.init.xavier_uniform_(param.data, 
+                                        gain=nn.init.calculate_gain(nonlinearity))
+            
         else:
-            raise TypeError(f"Invalid NN {nn}")
+            raise TypeError(f"Invalid Layer {layer}")
     
     
 def reinit_transformer_encoder_layer_(tf_encoder_layer: nn.TransformerEncoderLayer):
