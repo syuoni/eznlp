@@ -1,17 +1,59 @@
 # -*- coding: utf-8 -*-
 import torch
-from torch import Tensor
 import torch.nn.functional as F
 
 
-# TODO: Alternative aggregation method?
-def aggregate_tensor_by_group(tensor: Tensor, group_by: Tensor, agg_step: int=None):
+def seq_lens2mask(seq_lens: torch.LongTensor, max_len: int=None):
     """
     Parameters
     ----------
-    tensor : Tensor (batch, ori_step, hidden)
+    seq_lens : torch.LongTensor (batch, )
+    max_len : int, optional
+    
+    Returns
+    -------
+    mask : torch.BoolTensor
+        The positions with values of True are MASKED, while the others are NOT MASKED. 
+    """
+    max_len = seq_lens.max().item() if max_len is None else max_len
+    steps = torch.arange(max_len, device=seq_lens.device).repeat(seq_lens.size(0), 1)
+    return (steps >= seq_lens.unsqueeze(1))
+
+
+def max_pooling(tensor: torch.FloatTensor, mask: torch.BoolTensor):
+    """
+    Parameters
+    ----------
+    tensor : torch.FloatTensor (batch, step, hidden)
+    mask : torch.BoolTensor (batch, step)
+    """
+    tensor_masked = tensor.masked_fill(mask.unsqueeze(-1), float('-inf'))
+    return tensor_masked.max(dim=1).values
+
+
+def mean_pooling(tensor: torch.FloatTensor, mask: torch.BoolTensor):
+    """
+    Parameters
+    ----------
+    tensor : torch.FloatTensor (batch, step, hidden)
+    mask : torch.BoolTensor (batch, step)
+    """
+    tensor_masked = tensor.masked_fill(mask.unsqueeze(-1), 0)
+    seq_lens = mask.size(1) - mask.sum(dim=1)
+    return tensor_masked.sum(dim=1) / seq_lens.unsqueeze(1)
+
+
+
+# TODO: Alternative aggregation method?
+def aggregate_tensor_by_group(tensor: torch.FloatTensor, 
+                              group_by: torch.LongTensor, 
+                              agg_step: int=None):
+    """
+    Parameters
+    ----------
+    tensor : torch.FloatTensor (batch, ori_step, hidden)
         The tensor to be aggregate. 
-    group_by : Tesnor (batch, ori_step)
+    group_by : torch.LongTensor (batch, ori_step)
         The tensor indicating the positions after aggregation. 
         Positions being negative values are NOT used in aggregation. 
     """
@@ -25,4 +67,6 @@ def aggregate_tensor_by_group(tensor: Tensor, group_by: Tensor, agg_step: int=No
     
     # agg_tensor: (batch, agg_step, hidden)
     return pos_proj.bmm(tensor)
-    
+
+
+

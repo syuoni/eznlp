@@ -1,8 +1,42 @@
 # -*- coding: utf-8 -*-
 import torch
+from eznlp.functional import seq_lens2mask
+from eznlp.functional import max_pooling, mean_pooling
 from eznlp.functional import aggregate_tensor_by_group
 
 
+class TestSeqLens2Mask(object):
+    def test_example(self):
+        BATCH_SIZE = 100
+        MAX_LEN = 20
+        seq_lens = torch.randint(0, MAX_LEN, size=(BATCH_SIZE, )) + 1
+        mask = seq_lens2mask(seq_lens, max_len=MAX_LEN)
+        assert ((MAX_LEN - mask.sum(dim=1)) == seq_lens).all()
+        
+        for i in range(BATCH_SIZE):
+            assert not mask[i, :seq_lens[i]].any()
+            assert mask[i, seq_lens[i]:].all()
+            
+            
+class TestPooling(object):
+    def test_pooling(self):
+        BATCH_SIZE = 100
+        MAX_LEN = 20
+        HID_DIM = 50
+        
+        x = torch.randn(BATCH_SIZE, MAX_LEN, HID_DIM)
+        seq_lens = torch.randint(0, MAX_LEN, size=(BATCH_SIZE, )) + 1
+        mask = seq_lens2mask(seq_lens, max_len=MAX_LEN)
+        
+        max_pooled  = max_pooling(x, mask)
+        mean_pooled = mean_pooling(x, mask)
+        
+        for i in range(BATCH_SIZE):
+            assert (max_pooled[i]  - x[i, :seq_lens[i]].max(dim=0).values).abs().max().item() < 1e-6
+            assert (mean_pooled[i] - x[i, :seq_lens[i]].mean(dim=0)).abs().max().item() < 1e-6
+            
+            
+            
 class TestAggregateTensorByGroup(object):
     def test_example(self):
         BATCH_SIZE = 1

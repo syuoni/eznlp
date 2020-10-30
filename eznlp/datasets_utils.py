@@ -2,7 +2,9 @@
 import torch
 from torch import Tensor
 from torchtext.experimental.vocab import Vocab
-    
+
+from .functional import seq_lens2mask
+
 
 def _fetch_token_id(token: str, vocab: Vocab):
     tried_set = set()
@@ -32,6 +34,7 @@ def pad_seqs(seqs, padding_value=0.0, length=None):
         padding_item = padding_value
     
     return [s + [padding_item for _ in range(length-len(s))] for s in seqs]
+
 
 def unpad_seqs(seqs, seq_lens):
     """
@@ -85,27 +88,15 @@ class TensorWrapper(object):
         return self._apply_to_tensors(lambda x: x.to(*args, **kwargs))
         
 
-def _seq_lens2mask(shape, seq_lens):
-    """
-    shape: Tuple (batch_size, step)
-    seq_lens: Tensor (batch_size, )
-    """
-    return torch.arange(shape[1], device=seq_lens.device).repeat(shape[0], 1) >= seq_lens.unsqueeze(1)
-
-
 class Batch(TensorWrapper):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         
-        
     def build_masks(self, mask_config):
-        for mask_name, (mask_shape, lens) in mask_config.items():
-            setattr(self, mask_name, _seq_lens2mask(mask_shape, lens))
-    
-    
+        for mask_name, (lens, max_len) in mask_config.items():
+            setattr(self, mask_name, seq_lens2mask(lens, max_len))
+            
     def __repr__(self):
         return "Batch with attributes: {}".format(", ".join(self.__dict__))
     
-    def __str__(self):
-        return "Batch with attributes: {}".format(", ".join(self.__dict__))
-
+    

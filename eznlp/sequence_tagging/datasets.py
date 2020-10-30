@@ -216,11 +216,11 @@ class SequenceTaggingDataset(Dataset):
                       sub_tok_ids=batch_sub_tok_ids, ori_indexes=batch_ori_indexes, sub_tok_seq_lens=sub_tok_seq_lens, 
                       tags_objs=batch_tags_objs)
         
-        batch.build_masks({'tok_mask': (batch_tok_ids.size(), seq_lens)})
+        batch.build_masks({'tok_mask': (seq_lens, batch_tok_ids.size(1))})
         if self.config.embedder.char is not None:
-            batch.build_masks({'char_mask': (batch_char_ids.size(), tok_lens)})
+            batch.build_masks({'char_mask': (tok_lens, batch_char_ids.size(1))})
         if self.config.bert_like_embedder is not None:
-            batch.build_masks({'sub_tok_mask': (batch_sub_tok_ids.size(), sub_tok_seq_lens)})
+            batch.build_masks({'sub_tok_mask': (sub_tok_seq_lens, batch_sub_tok_ids.size(1))})
             
         return batch
     

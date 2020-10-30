@@ -62,7 +62,7 @@ class MLMHelper(object):
         batch_MLM_lab_ids = pad_sequence(batch_MLM_lab_ids, batch_first=True, padding_value=self.MLM_label_mask_id)
         
         batch = Batch(seq_lens=seq_lens, MLM_tok_ids=batch_MLM_tok_ids, MLM_lab_ids=batch_MLM_lab_ids)
-        batch.build_masks({'attention_mask': (batch_MLM_tok_ids.size(), seq_lens)})
+        batch.build_masks({'attention_mask': (seq_lens, batch_MLM_tok_ids.size(1))})
         return batch
 
 

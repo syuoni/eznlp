@@ -4,6 +4,7 @@ from torch import Tensor
 import torch.nn as nn
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence
 
+from .functional import mean_pooling, max_pooling
 from .nn_utils import reinit_embedding_, reinit_lstm_, reinit_gru_, reinit_layer_
 from .config import ConfigwithVocab
 
@@ -17,7 +18,10 @@ class CharConfig(ConfigwithVocab):
             
         if self.arch.lower() == 'cnn':
             self.kernel_size = kwargs.pop('kernel_size', 3)
-            
+            self.pooling = kwargs.pop('pooling', 'Max')
+            if self.pooling.lower() not in ('max', 'mean'):
+                raise ValueError(f"Invalid pooling method {self.pooling}")
+                
         self.emb_dim = kwargs.pop('emb_dim', 25)
         self.out_dim = kwargs.pop('out_dim', 50)
         self.dropout = kwargs.pop('dropout', 0.5)
@@ -35,7 +39,6 @@ class CharEncoder(nn.Module):
         super().__init__()
         self.emb = nn.Embedding(config.voc_dim, config.emb_dim, padding_idx=config.pad_idx)
         self.dropout = nn.Dropout(config.dropout)
-        
         reinit_embedding_(self.emb)
         
         
@@ -66,7 +69,7 @@ class CharCNN(CharEncoder):
         self.conv = nn.Conv1d(config.emb_dim, config.out_dim, 
                               kernel_size=config.kernel_size, padding=(config.kernel_size-1)//2)
         self.relu = nn.ReLU()
-        
+        self.pooling = config.pooling
         reinit_layer_(self.conv, 'relu')
         
         
@@ -76,7 +79,11 @@ class CharCNN(CharEncoder):
         hidden = self.relu(hidden)
         
         # hidden: (batch*tok_step, char_step, out_dim) -> (batch*tok_step, out_dim)
-        hidden = hidden.masked_fill(char_mask.unsqueeze(-1), 0).sum(dim=1) / tok_lens.unsqueeze(1)
+        if self.pooling.lower() == 'max':
+            hidden = max_pooling(hidden, char_mask)
+        elif self.pooling.lower() == 'mean':
+            hidden = mean_pooling(hidden, char_mask)
+            
         return hidden
     
     
@@ -94,8 +101,6 @@ class CharRNN(CharEncoder):
         elif config.arch.lower() == 'gru':
             self.rnn = nn.GRU(**rnn_config)
             reinit_gru_(self.rnn)
-        else:
-            raise ValueError(f"Invalid RNN architecture: {config.arch}")
             
             
     def embedded2hidden(self, embedded: Tensor, tok_lens: Tensor, char_mask: Tensor):
