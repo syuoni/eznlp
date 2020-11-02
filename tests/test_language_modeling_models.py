@@ -66,19 +66,18 @@ class TestMLM(object):
         roberta4mlm = roberta4mlm.to(device)
         
         files = glob.glob("assets/data/PMC/comm_use/Cells/*.txt")
-        train_set = PMCMLMDataset(files=files, tokenizer=tokenizer)
-        train_loader = DataLoader(train_set, batch_size=4, 
-                                  collate_fn=train_set.collate)
+        train_set = PMCMLMDataset(files=files, tokenizer=tokenizer, max_len=128)
+        train_loader = DataLoader(train_set, batch_size=4, collate_fn=train_set.collate)
         for batch in train_loader:
             batch = batch.to(device)
             break
         
         loss012, MLM_scores012 = roberta4mlm(input_ids=batch.MLM_tok_ids[:3], 
-                                              attention_mask=(~batch.attention_mask[:3]).type(torch.long), 
-                                              labels=batch.MLM_lab_ids[:3])
+                                             attention_mask=(~batch.attention_mask[:3]).type(torch.long), 
+                                             labels=batch.MLM_lab_ids[:3])
         loss123, MLM_scores123 = roberta4mlm(input_ids=batch.MLM_tok_ids[1:], 
-                                              attention_mask=(~batch.attention_mask[1:]).type(torch.long), 
-                                              labels=batch.MLM_lab_ids[1:])
+                                             attention_mask=(~batch.attention_mask[1:]).type(torch.long), 
+                                             labels=batch.MLM_lab_ids[1:])
         
         min_step = min(MLM_scores012.size(1), MLM_scores123.size(1))
         delta_MLM_scores = MLM_scores012[1:, :min_step] - MLM_scores123[:-1, :min_step]

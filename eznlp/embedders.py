@@ -92,12 +92,8 @@ class TokenEmbedding(nn.Module):
         
     def forward(self, tok_ids: Tensor):
         # word_embedded: (batch, step, emb_dim)
-        if self.freeze:
-            with torch.no_grad():
-                word_embedded = self.word_emb(tok_ids)
-        else:
-            word_embedded = self.word_emb(tok_ids)
-            
+        word_embedded = self.word_emb(tok_ids)
+        
         # pos_embedded: (batch, step, emb_dim)
         if hasattr(self, 'pos_emb'):
             pos = torch.arange(word_embedded.size(1), device=word_embedded.device).repeat(word_embedded.size(0), 1)

@@ -65,7 +65,7 @@ class CRF(nn.Module):
         
         
     def __repr__(self):
-        return f"CRF(tag_dim={self.tag_dim}, pad_idx={self.pad_idx}, batch_first={self.batch_first})"
+        return f"{self.__class__.__name__}(tag_dim={self.tag_dim}, pad_idx={self.pad_idx}, batch_first={self.batch_first})"
         
         
     def forward(self, emissions: torch.Tensor, tag_ids: torch.LongTensor, mask: torch.BoolTensor):

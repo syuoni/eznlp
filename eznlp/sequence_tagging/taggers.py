@@ -109,6 +109,7 @@ class TaggerConfig(Config):
         return self._repr_config_attrs(self.__dict__)
     
     
+    
 class Tagger(nn.Module):
     def __init__(self, config: TaggerConfig, 
                  pretrained_vectors: Vectors=None, elmo: Elmo=None, bert_like: PreTrainedModel=None):

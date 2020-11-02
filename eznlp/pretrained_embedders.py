@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
+from typing import Union, List
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from transformers import PreTrainedModel
 from allennlp.modules.elmo import Elmo
 
@@ -56,20 +58,57 @@ class PreTrainedEmbedder(nn.Module):
         
         
         
+class ScalarMix(nn.Module):
+    """
+    Mix multi-layer hidden states by corresponding scalar weights. 
+    
+    Computes a parameterised scalar mixture of N tensors, 
+    ``mixture = gamma * \sum_k(s_k * tensor_k)``
+    where ``s = softmax(w)``, with `w` and `gamma` scalar parameters.
+    
+    References
+    ----------
+    [1] Peters et al. 2018. Deep contextualized word representations. 
+    [2] https://github.com/allenai/allennlp/blob/master/allennlp/modules/scalar_mix.py
+    """
+    def __init__(self, mix_dim: int):
+        super().__init__()
+        self.scalars = nn.Parameter(torch.zeros(mix_dim))
+        self.gamma = nn.Parameter(torch.tensor(1.0))
+        
+    def __repr__(self):
+        return f"{self.__class__.__name__}(mix_dim={self.scalars.size(0)})"
+        
+    def forward(self, tensors: Union[torch.FloatTensor, List[torch.FloatTensor]]):
+        if isinstance(tensors, (list, tuple)):
+            tensors = torch.stack(tensors)
+        
+        norm_weights_shape = tuple([-1] + [1] * (tensors.dim()-1))
+        norm_weights = F.softmax(self.scalars, dim=0).view(*norm_weights_shape)
+        return self.gamma * (tensors * norm_weights).sum(dim=0)
+        
+        
+        
 class BertLikeEmbedder(PreTrainedEmbedder):
     def __init__(self, config: PreTrainedEmbedderConfig, bert_like: PreTrainedModel):
         super().__init__(config, bert_like)
+        self.scalar_mix = ScalarMix(bert_like.config.num_hidden_layers + 1)
         
     def forward(self, batch: Batch):
-        # ptm_outs: (batch, sub_tok_step+2, hid_dim)
-        ptm_outs, *_ = self.pretrained_model(input_ids=batch.sub_tok_ids, 
-                                             attention_mask=(~batch.sub_tok_mask).type(torch.long))
-        # Remove the `[CLS]` and `[SEP]` positions. 
-        ptm_outs = ptm_outs[:, 1:-1]
+        # bert_outs: (batch, sub_tok_step+2, hid_dim)
+        # hidden: list of (batch, sub_tok_step+2, hid_dim)
+        bert_outs, _, hidden = self.pretrained_model(input_ids=batch.sub_tok_ids, 
+                                                     attention_mask=(~batch.sub_tok_mask).type(torch.long), 
+                                                     output_hidden_states=True)
+        if hasattr(self, 'scalar_mix'):
+            bert_outs = self.scalar_mix(hidden)
         
-        # agg_ptm_outs: (batch, tok_step, hid_dim)
-        agg_ptm_outs = aggregate_tensor_by_group(ptm_outs, batch.ori_indexes, agg_step=batch.tok_ids.size(1))
-        return agg_ptm_outs
+        # Remove the `[CLS]` and `[SEP]` positions. 
+        bert_outs = bert_outs[:, 1:-1]
+        
+        # agg_bert_outs: (batch, tok_step, hid_dim)
+        agg_bert_outs = aggregate_tensor_by_group(bert_outs, batch.ori_indexes, agg_step=batch.tok_ids.size(1))
+        return agg_bert_outs
     
     
     
@@ -81,8 +120,12 @@ class ELMoEmbedder(PreTrainedEmbedder):
             ELMo layers are combined, i.e., `s^{task}` and `gamma^{task}` in Eq. (1) in 
             Peters et al. (2018). This part should always be trainable. 
             
-    Setting the `stateful` attribute to False can make the ELMo outputs consistent.  
-    See: https://github.com/allenai/allennlp/issues/2398
+    Setting the `stateful` attribute to False can make the ELMo outputs consistent. 
+    
+    References
+    ----------
+    [1] Peters et al. 2018. Deep contextualized word representations. 
+    [2] https://github.com/allenai/allennlp/issues/2398
     """
     def __init__(self, config: PreTrainedEmbedderConfig, elmo: Elmo):
         elmo._elmo_lstm._elmo_lstm.stateful = config.lstm_stateful
