@@ -5,9 +5,9 @@ import numpy as np
 
 from eznlp import TokenSequence
 from eznlp.sequence_tagging import DecoderConfig
-from eznlp.sequence_tagging import parse_conll_file
 from eznlp.sequence_tagging import ChunksTagsTranslator, SchemeTranslator
 from eznlp.sequence_tagging import precision_recall_f1_report
+from eznlp.sequence_tagging.raw_data import parse_conll_file
 from eznlp.sequence_tagging.transitions import find_ascending
 
 

@@ -20,7 +20,7 @@ class EncoderConfig(Config):
         elif self.arch.lower() in ('lstm', 'gru'):
             self.hid_dim = kwargs.pop('hid_dim', 128)
             self.num_layers = kwargs.pop('num_layers', 1)
-            self.dropout = kwargs.pop('dropout', 0.0)
+            self.dropout = kwargs.pop('dropout', 0.5)
             
         elif self.arch.lower() == 'cnn':
             self.hid_dim = kwargs.pop('hid_dim', 128)
@@ -93,7 +93,7 @@ class RNNEncoder(Encoder):
                       'num_layers': config.num_layers, 
                       'batch_first': True, 
                       'bidirectional': True, 
-                      'dropout': config.dropout}
+                      'dropout': 0.0 if config.num_layers <= 1 else config.dropout}
         
         if config.arch.lower() == 'lstm':
             self.rnn = nn.LSTM(**rnn_config)
@@ -101,8 +101,6 @@ class RNNEncoder(Encoder):
         elif config.arch.lower() == 'gru':
             self.rnn = nn.GRU(**rnn_config)
             reinit_gru_(self.rnn)
-        else:
-            raise ValueError(f"Invalid RNN architecture: {config.arch}")
             
         
     def embedded2hidden(self, batch: Batch, embedded: Tensor):

@@ -12,10 +12,10 @@ from eznlp import ConfigList, ConfigDict
 from eznlp import TokenConfig, CharConfig, EnumConfig, ValConfig, EmbedderConfig
 from eznlp import EncoderConfig
 from eznlp import PreTrainedEmbedderConfig
-from eznlp.sequence_tagging import parse_conll_file
 from eznlp.sequence_tagging import DecoderConfig, TaggerConfig
 from eznlp.sequence_tagging import SequenceTaggingDataset
 from eznlp.sequence_tagging import SequenceTaggingTrainer
+from eznlp.sequence_tagging.raw_data import parse_conll_file
 
 
 def load_demo_data(scheme='BIOES'):

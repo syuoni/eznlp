@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from transformers import BertTokenizer, BertForMaskedLM
 from transformers import RobertaTokenizer, RobertaForMaskedLM
 
-from eznlp.sequence_tagging import parse_conll_file
+from eznlp.sequence_tagging.raw_data import parse_conll_file
 from eznlp.language_modeling import MLMDataset, PMCMLMDataset, MLMTrainer
 
 

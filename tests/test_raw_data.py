@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from eznlp.sequence_tagging import parse_conll_file
+from eznlp.sequence_tagging.raw_data import parse_conll_file
 
 
 class TestParseConllFile(object):
