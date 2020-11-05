@@ -3,8 +3,10 @@ from typing import Union, List
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers import PreTrainedModel
-from allennlp.modules.elmo import Elmo
+from torch.nn.utils.rnn import pad_sequence
+import allennlp.modules
+import transformers
+import flair
 
 from .datasets_utils import Batch
 from .functional import aggregate_tensor_by_group
@@ -15,12 +17,14 @@ class PreTrainedEmbedderConfig(Config):
     def __init__(self, **kwargs):
         self.arch = kwargs.pop('arch')
         self.out_dim = kwargs.pop('out_dim')
-        self.freeze = kwargs.pop('freeze', False)
+        self.freeze = kwargs.pop('freeze', True)
         
         if self.arch.lower() == 'elmo':
             self.lstm_stateful = kwargs.pop('lstm_stateful', False)
         elif self.arch.lower() in ('bert', 'roberta', 'albert'):
             self.tokenizer = kwargs.pop('tokenizer')
+        elif self.arch.lower() == 'flair':
+            pass
         else:
             raise ValueError(f"Invalid pretrained embedder architecture {self.arch}")
         super().__init__(**kwargs)
@@ -30,6 +34,8 @@ class PreTrainedEmbedderConfig(Config):
             return ELMoEmbedder(self, pretrained_model)
         elif self.arch.lower() in ('bert', 'roberta', 'albert'):
             return BertLikeEmbedder(self, pretrained_model)
+        elif self.arch.lower() == 'flair':
+            return FlairEmbedder(self, pretrained_model)
         
         
 class PreTrainedEmbedder(nn.Module):
@@ -90,7 +96,7 @@ class ScalarMix(nn.Module):
         
         
 class BertLikeEmbedder(PreTrainedEmbedder):
-    def __init__(self, config: PreTrainedEmbedderConfig, bert_like: PreTrainedModel):
+    def __init__(self, config: PreTrainedEmbedderConfig, bert_like: transformers.PreTrainedModel):
         super().__init__(config, bert_like)
         self.scalar_mix = ScalarMix(bert_like.config.num_hidden_layers + 1)
         
@@ -127,7 +133,7 @@ class ELMoEmbedder(PreTrainedEmbedder):
     [1] Peters et al. 2018. Deep contextualized word representations. 
     [2] https://github.com/allenai/allennlp/issues/2398
     """
-    def __init__(self, config: PreTrainedEmbedderConfig, elmo: Elmo):
+    def __init__(self, config: PreTrainedEmbedderConfig, elmo: allennlp.modules.elmo.Elmo):
         elmo._elmo_lstm._elmo_lstm.stateful = config.lstm_stateful
         super().__init__(config, elmo)
         
@@ -148,4 +154,36 @@ class ELMoEmbedder(PreTrainedEmbedder):
         return elmo_outs['elmo_representations'][0]
     
     
+class FlairEmbedder(PreTrainedEmbedder):
+    def __init__(self, config: PreTrainedEmbedderConfig, flair_emb: flair.embeddings.TokenEmbeddings):
+        super().__init__(config, flair_emb)
+        self.gamma = nn.Parameter(torch.tensor(1.0))
     
+    @property
+    def freeze(self):
+        return self._freeze
+    
+    @freeze.setter
+    def freeze(self, value: bool):
+        assert isinstance(value, bool)
+        self._freeze = value
+        if isinstance(self.pretrained_model, flair.embeddings.StackedEmbeddings):
+            for emb in self.pretrained_model.embeddings:
+                emb.requires_grad_(not self._freeze)
+                emb.fine_tune = (not self._freeze)
+        else:
+            self.pretrained_model.requires_grad_(not self._freeze)
+            self.pretrained_model.fine_tune = (not self._freeze)
+                
+                
+    def forward(self, batch: Batch):
+        flair_sentences = [flair.data.Sentence(sent, use_tokenizer=False) for sent in batch.flair_sentences]
+        self.pretrained_model.embed(flair_sentences)
+        flair_outs = pad_sequence([torch.stack([tok.embedding for tok in sent]) for sent in flair_sentences], 
+                                  batch_first=True, padding_value=0.0)
+        # flair would automatically convert to CUDA?
+        # flair_outs = flair_outs.to(batch.tok_ids.device)
+        
+        return self.gamma * flair_outs
+        
+

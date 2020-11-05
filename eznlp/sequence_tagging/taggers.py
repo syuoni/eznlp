@@ -3,8 +3,9 @@ import torch
 from torch import Tensor
 import torch.nn as nn
 from torchtext.experimental.vectors import Vectors
-from transformers import PreTrainedModel
-from allennlp.modules.elmo import Elmo
+import allennlp.modules
+import transformers
+import flair
 
 from ..token import Token
 from ..datasets_utils import Batch
@@ -31,6 +32,7 @@ class TaggerConfig(Config):
         
         self.elmo_embedder = kwargs.pop('elmo_embedder', None)
         self.bert_like_embedder = kwargs.pop('bert_like_embedder', None)
+        self.flair_embedder = kwargs.pop('flair_embedder', None)
         
         self.intermediate = kwargs.pop('intermediate', None)
         self.decoder = kwargs.pop('decoder', DecoderConfig(arch='CRF'))
@@ -49,6 +51,8 @@ class TaggerConfig(Config):
         if self.elmo_embedder is not None and self.elmo_embedder.is_valid:
             return True
         if self.bert_like_embedder is not None and self.bert_like_embedder.is_valid:
+            return True
+        if self.flair_embedder is not None and self.flair_embedder.is_valid:
             return True
         
         return False
@@ -69,6 +73,7 @@ class TaggerConfig(Config):
         full_hid_dim += self.encoders.hid_dim if self.encoders is not None else 0
         full_hid_dim += self.elmo_embedder.out_dim if self.elmo_embedder is not None else 0
         full_hid_dim += self.bert_like_embedder.out_dim if self.bert_like_embedder is not None else 0
+        full_hid_dim += self.flair_embedder.out_dim if self.flair_embedder is not None else 0
         
         if self.intermediate is None:
             self.decoder.in_dim = full_hid_dim
@@ -92,6 +97,9 @@ class TaggerConfig(Config):
         if self.bert_like_embedder is not None:
             name_elements.append(self.bert_like_embedder.arch)
             
+        if self.flair_embedder is not None:
+            name_elements.append(self.flair_embedder.arch)
+            
         if self.intermediate is not None:
             name_elements.append(self.intermediate.arch)
             
@@ -100,19 +108,32 @@ class TaggerConfig(Config):
         return '-'.join(name_elements)
     
     
-    def instantiate(self, pretrained_vectors: Vectors=None, elmo: Elmo=None, bert_like: PreTrainedModel=None):
+    def instantiate(self, 
+                    pretrained_vectors: Vectors=None, 
+                    elmo: allennlp.modules.elmo.Elmo=None, 
+                    bert_like: transformers.PreTrainedModel=None, 
+                    flair_emb: flair.embeddings.TokenEmbeddings=None):
         # Only assert at the most outside level
         assert self.is_valid
-        return Tagger(self, pretrained_vectors=pretrained_vectors, elmo=elmo, bert_like=bert_like)
+        return Tagger(self, 
+                      pretrained_vectors=pretrained_vectors, 
+                      elmo=elmo, 
+                      bert_like=bert_like, 
+                      flair_emb=flair_emb)
     
     def __repr__(self):
         return self._repr_config_attrs(self.__dict__)
     
     
     
+    
 class Tagger(nn.Module):
-    def __init__(self, config: TaggerConfig, 
-                 pretrained_vectors: Vectors=None, elmo: Elmo=None, bert_like: PreTrainedModel=None):
+    def __init__(self, 
+                 config: TaggerConfig, 
+                 pretrained_vectors: Vectors=None, 
+                 elmo: allennlp.modules.elmo.Elmo=None, 
+                 bert_like: transformers.PreTrainedModel=None, 
+                 flair_emb: flair.embeddings.TokenEmbeddings=None):
         super().__init__()
         self.config = config
         self.embedder = config.embedder.instantiate(pretrained_vectors=pretrained_vectors)
@@ -121,12 +142,16 @@ class Tagger(nn.Module):
             self.encoders = config.encoders.instantiate()
             
         if config.elmo_embedder is not None:
-            assert elmo is not None and isinstance(elmo, Elmo)
+            assert elmo is not None and isinstance(elmo, allennlp.modules.elmo.Elmo)
             self.elmo_embedder = config.elmo_embedder.instantiate(elmo)
             
         if config.bert_like_embedder is not None:
-            assert bert_like is not None and isinstance(bert_like, PreTrainedModel)
+            assert bert_like is not None and isinstance(bert_like, transformers.PreTrainedModel)
             self.bert_like_embedder = config.bert_like_embedder.instantiate(bert_like)
+            
+        if config.flair_embedder is not None:
+            assert flair_emb is not None and isinstance(flair_emb, flair.embeddings.TokenEmbeddings)
+            self.flair_embedder = config.flair_embedder.instantiate(flair_emb)
             
         if config.intermediate is not None:
             self.intermediate = config.intermediate.instantiate()
@@ -147,6 +172,9 @@ class Tagger(nn.Module):
             
         if hasattr(self, 'bert_like_embedder'):
             full_hidden.append(self.bert_like_embedder(batch))
+            
+        if hasattr(self, 'flair_embedder'):
+            full_hidden.append(self.flair_embedder(batch))
             
         full_hidden = torch.cat(full_hidden, dim=-1)
         

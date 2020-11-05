@@ -4,8 +4,9 @@ import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchtext.experimental.vectors import GloVe
-from transformers import BertTokenizer, BertModel
-from allennlp.modules.elmo import Elmo
+import allennlp.modules
+import transformers
+import flair
 
 from eznlp import Token
 from eznlp import ConfigList, ConfigDict
@@ -52,14 +53,22 @@ def BIO2_data():
 def ELMo_model():
     options_file = "assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_options.json"
     weight_file = "assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_weights.hdf5"
-    return Elmo(options_file, weight_file, num_output_representations=1)
+    return allennlp.modules.elmo.Elmo(options_file, weight_file, num_output_representations=1)
     
 
 @pytest.fixture
 def BERT_with_tokenizer():
-    tokenizer = BertTokenizer.from_pretrained("assets/transformers_cache/bert-base-cased")
-    bert = BertModel.from_pretrained("assets/transformers_cache/bert-base-cased")
+    tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers_cache/bert-base-cased")
+    bert = transformers.BertModel.from_pretrained("assets/transformers_cache/bert-base-cased")
     return bert, tokenizer
+
+@pytest.fixture
+def Flair_emb():
+    flair_fw = flair.models.LanguageModel.load_language_model("assets/flair/lm-mix-english-forward-v0.2rc.pt")
+    flair_bw = flair.models.LanguageModel.load_language_model("assets/flair/lm-mix-english-backward-v0.2rc.pt")
+    flair_emb = flair.embeddings.StackedEmbeddings([flair.embeddings.FlairEmbeddings(flair_fw), 
+                                                    flair.embeddings.FlairEmbeddings(flair_bw)])
+    return flair_emb
 
 @pytest.fixture
 def glove100():
@@ -237,6 +246,18 @@ class TestTagger(object):
         config = TaggerConfig(encoders=None, bert_like_embedder=bert_like_embedder_config)
         train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
         tagger = config.instantiate(bert_like=bert).to(device)
+        
+        self.one_tagger_pass(tagger, train_set, device)
+        
+        
+    @pytest.mark.parametrize("freeze", [False, True])
+    def test_tagger_flair(self, BIOES_data, Flair_emb, freeze, device):
+        flair_embedder_config = PreTrainedEmbedderConfig(arch='Flair', 
+                                                         out_dim=Flair_emb.embedding_length, 
+                                                         freeze=freeze)
+        config = TaggerConfig(encoders=None, flair_embedder=flair_embedder_config)
+        train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
+        tagger = config.instantiate(flair_emb=Flair_emb).to(device)
         
         self.one_tagger_pass(tagger, train_set, device)
         

@@ -137,11 +137,9 @@ class SequenceTaggingDataset(Dataset):
         else:
             val_feats = None
             
-            
-        if self.config.elmo_embedder is not None:
-            elmo_tokenized_text = curr_data['tokens'].raw_text
-        else:
-            elmo_tokenized_text = None
+        # Prepare for pretrained embedders
+        tokenized_text = curr_data['tokens'].text
+        tokenized_raw_text = curr_data['tokens'].raw_text
             
         if self.config.bert_like_embedder is not None:
             tokens = curr_data['tokens']
@@ -155,11 +153,10 @@ class SequenceTaggingDataset(Dataset):
         else:
             sub_tok_ids, ori_indexes = None, None
             
-            
         tags_obj = Tags(curr_data['tags'], self.config.decoder) if self._is_labeled else None
         
         return TensorWrapper(char_ids=char_ids, tok_ids=tok_ids, enum=enum_feats, val=val_feats, 
-                             elmo_tokenized_text=elmo_tokenized_text, 
+                             tokenized_text=tokenized_text, tokenized_raw_text=tokenized_raw_text, 
                              sub_tok_ids=sub_tok_ids, ori_indexes=ori_indexes, 
                              tags_obj=tags_obj)
     
@@ -191,8 +188,7 @@ class SequenceTaggingDataset(Dataset):
         
         
         if self.config.elmo_embedder is not None:
-            batch_tokenized_text = [ex.elmo_tokenized_text for ex in batch_examples]
-            batch_elmo_char_ids = batch_to_elmo_char_ids(batch_tokenized_text)
+            batch_elmo_char_ids = batch_to_elmo_char_ids([ex.tokenized_raw_text for ex in batch_examples])
         else:
             batch_elmo_char_ids = None
             
@@ -206,6 +202,11 @@ class SequenceTaggingDataset(Dataset):
         else:
             batch_sub_tok_ids, sub_tok_seq_lens, batch_ori_indexes = None, None, None
             
+        if self.config.flair_embedder is not None:
+            batch_flair_sentences = [" ".join(ex.tokenized_raw_text) for ex in batch_examples]
+        else:
+            batch_flair_sentences = None
+            
         batch_tags_objs = [ex.tags_obj for ex in batch_examples] if self._is_labeled else None
         
         
@@ -214,6 +215,7 @@ class SequenceTaggingDataset(Dataset):
                       enum=batch_enum, val=batch_val, 
                       elmo_char_ids=batch_elmo_char_ids, 
                       sub_tok_ids=batch_sub_tok_ids, ori_indexes=batch_ori_indexes, sub_tok_seq_lens=sub_tok_seq_lens, 
+                      flair_sentences=batch_flair_sentences, 
                       tags_objs=batch_tags_objs)
         
         batch.build_masks({'tok_mask': (seq_lens, batch_tok_ids.size(1))})

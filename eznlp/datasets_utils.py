@@ -68,15 +68,15 @@ class TensorWrapper(object):
                 setattr(self, attr_name, func(attr))
             elif isinstance(attr, TensorWrapper):
                 setattr(self, attr_name, attr._apply_to_tensors(func))
-            elif isinstance(attr, list):
-                if len(attr) == 0 or isinstance(attr[0], Tensor):
+            elif isinstance(attr, list) and len(attr) > 0:
+                if isinstance(attr[0], Tensor):
                     setattr(self, attr_name, [func(x) for x in attr])
-                else:
+                elif isinstance(attr[0], TensorWrapper):
                     setattr(self, attr_name, [x._apply_to_tensors(func) for x in attr])
-            elif isinstance(attr, dict):
-                if len(attr) == 0 or isinstance(list(attr.values())[0], Tensor):
+            elif isinstance(attr, dict) and len(attr) > 0:
+                if isinstance(next(iter(attr.values())), Tensor):
                     setattr(self, attr_name, {k: func(v) for k, v in attr.items()})
-                else:
+                elif isinstance(attr[0], TensorWrapper):
                     setattr(self, attr_name, {k: v._apply_to_tensors(func) for k, v in attr.items()})
                     
         return self
