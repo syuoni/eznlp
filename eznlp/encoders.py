@@ -6,6 +6,7 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from .datasets_utils import Batch
 from .nn_utils import reinit_layer_, reinit_lstm_, reinit_gru_, reinit_transformer_encoder_layer_
+from .nn import WordDropout, LockedDropout
 from .config import Config
 
 
@@ -13,9 +14,12 @@ class EncoderConfig(Config):
     def __init__(self, **kwargs):
         self.arch = kwargs.pop('arch', 'LSTM')
         self.in_dim = kwargs.pop('in_dim', None)
+        self.word_dropout = kwargs.pop('word_dropout', 0.05)
+        self.locked_dropout = kwargs.pop('locked_dropout', 0.5)
         
         if self.arch.lower() == 'shortcut':
             self.hid_dim = kwargs.pop('hid_dim', None)
+            # DO NOT apply dropout to shortcut
             self.dropout = kwargs.pop('dropout', 0.0)
             
         elif self.arch.lower() in ('lstm', 'gru'):
@@ -61,9 +65,14 @@ class Encoder(nn.Module):
     """
     def __init__(self, config: EncoderConfig):
         super().__init__()
-        self.dropout = nn.Dropout(config.dropout)
-        
-        
+        # TODO: Only applies to embeddings?
+        if config.word_dropout > 0:
+            self.word_dropout = WordDropout(config.word_dropout)
+        if config.locked_dropout > 0:
+            self.locked_dropout = LockedDropout(config.locked_dropout)
+        if config.dropout > 0:
+            self.dropout = nn.Dropout(config.dropout)
+            
     def embedded2hidden(self, batch: Batch, embedded: Tensor):
         raise NotImplementedError("Not Implemented `embedded2hidden`")
         
@@ -71,7 +80,13 @@ class Encoder(nn.Module):
     def forward(self, batch: Batch, embedded: Tensor):
         # embedded: (batch, step, emb_dim)
         # hidden: (batch, step, hid_dim)
-        embedded = self.dropout(embedded)
+        if hasattr(self, 'dropout'):
+            embedded = self.dropout(embedded)
+        if hasattr(self, 'word_dropout'):
+            embedded = self.word_dropout(embedded)
+        if hasattr(self, 'locked_dropout'):
+            embedded = self.locked_dropout(embedded)
+            
         return self.embedded2hidden(batch, embedded)
     
     
@@ -81,11 +96,10 @@ class ShortcutEncoder(Encoder):
         super().__init__(config)
     
     def embedded2hidden(self, batch: Batch, embedded: Tensor):
-        # DO NOT apply dropout to shortcut (dropout=0.0)
         return embedded
     
     
-    
+# TODO: Isolate RNN with hidden0, to reuse in other modules
 class RNNEncoder(Encoder):
     def __init__(self, config: dict):
         super().__init__(config)
@@ -127,7 +141,8 @@ class RNNEncoder(Encoder):
         rnn_outs, _ = pad_packed_sequence(packed_rnn_outs, batch_first=True, padding_value=0)
         return rnn_outs
     
-    
+
+# TODO: More CNN structures? to reuse in other modules
 class ConvBlock(nn.Module):
     def __init__(self, hid_dim: int, kernel_size: int, dropout: float):
         super().__init__()
