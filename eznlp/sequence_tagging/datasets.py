@@ -8,11 +8,11 @@ from allennlp.modules.elmo import batch_to_ids as batch_to_elmo_char_ids
 
 from ..datasets_utils import TensorWrapper, Batch, _fetch_token_id
 from .decoders import DecoderConfig
-from .taggers import TaggerConfig
+from .taggers import SequenceTaggerConfig
 
 
 class SequenceTaggingDataset(Dataset):
-    def __init__(self, data: list, config: TaggerConfig):
+    def __init__(self, data: list, config: SequenceTaggerConfig):
         """
         Parameters
         ----------

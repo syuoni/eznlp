@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import torch
 from torch import Tensor
 import torch.nn as nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
@@ -16,9 +17,10 @@ class EncoderConfig(Config):
         if self.arch.lower() == 'shortcut':
             self.hid_dim = kwargs.pop('hid_dim', None)
             self.dropout = kwargs.pop('dropout', 0.0)
-        
+            
         elif self.arch.lower() in ('lstm', 'gru'):
             self.hid_dim = kwargs.pop('hid_dim', 128)
+            self.trainable_initial_hidden = kwargs.pop('trainable_initial_hidden', True)
             self.num_layers = kwargs.pop('num_layers', 1)
             self.dropout = kwargs.pop('dropout', 0.5)
             
@@ -98,18 +100,32 @@ class RNNEncoder(Encoder):
         if config.arch.lower() == 'lstm':
             self.rnn = nn.LSTM(**rnn_config)
             reinit_lstm_(self.rnn)
+            
         elif config.arch.lower() == 'gru':
             self.rnn = nn.GRU(**rnn_config)
             reinit_gru_(self.rnn)
             
+        if config.trainable_initial_hidden:
+            # h_0/c_0: (num_layers * num_directions, batch, hidden_size)
+            self.h_0 = nn.Parameter(torch.zeros(config.num_layers*2, 1, config.hid_dim//2))
+        if config.trainable_initial_hidden and config.arch.lower() == 'lstm':
+            self.c_0 = nn.Parameter(torch.zeros(config.num_layers*2, 1, config.hid_dim//2))
+            
         
     def embedded2hidden(self, batch: Batch, embedded: Tensor):
         packed_embedded = pack_padded_sequence(embedded, batch.seq_lens, batch_first=True, enforce_sorted=False)
-        packed_rnn_outs, _ = self.rnn(packed_embedded)
+        
+        if hasattr(self, 'h_0'):
+            h_0 = self.h_0.repeat(1, batch.tok_ids.size(0), 1)
+            if hasattr(self, 'c_0'):
+                c_0 = self.c_0.repeat(1, batch.tok_ids.size(0), 1)
+                h_0 = (h_0, c_0)
+            packed_rnn_outs, _ = self.rnn(packed_embedded, h_0)
+        else:
+            packed_rnn_outs, _ = self.rnn(packed_embedded)
         # outs: (batch, step, hid_dim*num_directions)
         rnn_outs, _ = pad_packed_sequence(packed_rnn_outs, batch_first=True, padding_value=0)
         return rnn_outs
-    
     
     
 class ConvBlock(nn.Module):

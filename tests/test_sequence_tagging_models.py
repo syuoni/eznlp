@@ -13,7 +13,7 @@ from eznlp import ConfigList, ConfigDict
 from eznlp import TokenConfig, CharConfig, EnumConfig, ValConfig, EmbedderConfig
 from eznlp import EncoderConfig
 from eznlp import PreTrainedEmbedderConfig
-from eznlp.sequence_tagging import DecoderConfig, TaggerConfig
+from eznlp.sequence_tagging import DecoderConfig, SequenceTaggerConfig
 from eznlp.sequence_tagging import SequenceTaggingDataset
 from eznlp.sequence_tagging import SequenceTaggingTrainer
 from eznlp.sequence_tagging.raw_data import parse_conll_file
@@ -81,7 +81,7 @@ class TestCharEncoder(object):
     def test_char_encoder(self, BIOES_data, arch, device):
         train_data, val_data, test_data = BIOES_data
         
-        config = TaggerConfig(embedder=EmbedderConfig(char=CharConfig(arch=arch)))
+        config = SequenceTaggerConfig(embedder=EmbedderConfig(char=CharConfig(arch=arch)))
         assert not config.is_valid
         train_set = SequenceTaggingDataset(train_data, config)
         assert config.is_valid
@@ -113,7 +113,7 @@ class TestBatching(object):
         
         embedder_config = EmbedderConfig(enum=ConfigDict([(f, EnumConfig(emb_dim=20)) for f in Token.basic_enum_fields]), 
                                          val=ConfigDict([(f, ValConfig(emb_dim=20)) for f in Token.basic_val_fields]))
-        config = TaggerConfig(embedder=embedder_config)
+        config = SequenceTaggerConfig(embedder=embedder_config)
         train_set = SequenceTaggingDataset(train_data, config)
         train_loader = DataLoader(train_set, batch_size=8, shuffle=True, collate_fn=train_set.collate, pin_memory=True)
         for batch in train_loader:
@@ -134,7 +134,7 @@ class TestBatching(object):
         
         
     def test_batches(self, BIOES_data):
-        config = TaggerConfig()
+        config = SequenceTaggerConfig()
         train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
         train_loader = DataLoader(train_set, batch_size=8, shuffle=True, 
                                   collate_fn=train_set.collate)
@@ -179,7 +179,7 @@ class TestTagger(object):
     @pytest.mark.parametrize("freeze", [False, True])
     def test_word_embedding_initialization(self, BIOES_data, glove100, freeze, device):
         embedder_config = EmbedderConfig(token=TokenConfig(emb_dim=100, freeze=freeze))
-        config = TaggerConfig(embedder=embedder_config)
+        config = SequenceTaggerConfig(embedder=embedder_config)
         train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
         tagger = config.instantiate(pretrained_vectors=glove100).to(device)
         
@@ -187,7 +187,7 @@ class TestTagger(object):
         
         
     def test_train_steps(self, BIOES_data, device):
-        config = TaggerConfig()
+        config = SequenceTaggerConfig()
         train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
         tagger = config.instantiate().to(device)
         
@@ -208,15 +208,15 @@ class TestTagger(object):
     @pytest.mark.parametrize("dec_arch", ['softmax', 'CRF'])
     def test_tagger(self, BIOES_data, enc_arches, dec_arch, device):
         encoders_config = ConfigList([EncoderConfig(arch=arch) for arch in enc_arches])
-        config = TaggerConfig(encoders=encoders_config, 
-                              decoder=DecoderConfig(arch=dec_arch))
+        config = SequenceTaggerConfig(encoders=encoders_config, 
+                                      decoder=DecoderConfig(arch=dec_arch))
         train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
         tagger = config.instantiate().to(device)
         self.one_tagger_pass(tagger, train_set, device)
         
         
     def test_tagger_intermediate(self, BIOES_data, device):
-        config = TaggerConfig(intermediate=EncoderConfig())
+        config = SequenceTaggerConfig(intermediate=EncoderConfig())
         train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
         tagger = config.instantiate().to(device)
         self.one_tagger_pass(tagger, train_set, device)
@@ -229,7 +229,7 @@ class TestTagger(object):
                                                         out_dim=elmo.get_output_dim(), 
                                                         lstm_stateful=False, 
                                                         freeze=freeze)
-        config = TaggerConfig(encoders=None, elmo_embedder=elmo_embedder_config)
+        config = SequenceTaggerConfig(encoders=None, elmo_embedder=elmo_embedder_config)
         train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
         tagger = config.instantiate(elmo=elmo).to(device)
         
@@ -243,7 +243,7 @@ class TestTagger(object):
                                                              out_dim=bert.config.hidden_size, 
                                                              tokenizer=tokenizer, 
                                                              freeze=freeze)
-        config = TaggerConfig(encoders=None, bert_like_embedder=bert_like_embedder_config)
+        config = SequenceTaggerConfig(encoders=None, bert_like_embedder=bert_like_embedder_config)
         train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
         tagger = config.instantiate(bert_like=bert).to(device)
         
@@ -255,7 +255,7 @@ class TestTagger(object):
         flair_embedder_config = PreTrainedEmbedderConfig(arch='Flair', 
                                                          out_dim=Flair_emb.embedding_length, 
                                                          freeze=freeze)
-        config = TaggerConfig(encoders=None, flair_embedder=flair_embedder_config)
+        config = SequenceTaggerConfig(encoders=None, flair_embedder=flair_embedder_config)
         train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
         tagger = config.instantiate(flair_emb=Flair_emb).to(device)
         
@@ -266,7 +266,7 @@ class TestTagger(object):
     @pytest.mark.parametrize("cascade_mode", ['Sliced', 'Straight'])
     def test_tagger_cascade(self, BIOES_data, dec_arch, cascade_mode, device):
         decoder_config = DecoderConfig(arch=dec_arch, cascade_mode=cascade_mode)
-        config = TaggerConfig(decoder=decoder_config)
+        config = SequenceTaggerConfig(decoder=decoder_config)
         train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
         tagger = config.instantiate().to(device)
         self.one_tagger_pass(tagger, train_set, device)
@@ -277,7 +277,7 @@ class TestTagger(object):
         embedder_config = EmbedderConfig(enum=ConfigDict([(f, EnumConfig(emb_dim=20)) for f in Token.basic_enum_fields]), 
                                          val=ConfigDict([(f, ValConfig(emb_dim=20)) for f in Token.basic_val_fields]))
         encoders_config = ConfigList([EncoderConfig(arch=arch) for arch in enc_arches])
-        config = TaggerConfig(embedder=embedder_config, encoders=encoders_config)
+        config = SequenceTaggerConfig(embedder=embedder_config, encoders=encoders_config)
         train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
         tagger = config.instantiate().to(device)
         self.one_tagger_pass(tagger, train_set, device)
@@ -286,7 +286,7 @@ class TestTagger(object):
     @pytest.mark.parametrize("enc_arches", [['CNN'], ['LSTM', 'Shortcut']])
     def test_tagger_BIO2(self, BIO2_data, enc_arches, device):
         encoders_config = ConfigList([EncoderConfig(arch=arch) for arch in enc_arches])
-        config = TaggerConfig(encoders=encoders_config)
+        config = SequenceTaggerConfig(encoders=encoders_config)
         train_set, val_set, test_set = build_demo_datasets(*BIO2_data, config)
         tagger = config.instantiate().to(device)
         self.one_tagger_pass(tagger, train_set, device)

@@ -16,7 +16,7 @@ from ..pretrained_embedders import PreTrainedEmbedderConfig
 from .decoders import DecoderConfig
 
 
-class TaggerConfig(Config):
+class SequenceTaggerConfig(Config):
     def __init__(self, **kwargs):
         """
         Parameters
@@ -115,11 +115,11 @@ class TaggerConfig(Config):
                     flair_emb: flair.embeddings.TokenEmbeddings=None):
         # Only assert at the most outside level
         assert self.is_valid
-        return Tagger(self, 
-                      pretrained_vectors=pretrained_vectors, 
-                      elmo=elmo, 
-                      bert_like=bert_like, 
-                      flair_emb=flair_emb)
+        return SequenceTagger(self, 
+                              pretrained_vectors=pretrained_vectors, 
+                              elmo=elmo, 
+                              bert_like=bert_like, 
+                              flair_emb=flair_emb)
     
     def __repr__(self):
         return self._repr_config_attrs(self.__dict__)
@@ -127,9 +127,9 @@ class TaggerConfig(Config):
     
     
     
-class Tagger(nn.Module):
+class SequenceTagger(nn.Module):
     def __init__(self, 
-                 config: TaggerConfig, 
+                 config: SequenceTaggerConfig, 
                  pretrained_vectors: Vectors=None, 
                  elmo: allennlp.modules.elmo.Elmo=None, 
                  bert_like: transformers.PreTrainedModel=None, 

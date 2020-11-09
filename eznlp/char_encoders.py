@@ -4,7 +4,7 @@ from torch import Tensor
 import torch.nn as nn
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence
 
-from .functional import mean_pooling, max_pooling
+from .nn import MaxPooling, MeanPooling
 from .nn_utils import reinit_embedding_, reinit_lstm_, reinit_gru_, reinit_layer_
 from .config import ConfigwithVocab
 
@@ -69,7 +69,11 @@ class CharCNN(CharEncoder):
         self.conv = nn.Conv1d(config.emb_dim, config.out_dim, 
                               kernel_size=config.kernel_size, padding=(config.kernel_size-1)//2)
         self.relu = nn.ReLU()
-        self.pooling = config.pooling
+        if config.pooling.lower() == 'max':
+            self.pooling = MaxPooling()
+        elif config.pooling.lower() == 'mean':
+            self.pooling = MeanPooling()
+            
         reinit_layer_(self.conv, 'relu')
         
         
@@ -79,11 +83,7 @@ class CharCNN(CharEncoder):
         hidden = self.relu(hidden)
         
         # hidden: (batch*tok_step, char_step, out_dim) -> (batch*tok_step, out_dim)
-        if self.pooling.lower() == 'max':
-            hidden = max_pooling(hidden, char_mask)
-        elif self.pooling.lower() == 'mean':
-            hidden = mean_pooling(hidden, char_mask)
-            
+        hidden = self.pooling(hidden, char_mask)
         return hidden
     
     

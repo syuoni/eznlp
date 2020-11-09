@@ -18,6 +18,7 @@ class PreTrainedEmbedderConfig(Config):
         self.arch = kwargs.pop('arch')
         self.out_dim = kwargs.pop('out_dim')
         self.freeze = kwargs.pop('freeze', True)
+        self.use_layers = kwargs.pop('use_layers', 'mix')
         
         if self.arch.lower() == 'elmo':
             self.lstm_stateful = kwargs.pop('lstm_stateful', False)

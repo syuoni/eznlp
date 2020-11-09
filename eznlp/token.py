@@ -252,7 +252,7 @@ class Token(object):
     
 class TokenSequence(object):
     """
-    A wrapper of a token list, providing sequential attribute access to all tokens. 
+    A wrapper of token list, providing sequential attribute access to all tokens. 
     """
     def __init__(self, token_list):
         self.token_list = token_list
@@ -294,7 +294,7 @@ class TokenSequence(object):
             raise TypeError(f"Invalid subscript type of {i}")
             
     def _build_pseudo_boundaries(self):
-        # Assign ``start`` and ``end`` at the token-level, to ensure consistency. 
+        # Assign ``start`` and ``end`` at the token-level, to ensure consistency to spacy-tokenized ones.
         token_lens = np.array([len(tok) for tok in self.token_list])
         token_ends = np.cumsum(token_lens + 1) - 1
         token_starts = token_ends - token_lens
