@@ -4,7 +4,7 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from ..dataset_utils import Batch
 from ..nn.init import reinit_layer_, reinit_lstm_, reinit_gru_, reinit_transformer_encoder_layer_
-from ..nn import WordDropout, LockedDropout
+from ..nn import CombinedDropout
 from ..config import Config
 
 
@@ -12,35 +12,35 @@ class EncoderConfig(Config):
     def __init__(self, **kwargs):
         self.arch = kwargs.pop('arch', 'LSTM')
         self.in_dim = kwargs.pop('in_dim', None)
-        self.word_dropout = kwargs.pop('word_dropout', 0.05)
-        self.locked_dropout = kwargs.pop('locked_dropout', 0.5)
+        self.word_dropout = kwargs.pop('word_dropout', 0.0)
+        self.locked_dropout = kwargs.pop('locked_dropout', 0.0)
         
         if self.arch.lower() == 'shortcut':
             self.hid_dim = kwargs.pop('hid_dim', None)
             # DO NOT apply dropout to shortcut
             self.dropout = kwargs.pop('dropout', 0.0)
             
-        elif self.arch.lower() in ('lstm', 'gru'):
-            self.hid_dim = kwargs.pop('hid_dim', 128)
-            self.trainable_initial_hidden = kwargs.pop('trainable_initial_hidden', True)
-            self.num_layers = kwargs.pop('num_layers', 1)
-            self.dropout = kwargs.pop('dropout', 0.5)
-            
-        elif self.arch.lower() == 'cnn':
-            self.hid_dim = kwargs.pop('hid_dim', 128)
-            self.kernel_size = kwargs.pop('kernel_size', 3)
-            self.num_layers = kwargs.pop('num_layers', 3)
-            self.dropout = kwargs.pop('dropout', 0.25)
-            
-        elif self.arch.lower() == 'transformer':
-            self.hid_dim = kwargs.pop('hid_dim', 128)
-            self.nhead = kwargs.pop('nhead', 8)
-            self.pf_dim = kwargs.pop('pf_dim', 256)
-            self.num_layers = kwargs.pop('num_layers', 3)
-            self.dropout = kwargs.pop('dropout', 0.1)
-            
         else:
-            raise ValueError(f"Invalid encoder architecture {self.arch}")
+            self.hid_dim = kwargs.pop('hid_dim', 128)
+            
+            if self.arch.lower() in ('lstm', 'gru'):
+                self.trainable_initial_hidden = kwargs.pop('trainable_initial_hidden', True)
+                self.num_layers = kwargs.pop('num_layers', 1)
+                self.dropout = kwargs.pop('dropout', 0.5)
+                
+            elif self.arch.lower() == 'cnn':
+                self.kernel_size = kwargs.pop('kernel_size', 3)
+                self.num_layers = kwargs.pop('num_layers', 3)
+                self.dropout = kwargs.pop('dropout', 0.25)
+                
+            elif self.arch.lower() == 'transformer':
+                self.nhead = kwargs.pop('nhead', 8)
+                self.pf_dim = kwargs.pop('pf_dim', 256)
+                self.num_layers = kwargs.pop('num_layers', 3)
+                self.dropout = kwargs.pop('dropout', 0.1)
+                
+            else:
+                raise ValueError(f"Invalid encoder architecture {self.arch}")
         
         super().__init__(**kwargs)
         
@@ -64,28 +64,18 @@ class Encoder(torch.nn.Module):
     def __init__(self, config: EncoderConfig):
         super().__init__()
         # TODO: Only applies to embeddings?
-        if config.dropout > 0:
-            self.dropout = torch.nn.Dropout(config.dropout)
-        if config.word_dropout > 0:
-            self.word_dropout = WordDropout(config.word_dropout)
-        if config.locked_dropout > 0:
-            self.locked_dropout = LockedDropout(config.locked_dropout)
-            
-            
+        if config.word_dropout > 0 or config.locked_dropout > 0:
+            self.dropout = CombinedDropout(p=0.0, word_p=config.word_dropout, locked_p=config.locked_dropout)
+        else:
+            self.dropout = CombinedDropout(p=config.dropout, word_p=0.0, locked_p=0.0)
+        
     def embedded2hidden(self, batch: Batch, embedded: torch.Tensor):
         raise NotImplementedError("Not Implemented `embedded2hidden`")
-        
         
     def forward(self, batch: Batch, embedded: torch.Tensor):
         # embedded: (batch, step, emb_dim)
         # hidden: (batch, step, hid_dim)
-        if hasattr(self, 'dropout'):
-            embedded = self.dropout(embedded)
-        if hasattr(self, 'word_dropout'):
-            embedded = self.word_dropout(embedded)
-        if hasattr(self, 'locked_dropout'):
-            embedded = self.locked_dropout(embedded)
-            
+        embedded = self.dropout(embedded)
         return self.embedded2hidden(batch, embedded)
     
     

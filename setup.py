@@ -30,7 +30,7 @@ setup(name='eznlp',
                         "pandas>=1.0.5",
                         "tqdm",
                         "pytest"],
-      package_data={'eznlp': ["sequence_tagging/transitions.xlsx"]}, 
+      package_data={'eznlp': ["sequence_tagging/transition.xlsx"]}, 
       include_package_data=True, 
       python_requires ='>=3.8,<4')
 

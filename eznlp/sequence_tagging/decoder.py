@@ -4,6 +4,7 @@ from torch.nn.utils.rnn import pad_sequence
 
 from ..dataset_utils import Batch, unpad_seqs
 from ..nn.init import reinit_layer_
+from ..nn import CombinedDropout
 from ..config import Config
 from .crf import CRF
 from .transition import ChunksTagsTranslator
@@ -18,6 +19,8 @@ class DecoderConfig(Config):
             
         self.in_dim = kwargs.pop('in_dim', None)
         self.dropout = kwargs.pop('dropout', 0.5)
+        self.word_dropout = kwargs.pop('word_dropout', 0.0)
+        self.locked_dropout = kwargs.pop('locked_dropout', 0.0)
         
         self.scheme = kwargs.pop('scheme', 'BIOES')
         self.translator = ChunksTagsTranslator(scheme=self.scheme)
@@ -190,11 +193,13 @@ class Decoder(torch.nn.Module):
         """
         super().__init__()
         self.config = config
-        self.dropout = torch.nn.Dropout(config.dropout)
+        if config.word_dropout > 0 or config.locked_dropout > 0:
+            self.dropout = CombinedDropout(p=0.0, word_p=config.word_dropout, locked_p=config.locked_dropout)
+        else:
+            self.dropout = CombinedDropout(p=config.dropout, word_p=0.0, locked_p=0.0)
         
     def forward(self, batch: Batch, full_hidden: torch.Tensor):
         raise NotImplementedError("Not Implemented `forward`")
-        
         
     def decode(self, batch: Batch, full_hidden: torch.Tensor):
         raise NotImplementedError("Not Implemented `decode`")
@@ -228,6 +233,7 @@ class SoftMaxDecoder(Decoder):
         return [self.config.ids2modeling_tags(tag_ids) for tag_ids in batch_tag_ids]
         
     
+    
 class CRFDecoder(Decoder):
     def __init__(self, config: DecoderConfig):
         super().__init__(config)
@@ -254,6 +260,7 @@ class CRFDecoder(Decoder):
         # List of List of predicted-tag-ids
         batch_tag_ids = self.crf.decode(tag_feats, mask=batch.tok_mask)
         return [self.config.ids2modeling_tags(tag_ids) for tag_ids in batch_tag_ids]
+    
     
     
 class CascadeDecoder(Decoder):
