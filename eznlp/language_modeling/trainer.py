@@ -11,7 +11,6 @@ class MLMTrainer(Trainer):
                          device=device, grad_clip=grad_clip)
         
     def forward_batch(self, batch):
-        batch = batch.to(self.device)
         loss, *_ = self.model(input_ids=batch.MLM_tok_ids, 
                               attention_mask=(~batch.attention_mask).type(torch.long), 
                               labels=batch.MLM_lab_ids)
@@ -21,5 +20,4 @@ class MLMTrainer(Trainer):
             
         # None as a placeholder for accuracy
         return loss, None
-        
     

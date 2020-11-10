@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import warnings
 from typing import List, Mapping
 from collections import OrderedDict
 import torch
@@ -14,9 +15,16 @@ def _add_indents(config_str: str, num_spaces: int=2):
     
 
 class Config(object):
+    """
+    `Config` stores and validates configurations of modules or models. 
+    `Config.instantiate` is the suggested way to instantiate modules or models. 
+    """
     def __init__(self, **kwargs):
-        for key, attr in kwargs.items():
-            setattr(self, key, attr)
+        if len(kwargs) > 0:
+            warnings.warn(f"Some configurations are set without checking: {kwargs}, "
+                          "which may be never used.")
+            for key, attr in kwargs.items():
+                setattr(self, key, attr)
         
     @property
     def is_valid(self):

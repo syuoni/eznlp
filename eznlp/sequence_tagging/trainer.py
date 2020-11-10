@@ -14,7 +14,6 @@ class SequenceTaggingTrainer(Trainer):
                          device=device, grad_clip=grad_clip)
         
     def forward_batch(self, batch):
-        batch = batch.to(self.device)
         losses, hidden = self.model(batch, return_hidden=True)
         loss = losses.mean()
         
@@ -30,11 +29,9 @@ class SequenceTaggingTrainer(Trainer):
         self.model.eval()
         paths = []
         with torch.no_grad():
-            with tqdm(total=len(dataloader)) as t:
-                for batch in dataloader:
-                    batch.to(self.device)
-                    paths.extend(self.model.decode(batch))
-                    t.update(1)
+            for batch in tqdm(dataloader):
+                batch.to(self.device)
+                paths.extend(self.model.decode(batch))
         return paths
     
     

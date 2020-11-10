@@ -57,7 +57,8 @@ class DecoderConfig(Config):
         
         
     def __repr__(self):
-        repr_attr_dict = {key: self.__dict__[key] for key in ['arch', 'in_dim', 'dropout', 'scheme', 'cascade_mode']}
+        repr_attr_dict = {key: self.__dict__[key] for key in ['arch', 'in_dim', 'scheme', 'cascade_mode', 
+                                                              'dropout', 'word_dropout', 'locked_dropout']}
         return self._repr_non_config_attrs(repr_attr_dict)
         
     @property
@@ -193,10 +194,7 @@ class Decoder(torch.nn.Module):
         """
         super().__init__()
         self.config = config
-        if config.word_dropout > 0 or config.locked_dropout > 0:
-            self.dropout = CombinedDropout(p=0.0, word_p=config.word_dropout, locked_p=config.locked_dropout)
-        else:
-            self.dropout = CombinedDropout(p=config.dropout, word_p=0.0, locked_p=0.0)
+        self.dropout = CombinedDropout(p=config.dropout, word_p=config.word_dropout, locked_p=config.locked_dropout)
         
     def forward(self, batch: Batch, full_hidden: torch.Tensor):
         raise NotImplementedError("Not Implemented `forward`")
