@@ -2,7 +2,6 @@
 from typing import List, Mapping
 from collections import OrderedDict
 import torch
-import torch.nn as nn
 
 
 def _add_indents(config_str: str, num_spaces: int=2):
@@ -84,7 +83,7 @@ class ConfigList(Config):
     
     def instantiate(self):
         # NOTE: The order should be consistent here and in the corresponding `forward`. 
-        return nn.ModuleList([config.instantiate() for config in self])
+        return torch.nn.ModuleList([config.instantiate() for config in self])
     
     def __repr__(self):
         return self._repr_config_attrs({i: config for i, config in enumerate(self)})
@@ -136,7 +135,7 @@ class ConfigDict(Config):
     def instantiate(self):
         # NOTE: `torch.nn.ModuleDict` is an **ordered** dictionary
         # NOTE: The order should be preserved here. 
-        return nn.ModuleDict([(key, config.instantiate()) for key, config in self.items()])
+        return torch.nn.ModuleDict([(key, config.instantiate()) for key, config in self.items()])
     
     def __repr__(self):
         return self._repr_config_attrs(self.config_dict)

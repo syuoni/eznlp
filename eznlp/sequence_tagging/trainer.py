@@ -1,16 +1,14 @@
 # -*- coding: utf-8 -*-
 from tqdm import tqdm
 import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader
 
-from ..trainers import Trainer
-from .datasets import SequenceTaggingDataset
-from .metrics import precision_recall_f1_report
+from ..trainer import Trainer
+from .dataset import SequenceTaggingDataset
+from .metric import precision_recall_f1_report
 
 
 class SequenceTaggingTrainer(Trainer):
-    def __init__(self, model: nn.Module, optimizer=None, scheduler=None, 
+    def __init__(self, model: torch.nn.Module, optimizer=None, scheduler=None, 
                  device=None, grad_clip=1.0):
         super().__init__(model, optimizer=optimizer, scheduler=scheduler, 
                          device=device, grad_clip=grad_clip)
@@ -26,7 +24,8 @@ class SequenceTaggingTrainer(Trainer):
         
     
     def predict_tags(self, dataset: SequenceTaggingDataset, batch_size=32):
-        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, collate_fn=dataset.collate)
+        dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, 
+                                                 collate_fn=dataset.collate)
         
         self.model.eval()
         paths = []

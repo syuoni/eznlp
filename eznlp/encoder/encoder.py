@@ -1,13 +1,11 @@
 # -*- coding: utf-8 -*-
 import torch
-from torch import Tensor
-import torch.nn as nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
-from .datasets_utils import Batch
-from .nn_utils import reinit_layer_, reinit_lstm_, reinit_gru_, reinit_transformer_encoder_layer_
-from .nn import WordDropout, LockedDropout
-from .config import Config
+from ..dataset_utils import Batch
+from ..nn.init import reinit_layer_, reinit_lstm_, reinit_gru_, reinit_transformer_encoder_layer_
+from ..nn import WordDropout, LockedDropout
+from ..config import Config
 
 
 class EncoderConfig(Config):
@@ -59,25 +57,26 @@ class EncoderConfig(Config):
         
         
         
-class Encoder(nn.Module):
+class Encoder(torch.nn.Module):
     """
     `Encoder` forwards from embeddings to hidden states. 
     """
     def __init__(self, config: EncoderConfig):
         super().__init__()
         # TODO: Only applies to embeddings?
+        if config.dropout > 0:
+            self.dropout = torch.nn.Dropout(config.dropout)
         if config.word_dropout > 0:
             self.word_dropout = WordDropout(config.word_dropout)
         if config.locked_dropout > 0:
             self.locked_dropout = LockedDropout(config.locked_dropout)
-        if config.dropout > 0:
-            self.dropout = nn.Dropout(config.dropout)
             
-    def embedded2hidden(self, batch: Batch, embedded: Tensor):
+            
+    def embedded2hidden(self, batch: Batch, embedded: torch.Tensor):
         raise NotImplementedError("Not Implemented `embedded2hidden`")
         
         
-    def forward(self, batch: Batch, embedded: Tensor):
+    def forward(self, batch: Batch, embedded: torch.Tensor):
         # embedded: (batch, step, emb_dim)
         # hidden: (batch, step, hid_dim)
         if hasattr(self, 'dropout'):
@@ -95,7 +94,7 @@ class ShortcutEncoder(Encoder):
     def __init__(self, config: EncoderConfig):
         super().__init__(config)
     
-    def embedded2hidden(self, batch: Batch, embedded: Tensor):
+    def embedded2hidden(self, batch: Batch, embedded: torch.Tensor):
         return embedded
     
     
@@ -112,21 +111,21 @@ class RNNEncoder(Encoder):
                       'dropout': 0.0 if config.num_layers <= 1 else config.dropout}
         
         if config.arch.lower() == 'lstm':
-            self.rnn = nn.LSTM(**rnn_config)
+            self.rnn = torch.nn.LSTM(**rnn_config)
             reinit_lstm_(self.rnn)
             
         elif config.arch.lower() == 'gru':
-            self.rnn = nn.GRU(**rnn_config)
+            self.rnn = torch.nn.GRU(**rnn_config)
             reinit_gru_(self.rnn)
             
         if config.trainable_initial_hidden:
             # h_0/c_0: (num_layers * num_directions, batch, hidden_size)
-            self.h_0 = nn.Parameter(torch.zeros(config.num_layers*2, 1, config.hid_dim//2))
+            self.h_0 = torch.nn.Parameter(torch.zeros(config.num_layers*2, 1, config.hid_dim//2))
         if config.trainable_initial_hidden and config.arch.lower() == 'lstm':
-            self.c_0 = nn.Parameter(torch.zeros(config.num_layers*2, 1, config.hid_dim//2))
+            self.c_0 = torch.nn.Parameter(torch.zeros(config.num_layers*2, 1, config.hid_dim//2))
             
         
-    def embedded2hidden(self, batch: Batch, embedded: Tensor):
+    def embedded2hidden(self, batch: Batch, embedded: torch.Tensor):
         packed_embedded = pack_padded_sequence(embedded, batch.seq_lens, batch_first=True, enforce_sorted=False)
         
         if hasattr(self, 'h_0'):
@@ -143,16 +142,16 @@ class RNNEncoder(Encoder):
     
 
 # TODO: More CNN structures? to reuse in other modules
-class ConvBlock(nn.Module):
+class ConvBlock(torch.nn.Module):
     def __init__(self, hid_dim: int, kernel_size: int, dropout: float):
         super().__init__()
-        self.conv = nn.Conv1d(hid_dim, hid_dim*2, kernel_size=kernel_size, padding=(kernel_size-1)//2)
-        self.glu = nn.GLU(dim=1)
-        self.dropout = nn.Dropout(dropout)
+        self.conv = torch.nn.Conv1d(hid_dim, hid_dim*2, kernel_size=kernel_size, padding=(kernel_size-1)//2)
+        self.glu = torch.nn.GLU(dim=1)
+        self.dropout = torch.nn.Dropout(dropout)
         reinit_layer_(self.conv, 'sigmoid')
         
         
-    def forward(self, hidden: Tensor, mask: Tensor):
+    def forward(self, hidden: torch.Tensor, mask: torch.Tensor):
         # hidden: (batch, hid_dim=channels, step)
         # mask: (batch, step)
         # NOTE: It is better to ensure the input (rather than the output) of convolutional
@@ -172,14 +171,14 @@ class CNNEncoder(Encoder):
     """
     def __init__(self, config: EncoderConfig):
         super().__init__(config)
-        self.emb2init_hid = nn.Linear(config.in_dim, config.hid_dim*2)
-        self.glu = nn.GLU(dim=-1)
-        self.conv_blocks = nn.ModuleList([ConvBlock(config.hid_dim, config.kernel_size, config.dropout) \
-                                          for _ in range(config.num_layers)])
+        self.emb2init_hid = torch.nn.Linear(config.in_dim, config.hid_dim*2)
+        self.glu = torch.nn.GLU(dim=-1)
+        self.conv_blocks = torch.nn.ModuleList([ConvBlock(config.hid_dim, config.kernel_size, config.dropout) \
+                                                for _ in range(config.num_layers)])
         reinit_layer_(self.emb2init_hid, 'sigmoid')
         
         
-    def embedded2hidden(self, batch: Batch, embedded: Tensor):
+    def embedded2hidden(self, batch: Batch, embedded: torch.Tensor):
         init_hidden = self.glu(self.emb2init_hid(embedded))
         
         # hidden: (batch, step, hid_dim/channels) -> (batch, hid_dim/channels, step)
@@ -199,20 +198,20 @@ class TransformerEncoder(Encoder):
     """
     def __init__(self, config: EncoderConfig):
         super().__init__(config)
-        self.emb2init_hid = nn.Linear(config.in_dim, config.hid_dim*2)
-        self.glu = nn.GLU(dim=-1)
+        self.emb2init_hid = torch.nn.Linear(config.in_dim, config.hid_dim*2)
+        self.glu = torch.nn.GLU(dim=-1)
         
-        self.tf_layers = nn.ModuleList([nn.TransformerEncoderLayer(d_model=config.hid_dim, 
-                                                                   nhead=config.nhead, 
-                                                                   dim_feedforward=config.pf_dim, 
-                                                                   dropout=config.dropout) \
-                                        for _ in range(config.num_layers)])
+        self.tf_layers = torch.nn.ModuleList([torch.nn.TransformerEncoderLayer(d_model=config.hid_dim, 
+                                                                               nhead=config.nhead, 
+                                                                               dim_feedforward=config.pf_dim, 
+                                                                               dropout=config.dropout) \
+                                              for _ in range(config.num_layers)])
         reinit_layer_(self.emb2init_hid, 'sigmoid')
         for tf_layer in self.tf_layers:
             reinit_transformer_encoder_layer_(tf_layer)
             
         
-    def embedded2hidden(self, batch: Batch, embedded: Tensor):
+    def embedded2hidden(self, batch: Batch, embedded: torch.Tensor):
         init_hidden = self.glu(self.emb2init_hid(embedded))
         
         # hidden: (batch, step, hid_dim) -> (step, batch, hid_dim)

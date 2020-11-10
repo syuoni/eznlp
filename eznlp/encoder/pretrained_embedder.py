@@ -1,16 +1,14 @@
 # -*- coding: utf-8 -*-
 from typing import Union, List
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_sequence
 import allennlp.modules
 import transformers
 import flair
 
-from .datasets_utils import Batch
-from .functional import aggregate_tensor_by_group
-from .config import Config
+from ..dataset_utils import Batch
+from ..nn.functional import aggregate_tensor_by_group
+from ..config import Config
 
 
 class PreTrainedEmbedderConfig(Config):
@@ -30,7 +28,7 @@ class PreTrainedEmbedderConfig(Config):
             raise ValueError(f"Invalid pretrained embedder architecture {self.arch}")
         super().__init__(**kwargs)
         
-    def instantiate(self, pretrained_model: nn.Module):
+    def instantiate(self, pretrained_model: torch.nn.Module):
         if self.arch.lower() == 'elmo':
             return ELMoEmbedder(self, pretrained_model)
         elif self.arch.lower() in ('bert', 'roberta', 'albert'):
@@ -39,7 +37,7 @@ class PreTrainedEmbedderConfig(Config):
             return FlairEmbedder(self, pretrained_model)
         
         
-class PreTrainedEmbedder(nn.Module):
+class PreTrainedEmbedder(torch.nn.Module):
     """
     `PreTrainedEmbedder` forwards from inputs to hidden states. 
     
@@ -48,7 +46,7 @@ class PreTrainedEmbedder(nn.Module):
     `torch.no_grad()` enforces the result of every computation in its context 
     to have `requires_grad=False`, even when the inputs have `requires_grad=True`.
     """
-    def __init__(self, config: PreTrainedEmbedderConfig, pretrained_model: nn.Module):
+    def __init__(self, config: PreTrainedEmbedderConfig, pretrained_model: torch.nn.Module):
         super().__init__()
         self.pretrained_model = pretrained_model
         self.freeze = config.freeze
@@ -65,7 +63,7 @@ class PreTrainedEmbedder(nn.Module):
         
         
         
-class ScalarMix(nn.Module):
+class ScalarMix(torch.nn.Module):
     """
     Mix multi-layer hidden states by corresponding scalar weights. 
     
@@ -80,8 +78,8 @@ class ScalarMix(nn.Module):
     """
     def __init__(self, mix_dim: int):
         super().__init__()
-        self.scalars = nn.Parameter(torch.zeros(mix_dim))
-        self.gamma = nn.Parameter(torch.tensor(1.0))
+        self.scalars = torch.nn.Parameter(torch.zeros(mix_dim))
+        self.gamma = torch.nn.Parameter(torch.tensor(1.0))
         
     def __repr__(self):
         return f"{self.__class__.__name__}(mix_dim={self.scalars.size(0)})"
@@ -91,7 +89,7 @@ class ScalarMix(nn.Module):
             tensors = torch.stack(tensors)
         
         norm_weights_shape = tuple([-1] + [1] * (tensors.dim()-1))
-        norm_weights = F.softmax(self.scalars, dim=0).view(*norm_weights_shape)
+        norm_weights = torch.nn.functional.softmax(self.scalars, dim=0).view(*norm_weights_shape)
         return self.gamma * (tensors * norm_weights).sum(dim=0)
         
         
@@ -158,7 +156,7 @@ class ELMoEmbedder(PreTrainedEmbedder):
 class FlairEmbedder(PreTrainedEmbedder):
     def __init__(self, config: PreTrainedEmbedderConfig, flair_emb: flair.embeddings.TokenEmbeddings):
         super().__init__(config, flair_emb)
-        self.gamma = nn.Parameter(torch.tensor(1.0))
+        self.gamma = torch.nn.Parameter(torch.tensor(1.0))
     
     @property
     def freeze(self):

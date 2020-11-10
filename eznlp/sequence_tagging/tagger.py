@@ -1,19 +1,15 @@
 # -*- coding: utf-8 -*-
 import torch
-from torch import Tensor
-import torch.nn as nn
 from torchtext.experimental.vectors import Vectors
 import allennlp.modules
 import transformers
 import flair
 
 from ..token import Token
-from ..datasets_utils import Batch
+from ..dataset_utils import Batch
 from ..config import Config, ConfigList
-from ..embedders import EmbedderConfig
-from ..encoders import EncoderConfig
-from ..pretrained_embedders import PreTrainedEmbedderConfig
-from .decoders import DecoderConfig
+from ..encoder import EmbedderConfig, EncoderConfig, PreTrainedEmbedderConfig
+from .decoder import DecoderConfig
 
 
 class SequenceTaggerConfig(Config):
@@ -127,7 +123,7 @@ class SequenceTaggerConfig(Config):
     
     
     
-class SequenceTagger(nn.Module):
+class SequenceTagger(torch.nn.Module):
     def __init__(self, 
                  config: SequenceTaggerConfig, 
                  pretrained_vectors: Vectors=None, 
@@ -195,7 +191,7 @@ class SequenceTagger(nn.Module):
             return losses
         
         
-    def decode(self, batch: Batch, full_hidden: Tensor=None):
+    def decode(self, batch: Batch, full_hidden: torch.Tensor=None):
         if full_hidden is None:
             full_hidden = self.get_full_hidden(batch)
             

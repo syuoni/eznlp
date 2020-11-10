@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from ..token import TokenSequence
-from .transitions import SchemeTranslator
+from .transition import SchemeTranslator
 
 
 def _build_data_entry(example, columns, text_col, trg_col, attach_additional_tags, **kwargs):

@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 import pytest
 import torch
-from eznlp.functional import seq_lens2mask
-from eznlp.functional import aggregate_tensor_by_group
+from eznlp.nn.functional import seq_lens2mask, aggregate_tensor_by_group
 from eznlp.nn import MaxPooling, MeanPooling
 from eznlp.nn import LockedDropout, WordDropout
 
@@ -23,6 +22,8 @@ class TestDropout(object):
         assert set(x_word_dropouted.sum(dim=2).type(torch.long).flatten().tolist()) == {0, int(round(HID_DIM/(1-dropout_rate)))}
         assert abs(x_word_dropouted.mean().item() - 1) < 0.05
         
+        #TODO:
+        # eval...
         
 class TestSeqLens2Mask(object):
     def test_example(self):

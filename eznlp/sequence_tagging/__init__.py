@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-from .transitions import ChunksTagsTranslator, SchemeTranslator
-from .datasets import SequenceTaggingDataset
-from .decoders import DecoderConfig
-from .taggers import SequenceTaggerConfig
-from .trainers import SequenceTaggingTrainer
-from .metrics import precision_recall_f1_report
+from .transition import ChunksTagsTranslator, SchemeTranslator
+from .dataset import SequenceTaggingDataset
+from .decoder import DecoderConfig
+from .tagger import SequenceTaggerConfig
+from .trainer import SequenceTaggingTrainer
+from .metric import precision_recall_f1_report

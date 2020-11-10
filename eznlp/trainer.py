@@ -2,11 +2,10 @@
 import time
 import numpy as np
 import torch
-import torch.nn as nn
 
 
 class Trainer(object):
-    def __init__(self, model: nn.Module, optimizer=None, scheduler=None, 
+    def __init__(self, model: torch.nn.Module, optimizer=None, scheduler=None, 
                  device=None, grad_clip=None):
         self.model = model
         self.optimizer = optimizer
@@ -37,8 +36,8 @@ class Trainer(object):
         loss.backward()
         
         if self.grad_clip is not None:
-            # nn.utils.clip_grad_value_(self.model.parameters(), self.grad_clip)
-            nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
+            # torch.nn.utils.clip_grad_value_(self.model.parameters(), self.grad_clip)
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
         
         # Update weights
         self.optimizer.step()

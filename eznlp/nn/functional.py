@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import torch
-import torch.nn.functional as F
 
 
 def seq_lens2mask(seq_lens: torch.LongTensor, max_len: int=None):
@@ -18,30 +17,6 @@ def seq_lens2mask(seq_lens: torch.LongTensor, max_len: int=None):
     max_len = seq_lens.max().item() if max_len is None else max_len
     steps = torch.arange(max_len, device=seq_lens.device).repeat(seq_lens.size(0), 1)
     return (steps >= seq_lens.unsqueeze(1))
-
-
-def max_pooling(tensor: torch.FloatTensor, mask: torch.BoolTensor):
-    """
-    Parameters
-    ----------
-    tensor : torch.FloatTensor (batch, step, hidden)
-    mask : torch.BoolTensor (batch, step)
-    """
-    tensor_masked = tensor.masked_fill(mask.unsqueeze(-1), float('-inf'))
-    return tensor_masked.max(dim=1).values
-
-
-def mean_pooling(tensor: torch.FloatTensor, mask: torch.BoolTensor):
-    """
-    Parameters
-    ----------
-    tensor : torch.FloatTensor (batch, step, hidden)
-    mask : torch.BoolTensor (batch, step)
-    """
-    tensor_masked = tensor.masked_fill(mask.unsqueeze(-1), 0)
-    seq_lens = mask.size(1) - mask.sum(dim=1)
-    return tensor_masked.sum(dim=1) / seq_lens.unsqueeze(1)
-
 
 
 # TODO: Alternative aggregation method?
@@ -63,10 +38,8 @@ def aggregate_tensor_by_group(tensor: torch.FloatTensor,
     pos_proj = torch.arange(agg_step, device=group_by.device).unsqueeze(1).repeat(1, group_by.size(1))
     
     # pos_proj: (batch, agg_step, ori_step)
-    pos_proj = F.normalize((pos_proj.unsqueeze(0) == group_by.unsqueeze(1)).type(torch.float), p=1, dim=2)
+    pos_proj = torch.nn.functional.normalize((pos_proj.unsqueeze(0) == group_by.unsqueeze(1)).type(torch.float), p=1, dim=2)
     
     # agg_tensor: (batch, agg_step, hidden)
     return pos_proj.bmm(tensor)
-
-
 

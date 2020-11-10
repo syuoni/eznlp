@@ -80,7 +80,7 @@ class ChunksTagsTranslator(object):
         self.scheme = scheme
         
         dirname = os.path.dirname(__file__)
-        trans = pd.read_excel(f"{dirname}/transitions.xlsx", scheme, index_col=[0, 1], 
+        trans = pd.read_excel(f"{dirname}/transition.xlsx", scheme, index_col=[0, 1], 
                               use_cols=['legal', 'end_of_chunk', 'start_of_chunk'])
         self.trans = {tr: trans.loc[tr].to_dict() for tr in trans.index.tolist()}
         

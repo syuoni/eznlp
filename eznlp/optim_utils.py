@@ -1,15 +1,16 @@
 # -*- coding: utf-8 -*-
 from typing import Union
 from collections import defaultdict
-import torch.nn as nn
+import torch
 
-def count_trainable_params(model_or_params: Union[nn.Module, list], verbose=True):
+
+def count_trainable_params(model_or_params: Union[torch.nn.Module, list], verbose=True):
     """
     NOTE: `nn.Module.parameters()` return a `Generator` which can only been 
     iterated ONCE. Hence, `model_or_params` passed-in must be a `List` of 
     parameters (which can be iterated multiple times). 
     """
-    if isinstance(model_or_params, nn.Module):
+    if isinstance(model_or_params, torch.nn.Module):
         model_or_params = model_or_params.parameters()
     elif not isinstance(model_or_params, list):
         raise TypeError("`model_or_params` is neither a `torch.nn.Module` nor a list of parameters, "
@@ -21,7 +22,7 @@ def count_trainable_params(model_or_params: Union[nn.Module, list], verbose=True
     return num_params
 
 
-def build_param_groups_with_keyword2lr(model: nn.Module, keyword2lr: dict, verbose=True):
+def build_param_groups_with_keyword2lr(model: torch.nn.Module, keyword2lr: dict, verbose=True):
     keyword2params = defaultdict(list)
     for name, params in model.named_parameters():
         for keyword in keyword2lr:
@@ -45,7 +46,7 @@ def build_param_groups_with_keyword2lr(model: nn.Module, keyword2lr: dict, verbo
     return param_groups, lr_lambdas
 
 
-def check_param_groups_no_missing(param_groups: list, model: nn.Module, verbose=True):
+def check_param_groups_no_missing(param_groups: list, model: torch.nn.Module, verbose=True):
     num_grouped_params = sum(count_trainable_params(group['params'], verbose=False) for group in param_groups)
     num_model_params = count_trainable_params(model, verbose=False)
     is_equal = (num_grouped_params == num_model_params)

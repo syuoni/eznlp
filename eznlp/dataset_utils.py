@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 import torch
-from torch import Tensor
 from torchtext.experimental.vocab import Vocab
 
-from .functional import seq_lens2mask
+from .nn.functional import seq_lens2mask
 
 
 def _fetch_token_id(token: str, vocab: Vocab):
@@ -46,12 +45,12 @@ def unpad_seqs(seqs, seq_lens):
 class TensorWrapper(object):
     def __init__(self, **kwargs):
         for possible_name, possible_attr in kwargs.items():
-            if possible_attr is None or isinstance(possible_attr, (Tensor, TensorWrapper)):
+            if possible_attr is None or isinstance(possible_attr, (torch.Tensor, TensorWrapper)):
                 pass
             elif isinstance(possible_attr, list):
-                assert all(isinstance(sub_attr, (Tensor, TensorWrapper, str)) for sub_attr in possible_attr)
+                assert all(isinstance(sub_attr, (torch.Tensor, TensorWrapper, str)) for sub_attr in possible_attr)
             elif isinstance(possible_attr, dict):
-                assert all(isinstance(sub_attr, (Tensor, TensorWrapper, str)) for sub_attr in possible_attr.values())
+                assert all(isinstance(sub_attr, (torch.Tensor, TensorWrapper, str)) for sub_attr in possible_attr.values())
             else:
                 raise TypeError(f"Invalid input to `TensorWrapper`: {possible_attr}")
                 
@@ -64,17 +63,17 @@ class TensorWrapper(object):
         """
         for attr_name in self.__dict__:
             attr = getattr(self, attr_name)
-            if isinstance(attr, Tensor):
+            if isinstance(attr, torch.Tensor):
                 setattr(self, attr_name, func(attr))
             elif isinstance(attr, TensorWrapper):
                 setattr(self, attr_name, attr._apply_to_tensors(func))
             elif isinstance(attr, list) and len(attr) > 0:
-                if isinstance(attr[0], Tensor):
+                if isinstance(attr[0], torch.Tensor):
                     setattr(self, attr_name, [func(x) for x in attr])
                 elif isinstance(attr[0], TensorWrapper):
                     setattr(self, attr_name, [x._apply_to_tensors(func) for x in attr])
             elif isinstance(attr, dict) and len(attr) > 0:
-                if isinstance(next(iter(attr.values())), Tensor):
+                if isinstance(next(iter(attr.values())), torch.Tensor):
                     setattr(self, attr_name, {k: func(v) for k, v in attr.items()})
                 elif isinstance(attr[0], TensorWrapper):
                     setattr(self, attr_name, {k: v._apply_to_tensors(func) for k, v in attr.items()})

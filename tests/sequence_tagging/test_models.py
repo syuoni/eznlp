@@ -11,8 +11,7 @@ import flair
 from eznlp import Token
 from eznlp import ConfigList, ConfigDict
 from eznlp import TokenConfig, CharConfig, EnumConfig, ValConfig, EmbedderConfig
-from eznlp import EncoderConfig
-from eznlp import PreTrainedEmbedderConfig
+from eznlp import EncoderConfig, PreTrainedEmbedderConfig
 from eznlp.sequence_tagging import DecoderConfig, SequenceTaggerConfig
 from eznlp.sequence_tagging import SequenceTaggingDataset
 from eznlp.sequence_tagging import SequenceTaggingTrainer

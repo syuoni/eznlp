@@ -1,23 +1,62 @@
 # -*- coding: utf-8 -*-
 import torch
-from .functional import max_pooling, mean_pooling
 
 
 class MaxPooling(torch.nn.Module):
+    """
+    Max Pooling over steps. 
+    
+    Parameters
+    ----------
+    tensor : torch.FloatTensor (batch, step, hidden)
+    mask : torch.BoolTensor (batch, step)
+    """
     def __init__(self):
         super().__init__()
         
     def forward(self, x: torch.FloatTensor, mask: torch.BoolTensor):
-        return max_pooling(x, mask)
+        x_masked = x.masked_fill(mask.unsqueeze(-1), float('-inf'))
+        return x_masked.max(dim=1).values
     
     
 class MeanPooling(torch.nn.Module):
+    """
+    Mean Pooling over steps. 
+    
+    Parameters
+    ----------
+    tensor : torch.FloatTensor (batch, step, hidden)
+    mask : torch.BoolTensor (batch, step)
+    """
     def __init__(self):
         super().__init__()
         
     def forward(self, x: torch.FloatTensor, mask: torch.BoolTensor):
-        return mean_pooling(x, mask)
+        x_masked = x.masked_fill(mask.unsqueeze(-1), 0)
+        seq_lens = mask.size(1) - mask.sum(dim=1)
+        return x_masked.sum(dim=1) / seq_lens.unsqueeze(1)
     
+    
+
+class CombinedDropout(torch.nn.Module):
+    def __init__(self, p: float=0.0, word_p: float=0.05, locked_p: float=0.5):
+        super().__init__()
+        if p > 0:
+            self.dropout = torch.nn.Dropout(p)
+        if word_p > 0:
+            self.word_dropout = WordDropout(word_p)
+        if locked_p > 0:
+            self.locked_dropout = LockedDropout(locked_p)
+        
+    def forward(self, x: torch.Tensor):
+        if hasattr(self, 'dropout'):
+            x = self.dropout(x)
+        if hasattr(self, 'word_dropout'):
+            x = self.word_dropout(x)
+        if hasattr(self, 'locked_dropout'):
+            x = self.locked_dropout(x)
+        return x
+
 
 class LockedDropout(torch.nn.Module):
     """

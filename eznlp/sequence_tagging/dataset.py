@@ -1,17 +1,16 @@
 # -*- coding: utf-8 -*-
 from collections import Counter, OrderedDict
 import torch
-from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
 from torchtext.experimental.vocab import Vocab
 from allennlp.modules.elmo import batch_to_ids as batch_to_elmo_char_ids
 
-from ..datasets_utils import TensorWrapper, Batch, _fetch_token_id
-from .decoders import DecoderConfig
-from .taggers import SequenceTaggerConfig
+from ..dataset_utils import TensorWrapper, Batch, _fetch_token_id
+from .decoder import DecoderConfig
+from .tagger import SequenceTaggerConfig
 
 
-class SequenceTaggingDataset(Dataset):
+class SequenceTaggingDataset(torch.utils.data.Dataset):
     def __init__(self, data: list, config: SequenceTaggerConfig):
         """
         Parameters

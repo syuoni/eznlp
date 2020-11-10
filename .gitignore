@@ -126,5 +126,4 @@ dmypy.json
 
 # Data
 assets/
-resources/
 test-script*.py
