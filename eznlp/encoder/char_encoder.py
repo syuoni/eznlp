@@ -22,7 +22,7 @@ class CharConfig(ConfigwithVocab):
                 
         self.emb_dim = kwargs.pop('emb_dim', 25)
         self.out_dim = kwargs.pop('out_dim', 50)
-        self.dropout = kwargs.pop('dropout', 0.5)
+        self.drop_rate = kwargs.pop('drop_rate', 0.5)
         super().__init__(**kwargs)
     
     def instantiate(self):
@@ -36,7 +36,7 @@ class CharEncoder(torch.nn.Module):
     def __init__(self, config: CharConfig):
         super().__init__()
         self.emb = torch.nn.Embedding(config.voc_dim, config.emb_dim, padding_idx=config.pad_idx)
-        self.dropout = torch.nn.Dropout(config.dropout)
+        self.dropout = torch.nn.Dropout(config.drop_rate)
         reinit_embedding_(self.emb)
         
         

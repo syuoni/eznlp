@@ -24,7 +24,7 @@ class SequenceTaggerConfig(Config):
         decoder: DecoderConfig
         """
         self.embedder = kwargs.pop('embedder', EmbedderConfig())
-        self.encoders = kwargs.pop('encoders', ConfigList([EncoderConfig(arch='LSTM')]))
+        self.encoder = kwargs.pop('encoders', EncoderConfig(arch='LSTM'))
         
         self.elmo_embedder = kwargs.pop('elmo_embedder', None)
         self.bert_like_embedder = kwargs.pop('bert_like_embedder', None)
@@ -42,7 +42,7 @@ class SequenceTaggerConfig(Config):
         if self.embedder is None or not self.embedder.is_valid:
             return False
         
-        if self.encoders is not None and self.encoders.is_valid:
+        if self.encoder is not None and self.encoder.is_valid:
             return True
         if self.elmo_embedder is not None and self.elmo_embedder.is_valid:
             return True
@@ -59,14 +59,14 @@ class SequenceTaggerConfig(Config):
             for f, val_config in self.embedder.val.items():
                 val_config.in_dim = getattr(ex_token, f).shape[0]
                 
-        if self.encoders is not None:
-            for enc_config in self.encoders:
+        if self.encoder is not None:
+            for enc_config in self.encoder:
                 enc_config.in_dim = self.embedder.out_dim
                 if enc_config.arch.lower() == 'shortcut':
                     enc_config.hid_dim = self.embedder.out_dim
         
         full_hid_dim = 0
-        full_hid_dim += self.encoders.hid_dim if self.encoders is not None else 0
+        full_hid_dim += self.encoder.hid_dim if self.encoder is not None else 0
         full_hid_dim += self.elmo_embedder.out_dim if self.elmo_embedder is not None else 0
         full_hid_dim += self.bert_like_embedder.out_dim if self.bert_like_embedder is not None else 0
         full_hid_dim += self.flair_embedder.out_dim if self.flair_embedder is not None else 0

@@ -199,11 +199,8 @@ class TestTagger(object):
                             n_epochs=10, disp_every_steps=2, eval_every_steps=6)
     
     
-    @pytest.mark.parametrize("enc_arches", [['CNN'], 
-                                            ['LSTM'], 
-                                            ['GRU'], 
-                                            ['Transformer'], 
-                                            ['LSTM', 'Shortcut']])
+    @pytest.mark.parametrize("enc_arches", ['CNN', 'LSTM', 'GRU', 'Transformer'])
+    @pytest.mark.parametrize("shortcut", [False, True])
     @pytest.mark.parametrize("dec_arch", ['softmax', 'CRF'])
     def test_tagger(self, BIOES_data, enc_arches, dec_arch, device):
         encoders_config = ConfigList([EncoderConfig(arch=arch) for arch in enc_arches])
@@ -271,7 +268,7 @@ class TestTagger(object):
         self.one_tagger_pass(tagger, train_set, device)
         
         
-    @pytest.mark.parametrize("enc_arches", [['CNN'], ['LSTM', 'Shortcut']])
+    @pytest.mark.parametrize("enc_arches", ['CNN', 'LSTM'])
     def test_tagger_morefields(self, BIOES_data, enc_arches, device):
         embedder_config = EmbedderConfig(enum=ConfigDict([(f, EnumConfig(emb_dim=20)) for f in Token.basic_enum_fields]), 
                                          val=ConfigDict([(f, ValConfig(emb_dim=20)) for f in Token.basic_val_fields]))
@@ -282,7 +279,7 @@ class TestTagger(object):
         self.one_tagger_pass(tagger, train_set, device)
         
         
-    @pytest.mark.parametrize("enc_arches", [['CNN'], ['LSTM', 'Shortcut']])
+    @pytest.mark.parametrize("enc_arches", ['CNN', 'LSTM'])
     def test_tagger_BIO2(self, BIO2_data, enc_arches, device):
         encoders_config = ConfigList([EncoderConfig(arch=arch) for arch in enc_arches])
         config = SequenceTaggerConfig(encoders=encoders_config)
