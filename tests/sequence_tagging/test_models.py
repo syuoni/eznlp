@@ -257,13 +257,13 @@ class TestTagger(object):
         self.one_tagger_pass(tagger, train_set, device)
         
     
-    @pytest.mark.parametrize("dec_arch", ['softmax', 'CRF'])
-    @pytest.mark.parametrize("cascade_mode", ['Sliced', 'Straight'])
-    def test_tagger_cascade(self, BIOES_data, dec_arch, cascade_mode, device):
-        config = SequenceTaggerConfig(decoder=DecoderConfig(arch=dec_arch, cascade_mode=cascade_mode))
-        train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
-        tagger = config.instantiate().to(device)
-        self.one_tagger_pass(tagger, train_set, device)
+    # @pytest.mark.parametrize("dec_arch", ['softmax', 'CRF'])
+    # @pytest.mark.parametrize("cascade_mode", ['Sliced', 'Straight'])
+    # def test_tagger_cascade(self, BIOES_data, dec_arch, cascade_mode, device):
+    #     config = SequenceTaggerConfig(decoder=DecoderConfig(arch=dec_arch, cascade_mode=cascade_mode))
+    #     train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
+    #     tagger = config.instantiate().to(device)
+    #     self.one_tagger_pass(tagger, train_set, device)
         
         
     @pytest.mark.parametrize("enc_arch", ['CNN', 'LSTM'])

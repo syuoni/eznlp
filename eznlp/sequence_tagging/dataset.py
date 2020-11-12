@@ -18,7 +18,7 @@ class SequenceTaggingDataset(torch.utils.data.Dataset):
         data : list
             [{'tokens': TokenSequence, 'tags': list of str}, ...]
             
-            ``tags`` is an optional key, which does not exist if the data are unlabeled. 
+            `tags` is an optional key, which does not exist if the data are unlabeled. 
         """
         super().__init__()
         self.data = data
@@ -31,7 +31,7 @@ class SequenceTaggingDataset(torch.utils.data.Dataset):
             assert self._is_labeled
             
             self._build_token_vocab()
-            self._build_tag_vocabs()
+            self._build_tag_vocab()
             
             if self.config.embedder.char is not None:
                 self._build_char_vocab()
@@ -80,18 +80,22 @@ class SequenceTaggingDataset(torch.utils.data.Dataset):
             enum_config.vocab = Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + counters[f].most_common()), min_freq=1)
             
             
-    def _build_tag_vocabs(self):
+    def _build_tag_vocab(self):
         tag_counter = Counter()
-        cas_tag_counter = Counter()
-        cas_type_counter = Counter()
         for curr_data in self.data:
             tag_counter.update(curr_data['tags'])
-            cas_tag_counter.update(self.config.decoder.build_cas_tags_by_tags(curr_data['tags']))
-            cas_type_counter.update(self.config.decoder.build_cas_types_by_tags(curr_data['tags']))
+        self.config.decoder.set_vocab(idx2tag=['<pad>'] + list(tag_counter.keys()))
             
-        self.config.decoder.set_vocabs(idx2tag=['<pad>'] + list(tag_counter.keys()), 
-                                       idx2cas_tag=['<pad>'] + list(cas_tag_counter.keys()), 
-                                       idx2cas_type=['<pad>'] + list(cas_type_counter.keys()))
+            
+    # def _build_tag_vocabs(self):
+    #     cas_tag_counter = Counter()
+    #     cas_type_counter = Counter()
+    #     for curr_data in self.data:
+    #         cas_tag_counter.update(self.config.decoder.build_cas_tags_by_tags(curr_data['tags']))
+    #         cas_type_counter.update(self.config.decoder.build_cas_types_by_tags(curr_data['tags']))
+            
+    #     self.config.decoder.set_vocabs(idx2cas_tag=['<pad>'] + list(cas_tag_counter.keys()), 
+    #                                    idx2cas_type=['<pad>'] + list(cas_type_counter.keys()))
         
     def _check_tag_vocabs(self):
         tag_counter = Counter()
@@ -231,20 +235,20 @@ class SequenceTaggingDataset(torch.utils.data.Dataset):
 class Tags(TensorWrapper):
     def __init__(self, tags: list, config: DecoderConfig):
         self.tags = tags
-        self.cas_tags = config.build_cas_tags_by_tags(tags)
-        self.cas_types = config.build_cas_types_by_tags(tags)
-        self.cas_ent_slices, self.cas_ent_types = config.build_cas_ent_slices_and_types_by_tags(tags)
+        # self.cas_tags = config.build_cas_tags_by_tags(tags)
+        # self.cas_types = config.build_cas_types_by_tags(tags)
+        # self.cas_ent_slices, self.cas_ent_types = config.build_cas_ent_slices_and_types_by_tags(tags)
         
         self.tag_ids = torch.tensor(config.tags2ids(self.tags))
-        self.cas_tag_ids = torch.tensor(config.cas_tags2ids(self.cas_tags))
-        self.cas_type_ids = torch.tensor(config.cas_types2ids(self.cas_types))
-        self.cas_ent_type_ids = torch.tensor(config.cas_types2ids(self.cas_ent_types))
+        # self.cas_tag_ids = torch.tensor(config.cas_tags2ids(self.cas_tags))
+        # self.cas_type_ids = torch.tensor(config.cas_types2ids(self.cas_types))
+        # self.cas_ent_type_ids = torch.tensor(config.cas_types2ids(self.cas_ent_types))
         
     def _apply_to_tensors(self, func):
         self.tag_ids = func(self.tag_ids)
-        self.cas_tag_ids = func(self.cas_tag_ids)
-        self.cas_type_ids = func(self.cas_type_ids)
-        self.cas_ent_type_ids = func(self.cas_ent_type_ids)
+        # self.cas_tag_ids = func(self.cas_tag_ids)
+        # self.cas_type_ids = func(self.cas_type_ids)
+        # self.cas_ent_type_ids = func(self.cas_ent_type_ids)
         return self
     
     
