@@ -10,6 +10,9 @@ from .crf import CRF
 from .transition import ChunksTagsTranslator
 
 
+
+
+
 class DecoderConfig(Config):
     def __init__(self, **kwargs):
         # TODO: Seperate some methods...
@@ -18,9 +21,7 @@ class DecoderConfig(Config):
             raise ValueError(f"Invalid decoder architecture {self.arch}")
             
         self.in_dim = kwargs.pop('in_dim', None)
-        self.dropout = kwargs.pop('dropout', 0.5)
-        self.word_dropout = kwargs.pop('word_dropout', 0.0)
-        self.locked_dropout = kwargs.pop('locked_dropout', 0.0)
+        self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
         
         self.scheme = kwargs.pop('scheme', 'BIOES')
         self.translator = ChunksTagsTranslator(scheme=self.scheme)
@@ -57,8 +58,7 @@ class DecoderConfig(Config):
         
         
     def __repr__(self):
-        repr_attr_dict = {key: self.__dict__[key] for key in ['arch', 'in_dim', 'scheme', 'cascade_mode', 
-                                                              'dropout', 'word_dropout', 'locked_dropout']}
+        repr_attr_dict = {key: self.__dict__[key] for key in ['arch', 'in_dim', 'scheme', 'cascade_mode', 'in_drop_rates']}
         return self._repr_non_config_attrs(repr_attr_dict)
         
     @property
@@ -194,7 +194,7 @@ class Decoder(torch.nn.Module):
         """
         super().__init__()
         self.config = config
-        self.dropout = CombinedDropout(p=config.dropout, word_p=config.word_dropout, locked_p=config.locked_dropout)
+        self.dropout = CombinedDropout(*config.in_drop_rates)
         
     def forward(self, batch: Batch, full_hidden: torch.Tensor):
         raise NotImplementedError("Not Implemented `forward`")

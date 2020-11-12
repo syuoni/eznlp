@@ -15,7 +15,7 @@ class EncoderConfig(Config):
         self.in_proj = kwargs.pop('in_proj', False)
         self.shortcut = kwargs.pop('shortcut', False)
         
-        if self.arch.lower() == 'indentity':
+        if self.arch.lower() == 'identity':
             self.in_drop_rates = kwargs.pop('in_drop_rates', (0.0, 0.0, 0.0))
             self.hid_drop_rate = kwargs.pop('hid_drop_rate', 0.0)
             
@@ -25,6 +25,7 @@ class EncoderConfig(Config):
             if self.arch.lower() in ('lstm', 'gru'):
                 self.train_init_hidden = kwargs.pop('train_init_hidden', True)
                 self.num_layers = kwargs.pop('num_layers', 1)
+                # self.in_drop_rates = kwargs.pop('in_drop_rates', (0.0, 0.05, 0.5))
                 self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
                 self.hid_drop_rate = kwargs.pop('hid_drop_rate', 0.5)
                 
