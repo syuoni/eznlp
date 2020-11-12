@@ -13,36 +13,50 @@ class EncoderConfig(Config):
         self.arch = kwargs.pop('arch', 'LSTM')
         self.in_dim = kwargs.pop('in_dim', None)
         self.in_proj = kwargs.pop('in_proj', False)
-        self.hid_dim = kwargs.pop('hid_dim', 128)
         self.shortcut = kwargs.pop('shortcut', False)
         
-        if self.arch.lower() in ('lstm', 'gru'):
-            self.train_init_hidden = kwargs.pop('train_init_hidden', True)
-            self.num_layers = kwargs.pop('num_layers', 1)
-            self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
-            self.hid_drop_rate = kwargs.pop('hid_drop_rate', 0.5)
-            
-        elif self.arch.lower() == 'cnn':
-            self.kernel_size = kwargs.pop('kernel_size', 3)
-            self.num_layers = kwargs.pop('num_layers', 3)
-            self.in_drop_rates = kwargs.pop('in_drop_rates', (0.25, 0.0, 0.0))
-            self.hid_drop_rate = kwargs.pop('hid_drop_rate', 0.25)
-            
-        elif self.arch.lower() == 'transformer':
-            self.nhead = kwargs.pop('nhead', 8)
-            self.pf_dim = kwargs.pop('pf_dim', 256)
-            self.num_layers = kwargs.pop('num_layers', 3)
-            self.in_drop_rates = kwargs.pop('in_drop_rates', (0.1, 0.0, 0.0))
-            self.hid_drop_rate = kwargs.pop('hid_drop_rate', 0.1)
+        if self.arch.lower() == 'indentity':
+            self.in_drop_rates = kwargs.pop('in_drop_rates', (0.0, 0.0, 0.0))
+            self.hid_drop_rate = kwargs.pop('hid_drop_rate', 0.0)
             
         else:
-            raise ValueError(f"Invalid encoder architecture {self.arch}")
+            self.hid_dim = kwargs.pop('hid_dim', 128)
+            
+            if self.arch.lower() in ('lstm', 'gru'):
+                self.train_init_hidden = kwargs.pop('train_init_hidden', True)
+                self.num_layers = kwargs.pop('num_layers', 1)
+                self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
+                self.hid_drop_rate = kwargs.pop('hid_drop_rate', 0.5)
+                
+            elif self.arch.lower() == 'cnn':
+                self.kernel_size = kwargs.pop('kernel_size', 3)
+                self.num_layers = kwargs.pop('num_layers', 3)
+                self.in_drop_rates = kwargs.pop('in_drop_rates', (0.25, 0.0, 0.0))
+                self.hid_drop_rate = kwargs.pop('hid_drop_rate', 0.25)
+                
+            elif self.arch.lower() == 'transformer':
+                self.nhead = kwargs.pop('nhead', 8)
+                self.pf_dim = kwargs.pop('pf_dim', 256)
+                self.num_layers = kwargs.pop('num_layers', 3)
+                self.in_drop_rates = kwargs.pop('in_drop_rates', (0.1, 0.0, 0.0))
+                self.hid_drop_rate = kwargs.pop('hid_drop_rate', 0.1)
+                
+            else:
+                raise ValueError(f"Invalid encoder architecture {self.arch}")
         
         super().__init__(**kwargs)
         
         
+    @property
+    def out_dim(self):
+        out_dim = self.in_dim if self.arch.lower() == 'identity' else self.hid_dim
+        out_dim = (out_dim + self.in_dim) if self.shortcut else out_dim
+        return out_dim
+        
     def instantiate(self):
-        if self.arch.lower() in ('lstm', 'gru'):
+        if self.arch.lower() == 'identity':
+            return IdentityEncoder(self)
+        elif self.arch.lower() in ('lstm', 'gru'):
             return RNNEncoder(self)
         elif self.arch.lower() == 'cnn':
             return CNNEncoder(self)
@@ -79,6 +93,14 @@ class Encoder(torch.nn.Module):
             return hidden
         
         
+class IdentityEncoder(Encoder):
+    def __init__(self, config: EncoderConfig):
+        super().__init__(config)
+        
+    def embedded2hidden(self, batch: Batch, embedded: torch.Tensor):
+        return embedded
+    
+    
 # TODO: Isolate RNN with hidden0, to reuse in other modules
 class RNNEncoder(Encoder):
     def __init__(self, config: EncoderConfig):

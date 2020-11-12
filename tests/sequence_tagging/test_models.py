@@ -9,7 +9,7 @@ import transformers
 import flair
 
 from eznlp import Token
-from eznlp import ConfigList, ConfigDict
+from eznlp import ConfigDict
 from eznlp import TokenConfig, CharConfig, EnumConfig, ValConfig, EmbedderConfig
 from eznlp import EncoderConfig, PreTrainedEmbedderConfig
 from eznlp.sequence_tagging import DecoderConfig, SequenceTaggerConfig
@@ -199,12 +199,11 @@ class TestTagger(object):
                             n_epochs=10, disp_every_steps=2, eval_every_steps=6)
     
     
-    @pytest.mark.parametrize("enc_arches", ['CNN', 'LSTM', 'GRU', 'Transformer'])
+    @pytest.mark.parametrize("enc_arch", ['CNN', 'LSTM', 'GRU', 'Transformer'])
     @pytest.mark.parametrize("shortcut", [False, True])
     @pytest.mark.parametrize("dec_arch", ['softmax', 'CRF'])
-    def test_tagger(self, BIOES_data, enc_arches, dec_arch, device):
-        encoders_config = ConfigList([EncoderConfig(arch=arch) for arch in enc_arches])
-        config = SequenceTaggerConfig(encoders=encoders_config, 
+    def test_tagger(self, BIOES_data, enc_arch, shortcut, dec_arch, device):
+        config = SequenceTaggerConfig(encoder=EncoderConfig(arch=enc_arch, shortcut=shortcut), 
                                       decoder=DecoderConfig(arch=dec_arch))
         train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
         tagger = config.instantiate().to(device)
@@ -225,7 +224,7 @@ class TestTagger(object):
                                                         out_dim=elmo.get_output_dim(), 
                                                         lstm_stateful=False, 
                                                         freeze=freeze)
-        config = SequenceTaggerConfig(encoders=None, elmo_embedder=elmo_embedder_config)
+        config = SequenceTaggerConfig(encoder=None, elmo_embedder=elmo_embedder_config)
         train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
         tagger = config.instantiate(elmo=elmo).to(device)
         
@@ -239,7 +238,7 @@ class TestTagger(object):
                                                              out_dim=bert.config.hidden_size, 
                                                              tokenizer=tokenizer, 
                                                              freeze=freeze)
-        config = SequenceTaggerConfig(encoders=None, bert_like_embedder=bert_like_embedder_config)
+        config = SequenceTaggerConfig(encoder=None, bert_like_embedder=bert_like_embedder_config)
         train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
         tagger = config.instantiate(bert_like=bert).to(device)
         
@@ -251,7 +250,7 @@ class TestTagger(object):
         flair_embedder_config = PreTrainedEmbedderConfig(arch='Flair', 
                                                          out_dim=Flair_emb.embedding_length, 
                                                          freeze=freeze)
-        config = SequenceTaggerConfig(encoders=None, flair_embedder=flair_embedder_config)
+        config = SequenceTaggerConfig(encoder=None, flair_embedder=flair_embedder_config)
         train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
         tagger = config.instantiate(flair_emb=Flair_emb).to(device)
         
@@ -261,28 +260,26 @@ class TestTagger(object):
     @pytest.mark.parametrize("dec_arch", ['softmax', 'CRF'])
     @pytest.mark.parametrize("cascade_mode", ['Sliced', 'Straight'])
     def test_tagger_cascade(self, BIOES_data, dec_arch, cascade_mode, device):
-        decoder_config = DecoderConfig(arch=dec_arch, cascade_mode=cascade_mode)
-        config = SequenceTaggerConfig(decoder=decoder_config)
+        config = SequenceTaggerConfig(decoder=DecoderConfig(arch=dec_arch, cascade_mode=cascade_mode))
         train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
         tagger = config.instantiate().to(device)
         self.one_tagger_pass(tagger, train_set, device)
         
         
-    @pytest.mark.parametrize("enc_arches", ['CNN', 'LSTM'])
-    def test_tagger_morefields(self, BIOES_data, enc_arches, device):
+    @pytest.mark.parametrize("enc_arch", ['CNN', 'LSTM'])
+    def test_tagger_morefields(self, BIOES_data, enc_arch, device):
         embedder_config = EmbedderConfig(enum=ConfigDict([(f, EnumConfig(emb_dim=20)) for f in Token.basic_enum_fields]), 
                                          val=ConfigDict([(f, ValConfig(emb_dim=20)) for f in Token.basic_val_fields]))
-        encoders_config = ConfigList([EncoderConfig(arch=arch) for arch in enc_arches])
-        config = SequenceTaggerConfig(embedder=embedder_config, encoders=encoders_config)
+        config = SequenceTaggerConfig(embedder=embedder_config, 
+                                      encoder=EncoderConfig(arch=enc_arch))
         train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
         tagger = config.instantiate().to(device)
         self.one_tagger_pass(tagger, train_set, device)
         
         
-    @pytest.mark.parametrize("enc_arches", ['CNN', 'LSTM'])
-    def test_tagger_BIO2(self, BIO2_data, enc_arches, device):
-        encoders_config = ConfigList([EncoderConfig(arch=arch) for arch in enc_arches])
-        config = SequenceTaggerConfig(encoders=encoders_config)
+    @pytest.mark.parametrize("enc_arch", ['CNN', 'LSTM'])
+    def test_tagger_BIO2(self, BIO2_data, enc_arch, device):
+        config = SequenceTaggerConfig(encoder=EncoderConfig(arch=enc_arch))
         train_set, val_set, test_set = build_demo_datasets(*BIO2_data, config)
         tagger = config.instantiate().to(device)
         self.one_tagger_pass(tagger, train_set, device)
