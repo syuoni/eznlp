@@ -16,14 +16,21 @@ class PreTrainedEmbedderConfig(Config):
         self.arch = kwargs.pop('arch')
         self.out_dim = kwargs.pop('out_dim')
         self.freeze = kwargs.pop('freeze', True)
-        self.use_layers = kwargs.pop('use_layers', 'mix')
         
         if self.arch.lower() == 'elmo':
             self.lstm_stateful = kwargs.pop('lstm_stateful', False)
+            self.mix_layers = kwargs.pop('mix_layers', 'trainable')
+            self.use_gamma = kwargs.pop('use_gamma', True)
+            
         elif self.arch.lower() in ('bert', 'roberta', 'albert'):
             self.tokenizer = kwargs.pop('tokenizer')
+            self.mix_layers = kwargs.pop('mix_layers', 'top')
+            self.use_gamma = kwargs.pop('use_gamma', False)
+            
         elif self.arch.lower() == 'flair':
-            pass
+            self.mix_layers = kwargs.pop('mix_layers', 'top')
+            self.use_gamma = kwargs.pop('use_gamma', False)
+            
         else:
             raise ValueError(f"Invalid pretrained embedder architecture {self.arch}")
         super().__init__(**kwargs)
@@ -50,6 +57,8 @@ class PreTrainedEmbedder(torch.nn.Module):
         super().__init__()
         self.pretrained_model = pretrained_model
         self.freeze = config.freeze
+        self.mix_layers = config.mix_layers
+        self.use_gamma = config.use_gamma
         
     @property
     def freeze(self):
@@ -79,7 +88,6 @@ class ScalarMix(torch.nn.Module):
     def __init__(self, mix_dim: int):
         super().__init__()
         self.scalars = torch.nn.Parameter(torch.zeros(mix_dim))
-        self.gamma = torch.nn.Parameter(torch.tensor(1.0))
         
     def __repr__(self):
         return f"{self.__class__.__name__}(mix_dim={self.scalars.size(0)})"
@@ -90,14 +98,19 @@ class ScalarMix(torch.nn.Module):
         
         norm_weights_shape = tuple([-1] + [1] * (tensors.dim()-1))
         norm_weights = torch.nn.functional.softmax(self.scalars, dim=0).view(*norm_weights_shape)
-        return self.gamma * (tensors * norm_weights).sum(dim=0)
+        return (tensors * norm_weights).sum(dim=0)
         
         
         
 class BertLikeEmbedder(PreTrainedEmbedder):
     def __init__(self, config: PreTrainedEmbedderConfig, bert_like: transformers.PreTrainedModel):
         super().__init__(config, bert_like)
-        self.scalar_mix = ScalarMix(bert_like.config.num_hidden_layers + 1)
+        
+        if self.mix_layers.lower() == 'trainable':
+            self.scalar_mix = ScalarMix(bert_like.config.num_hidden_layers + 1)
+        if self.use_gamma:
+            self.gamma = torch.nn.Parameter(torch.tensor(1.0))
+            
         
     def forward(self, batch: Batch):
         # bert_outs: (batch, sub_tok_step+2, hid_dim)
@@ -105,16 +118,23 @@ class BertLikeEmbedder(PreTrainedEmbedder):
         bert_outs, _, hidden = self.pretrained_model(input_ids=batch.sub_tok_ids, 
                                                      attention_mask=(~batch.sub_tok_mask).type(torch.long), 
                                                      output_hidden_states=True)
-        if hasattr(self, 'scalar_mix'):
+        
+        if self.mix_layers.lower() == 'trainable':
             bert_outs = self.scalar_mix(hidden)
+        elif self.mix_layers.lower() == 'top':
+            pass
+        elif self.mix_layers.lower() == 'average':
+            bert_outs = sum(hidden) / len(hidden)
         
         # Remove the `[CLS]` and `[SEP]` positions. 
         bert_outs = bert_outs[:, 1:-1]
         
         # agg_bert_outs: (batch, tok_step, hid_dim)
         agg_bert_outs = aggregate_tensor_by_group(bert_outs, batch.ori_indexes, agg_step=batch.tok_ids.size(1))
-        return agg_bert_outs
-    
+        if self.use_gamma:
+            return self.gamma * agg_bert_outs
+        else:
+            return agg_bert_outs
     
     
 class ELMoEmbedder(PreTrainedEmbedder):
@@ -134,7 +154,18 @@ class ELMoEmbedder(PreTrainedEmbedder):
     """
     def __init__(self, config: PreTrainedEmbedderConfig, elmo: allennlp.modules.elmo.Elmo):
         elmo._elmo_lstm._elmo_lstm.stateful = config.lstm_stateful
+        
+        if config.mix_layers.lower() != 'trainable':
+            elmo.scalar_mix_0.scalar_parameters.requires_grad_(False)
+            if config.mix_layers.lower() == 'top':
+                for scalar_param in elmo.scalar_mix_0.scalar_parameters:
+                    scalar_param.data = -9e10
+            
+        if not config.use_gamma:
+            elmo.scalar_mix_0.gamma.requires_grad_(False)
+        
         super().__init__(config, elmo)
+        
         
     @property
     def freeze(self):
@@ -156,7 +187,10 @@ class ELMoEmbedder(PreTrainedEmbedder):
 class FlairEmbedder(PreTrainedEmbedder):
     def __init__(self, config: PreTrainedEmbedderConfig, flair_emb: flair.embeddings.TokenEmbeddings):
         super().__init__(config, flair_emb)
-        self.gamma = torch.nn.Parameter(torch.tensor(1.0))
+        
+        if self.use_gamma:
+            self.gamma = torch.nn.Parameter(torch.tensor(1.0))
+            
     
     @property
     def freeze(self):
@@ -180,9 +214,12 @@ class FlairEmbedder(PreTrainedEmbedder):
         self.pretrained_model.embed(flair_sentences)
         flair_outs = pad_sequence([torch.stack([tok.embedding for tok in sent]) for sent in flair_sentences], 
                                   batch_first=True, padding_value=0.0)
-        # flair would automatically convert to CUDA?
+        # flair would automatically convert to CUDA? (flair.device)
         # flair_outs = flair_outs.to(batch.tok_ids.device)
         
-        return self.gamma * flair_outs
+        if self.use_gamma:
+            return self.gamma * flair_outs
+        else:
+            return flair_outs
         
 

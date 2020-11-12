@@ -19,7 +19,7 @@ def _fetch_token_pretrained_vector(token: str, pretrained_vectors: Vectors):
     return None
 
 
-def reinit_embedding_(emb: torch.nn.Embedding, itos=None, pretrained_vectors=None):
+def reinit_embedding_(emb: torch.nn.Embedding, itos=None, pretrained_vectors=None, unk_vector='uniform'):
     emb_dim = emb.weight.size(1)
     uniform_range = (3 / emb_dim) ** 0.5
     
@@ -34,7 +34,10 @@ def reinit_embedding_(emb: torch.nn.Embedding, itos=None, pretrained_vectors=Non
             
             if pretrained_vec is None:
                 oov_tokens.append(tok)
-                torch.nn.init.uniform_(emb.weight.data[idx], -uniform_range, uniform_range)
+                if unk_vector.lower() == 'uniform':
+                    torch.nn.init.uniform_(emb.weight.data[idx], -uniform_range, uniform_range)
+                elif unk_vector.lower() == 'zeros':
+                    torch.nn.init.zeros_(emb.weight.data[idx])
             else:
                 acc_vec_abs += pretrained_vec.abs().mean().item()
                 emb.weight.data[idx].copy_(pretrained_vec)
@@ -44,7 +47,12 @@ def reinit_embedding_(emb: torch.nn.Embedding, itos=None, pretrained_vectors=Non
         print(f"OOV tokens: {len(oov_tokens)} ({len(oov_tokens)/len(itos)*100:.2f}%)")
         ave_vec_abs = acc_vec_abs / (len(itos) - len(oov_tokens))
         print(f"Pretrained      vector average absolute value: {ave_vec_abs:.4f}")
-        print(f"OOV initialized vector average absolute value: {uniform_range/2:.4f}")
+        
+        if unk_vector.lower() == 'uniform':
+            oov_vec_abs = uniform_range / 2
+        elif unk_vector.lower() == 'zeros':
+            oov_vec_abs = 0.0
+        print(f"OOV initialized vector average absolute value: {oov_vec_abs:.4f}")
         return oov_tokens
     
     else:

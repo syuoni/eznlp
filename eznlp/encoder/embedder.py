@@ -60,6 +60,7 @@ class TokenConfig(ConfigwithVocab):
         
         self.freeze = kwargs.pop('freeze', False)
         self.scale_grad_by_freq = kwargs.pop('scale_grad_by_freq', False)
+        self.unk_vector = kwargs.pop('unk_vector', 'zeros')
         super().__init__(**kwargs)
     
     def instantiate(self, pretrained_vectors: Vectors=None):
@@ -69,9 +70,8 @@ class TokenConfig(ConfigwithVocab):
 class TokenEmbedding(torch.nn.Module):
     def __init__(self, config: TokenConfig, pretrained_vectors: Vectors=None):
         super().__init__()
-        self.word_emb = torch.nn.Embedding(config.voc_dim, config.emb_dim, padding_idx=config.pad_idx, 
-                                           scale_grad_by_freq=config.scale_grad_by_freq)
-        reinit_embedding_(self.word_emb, itos=config.vocab.get_itos(), pretrained_vectors=pretrained_vectors)
+        self.word_emb = torch.nn.Embedding(config.voc_dim, config.emb_dim, padding_idx=config.pad_idx, scale_grad_by_freq=config.scale_grad_by_freq)
+        reinit_embedding_(self.word_emb, itos=config.vocab.get_itos(), pretrained_vectors=pretrained_vectors, unk_vector=config.unk_vector)
         self.freeze = config.freeze
         
         if config.use_pos_emb:

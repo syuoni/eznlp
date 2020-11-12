@@ -108,39 +108,39 @@ class TestSchemeTranslator(object):
                 assert from_tags_translated == tags_dic[to_scheme]
                 
                 
-class TestTagHelper(object):
-    def test_dictionary(self, BIOES_tags_example, BIOES_dec_config_example):
-        (tags, cas_tags, cas_types), (tag_ids, cas_tag_ids, cas_type_ids) = BIOES_tags_example
-        dec_config, _ = BIOES_dec_config_example
+# class TestTagHelper(object):
+#     def test_dictionary(self, BIOES_tags_example, BIOES_dec_config_example):
+#         (tags, cas_tags, cas_types), (tag_ids, cas_tag_ids, cas_type_ids) = BIOES_tags_example
+#         dec_config, _ = BIOES_dec_config_example
 
-        assert dec_config.tags2ids(tags) == tag_ids
-        assert dec_config.ids2tags(tag_ids) == tags
-        assert dec_config.modeling_tags2ids(tags) == tag_ids
-        assert dec_config.ids2modeling_tags(tag_ids) == tags
+#         assert dec_config.tags2ids(tags) == tag_ids
+#         assert dec_config.ids2tags(tag_ids) == tags
+#         assert dec_config.modeling_tags2ids(tags) == tag_ids
+#         assert dec_config.ids2modeling_tags(tag_ids) == tags
         
-        _, dec_config = BIOES_dec_config_example
-        assert dec_config.cas_tags2ids(cas_tags) == cas_tag_ids
-        assert dec_config.ids2cas_tags(cas_tag_ids) == cas_tags
-        assert dec_config.modeling_tags2ids(cas_tags) == cas_tag_ids
-        assert dec_config.ids2modeling_tags(cas_tag_ids) == cas_tags
+#         _, dec_config = BIOES_dec_config_example
+#         assert dec_config.cas_tags2ids(cas_tags) == cas_tag_ids
+#         assert dec_config.ids2cas_tags(cas_tag_ids) == cas_tags
+#         assert dec_config.modeling_tags2ids(cas_tags) == cas_tag_ids
+#         assert dec_config.ids2modeling_tags(cas_tag_ids) == cas_tags
         
-        assert dec_config.cas_types2ids(cas_types) == cas_type_ids
-        assert dec_config.ids2cas_types(cas_type_ids) == cas_types
+#         assert dec_config.cas_types2ids(cas_types) == cas_type_ids
+#         assert dec_config.ids2cas_types(cas_type_ids) == cas_types
         
         
-    def test_cascade_transform(self, BIOES_tags_example, BIOES_dec_config_example):
-        (tags, cas_tags, cas_types), *_ = BIOES_tags_example
-        dec_config, _ = BIOES_dec_config_example
-        cas_ent_slices = [slice(2, 3), slice(3, 5), slice(6, 7), slice(8, 12), slice(12, 13)]
-        cas_ent_types = ['A', 'B', 'B', 'C', 'C']
+#     def test_cascade_transform(self, BIOES_tags_example, BIOES_dec_config_example):
+#         (tags, cas_tags, cas_types), *_ = BIOES_tags_example
+#         dec_config, _ = BIOES_dec_config_example
+#         cas_ent_slices = [slice(2, 3), slice(3, 5), slice(6, 7), slice(8, 12), slice(12, 13)]
+#         cas_ent_types = ['A', 'B', 'B', 'C', 'C']
         
-        assert dec_config.build_cas_tags_by_tags(tags) == cas_tags
-        assert dec_config.build_cas_types_by_tags(tags) == cas_types
-        assert dec_config.build_cas_ent_slices_and_types_by_tags(tags)[0] == cas_ent_slices
-        assert dec_config.build_cas_ent_slices_and_types_by_tags(tags)[1] == cas_ent_types
-        assert dec_config.build_cas_ent_slices_by_cas_tags(cas_tags) == cas_ent_slices
-        assert dec_config.build_tags_by_cas_tags_and_types(cas_tags, cas_types) == tags
-        assert dec_config.build_tags_by_cas_tags_and_ent_slices_and_types(cas_tags, cas_ent_slices, cas_ent_types) == tags
+#         assert dec_config.build_cas_tags_by_tags(tags) == cas_tags
+#         assert dec_config.build_cas_types_by_tags(tags) == cas_types
+#         assert dec_config.build_cas_ent_slices_and_types_by_tags(tags)[0] == cas_ent_slices
+#         assert dec_config.build_cas_ent_slices_and_types_by_tags(tags)[1] == cas_ent_types
+#         assert dec_config.build_cas_ent_slices_by_cas_tags(cas_tags) == cas_ent_slices
+#         assert dec_config.build_tags_by_cas_tags_and_types(cas_tags, cas_types) == tags
+#         assert dec_config.build_tags_by_cas_tags_and_ent_slices_and_types(cas_tags, cas_ent_slices, cas_ent_types) == tags
         
         
 class TestMetrics(object):
