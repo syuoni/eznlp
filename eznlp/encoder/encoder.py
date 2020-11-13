@@ -23,7 +23,7 @@ class EncoderConfig(Config):
             self.hid_dim = kwargs.pop('hid_dim', 128)
             
             if self.arch.lower() in ('lstm', 'gru'):
-                self.train_init_hidden = kwargs.pop('train_init_hidden', True)
+                self.train_init_hidden = kwargs.pop('train_init_hidden', False)
                 self.num_layers = kwargs.pop('num_layers', 1)
                 # self.in_drop_rates = kwargs.pop('in_drop_rates', (0.0, 0.05, 0.5))
                 self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))

@@ -81,7 +81,7 @@ class SequenceTaggerConfig(Config):
                 name_elements.append(assembly.arch)
                 
         name_elements.append(self.decoder.arch)
-        name_elements.append(self.decoder.cascade_mode)
+        # name_elements.append(self.decoder.cascade_mode)
         return '-'.join(name_elements)
     
     

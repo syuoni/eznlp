@@ -8,7 +8,7 @@ class MaxPooling(torch.nn.Module):
     
     Parameters
     ----------
-    tensor : torch.FloatTensor (batch, step, hidden)
+    x : torch.FloatTensor (batch, step, hidden)
     mask : torch.BoolTensor (batch, step)
     """
     def __init__(self):
@@ -25,7 +25,7 @@ class MeanPooling(torch.nn.Module):
     
     Parameters
     ----------
-    tensor : torch.FloatTensor (batch, step, hidden)
+    x : torch.FloatTensor (batch, step, hidden)
     mask : torch.BoolTensor (batch, step)
     """
     def __init__(self):

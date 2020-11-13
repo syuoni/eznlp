@@ -75,35 +75,38 @@ class TestPooling(object):
             
             
 class TestAggregateTensorByGroup(object):
-    def test_example(self):
-        BATCH_SIZE = 1
-        ORI_STEP = 10
+    @pytest.mark.parametrize("x, group_by", [(torch.randn(1, 10, 20), 
+                                              torch.tensor([[0, 0, 1, 1, 2, 3, 3, 3, 3, -1]])), 
+                                             (torch.randn(16, 10, 20), 
+                                              torch.randint(0, 8, size=(16, 10)))])
+    @pytest.mark.parametrize("agg_mode", ['mean', 'max', 'min', 'first', 'last'])
+    def test_example(self, x, group_by, agg_mode):
         AGG_STEP = 8
-        
-        tensor = torch.randn(BATCH_SIZE, ORI_STEP, 20)
-        group_by = torch.tensor([[0, 0, 1, 1, 2, 3, 3, 3, 3, -1]])
-        agg_tensor = aggregate_tensor_by_group(tensor, group_by, agg_step=AGG_STEP)
-        
-        agg_tensor_gold = torch.stack([tensor[0][group_by[0] == i].mean(dim=0) for i in range(AGG_STEP)])
-        agg_tensor_gold.masked_fill_(agg_tensor_gold.isnan(), 0)
-        
-        assert (agg_tensor - agg_tensor_gold).abs().max().item() < 1e-6
-        
-        
-    def test_batch(self):
-        BATCH_SIZE = 16
-        ORI_STEP = 10
-        AGG_STEP = 8
-        
-        tensor = torch.randn(BATCH_SIZE, ORI_STEP, 20)
-        group_by = torch.randint(0, AGG_STEP, size=(BATCH_SIZE, ORI_STEP))
-        agg_tensor = aggregate_tensor_by_group(tensor, group_by, agg_step=AGG_STEP)
+        agg_tensor = aggregate_tensor_by_group(x, group_by, agg_mode=agg_mode, agg_step=AGG_STEP)
         
         agg_tensor_gold = []
-        for k in range(BATCH_SIZE):
-            agg_tensor_gold.append(torch.stack([tensor[k][group_by[k] == i].mean(dim=0) for i in range(AGG_STEP)]))
-        agg_tensor_gold = torch.stack(agg_tensor_gold)
-        agg_tensor_gold.masked_fill_(agg_tensor_gold.isnan(), 0)
+        for k in range(x.size(0)):
+            curr_agg_tensor_gold = []
+            for i in range(AGG_STEP):
+                piece = x[k][group_by[k] == i]
+                if piece.size(0) > 0:
+                    if agg_mode.lower() == 'mean':
+                        curr_agg_tensor_gold.append(piece.mean(dim=0))
+                    elif agg_mode.lower() == 'max':
+                        curr_agg_tensor_gold.append(piece.max(dim=0).values)
+                    elif agg_mode.lower() == 'min':
+                        curr_agg_tensor_gold.append(piece.min(dim=0).values)
+                    elif agg_mode.lower() == 'first':
+                        curr_agg_tensor_gold.append(piece[0])
+                    elif agg_mode.lower() == 'last':
+                        curr_agg_tensor_gold.append(piece[-1])
+                else:
+                    curr_agg_tensor_gold.append(torch.zeros(piece.size(1)))
+            agg_tensor_gold.append(torch.stack(curr_agg_tensor_gold))
         
+        agg_tensor_gold = torch.stack(agg_tensor_gold)
         assert (agg_tensor - agg_tensor_gold).abs().max().item() < 1e-6
-
+        
+        
+        
+        

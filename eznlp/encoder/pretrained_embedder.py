@@ -184,42 +184,41 @@ class ELMoEmbedder(PreTrainedEmbedder):
         return elmo_outs['elmo_representations'][0]
     
     
+    
 class FlairEmbedder(PreTrainedEmbedder):
-    def __init__(self, config: PreTrainedEmbedderConfig, flair_emb: flair.embeddings.TokenEmbeddings):
-        super().__init__(config, flair_emb)
+    def __init__(self, config: PreTrainedEmbedderConfig, flair_lm: flair.models.LanguageModel):
+        super().__init__(config, flair_lm)
         
         if self.use_gamma:
             self.gamma = torch.nn.Parameter(torch.tensor(1.0))
+        
             
-    
-    @property
-    def freeze(self):
-        return self._freeze
-    
-    @freeze.setter
-    def freeze(self, value: bool):
-        assert isinstance(value, bool)
-        self._freeze = value
-        if isinstance(self.pretrained_model, flair.embeddings.StackedEmbeddings):
-            for emb in self.pretrained_model.embeddings:
-                emb.requires_grad_(not self._freeze)
-                emb.fine_tune = (not self._freeze)
-        else:
-            self.pretrained_model.requires_grad_(not self._freeze)
-            self.pretrained_model.fine_tune = (not self._freeze)
-                
-                
     def forward(self, batch: Batch):
-        flair_sentences = [flair.data.Sentence(sent, use_tokenizer=False) for sent in batch.flair_sentences]
-        self.pretrained_model.embed(flair_sentences)
-        flair_outs = pad_sequence([torch.stack([tok.embedding for tok in sent]) for sent in flair_sentences], 
-                                  batch_first=True, padding_value=0.0)
+        if self.pretrained_model.is_forward_lm:
+            batch_char_ids = batch.flair_fw_char_ids
+            batch_tok_ends = batch.flair_fw_tok_ends
+        else:
+            batch_char_ids = batch.flair_bw_char_ids
+            batch_tok_ends = batch.flair_bw_tok_ends
+        
+        _, flair_hidden, _ = self.pretrained_model(batch_char_ids, hidden=None)
+        
+        agg_flair_hidden = []
+        for k, tok_ends in enumerate(batch_tok_ends):
+            agg_flair_hidden.append(torch.stack([flair_hidden[end, k] for end in tok_ends]))
+        agg_flair_hidden = pad_sequence(agg_flair_hidden, batch_first=True, padding_value=0.0)
+        
+        # flair_sentences = [flair.data.Sentence(sent, use_tokenizer=False) for sent in batch.flair_sentences]
+        # self.pretrained_model.embed(flair_sentences)
+        # flair_outs = pad_sequence([torch.stack([tok.embedding for tok in sent]) for sent in flair_sentences], 
+        #                           batch_first=True, padding_value=0.0)
         # flair would automatically convert to CUDA? (flair.device)
         # flair_outs = flair_outs.to(batch.tok_ids.device)
         
         if self.use_gamma:
-            return self.gamma * flair_outs
+            return self.gamma * agg_flair_hidden
         else:
-            return flair_outs
+            return agg_flair_hidden
         
-
+        
+        
