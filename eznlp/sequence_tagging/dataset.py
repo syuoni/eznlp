@@ -3,7 +3,6 @@ from collections import Counter, OrderedDict
 import torch
 from torch.nn.utils.rnn import pad_sequence
 from torchtext.experimental.vocab import Vocab
-from allennlp.modules.elmo import batch_to_ids as batch_to_elmo_char_ids
 
 from ..dataset_utils import TensorWrapper, Batch, _fetch_token_id
 from .decoder import DecoderConfig
@@ -140,27 +139,26 @@ class SequenceTaggingDataset(torch.utils.data.Dataset):
         else:
             val_feats = None
             
-        # Prepare for pretrained embedders
-        tokenized_text = curr_data['tokens'].text
+        # Prepare text for pretrained embedders
         tokenized_raw_text = curr_data['tokens'].raw_text
             
-        if self.config.bert_like_embedder is not None:
-            tokens = curr_data['tokens']
-            tokenizer = self.config.bert_like_embedder.tokenizer
+        # if self.config.bert_like_embedder is not None:
+        #     tokens = curr_data['tokens']
+        #     tokenizer = self.config.bert_like_embedder.tokenizer
             
-            tokens.build_sub_tokens(tokenizer)
-            sub_tok_ids = torch.tensor([tokenizer.cls_token_id] + \
-                                        tokenizer.convert_tokens_to_ids(tokens.sub_tokens) + \
-                                       [tokenizer.sep_token_id])
-            ori_indexes = torch.tensor(tokens.ori_indexes)
-        else:
-            sub_tok_ids, ori_indexes = None, None
+        #     tokens.build_sub_tokens(tokenizer)
+        #     sub_tok_ids = torch.tensor([tokenizer.cls_token_id] + \
+        #                                 tokenizer.convert_tokens_to_ids(tokens.sub_tokens) + \
+        #                                [tokenizer.sep_token_id])
+        #     ori_indexes = torch.tensor(tokens.ori_indexes)
+        # else:
+        #     sub_tok_ids, ori_indexes = None, None
             
         tags_obj = Tags(curr_data['tags'], self.config.decoder) if self._is_labeled else None
         
         return TensorWrapper(char_ids=char_ids, tok_ids=tok_ids, enum=enum_feats, val=val_feats, 
-                             tokenized_text=tokenized_text, tokenized_raw_text=tokenized_raw_text, 
-                             sub_tok_ids=sub_tok_ids, ori_indexes=ori_indexes, 
+                             tokenized_raw_text=tokenized_raw_text, 
+                             # sub_tok_ids=sub_tok_ids, ori_indexes=ori_indexes, 
                              tags_obj=tags_obj)
     
     
@@ -190,25 +188,29 @@ class SequenceTaggingDataset(torch.utils.data.Dataset):
             batch_val = None
         
         
-        if self.config.elmo_embedder is not None:
-            batch_elmo_char_ids = batch_to_elmo_char_ids([ex.tokenized_raw_text for ex in batch_examples])
-        else:
-            batch_elmo_char_ids = None
+        # Prepare text for pretrained embedders
+        batch_tokenized_raw_text = [ex.tokenized_raw_text for ex in batch_examples]
+        
+        
+        # if self.config.elmo_embedder is not None:
+        #     batch_elmo_char_ids = batch_to_elmo_char_ids([ex.tokenized_raw_text for ex in batch_examples])
+        # else:
+        #     batch_elmo_char_ids = None
             
-        if self.config.bert_like_embedder is not None:
-            batch_sub_tok_ids = [ex.sub_tok_ids for ex in batch_examples]
-            sub_tok_seq_lens = torch.tensor([seq.size(0) for seq in batch_sub_tok_ids])
-            batch_sub_tok_ids = pad_sequence(batch_sub_tok_ids, batch_first=True, 
-                                             padding_value=self.config.bert_like_embedder.tokenizer.pad_token_id)
-            batch_ori_indexes = pad_sequence([ex.ori_indexes for ex in batch_examples], batch_first=True, 
-                                             padding_value=-1)
-        else:
-            batch_sub_tok_ids, sub_tok_seq_lens, batch_ori_indexes = None, None, None
+        # if self.config.bert_like_embedder is not None:
+        #     batch_sub_tok_ids = [ex.sub_tok_ids for ex in batch_examples]
+        #     sub_tok_seq_lens = torch.tensor([seq.size(0) for seq in batch_sub_tok_ids])
+        #     batch_sub_tok_ids = pad_sequence(batch_sub_tok_ids, batch_first=True, 
+        #                                      padding_value=self.config.bert_like_embedder.tokenizer.pad_token_id)
+        #     batch_ori_indexes = pad_sequence([ex.ori_indexes for ex in batch_examples], batch_first=True, 
+        #                                      padding_value=-1)
+        # else:
+        #     batch_sub_tok_ids, sub_tok_seq_lens, batch_ori_indexes = None, None, None
             
-        if self.config.flair_embedder is not None:
-            batch_flair_sentences = [" ".join(ex.tokenized_raw_text) for ex in batch_examples]
-        else:
-            batch_flair_sentences = None
+        # if self.config.flair_embedder is not None:
+        #     batch_flair_sentences = [" ".join(ex.tokenized_raw_text) for ex in batch_examples]
+        # else:
+        #     batch_flair_sentences = None
             
         batch_tags_objs = [ex.tags_obj for ex in batch_examples] if self._is_labeled else None
         
@@ -216,17 +218,18 @@ class SequenceTaggingDataset(torch.utils.data.Dataset):
         batch = Batch(tok_ids=batch_tok_ids, seq_lens=seq_lens, 
                       char_ids=batch_char_ids, tok_lens=tok_lens, 
                       enum=batch_enum, val=batch_val, 
-                      elmo_char_ids=batch_elmo_char_ids, 
-                      sub_tok_ids=batch_sub_tok_ids, ori_indexes=batch_ori_indexes, sub_tok_seq_lens=sub_tok_seq_lens, 
-                      flair_sentences=batch_flair_sentences, 
+                      tokenized_raw_text=batch_tokenized_raw_text, 
+                      # elmo_char_ids=batch_elmo_char_ids, 
+                      # sub_tok_ids=batch_sub_tok_ids, ori_indexes=batch_ori_indexes, sub_tok_seq_lens=sub_tok_seq_lens, 
+                      # flair_sentences=batch_flair_sentences, 
                       tags_objs=batch_tags_objs)
         
         batch.build_masks({'tok_mask': (seq_lens, batch_tok_ids.size(1))})
         if self.config.embedder.char is not None:
             batch.build_masks({'char_mask': (tok_lens, batch_char_ids.size(1))})
-        if self.config.bert_like_embedder is not None:
-            batch.build_masks({'sub_tok_mask': (sub_tok_seq_lens, batch_sub_tok_ids.size(1))})
-            
+        # if self.config.bert_like_embedder is not None:
+        #     batch.build_masks({'sub_tok_mask': (sub_tok_seq_lens, batch_sub_tok_ids.size(1))})
+        
         return batch
     
     

@@ -16,8 +16,9 @@ from transformers import BertTokenizer, BertModel, BertForMaskedLM
 from transformers import RobertaTokenizer, RobertaModel, RobertaForMaskedLM
 
 
-from eznlp import Token, TokenSequence, count_trainable_params
+from eznlp import Token, TokenSequence, count_params
 from eznlp.token import Full2Half
+from eznlp.dataset_utils import Batch
 from eznlp import ConfigList, ConfigDict
 from eznlp import CharConfig, TokenConfig, EnumConfig, ValConfig, EmbedderConfig
 from eznlp import EncoderConfig
@@ -35,7 +36,6 @@ from eznlp.language_modeling import MLMDataset, PMCMLMDataset, MLMTrainer
 
 from seqeval.metrics import classification_report
 from torchcrf import CRF
-from eznlp.sequence_tagging.crf import CRF as MyCRF
 from allennlp.modules.elmo import Elmo, batch_to_ids
 from allennlp.modules.token_embedders import ElmoTokenEmbedder
 from flair.data import Sentence, Corpus
@@ -87,12 +87,12 @@ if __name__ == '__main__':
     agg_flair_hidden = pad_sequence(agg_flair_hidden, batch_first=True, padding_value=0.0)
     
     
-    # flair_emb = FlairEmbeddings(flair_lm)
-    # flair_sentences = [Sentence(sent, use_tokenizer=False) for sent in batch_text]
-    # flair_emb.embed(flair_sentences)
-    # expected = pad_sequence([torch.stack([tok.embedding for tok in sent]) for sent in flair_sentences], 
-    #                         batch_first=True, padding_value=0.0)
-    # assert (agg_flair_hidden == expected).all().item()
+    flair_emb = FlairEmbeddings(flair_lm)
+    flair_sentences = [Sentence(sent, use_tokenizer=False) for sent in batch_text]
+    flair_emb.embed(flair_sentences)
+    expected = pad_sequence([torch.stack([tok.embedding for tok in sent]) for sent in flair_sentences], 
+                            batch_first=True, padding_value=0.0)
+    assert (agg_flair_hidden == expected).all().item()
     
     
     batch_ori_indexes = [[-1] + [i for i, tok_len in enumerate(tok_lens) for _ in range(tok_len+1)] for tok_lens in batch_tok_lens]
@@ -101,6 +101,11 @@ if __name__ == '__main__':
     
     aggregate_tensor_by_group(flair_hidden.permute(1, 0, 2), batch_ori_indexes, agg_mode='last')
     
+    
+    flair_embedder = PreTrainedEmbedderConfig(arch='Flair', out_dim=flair_lm.hidden_size).instantiate(flair_lm)
+    batch = Batch(tokenized_raw_text=batch_tokenized_text, tok_ids=torch.randint(0, 5, size=(4, 5)))
+    
+    assert (flair_embedder(batch) == expected).all().item()
     
     
     # options_file = "assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_options.json"

@@ -320,8 +320,8 @@ class TokenSequence(object):
             nested_sub_tokens = [tokenizer.tokenize(word) for word in self.raw_text]
             self.sub_tokens = [sub_tok for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
             self.ori_indexes = [i for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
-            
-            
+    
+    
     def spans_within_max_length(self, max_len):
         total_len = len(self.token_list)
         slice_start = 0

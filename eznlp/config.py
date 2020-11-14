@@ -16,7 +16,7 @@ def _add_indents(config_str: str, num_spaces: int=2):
 
 class Config(object):
     """
-    `Config` stores and validates configurations a model or assembly. 
+    `Config` stores and validates configurations of a model or assembly. 
     `Config.instantiate` is the suggested way to instantiate the model or assembly. 
     
     NOTE: 

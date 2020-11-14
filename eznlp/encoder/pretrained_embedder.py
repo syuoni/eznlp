@@ -7,7 +7,7 @@ import transformers
 import flair
 
 from ..dataset_utils import Batch
-from ..nn.functional import aggregate_tensor_by_group
+from ..nn.functional import seq_lens2mask, aggregate_tensor_by_group
 from ..config import Config
 
 
@@ -24,10 +24,18 @@ class PreTrainedEmbedderConfig(Config):
             
         elif self.arch.lower() in ('bert', 'roberta', 'albert'):
             self.tokenizer = kwargs.pop('tokenizer')
+            self.agg_mode = kwargs.pop('agg_mode', 'mean')
             self.mix_layers = kwargs.pop('mix_layers', 'top')
             self.use_gamma = kwargs.pop('use_gamma', False)
             
         elif self.arch.lower() == 'flair':
+            # start_marker / end_marker in `flair`
+            self.sos = kwargs.pop('sos', "\n")
+            self.eos = kwargs.pop('eos', " ")
+            self.sep = kwargs.pop('sep', " ")
+            self.pad = kwargs.pop('pad', " ")
+            
+            self.agg_mode = kwargs.pop('agg_mode', 'last')
             self.mix_layers = kwargs.pop('mix_layers', 'top')
             self.use_gamma = kwargs.pop('use_gamma', False)
             
@@ -103,20 +111,50 @@ class ScalarMix(torch.nn.Module):
         
         
 class BertLikeEmbedder(PreTrainedEmbedder):
+    """
+    An embedder based on BERT representations. 
+    
+    """
     def __init__(self, config: PreTrainedEmbedderConfig, bert_like: transformers.PreTrainedModel):
         super().__init__(config, bert_like)
         
+        self.tokenizer = config.tokenizer
+        self.agg_mode = config.agg_mode
         if self.mix_layers.lower() == 'trainable':
             self.scalar_mix = ScalarMix(bert_like.config.num_hidden_layers + 1)
         if self.use_gamma:
             self.gamma = torch.nn.Parameter(torch.tensor(1.0))
             
+            
+    def _build_sub_token_ids(self, tokenized_raw_text: List[str]):
+        nested_sub_tokens = [self.tokenizer.tokenize(word) for word in tokenized_raw_text]
+        sub_tokens = [sub_tok for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
+        ori_indexes = [i for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
         
+        sub_tok_ids = [self.tokenizer.cls_token_id] + \
+                       self.tokenizer.convert_tokens_to_ids(sub_tokens) + \
+                      [self.tokenizer.sep_token_id]
+        
+        # (step+2, ), (step, )
+        return torch.tensor(sub_tok_ids), torch.tensor(ori_indexes)
+        
+    
     def forward(self, batch: Batch):
+        batch_sub_token_data = [self._build_sub_token_ids(text) for text in batch.tokenized_raw_text]
+        batch_sub_tok_ids, batch_ori_indexes = list(zip(*batch_sub_token_data))
+        sub_tok_seq_lens = torch.tensor([sub_tok_ids.size(0) for sub_tok_ids in batch_sub_tok_ids])
+        batch_sub_tok_mask = seq_lens2mask(sub_tok_seq_lens)
+        batch_sub_tok_ids = pad_sequence(batch_sub_tok_ids, batch_first=True, padding_value=self.tokenizer.pad_token_id)
+        batch_ori_indexes = pad_sequence(batch_ori_indexes, batch_first=True, padding_value=-1)
+        
+        batch_sub_tok_ids = batch_sub_tok_ids.to(batch.device)
+        batch_sub_tok_mask = batch_sub_tok_mask.to(batch.device)
+        batch_ori_indexes = batch_ori_indexes.to(batch.device)
+        
         # bert_outs: (batch, sub_tok_step+2, hid_dim)
         # hidden: list of (batch, sub_tok_step+2, hid_dim)
-        bert_outs, _, hidden = self.pretrained_model(input_ids=batch.sub_tok_ids, 
-                                                     attention_mask=(~batch.sub_tok_mask).type(torch.long), 
+        bert_outs, _, hidden = self.pretrained_model(input_ids=batch_sub_tok_ids, 
+                                                     attention_mask=(~batch_sub_tok_mask).type(torch.long), 
                                                      output_hidden_states=True)
         
         if self.mix_layers.lower() == 'trainable':
@@ -130,7 +168,8 @@ class BertLikeEmbedder(PreTrainedEmbedder):
         bert_outs = bert_outs[:, 1:-1]
         
         # agg_bert_outs: (batch, tok_step, hid_dim)
-        agg_bert_outs = aggregate_tensor_by_group(bert_outs, batch.ori_indexes, agg_step=batch.tok_ids.size(1))
+        agg_bert_outs = aggregate_tensor_by_group(bert_outs, batch_ori_indexes, 
+                                                  agg_mode=self.agg_mode, agg_step=batch.tok_ids.size(1))
         if self.use_gamma:
             return self.gamma * agg_bert_outs
         else:
@@ -139,6 +178,8 @@ class BertLikeEmbedder(PreTrainedEmbedder):
     
 class ELMoEmbedder(PreTrainedEmbedder):
     """
+    An embedder based on ELMo representations. 
+    
     `Elmo` consists two parts: 
         (1) `_elmo_lstm` includes the (character-based) embedder and (two-layer) BiLSTMs
         (2) `scalar_mix_{i}` includes the "layer weights", which define how different 
@@ -158,8 +199,8 @@ class ELMoEmbedder(PreTrainedEmbedder):
         if config.mix_layers.lower() != 'trainable':
             elmo.scalar_mix_0.scalar_parameters.requires_grad_(False)
             if config.mix_layers.lower() == 'top':
-                for scalar_param in elmo.scalar_mix_0.scalar_parameters:
-                    scalar_param.data = -9e10
+                for scalar_param in elmo.scalar_mix_0.scalar_parameters[:-1]:
+                    scalar_param.data.fill_(-9e10)
             
         if not config.use_gamma:
             elmo.scalar_mix_0.gamma.requires_grad_(False)
@@ -179,41 +220,71 @@ class ELMoEmbedder(PreTrainedEmbedder):
         
     def forward(self, batch: Batch):
         # TODO: use `word_inputs`?
-        elmo_outs = self.pretrained_model(inputs=batch.elmo_char_ids)
+        elmo_char_ids = allennlp.modules.elmo.batch_to_ids(batch.tokenized_raw_text)
+        elmo_char_ids = elmo_char_ids.to(batch.device)
+        elmo_outs = self.pretrained_model(inputs=elmo_char_ids)
         
         return elmo_outs['elmo_representations'][0]
     
     
     
 class FlairEmbedder(PreTrainedEmbedder):
+    """
+    An embedder based on flair representations. 
+    
+    References
+    ----------
+    [1] Akbik et al. 2018. Contextual string embeddings for sequence labeling. 
+    [2] https://github.com/flairNLP/flair/blob/master/flair/embeddings/token.py
+    [3] https://github.com/flairNLP/flair/blob/master/flair/models/language_model.py
+    """
     def __init__(self, config: PreTrainedEmbedderConfig, flair_lm: flair.models.LanguageModel):
         super().__init__(config, flair_lm)
+        self.sos = config.sos
+        self.eos = config.eos
+        self.sep = config.sep
+        self.pad = config.pad
+        self.pad_id = flair_lm.dictionary.get_idx_for_item(self.pad)
         
+        self.is_forward = flair_lm.is_forward_lm
+        self.dictionary = flair_lm.dictionary
+        self.agg_mode = config.agg_mode
         if self.use_gamma:
             self.gamma = torch.nn.Parameter(torch.tensor(1.0))
         
+        
+    def _build_char_ids(self, tokenized_raw_text: List[str]):
+        if not self.is_forward:
+            tokenized_raw_text = [tok[::-1] for tok in tokenized_raw_text[::-1]]
             
+        padded_text = self.sos + self.sep.join(tokenized_raw_text) + self.eos
+        ori_indexes = [i for i, tok in enumerate(tokenized_raw_text) for _ in range(len(tok)+len(self.sep))]
+        if not self.is_forward:
+            ori_indexes = [max(ori_indexes) - i for i in ori_indexes]
+        
+        ori_indexes = [-1] * len(self.sos) + ori_indexes + [-1] * (len(self.eos) - 1)
+        
+        char_ids = self.dictionary.get_idx_for_items(padded_text)
+        # (char_step, ), (char_step, )
+        return torch.tensor(char_ids), torch.tensor(ori_indexes)
+        
+    
     def forward(self, batch: Batch):
-        if self.pretrained_model.is_forward_lm:
-            batch_char_ids = batch.flair_fw_char_ids
-            batch_tok_ends = batch.flair_fw_tok_ends
-        else:
-            batch_char_ids = batch.flair_bw_char_ids
-            batch_tok_ends = batch.flair_bw_tok_ends
+        batch_char_data = [self._build_char_ids(text) for text in batch.tokenized_raw_text]
+        batch_char_ids, batch_ori_indexes = list(zip(*batch_char_data))
         
+        # char_seq_lens = torch.tensor([char_ids.size(0) for char_ids in batch_char_ids])
+        batch_char_ids = pad_sequence(batch_char_ids, batch_first=False, padding_value=self.pad_id)
+        batch_ori_indexes = pad_sequence(batch_ori_indexes, batch_first=True, padding_value=-1)
+        
+        batch_char_ids = batch_char_ids.to(batch.device)
+        batch_ori_indexes = batch_ori_indexes.to(batch.device)
+        
+        # flair_hidden: (char_step, batch, hid_dim)
         _, flair_hidden, _ = self.pretrained_model(batch_char_ids, hidden=None)
-        
-        agg_flair_hidden = []
-        for k, tok_ends in enumerate(batch_tok_ends):
-            agg_flair_hidden.append(torch.stack([flair_hidden[end, k] for end in tok_ends]))
-        agg_flair_hidden = pad_sequence(agg_flair_hidden, batch_first=True, padding_value=0.0)
-        
-        # flair_sentences = [flair.data.Sentence(sent, use_tokenizer=False) for sent in batch.flair_sentences]
-        # self.pretrained_model.embed(flair_sentences)
-        # flair_outs = pad_sequence([torch.stack([tok.embedding for tok in sent]) for sent in flair_sentences], 
-        #                           batch_first=True, padding_value=0.0)
-        # flair would automatically convert to CUDA? (flair.device)
-        # flair_outs = flair_outs.to(batch.tok_ids.device)
+        # agg_flair_hidden: (batch, tok_step, hid_dim)
+        agg_flair_hidden = aggregate_tensor_by_group(flair_hidden.permute(1, 0, 2), batch_ori_indexes, 
+                                                     agg_mode=self.agg_mode, agg_step=batch.tok_ids.size(1))
         
         if self.use_gamma:
             return self.gamma * agg_flair_hidden

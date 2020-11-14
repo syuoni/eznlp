@@ -15,40 +15,54 @@ from .decoder import DecoderConfig
 class SequenceTaggerConfig(Config):
     def __init__(self, **kwargs):
         """
-        Parameters
-        ----------
-        embedder: EmbedderConfig
-        encoder: EncoderConfig
-        elmo_embedder: PreTrainedEmbedderConfig
-        bert_like_embedder: PreTrainedEmbedderConfig
-        flair_embedder: PreTrainedEmbedderConfig
-        intermediate: EncoderConfig
-        decoder: DecoderConfig
+        Configurations of a sequence tagger. 
+        
+        tagger
+          ├─decoder
+          └─intermediate
+              ├─encoder
+              │   └─embedder
+              ├─elmo_embedder
+              ├─bert_like_embedder
+              ├─flair_fw_embedder
+              └─flair_bw_embedder
         """
-        self.embedder = kwargs.pop('embedder', EmbedderConfig())
-        self.encoder = kwargs.pop('encoder', EncoderConfig(arch='LSTM'))
+        self.embedder: EmbedderConfig = kwargs.pop('embedder', EmbedderConfig())
+        self.encoder: EncoderConfig = kwargs.pop('encoder', EncoderConfig(arch='LSTM'))
         
-        self.elmo_embedder = kwargs.pop('elmo_embedder', None)
-        self.bert_like_embedder = kwargs.pop('bert_like_embedder', None)
-        self.flair_embedder = kwargs.pop('flair_embedder', None)
+        self.elmo_embedder: PreTrainedEmbedderConfig = kwargs.pop('elmo_embedder', None)
+        self.bert_like_embedder: PreTrainedEmbedderConfig = kwargs.pop('bert_like_embedder', None)
+        self.flair_fw_embedder: PreTrainedEmbedderConfig = kwargs.pop('flair_fw_embedder', None)
+        self.flair_bw_embedder: PreTrainedEmbedderConfig = kwargs.pop('flair_bw_embedder', None)
         
-        self.intermediate = kwargs.pop('intermediate', None)
-        self.decoder = kwargs.pop('decoder', DecoderConfig(arch='CRF'))
+        self.intermediate: EncoderConfig = kwargs.pop('intermediate', None)
+        self.decoder: DecoderConfig = kwargs.pop('decoder', DecoderConfig(arch='CRF'))
         super().__init__(**kwargs)
         
+    @property
+    def necessary_assemblies(self):
+        return [self.embedder, self.decoder]
+        
+    @property
+    def optional_assemblies(self):
+        optional_assemblies = [self.encoder, self.elmo_embedder, self.bert_like_embedder, self.flair_fw_embedder, self.flair_bw_embedder]
+        return [assembly for assembly in optional_assemblies if assembly is not None]
         
     @property
     def is_valid(self):
-        for assembly in [self.embedder, self.decoder]:
+        for assembly in self.necessary_assemblies:
             if assembly is None or not assembly.is_valid:
                 return False
         
-        for assembly in [self.encoder, self.elmo_embedder, self.bert_like_embedder, self.flair_embedder, self.intermediate]:
-            if assembly is not None and not assembly.is_valid:
+        for assembly in self.optional_assemblies:
+            if not assembly.is_valid:
                 return False
             
+        if self.intermediate is not None and not self.intermediate.is_valid:
+            return False
+            
         return True
-        
+    
     
     def _update_dims(self, ex_token: Token=None):
         if self.embedder.val is not None and ex_token is not None:
@@ -58,10 +72,7 @@ class SequenceTaggerConfig(Config):
         if self.encoder is not None:
             self.encoder.in_dim = self.embedder.out_dim
             
-        full_hid_dim = 0
-        for assembly in [self.encoder, self.elmo_embedder, self.bert_like_embedder, self.flair_embedder]:
-            if assembly is not None:
-                full_hid_dim += assembly.out_dim
+        full_hid_dim = sum(assembly.out_dim for assembly in self.optional_assemblies)
         
         if self.intermediate is None:
             self.decoder.in_dim = full_hid_dim
@@ -73,13 +84,15 @@ class SequenceTaggerConfig(Config):
     @property
     def name(self):
         name_elements = []
-        if self.embedder is not None and self.embedder.char is not None:
+        if self.embedder.char is not None:
             name_elements.append("Char" + self.embedder.char.arch)
         
-        for assembly in [self.encoder, self.elmo_embedder, self.bert_like_embedder, self.flair_embedder, self.intermediate]:
-            if assembly is not None:
-                name_elements.append(assembly.arch)
-                
+        for assembly in self.optional_assemblies:
+            name_elements.append(assembly.arch)
+            
+        if self.intermediate is not None:
+            name_elements.append(self.intermediate.arch)
+        
         name_elements.append(self.decoder.arch)
         # name_elements.append(self.decoder.cascade_mode)
         return '-'.join(name_elements)
@@ -89,30 +102,25 @@ class SequenceTaggerConfig(Config):
                     pretrained_vectors: Vectors=None, 
                     elmo: allennlp.modules.elmo.Elmo=None, 
                     bert_like: transformers.PreTrainedModel=None, 
-                    flair_emb: flair.embeddings.TokenEmbeddings=None):
+                    flair_fw_lm: flair.models.LanguageModel=None, 
+                    flair_bw_lm: flair.models.LanguageModel=None):
         # Only check validity at the most outside level
         assert self.is_valid
-        return SequenceTagger(self, 
-                              pretrained_vectors=pretrained_vectors, 
-                              elmo=elmo, 
-                              bert_like=bert_like, 
-                              flair_emb=flair_emb)
+        return SequenceTagger(self, pretrained_vectors, elmo, bert_like, flair_fw_lm, flair_bw_lm)
     
     def __repr__(self):
         return self._repr_config_attrs(self.__dict__)
     
     
     
-    
 class SequenceTagger(torch.nn.Module):
-    def __init__(self, 
-                 config: SequenceTaggerConfig, 
+    def __init__(self, config: SequenceTaggerConfig, 
                  pretrained_vectors: Vectors=None, 
                  elmo: allennlp.modules.elmo.Elmo=None, 
                  bert_like: transformers.PreTrainedModel=None, 
-                 flair_emb: flair.embeddings.TokenEmbeddings=None):
+                 flair_fw_lm: flair.models.LanguageModel=None, 
+                 flair_bw_lm: flair.models.LanguageModel=None):
         super().__init__()
-        # self.config = config
         self.embedder = config.embedder.instantiate(pretrained_vectors=pretrained_vectors)
         
         if config.encoder is not None:
@@ -126,9 +134,13 @@ class SequenceTagger(torch.nn.Module):
             assert bert_like is not None and isinstance(bert_like, transformers.PreTrainedModel)
             self.bert_like_embedder = config.bert_like_embedder.instantiate(bert_like)
             
-        if config.flair_embedder is not None:
-            assert flair_emb is not None and isinstance(flair_emb, flair.embeddings.TokenEmbeddings)
-            self.flair_embedder = config.flair_embedder.instantiate(flair_emb)
+        if config.flair_fw_embedder is not None:
+            assert flair_fw_lm is not None and isinstance(flair_fw_lm, flair.models.LanguageModel)
+            self.flair_fw_embedder = config.flair_fw_embedder.instantiate(flair_fw_lm)
+            
+        if config.flair_bw_embedder is not None:
+            assert flair_bw_lm is not None and isinstance(flair_bw_lm, flair.models.LanguageModel)
+            self.flair_bw_embedder = config.flair_bw_embedder.instantiate(flair_bw_lm)
             
         if config.intermediate is not None:
             self.intermediate = config.intermediate.instantiate()
@@ -149,8 +161,10 @@ class SequenceTagger(torch.nn.Module):
         if hasattr(self, 'bert_like_embedder'):
             full_hidden.append(self.bert_like_embedder(batch))
             
-        if hasattr(self, 'flair_embedder'):
-            full_hidden.append(self.flair_embedder(batch))
+        if hasattr(self, 'flair_fw_embedder'):
+            full_hidden.append(self.flair_fw_embedder(batch))
+        if hasattr(self, 'flair_bw_embedder'):
+            full_hidden.append(self.flair_bw_embedder(batch))
             
         full_hidden = torch.cat(full_hidden, dim=-1)
         

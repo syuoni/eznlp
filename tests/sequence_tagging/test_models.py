@@ -3,10 +3,7 @@ import pytest
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from torchtext.experimental.vectors import GloVe
-import allennlp.modules
-import transformers
-import flair
+
 
 from eznlp import Token
 from eznlp import ConfigDict
@@ -48,31 +45,6 @@ def BIOES_data():
 def BIO2_data():
     return load_demo_data(scheme='BIO2')
 
-@pytest.fixture
-def ELMo_model():
-    options_file = "assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_options.json"
-    weight_file = "assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_weights.hdf5"
-    return allennlp.modules.elmo.Elmo(options_file, weight_file, num_output_representations=1)
-    
-
-@pytest.fixture
-def BERT_with_tokenizer():
-    tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers_cache/bert-base-cased")
-    bert = transformers.BertModel.from_pretrained("assets/transformers_cache/bert-base-cased")
-    return bert, tokenizer
-
-@pytest.fixture
-def Flair_emb():
-    flair_fw = flair.models.LanguageModel.load_language_model("assets/flair/lm-mix-english-forward-v0.2rc.pt")
-    flair_bw = flair.models.LanguageModel.load_language_model("assets/flair/lm-mix-english-backward-v0.2rc.pt")
-    flair_emb = flair.embeddings.StackedEmbeddings([flair.embeddings.FlairEmbeddings(flair_fw), 
-                                                    flair.embeddings.FlairEmbeddings(flair_bw)])
-    return flair_emb
-
-@pytest.fixture
-def glove100():
-    # https://nlp.stanford.edu/projects/glove/
-    return GloVe(name='6B', dim=100, root="assets/vector_cache", validate_file=False)
 
 
 class TestCharEncoder(object):
@@ -218,8 +190,7 @@ class TestTagger(object):
         
         
     @pytest.mark.parametrize("freeze", [False, True])
-    def test_tagger_elmo(self, BIOES_data, ELMo_model, freeze, device):
-        elmo = ELMo_model
+    def test_tagger_elmo(self, BIOES_data, elmo, freeze, device):
         elmo_embedder_config = PreTrainedEmbedderConfig(arch='ELMo', 
                                                         out_dim=elmo.get_output_dim(), 
                                                         lstm_stateful=False, 
@@ -232,8 +203,8 @@ class TestTagger(object):
     
     
     @pytest.mark.parametrize("freeze", [False, True])
-    def test_tagger_bert_like(self, BIOES_data, BERT_with_tokenizer, freeze, device):
-        bert, tokenizer = BERT_with_tokenizer
+    def test_tagger_bert_like(self, BIOES_data, bert_with_tokenizer, freeze, device):
+        bert, tokenizer = bert_with_tokenizer
         bert_like_embedder_config = PreTrainedEmbedderConfig(arch='BERT', 
                                                              out_dim=bert.config.hidden_size, 
                                                              tokenizer=tokenizer, 
@@ -246,17 +217,19 @@ class TestTagger(object):
         
         
     @pytest.mark.parametrize("freeze", [False, True])
-    def test_tagger_flair(self, BIOES_data, Flair_emb, freeze, device):
-        flair_embedder_config = PreTrainedEmbedderConfig(arch='Flair', 
-                                                         out_dim=Flair_emb.embedding_length, 
-                                                         freeze=freeze)
-        config = SequenceTaggerConfig(encoder=None, flair_embedder=flair_embedder_config)
+    def test_tagger_flair(self, BIOES_data, flair_fw_lm, flair_bw_lm, freeze, device):
+        flair_fw_embedder_config = PreTrainedEmbedderConfig(arch='Flair', out_dim=flair_fw_lm.hidden_size, freeze=freeze)
+        flair_bw_embedder_config = PreTrainedEmbedderConfig(arch='Flair', out_dim=flair_bw_lm.hidden_size, freeze=freeze)
+        
+        config = SequenceTaggerConfig(encoder=None, 
+                                      flair_fw_embedder=flair_fw_embedder_config, 
+                                      flair_bw_embedder=flair_bw_embedder_config)
         train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
-        tagger = config.instantiate(flair_emb=Flair_emb).to(device)
+        tagger = config.instantiate(flair_fw_lm=flair_fw_lm, flair_bw_lm=flair_bw_lm).to(device)
         
         self.one_tagger_pass(tagger, train_set, device)
         
-    
+        
     # @pytest.mark.parametrize("dec_arch", ['softmax', 'CRF'])
     # @pytest.mark.parametrize("cascade_mode", ['Sliced', 'Straight'])
     # def test_tagger_cascade(self, BIOES_data, dec_arch, cascade_mode, device):
