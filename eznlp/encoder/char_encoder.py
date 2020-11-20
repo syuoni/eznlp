@@ -2,7 +2,7 @@
 import torch
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence
 
-from ..nn import MaxPooling, MeanPooling
+from ..nn import SequencePooling
 from ..nn.init import reinit_embedding_, reinit_lstm_, reinit_gru_, reinit_layer_
 from ..config import ConfigwithVocab
 
@@ -67,11 +67,7 @@ class CharCNN(CharEncoder):
         self.conv = torch.nn.Conv1d(config.emb_dim, config.out_dim, 
                               kernel_size=config.kernel_size, padding=(config.kernel_size-1)//2)
         self.relu = torch.nn.ReLU()
-        if config.pooling.lower() == 'max':
-            self.pooling = MaxPooling()
-        elif config.pooling.lower() == 'mean':
-            self.pooling = MeanPooling()
-            
+        self.pooling = SequencePooling(mode=config.pooling)
         reinit_layer_(self.conv, 'relu')
         
         

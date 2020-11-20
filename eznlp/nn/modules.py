@@ -1,43 +1,61 @@
 # -*- coding: utf-8 -*-
 import torch
+from .functional import sequence_pooling, sequence_group_aggregating
 
 
-class MaxPooling(torch.nn.Module):
+class SequencePooling(torch.nn.Module):
     """
-    Max Pooling over steps. 
+    Pooling values over steps. 
     
     Parameters
     ----------
-    x : torch.FloatTensor (batch, step, hidden)
-    mask : torch.BoolTensor (batch, step)
+    x: torch.FloatTensor (batch, step, hid_dim)
+    mask: torch.BoolTensor (batch, step)
+    mode: str
+        'mean', 'max', 'min'
     """
-    def __init__(self):
+    def __init__(self, mode: str='mean'):
         super().__init__()
+        if mode.lower() not in ('mean', 'max', 'min'):
+            raise ValueError(f"Invalid pooling mode {mode}")
+        self.mode = mode
         
     def forward(self, x: torch.FloatTensor, mask: torch.BoolTensor):
-        x_masked = x.masked_fill(mask.unsqueeze(-1), float('-inf'))
-        return x_masked.max(dim=1).values
+        return sequence_pooling(x, mask, mode=self.mode)
+    
+    def extra_repr(self):
+        return f"mode={self.mode}"
     
     
-class MeanPooling(torch.nn.Module):
+class SequenceGroupAggregating(torch.nn.Module):
     """
-    Mean Pooling over steps. 
+    Aggregating values over steps by groups. 
     
     Parameters
     ----------
-    x : torch.FloatTensor (batch, step, hidden)
-    mask : torch.BoolTensor (batch, step)
+    x : torch.FloatTensor (batch, ori_step, hidden)
+        The tensor to be aggregate. 
+    group_by : torch.LongTensor (batch, ori_step)
+        The tensor indicating the positions after aggregation. 
+        Positions being negative values are NOT used in aggregation. 
+    agg_mode: str
+        'mean', 'max', 'min', 'first', 'last'
+    agg_step: int
     """
-    def __init__(self):
+    def __init__(self, mode: str='mean'):
         super().__init__()
+        if mode.lower() not in ('mean', 'max', 'min', 'first', 'last'):
+            raise ValueError(f"Invalid aggregating mode {mode}")
+        self.mode = mode
         
-    def forward(self, x: torch.FloatTensor, mask: torch.BoolTensor):
-        x_masked = x.masked_fill(mask.unsqueeze(-1), 0)
-        seq_lens = mask.size(1) - mask.sum(dim=1)
-        return x_masked.sum(dim=1) / seq_lens.unsqueeze(1)
+    def forward(self, x: torch.FloatTensor, group_by: torch.LongTensor, agg_step: int=None):
+        return sequence_group_aggregating(x, group_by, agg_mode=self.mode, agg_step=agg_step)
+    
+    def extra_repr(self):
+        return f"mode={self.mode}"
     
     
-
+    
 class CombinedDropout(torch.nn.Module):
     def __init__(self, p: float=0.0, word_p: float=0.05, locked_p: float=0.5):
         super().__init__()

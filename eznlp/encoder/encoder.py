@@ -75,6 +75,7 @@ class Encoder(torch.nn.Module):
         self.dropout = CombinedDropout(*config.in_drop_rates)
         if config.in_proj:
             self.in_proj_layer = torch.nn.Linear(config.in_dim, config.in_dim)
+            reinit_layer_(self.in_proj_layer, 'linear')
         self.shortcut = config.shortcut
         
     def embedded2hidden(self, batch: Batch, embedded: torch.Tensor):

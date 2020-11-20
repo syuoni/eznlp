@@ -2,7 +2,7 @@
 import pytest
 import torch
 from eznlp.nn.functional import seq_lens2mask
-from eznlp.nn import MaxPooling, MeanPooling
+from eznlp.nn import SequencePooling, SequenceGroupAggregating
 from eznlp.nn import LockedDropout, WordDropout
 
 
@@ -53,14 +53,45 @@ class TestPooling(object):
         seq_lens = torch.randint(0, MAX_LEN, size=(BATCH_SIZE, )) + 1
         mask = seq_lens2mask(seq_lens, max_len=MAX_LEN)
         
-        max_pooled  = MaxPooling()(x, mask)
-        mean_pooled = MeanPooling()(x, mask)
+        mean_pooled = SequencePooling(mode='mean')(x, mask)
+        max_pooled  = SequencePooling(mode='max')(x, mask)
+        min_pooled  = SequencePooling(mode='min')(x, mask)
         
         for i in range(BATCH_SIZE):
-            assert (max_pooled[i]  - x[i, :seq_lens[i]].max(dim=0).values).abs().max().item() < 1e-6
             assert (mean_pooled[i] - x[i, :seq_lens[i]].mean(dim=0)).abs().max().item() < 1e-6
+            assert (max_pooled[i]  - x[i, :seq_lens[i]].max(dim=0).values).abs().max().item() < 1e-6
+            assert (min_pooled[i]  - x[i, :seq_lens[i]].min(dim=0).values).abs().max().item() < 1e-6
             
-            
         
+class TestAggregateTensorByGroup(object):
+    @pytest.mark.parametrize("x, group_by", [(torch.randn(1, 10, 20), 
+                                              torch.tensor([[0, 0, 1, 1, 2, 3, 3, 3, 3, -1]])), 
+                                             (torch.randn(16, 10, 20), 
+                                              torch.randint(0, 8, size=(16, 10)))])
+    @pytest.mark.parametrize("agg_mode", ['mean', 'max', 'min', 'first', 'last'])
+    def test_example(self, x, group_by, agg_mode):
+        AGG_STEP = 8
+        agg_tensor = SequenceGroupAggregating(mode=agg_mode)(x, group_by, agg_step=AGG_STEP)
         
+        agg_tensor_gold = []
+        for k in range(x.size(0)):
+            curr_agg_tensor_gold = []
+            for i in range(AGG_STEP):
+                piece = x[k][group_by[k] == i]
+                if piece.size(0) > 0:
+                    if agg_mode.lower() == 'mean':
+                        curr_agg_tensor_gold.append(piece.mean(dim=0))
+                    elif agg_mode.lower() == 'max':
+                        curr_agg_tensor_gold.append(piece.max(dim=0).values)
+                    elif agg_mode.lower() == 'min':
+                        curr_agg_tensor_gold.append(piece.min(dim=0).values)
+                    elif agg_mode.lower() == 'first':
+                        curr_agg_tensor_gold.append(piece[0])
+                    elif agg_mode.lower() == 'last':
+                        curr_agg_tensor_gold.append(piece[-1])
+                else:
+                    curr_agg_tensor_gold.append(torch.zeros(piece.size(1)))
+            agg_tensor_gold.append(torch.stack(curr_agg_tensor_gold))
         
+        agg_tensor_gold = torch.stack(agg_tensor_gold)
+        assert (agg_tensor - agg_tensor_gold).abs().max().item() < 1e-6

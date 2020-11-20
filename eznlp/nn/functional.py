@@ -4,6 +4,8 @@ import torch
 
 def seq_lens2mask(seq_lens: torch.LongTensor, max_len: int=None):
     """
+    Convert `seq_lens` to `mask`. 
+    
     Parameters
     ----------
     seq_lens : torch.LongTensor (batch, )
@@ -11,7 +13,7 @@ def seq_lens2mask(seq_lens: torch.LongTensor, max_len: int=None):
     
     Returns
     -------
-    mask : torch.BoolTensor
+    mask : torch.BoolTensor (batch, step)
         The positions with values of True are MASKED, while the others are NOT MASKED. 
     """
     max_len = seq_lens.max().item() if max_len is None else max_len
@@ -19,8 +21,45 @@ def seq_lens2mask(seq_lens: torch.LongTensor, max_len: int=None):
     return (steps >= seq_lens.unsqueeze(1))
 
 
-def aggregate_tensor_by_group(x: torch.FloatTensor, group_by: torch.LongTensor, agg_mode='mean', agg_step: int=None):
+
+def mask2seq_lens(mask: torch.BoolTensor):
     """
+    Convert `mask` to `seq_lens`. 
+    """
+    return mask.size(1) - mask.sum(dim=1)
+
+
+
+def sequence_pooling(x: torch.FloatTensor, mask: torch.BoolTensor, mode: str='mean'):
+    """
+    Pooling values over steps. 
+    
+    Parameters
+    ----------
+    x: torch.FloatTensor (batch, step, hid_dim)
+    mask: torch.BoolTensor (batch, step)
+    mode: str
+        'mean', 'max', 'min'
+    """
+    if mode.lower() == 'mean':
+        x_masked = x.masked_fill(mask.unsqueeze(-1), 0)
+        seq_lens = mask2seq_lens(mask)
+        return x_masked.sum(dim=1) / seq_lens.unsqueeze(1)
+    elif mode.lower() == 'max':
+        x_masked = x.masked_fill(mask.unsqueeze(-1), float('-inf'))
+        return x_masked.max(dim=1).values
+    elif mode.lower() == 'min':
+        x_masked = x.masked_fill(mask.unsqueeze(-1), float('inf'))
+        return x_masked.min(dim=1).values
+    else:
+        raise ValueError(f"Invalid pooling mode {mode}")
+        
+        
+        
+def sequence_group_aggregating(x: torch.FloatTensor, group_by: torch.LongTensor, agg_mode: str='mean', agg_step: int=None):
+    """
+    Aggregating values over steps by groups. 
+    
     Parameters
     ----------
     x : torch.FloatTensor (batch, ori_step, hidden)
@@ -30,6 +69,7 @@ def aggregate_tensor_by_group(x: torch.FloatTensor, group_by: torch.LongTensor, 
         Positions being negative values are NOT used in aggregation. 
     agg_mode: str
         'mean', 'max', 'min', 'first', 'last'
+    agg_step: int
     """
     if agg_mode.lower() not in ('mean', 'max', 'min', 'first', 'last'):
         raise ValueError(f"Invalid aggregation mode {agg_mode}")

@@ -7,7 +7,8 @@ import transformers
 import flair
 
 from ..dataset_utils import Batch
-from ..nn.functional import seq_lens2mask, aggregate_tensor_by_group
+from ..nn import SequenceGroupAggregating
+from ..nn.functional import seq_lens2mask
 from ..config import Config
 
 
@@ -119,7 +120,7 @@ class BertLikeEmbedder(PreTrainedEmbedder):
         super().__init__(config, bert_like)
         
         self.tokenizer = config.tokenizer
-        self.agg_mode = config.agg_mode
+        self.group_aggregating = SequenceGroupAggregating(mode=config.agg_mode)
         if self.mix_layers.lower() == 'trainable':
             self.scalar_mix = ScalarMix(bert_like.config.num_hidden_layers + 1)
         if self.use_gamma:
@@ -168,8 +169,7 @@ class BertLikeEmbedder(PreTrainedEmbedder):
         bert_outs = bert_outs[:, 1:-1]
         
         # agg_bert_outs: (batch, tok_step, hid_dim)
-        agg_bert_outs = aggregate_tensor_by_group(bert_outs, batch_ori_indexes, 
-                                                  agg_mode=self.agg_mode, agg_step=batch.tok_ids.size(1))
+        agg_bert_outs = self.group_aggregating(bert_outs, batch_ori_indexes, agg_step=batch.tok_ids.size(1))
         if self.use_gamma:
             return self.gamma * agg_bert_outs
         else:
@@ -248,7 +248,7 @@ class FlairEmbedder(PreTrainedEmbedder):
         
         self.is_forward = flair_lm.is_forward_lm
         self.dictionary = flair_lm.dictionary
-        self.agg_mode = config.agg_mode
+        self.group_aggregating = SequenceGroupAggregating(mode=config.agg_mode)
         if self.use_gamma:
             self.gamma = torch.nn.Parameter(torch.tensor(1.0))
         
@@ -283,8 +283,7 @@ class FlairEmbedder(PreTrainedEmbedder):
         # flair_hidden: (char_step, batch, hid_dim)
         _, flair_hidden, _ = self.pretrained_model(batch_char_ids, hidden=None)
         # agg_flair_hidden: (batch, tok_step, hid_dim)
-        agg_flair_hidden = aggregate_tensor_by_group(flair_hidden.permute(1, 0, 2), batch_ori_indexes, 
-                                                     agg_mode=self.agg_mode, agg_step=batch.tok_ids.size(1))
+        agg_flair_hidden = self.group_aggregating(flair_hidden.permute(1, 0, 2), batch_ori_indexes, agg_step=batch.tok_ids.size(1))
         
         if self.use_gamma:
             return self.gamma * agg_flair_hidden
