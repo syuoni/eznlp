@@ -112,11 +112,12 @@ class WordDropout(torch.nn.Module):
     ----------
     https://github.com/flairNLP/flair/blob/master/flair/nn.py
     """
-    def __init__(self, p: float=0.05):
+    def __init__(self, p: float=0.05, keep_exp=False):
         super().__init__()
         if p < 0 or p >= 1:
             raise ValueError(f"dropout probability has to be between 0 and 1, but got {p}")
         self.p = p
+        self.keep_exp = keep_exp
         
     def forward(self, x: torch.Tensor):
         if (not self.training) or self.p == 0:
@@ -124,9 +125,13 @@ class WordDropout(torch.nn.Module):
         
         # x: (batch, step, hidden)
         m = torch.empty(x.size(0), x.size(1), 1, device=x.device).bernoulli(p=1-self.p)
-        return x * m / (1 - self.p)
+        # Do NOT adjust values to keep the expectation, according to flair implementation. 
+        if self.keep_exp:
+            return x * m / (1 - self.p)
+        else:
+            return x * m
     
     def extra_repr(self):
-        return f"p={self.p}"
+        return f"p={self.p}, keep_exp={self.keep_exp}"
     
     

@@ -31,7 +31,7 @@ class TestDropout(object):
         HID_DIM = 500
         x = torch.ones(BATCH_SIZE, MAX_LEN, HID_DIM)
         
-        dropout = WordDropout(p=dropout_rate)
+        dropout = WordDropout(p=dropout_rate, keep_exp=True)
         dropout.eval()
         x_word_dropouted = dropout(x)
         assert (x_word_dropouted == x).all().item()
