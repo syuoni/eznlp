@@ -7,10 +7,11 @@ from torchtext.experimental.vocab import Vocab
 from ..dataset_utils import TensorWrapper, Batch, _fetch_token_id
 from .decoder import DecoderConfig
 from .tagger import SequenceTaggerConfig
+from .transition import ChunksTagsTranslator
 
 
 class SequenceTaggingDataset(torch.utils.data.Dataset):
-    def __init__(self, data: list, config: SequenceTaggerConfig):
+    def __init__(self, data: list, config: SequenceTaggerConfig=None):
         """
         Parameters
         ----------
@@ -21,10 +22,13 @@ class SequenceTaggingDataset(torch.utils.data.Dataset):
         """
         super().__init__()
         self.data = data
-        self.config = config
+        if config is not None:
+            self.config = config
+        else:
+            self.config = SequenceTaggerConfig()
         
         self._is_labeled = ('tags' in data[0])
-        self._building_vocabs = (config.decoder.idx2tag is None)
+        self._building_vocabs = (self.config.decoder.idx2tag is None)
         
         if self._building_vocabs:
             assert self._is_labeled
@@ -108,16 +112,21 @@ class SequenceTaggingDataset(torch.utils.data.Dataset):
         
     def summary(self):
         n_seqs = len(self.data)
+        print(f"The dataset consists {n_seqs:,} sequences")
+        
         if 'raw_idx' in self.data[0]:
             n_raws = len({curr_data['raw_idx'] for curr_data in self.data})
-        else:
-            n_raws = n_seqs
+            print(f"\tbuilt from {n_raws:,} raw entries")
             
-        max_len = max([len(curr_data['tokens']) for curr_data in self.data])
-        print(f"The dataset consists {n_seqs} sequences built from {n_raws} raw entries")
-        print(f"The max sequence length is {max_len}")
+        translator = ChunksTagsTranslator(scheme=self.config.decoder.scheme)
+        chunks_data = [translator.tags2chunks(curr_data['tags']) for curr_data in self.data]
+        n_chunks = sum(len(chunks) for chunks in chunks_data)
+        print(f"The dataset has {n_chunks:,} chunks")
         
-    
+        max_len = max([len(curr_data['tokens']) for curr_data in self.data])
+        print(f"The max sequence length is {max_len:,}")
+        
+        
     def __len__(self):
         return len(self.data)
         
