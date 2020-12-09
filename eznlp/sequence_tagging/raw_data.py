@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import re
+
 from ..token import TokenSequence
 from .transition import ChunksTagsTranslator
 
@@ -85,25 +87,77 @@ class BratReader(object):
     """
     A reader of brat-format files
     """
-    def __init__(self):
-        pass
+    def __init__(self, use_attrs=None):
+        self.use_attrs = use_attrs
+        
     
     def read(self, file_path, encoding=None):
         with open(file_path, 'r', encoding=encoding) as f:
             text = f.read()
         with open(file_path.replace('.txt', '.ann'), 'r', encoding=encoding) as f:
-            ann = f.readlines()
+            anns = f.readlines()
             
+        if ("\n" in text) and ("\r\n" not in text):
+            text = text.replace("\n", "\r\n")
+            
+        text_chunks = dict([self._parse_chunk_ann(ann) for ann in anns if ann.startswith('T')])
+        for chunk_id, text_chunk in text_chunks.items():
+            chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text = text_chunk
+            assert text[chunk_start_in_text:chunk_end_in_text].strip() == chunk_text.strip()
+            
+        # Update chunk_type for potential attributes
+        if self.use_attrs is not None:
+            attrs = [self._parse_attr_ann(ann) for ann in anns if ann.startswith('A')]
+            for chunk_id, attr_type in attrs:
+                if attr_type not in self.use_attrs:
+                    continue
+                
+                chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text = text_chunks[chunk_id]
+                ori_type, *chunk_attr_types = chunk_type.split('<s>')
+                chunk_attr_types.append(attr_type)
+                chunk_type = '<s>'.join([ori_type] + sorted(chunk_attr_types))
+                text_chunks[chunk_id] = chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text
+                
+        text_chunks = list(text_chunks.values())
+        
         data = []
-        
-        
+        line_start = 0
+        for line_cut in re.finditer("\r\n", text):
+            line_end = line_cut.start()
+            if line_end > line_start:
+                data.append(self._build_entry(text, text_chunks, line_start, line_end))
+            line_start = line_cut.end()
             
+        if len(text) > line_start:
+            data.append(self._build_entry(text, text_chunks, line_start))
+        return data
             
-            
-    
-    
-    
+        
+    def _build_entry(self, text: str, text_chunks: list, line_start=None, line_end=None):
+        line_start = 0 if line_start is None else line_start
+        line_end = len(text) if line_end is None else line_end
+        
+        chunks = []
+        for chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text in text_chunks:
+            if (line_start <= chunk_start_in_text) and (chunk_end_in_text <= line_end):
+                # TODO: chunk_start != chunk_start_in_text
+                chunk_start = chunk_start_in_text - line_start
+                chunk_end = chunk_end_in_text - line_start
+                chunks.append((chunk_type, chunk_start, chunk_end))
+                
+        return {'tokens': TokenSequence.from_tokenized_text(list(text[line_start:line_end])),
+                'chunks': chunks}
         
         
+    def _parse_chunk_ann(self, ann):
+        chunk_id, chunk_type_pos, chunk_text = ann.strip().split("\t")
+        chunk_type, chunk_start_in_text, chunk_end_in_text = chunk_type_pos.split(" ")
+        chunk_start_in_text = int(chunk_start_in_text)
+        chunk_end_in_text = int(chunk_end_in_text)
+        return chunk_id, (chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text)
         
+    def _parse_attr_ann(self, ann):
+        attr_id, attr_type_and_chunk_id = ann.strip().split("\t")
+        attr_type, chunk_id = attr_type_and_chunk_id.split(" ")
+        return chunk_id, attr_type
     

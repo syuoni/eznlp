@@ -111,7 +111,7 @@ class SequenceTaggingDataset(torch.utils.data.Dataset):
             
         oov_tags = [tag for tag in counter if tag not in self.config.decoder.tag2idx]
         if len(oov_tags) > 0:
-            raise ValueError(f"OOV tags exist: {oov_tags}")
+            raise RuntimeError(f"OOV tags exist: {oov_tags}")
             
         
     def summary(self):

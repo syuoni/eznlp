@@ -30,7 +30,7 @@ from eznlp.sequence_tagging import SequenceTaggingDataset
 from eznlp.sequence_tagging import SequenceTaggingTrainer
 from eznlp.sequence_tagging import ChunksTagsTranslator
 from eznlp.sequence_tagging import precision_recall_f1_report
-from eznlp.sequence_tagging.raw_data import ConllReader
+from eznlp.sequence_tagging.raw_data import ConllReader, BratReader
 from eznlp.sequence_tagging.transition import find_ascending
 from eznlp.language_modeling import MLMDataset, PMCMLMDataset, MLMTrainer
 
@@ -120,10 +120,12 @@ if __name__ == '__main__':
     # reader = ConllReader(text_col_id=0, tag_col_id=3, scheme='BIO1')
     # data = reader.read("assets/data/conll2003/eng.testa")
     
-    reader = ConllReader(text_col_id=3, tag_col_id=10, scheme='OntoNotes', line_sep_starts=["#begin", "#end", "pt/"])
-    data = reader.read("assets/data/conll2012/dev.chinese.v4_gold_conll", encoding='utf-8')
+    # reader = ConllReader(text_col_id=3, tag_col_id=10, scheme='OntoNotes', line_sep_starts=["#begin", "#end", "pt/"])
+    # data = reader.read("assets/data/conll2012/dev.chinese.v4_gold_conll", encoding='utf-8')
     
     
+    reader = BratReader(use_attrs=['Denied', 'Analyzed'])
+    brat_data = reader.read("assets/data/brat/demo.txt", encoding='utf-8')
     
     
     
