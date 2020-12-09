@@ -271,13 +271,9 @@ class SchemeTranslator(object):
         self.to_ct_translator   = ChunksTagsTranslator(scheme=to_scheme)
         self.breaking_for_types = breaking_for_types
         
-        
     def translate(self, tags):
         chunks = self.from_ct_translator.tags2chunks(tags, breaking_for_types=self.breaking_for_types)
         to_tags = self.to_ct_translator.chunks2tags(chunks, len(tags))
         return to_tags
         
         
-        
-
-
