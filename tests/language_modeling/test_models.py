@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from transformers import BertTokenizer, BertForMaskedLM
 from transformers import RobertaTokenizer, RobertaForMaskedLM
 
-from eznlp.sequence_tagging.raw_data import parse_conll_file
+from eznlp.sequence_tagging.raw_data import ConllReader
 from eznlp.language_modeling import MLMDataset, PMCMLMDataset, MLMTrainer
 
 
@@ -29,16 +29,8 @@ class TestMLM(object):
         bert4mlm, tokenizer = BERT4MLM_with_tokenizer
         bert4mlm = bert4mlm.to(device)
         
-        conll_config = {'raw_scheme': 'BIO1', 
-                        'scheme': 'BIOES', 
-                        'columns': ['text', 'pos_tag', 'chunking_tag', 'ner_tag'], 
-                        'trg_col': 'ner_tag', 
-                        'attach_additional_tags': False, 
-                        'skip_docstart': False, 
-                        'lower_case_mode': 'None'}
-    
-        train_data = parse_conll_file("assets/data/conll2003/eng.train", max_examples=200, **conll_config)
-        
+        reader = ConllReader(text_col_id=0, tag_col_id=3, scheme='BIO1')
+        train_data = reader.read("assets/data/conll2003/eng.train")
         train_set = MLMDataset(train_data, tokenizer)
         batch = [train_set[i] for i in range(4)]
         batch012 = train_set.collate(batch[:3]).to(device)

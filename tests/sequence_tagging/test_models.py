@@ -12,21 +12,14 @@ from eznlp import EncoderConfig, PreTrainedEmbedderConfig
 from eznlp.sequence_tagging import DecoderConfig, SequenceTaggerConfig
 from eznlp.sequence_tagging import SequenceTaggingDataset
 from eznlp.sequence_tagging import SequenceTaggingTrainer
-from eznlp.sequence_tagging.raw_data import parse_conll_file
+from eznlp.sequence_tagging.raw_data import ConllReader
 
 
 def load_demo_data(scheme='BIOES'):
-    conll_config = {'raw_scheme': 'BIO1', 
-                    'scheme': scheme, 
-                    'columns': ['text', 'pos_tag', 'chunking_tag', 'ner_tag'], 
-                    'trg_col': 'ner_tag', 
-                    'attach_additional_tags': False, 
-                    'skip_docstart': False, 
-                    'lower_case_mode': 'None'}
-    
-    train_data = parse_conll_file("assets/data/conll2003/eng.train", max_examples=200, **conll_config)
-    val_data   = parse_conll_file("assets/data/conll2003/eng.testa", max_examples=10,  **conll_config)
-    test_data  = parse_conll_file("assets/data/conll2003/eng.testb", max_examples=10,  **conll_config)
+    reader = ConllReader(text_col_id=0, tag_col_id=3, scheme='BIO1')
+    train_data = reader.read("assets/data/conll2003/eng.train")
+    val_data   = reader.read("assets/data/conll2003/eng.testa")
+    test_data  = reader.read("assets/data/conll2003/eng.testb")
     return train_data, val_data, test_data
 
 

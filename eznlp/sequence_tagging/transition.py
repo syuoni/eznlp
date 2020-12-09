@@ -76,7 +76,7 @@ class ChunksTagsTranslator(object):
     https://github.com/chakki-works/seqeval
     """
     def __init__(self, scheme='BIOES'):
-        assert scheme in ('BIO1', 'BIO2', 'BIOES')
+        assert scheme in ('BIO1', 'BIO2', 'BIOES', 'OntoNotes')
         self.scheme = scheme
         
         dirname = os.path.dirname(__file__)
@@ -129,6 +129,18 @@ class ChunksTagsTranslator(object):
                     for k in range(chunk_start+1, chunk_end-1):
                         tags[k] = 'I-' + chunk_type
             
+            elif self.scheme == 'OntoNotes':
+                if chunk_end - chunk_start == 1:
+                    tags[chunk_start] = '(' + chunk_type + ')'
+                else:
+                    tags[chunk_start] = '(' + chunk_type + '*'
+                    tags[chunk_end-1] = '*)'
+                    for k in range(chunk_start+1, chunk_end-1):
+                        tags[k] = '*'
+                        
+        if self.scheme == 'OntoNotes':
+            tags = ['*' if tag == 'O' else tag for tag in tags]
+            
         return tags
         
     
@@ -142,10 +154,11 @@ class ChunksTagsTranslator(object):
             type_counter[chunk_types[0]] += 0.5
             return type_counter.most_common(1)[0][0]
     
-        
     def tags2chunks(self, tags: list, breaking_for_types: bool=True):
-        chunks = []
+        if self.scheme == 'OntoNotes':
+            return self.ontonotes_tags2chunks(tags)
         
+        chunks = []
         prev_tag, prev_type = 'O', 'O'
         chunk_start, chunk_types = -1, []
         
@@ -160,19 +173,19 @@ class ChunksTagsTranslator(object):
                     this_tag, this_type = tag, '<pseudo-type>'
                     
             this_trans = self.trans[(prev_tag, this_tag)]
-            is_in_chunk = (prev_tag != 'O') and (this_tag != 'O') and \
-                          (not this_trans['end_of_chunk']) and (not this_trans['start_of_chunk'])
+            is_in_chunk = (prev_tag != 'O') and (this_tag != 'O') and (not this_trans['end_of_chunk']) and (not this_trans['start_of_chunk'])
             
-            # Breaking because of different types, is holding only in case of ``is_in_chunk`` being True. 
-            # In such case, the ``prev_tag`` must be ``B`` or ``I`` and 
-            #               the ``this_tag`` must be ``I`` or ``E``. 
-            # The breaking operation is equivalent to treating ``this_tag`` as ``B``. 
+            # Breaking because of different types, is holding only in case of `is_in_chunk` being True. 
+            # In such case, the `prev_tag` must be `B` or `I` and 
+            #               the `this_tag` must be `I` or `E`. 
+            # The breaking operation is equivalent to treating `this_tag` as `B`. 
             if is_in_chunk and breaking_for_types and (this_type != prev_type):
                 this_trans = self.trans[(prev_tag, 'B')]
                 is_in_chunk = False
                 
             if this_trans['end_of_chunk']:
                 chunks.append((self._vote_in_types(chunk_types, breaking_for_types), chunk_start, k))
+                chunk_types = []
                 
             if this_trans['start_of_chunk']:
                 chunk_start = k
@@ -189,6 +202,33 @@ class ChunksTagsTranslator(object):
             
         return chunks
         
+    def ontonotes_tags2chunks(self, tags: list):
+        chunks = []
+        prev_tag = '*)'
+        chunk_start, chunk_type = -1, None
+        
+        for k, tag in enumerate(tags):
+            this_tag = "".join(re.findall('[\(\*\)]', tag))
+            this_type = re.sub('[\(\*\)]', '', tag)
+            
+            this_trans = self.trans[(prev_tag, this_tag)]
+            
+            if this_trans['end_of_chunk'] and (chunk_type is not None):
+                chunks.append((chunk_type, chunk_start, k))
+                chunk_type = None
+                
+            if this_trans['start_of_chunk']:
+                chunk_start = k
+                chunk_type = this_type
+                
+            prev_tag = this_tag
+            
+            
+        if self.trans[(prev_tag, '(*')]['end_of_chunk']:
+            chunks.append((chunk_type, chunk_start, len(tags)))
+            
+        return chunks
+    
         
     def chunks2text_chunks(self, chunks: list, raw_text: str, tokens: TokenSequence):
         text_starts, text_ends = tokens.start, tokens.end
@@ -262,18 +302,4 @@ class ChunksTagsTranslator(object):
         return self.chunks2tags(chunks, len(tokens), **kwargs), errors, mismatches
     
     
-class SchemeTranslator(object):
-    """
-    The translator between tags of different tagging schemes. 
-    """
-    def __init__(self, from_scheme: str, to_scheme: str, breaking_for_types: bool=True):
-        self.from_ct_translator = ChunksTagsTranslator(scheme=from_scheme)
-        self.to_ct_translator   = ChunksTagsTranslator(scheme=to_scheme)
-        self.breaking_for_types = breaking_for_types
-        
-    def translate(self, tags):
-        chunks = self.from_ct_translator.tags2chunks(tags, breaking_for_types=self.breaking_for_types)
-        to_tags = self.to_ct_translator.chunks2tags(chunks, len(tags))
-        return to_tags
-        
-        
+    

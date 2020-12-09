@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 import pytest
+import itertools
 import spacy
 import numpy as np
 
 from eznlp import TokenSequence
 from eznlp.sequence_tagging import DecoderConfig
-from eznlp.sequence_tagging import ChunksTagsTranslator, SchemeTranslator
+from eznlp.sequence_tagging import ChunksTagsTranslator
 from eznlp.sequence_tagging import precision_recall_f1_report
-from eznlp.sequence_tagging.raw_data import parse_conll_file
+from eznlp.sequence_tagging.raw_data import ConllReader
 from eznlp.sequence_tagging.transition import find_ascending
 
 
@@ -88,26 +89,49 @@ class TestChunksTagsTranslator(object):
             text_chunks_retr_spans.extend(translator.tags2text_chunks(tags[span], raw_text, tokens[span], breaking_for_types=False))
         assert text_chunks_retr_spans == text_chunks
         
-        
         text_chunks_retr = translator.tags2text_chunks(tags, raw_text, tokens, breaking_for_types=True)
         assert text_chunks_retr[:2] == text_chunks[:2]
         assert text_chunks_retr[2][1] == 'EntB'
         assert text_chunks_retr[3][1] == 'EntC'
         
+    
+    @pytest.mark.parametrize("from_scheme, from_tags", 
+                             [('BIO1',  ['O', 'I-EntA', 'I-EntA', 'I-EntA', 'B-EntA', 'B-EntB', 'O', 'I-EntC', 'I-EntC', 'O']), 
+                              ('BIO2',  ['O', 'B-EntA', 'I-EntA', 'I-EntA', 'B-EntA', 'B-EntB', 'O', 'B-EntC', 'I-EntC', 'O']), 
+                              ('BIOES', ['O', 'B-EntA', 'I-EntA', 'E-EntA', 'S-EntA', 'S-EntB', 'O', 'B-EntC', 'E-EntC', 'O']), 
+                              ('OntoNotes', ['*', '(EntA*', '*', '*)', '(EntA)', '(EntB)', '*', '(EntC*', '*)', '*'])])
+    @pytest.mark.parametrize("to_scheme, to_tags", 
+                             [('BIO1',  ['O', 'I-EntA', 'I-EntA', 'I-EntA', 'B-EntA', 'B-EntB', 'O', 'I-EntC', 'I-EntC', 'O']), 
+                              ('BIO2',  ['O', 'B-EntA', 'I-EntA', 'I-EntA', 'B-EntA', 'B-EntB', 'O', 'B-EntC', 'I-EntC', 'O']), 
+                              ('BIOES', ['O', 'B-EntA', 'I-EntA', 'E-EntA', 'S-EntA', 'S-EntB', 'O', 'B-EntC', 'E-EntC', 'O']), 
+                              ('OntoNotes', ['*', '(EntA*', '*', '*)', '(EntA)', '(EntB)', '*', '(EntC*', '*)', '*'])])
+    def test_scheme_translation1(self, from_scheme, from_tags, to_scheme, to_tags):
+        from_translator = ChunksTagsTranslator(scheme=from_scheme)
+        to_translator = ChunksTagsTranslator(scheme=to_scheme)
         
-class TestSchemeTranslator(object):
-    def test_scheme_translator(self):
-        tags_dic = {'BIO1':  ['O', 'I-EntA', 'I-EntA', 'I-EntA', 'B-EntA', 'B-EntB', 'O', 'I-EntC', 'I-EntC', 'O'], 
-                    'BIO2':  ['O', 'B-EntA', 'I-EntA', 'I-EntA', 'B-EntA', 'B-EntB', 'O', 'B-EntC', 'I-EntC', 'O'], 
-                    'BIOES': ['O', 'B-EntA', 'I-EntA', 'E-EntA', 'S-EntA', 'S-EntB', 'O', 'B-EntC', 'E-EntC', 'O']}
+        chunks = from_translator.tags2chunks(from_tags)
+        from_tags_translated = to_translator.chunks2tags(chunks, len(from_tags))
+        assert from_tags_translated == to_tags
         
-        for from_scheme in tags_dic:
-            for to_scheme in tags_dic:
-                from_tags_translated = SchemeTranslator(from_scheme=from_scheme, to_scheme=to_scheme, 
-                                                        breaking_for_types=True).translate(tags_dic[from_scheme])
-                assert from_tags_translated == tags_dic[to_scheme]
-                
-                
+    @pytest.mark.parametrize("from_scheme, from_tags", 
+                             [('BIO1',  ['I-EntA', 'I-EntA', 'I-EntA', 'B-EntA', 'B-EntB', 'O', 'I-EntC', 'I-EntC']), 
+                              ('BIO2',  ['B-EntA', 'I-EntA', 'I-EntA', 'B-EntA', 'B-EntB', 'O', 'B-EntC', 'I-EntC']), 
+                              ('BIOES', ['B-EntA', 'I-EntA', 'E-EntA', 'S-EntA', 'S-EntB', 'O', 'B-EntC', 'E-EntC']), 
+                              ('OntoNotes', ['(EntA*', '*', '*)', '(EntA)', '(EntB)', '*', '(EntC*', '*)'])])
+    @pytest.mark.parametrize("to_scheme, to_tags", 
+                             [('BIO1',  ['I-EntA', 'I-EntA', 'I-EntA', 'B-EntA', 'B-EntB', 'O', 'I-EntC', 'I-EntC']), 
+                              ('BIO2',  ['B-EntA', 'I-EntA', 'I-EntA', 'B-EntA', 'B-EntB', 'O', 'B-EntC', 'I-EntC']), 
+                              ('BIOES', ['B-EntA', 'I-EntA', 'E-EntA', 'S-EntA', 'S-EntB', 'O', 'B-EntC', 'E-EntC']), 
+                              ('OntoNotes', ['(EntA*', '*', '*)', '(EntA)', '(EntB)', '*', '(EntC*', '*)'])])
+    def test_scheme_translation2(self, from_scheme, from_tags, to_scheme, to_tags):
+        from_translator = ChunksTagsTranslator(scheme=from_scheme)
+        to_translator = ChunksTagsTranslator(scheme=to_scheme)
+        
+        chunks = from_translator.tags2chunks(from_tags)
+        from_tags_translated = to_translator.chunks2tags(chunks, len(from_tags))
+        assert from_tags_translated == to_tags
+        
+        
 # class TestTagHelper(object):
 #     def test_dictionary(self, BIOES_tags_example, BIOES_dec_config_example):
 #         (tags, cas_tags, cas_types), (tag_ids, cas_tag_ids, cas_type_ids) = BIOES_tags_example
@@ -144,57 +168,38 @@ class TestSchemeTranslator(object):
         
         
 class TestMetrics(object):
-    def one_pair_pass(self, tags_gold_data, tags_pred_data, expected_ave_scores):
+    @pytest.mark.parametrize("tags_gold_data, tags_pred_data, expected_ave_scores", 
+                             [([['B-A', 'B-B', 'O', 'B-A']], 
+                               [['O', 'B-B', 'B-C', 'B-A']], 
+                               {'macro': {'precision': 2/3, 'recall': 1/2, 'f1': 5/9}, 
+                                'micro': {'precision': 2/3, 'recall': 2/3, 'f1': 2/3}}), 
+                              ([['O', 'O', 'O', 'B-MISC', 'I-MISC', 'I-MISC', 'O'], 
+                                ['B-PER', 'I-PER', 'O']], 
+                               [['O', 'O', 'B-MISC', 'I-MISC', 'I-MISC', 'I-MISC', 'O'], 
+                                ['B-PER', 'I-PER', 'O']], 
+                               {'macro': {'precision': 0.5, 'recall': 0.5, 'f1': 0.5}, 
+                                'micro': {'precision': 0.5, 'recall': 0.5, 'f1': 0.5}})])
+    def test_example(self, tags_gold_data, tags_pred_data, expected_ave_scores):
         translator = ChunksTagsTranslator(scheme='BIO2')
         chunks_gold_data = [translator.tags2chunks(tags, False) for tags in tags_gold_data]
         chunks_pred_data = [translator.tags2chunks(tags, False) for tags in tags_pred_data]
         
         scores, ave_scores = precision_recall_f1_report(chunks_gold_data, chunks_pred_data)
-        
         for key in ave_scores:
             for score_key in ['precision', 'recall', 'f1']:
                 assert np.abs(ave_scores[key][score_key] - expected_ave_scores[key][score_key]) < 1e-6
                 
-        
-    def test_example1(self):
-        tags_gold_data = [['B-A', 'B-B', 'O', 'B-A']]
-        tags_pred_data = [['O', 'B-B', 'B-C', 'B-A']]
-        expected_ave_scores = {'macro': {'precision': 2/3,
-                                         'recall': 1/2, 
-                                         'f1': 5/9}, 
-                               'micro': {'precision': 2/3, 
-                                         'recall': 2/3, 
-                                         'f1': 2/3}}
-        self.one_pair_pass(tags_gold_data, tags_pred_data, expected_ave_scores)
-        
-        
-    def test_example2(self):
-        tags_gold_data = [['O', 'O', 'O', 'B-MISC', 'I-MISC', 'I-MISC', 'O'], ['B-PER', 'I-PER', 'O']]
-        tags_pred_data = [['O', 'O', 'B-MISC', 'I-MISC', 'I-MISC', 'I-MISC', 'O'], ['B-PER', 'I-PER', 'O']]
-        expected_ave_scores = {'macro': {'precision': 0.5,
-                                         'recall': 0.5, 
-                                         'f1': 0.5}, 
-                               'micro': {'precision': 0.5,
-                                         'recall': 0.5, 
-                                         'f1': 0.5}}
-        self.one_pair_pass(tags_gold_data, tags_pred_data, expected_ave_scores)
-        
-        
+                
     def test_conll2000(self):
         # https://www.clips.uantwerpen.be/conll2000/chunking/output.html
         # https://github.com/chakki-works/seqeval
-        conll_config = {'raw_scheme': 'BIO1', 
-                        'scheme': 'BIO2', 
-                        'columns': ['text', 'pos_tag', 'chunking_tag_gold', 'chunking_tag_pred'], 
-                        'attach_additional_tags': False, 
-                        'skip_docstart': False, 
-                        'lower_case_mode': 'None'}
+        gold_reader = ConllReader(text_col_id=0, tag_col_id=2, scheme='BIO2')
+        gold_data = gold_reader.read("assets/conlleval/output.txt")
+        pred_reader = ConllReader(text_col_id=0, tag_col_id=3, scheme='BIO2')
+        pred_data = pred_reader.read("assets/conlleval/output.txt")
         
-        gold_data = parse_conll_file("assets/conlleval/output.txt", trg_col='chunking_tag_gold', **conll_config)
-        pred_data = parse_conll_file("assets/conlleval/output.txt", trg_col='chunking_tag_pred', **conll_config)
-        
-        tags_gold_data = [ex['tags'] for ex in gold_data]
-        tags_pred_data = [ex['tags'] for ex in pred_data]
+        chunks_gold_data = [ex['chunks'] for ex in gold_data]
+        chunks_pred_data = [ex['chunks'] for ex in pred_data]
         
         expected_ave_scores = {'macro': {'precision': 0.54880502,
                                          'recall': 0.58776420, 
@@ -202,6 +207,9 @@ class TestMetrics(object):
                                'micro': {'precision': 0.68831169, 
                                          'recall': 0.80827887, 
                                          'f1': 0.74348697}}
-        self.one_pair_pass(tags_gold_data, tags_pred_data, expected_ave_scores)
+        scores, ave_scores = precision_recall_f1_report(chunks_gold_data, chunks_pred_data)
+        for key in ave_scores:
+            for score_key in ['precision', 'recall', 'f1']:
+                assert np.abs(ave_scores[key][score_key] - expected_ave_scores[key][score_key]) < 1e-6
         
         

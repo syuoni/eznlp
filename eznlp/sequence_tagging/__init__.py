@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from .transition import ChunksTagsTranslator, SchemeTranslator
+from .transition import ChunksTagsTranslator
 from .dataset import SequenceTaggingDataset
 from .decoder import DecoderConfig
 from .tagger import SequenceTaggerConfig
