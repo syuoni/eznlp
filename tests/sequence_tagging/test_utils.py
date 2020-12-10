@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import pytest
-import itertools
 import spacy
 import numpy as np
 
@@ -8,7 +7,7 @@ from eznlp import TokenSequence
 from eznlp.sequence_tagging import DecoderConfig
 from eznlp.sequence_tagging import ChunksTagsTranslator
 from eznlp.sequence_tagging import precision_recall_f1_report
-from eznlp.sequence_tagging.raw_data import ConllReader
+from eznlp.sequence_tagging.io import ConllIO
 from eznlp.sequence_tagging.transition import find_ascending
 
 
@@ -193,10 +192,8 @@ class TestMetrics(object):
     def test_conll2000(self):
         # https://www.clips.uantwerpen.be/conll2000/chunking/output.html
         # https://github.com/chakki-works/seqeval
-        gold_reader = ConllReader(text_col_id=0, tag_col_id=2, scheme='BIO2')
-        gold_data = gold_reader.read("assets/conlleval/output.txt")
-        pred_reader = ConllReader(text_col_id=0, tag_col_id=3, scheme='BIO2')
-        pred_data = pred_reader.read("assets/conlleval/output.txt")
+        gold_data = ConllIO(text_col_id=0, tag_col_id=2, scheme='BIO2').read("assets/conlleval/output.txt")
+        pred_data = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO2').read("assets/conlleval/output.txt")
         
         chunks_gold_data = [ex['chunks'] for ex in gold_data]
         chunks_pred_data = [ex['chunks'] for ex in pred_data]

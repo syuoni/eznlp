@@ -12,14 +12,14 @@ from eznlp import EncoderConfig, PreTrainedEmbedderConfig
 from eznlp.sequence_tagging import DecoderConfig, SequenceTaggerConfig
 from eznlp.sequence_tagging import SequenceTaggingDataset
 from eznlp.sequence_tagging import SequenceTaggingTrainer
-from eznlp.sequence_tagging.raw_data import ConllReader
+from eznlp.sequence_tagging.io import ConllIO
 
 
 def load_demo_data(scheme='BIOES'):
-    reader = ConllReader(text_col_id=0, tag_col_id=3, scheme='BIO1')
-    train_data = reader.read("assets/data/conll2003/eng.train")
-    val_data   = reader.read("assets/data/conll2003/eng.testa")
-    test_data  = reader.read("assets/data/conll2003/eng.testb")
+    conll_io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1')
+    train_data = conll_io.read("assets/data/conll2003/eng.train")
+    val_data   = conll_io.read("assets/data/conll2003/eng.testa")
+    test_data  = conll_io.read("assets/data/conll2003/eng.testb")
     return train_data, val_data, test_data
 
 
