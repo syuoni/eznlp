@@ -120,7 +120,6 @@ if __name__ == '__main__':
     
     brat_io = BratIO(use_attrs=['Denied', 'Analyzed'])
     brat_data = brat_io.read("assets/data/brat/demo.txt", encoding='utf-8')
-    
     brat_io.write(brat_data, "assets/data/brat/demo-write.txt", encoding='utf-8')
     
     
