@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 from typing import List
-from collections import Counter, OrderedDict
+from collections import Counter
 import torch
 from torch.nn.utils.rnn import pad_sequence
-from torchtext.experimental.vocab import Vocab
 
 from ..data import TensorWrapper, Batch
 from ..data import Dataset
