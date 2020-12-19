@@ -4,7 +4,7 @@ import flair
 flair.device = torch.device('cpu')
 
 
-__version__ = '0.0.4'
+__version__ = '0.0.5'
 
 from .token import Token, TokenSequence, custom_spacy_tokenizer
 from .config import ConfigList, ConfigDict
