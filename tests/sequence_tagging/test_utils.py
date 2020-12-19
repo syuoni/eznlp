@@ -43,7 +43,7 @@ def BIOES_dec_config_example():
     dec_config_nocas = DecoderConfig(scheme='BIOES', cascade_mode='None', 
                                      idx2tag=idx2tag, idx2cas_tag=idx2cas_tag, idx2cas_type=idx2cas_type)
     dec_config_sliced = DecoderConfig(scheme='BIOES', cascade_mode='Sliced', 
-                                   idx2tag=idx2tag, idx2cas_tag=idx2cas_tag, idx2cas_type=idx2cas_type)
+                                      idx2tag=idx2tag, idx2cas_tag=idx2cas_tag, idx2cas_type=idx2cas_type)
     return dec_config_nocas, dec_config_sliced
 
 

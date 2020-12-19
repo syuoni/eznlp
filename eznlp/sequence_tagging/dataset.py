@@ -6,12 +6,13 @@ from torch.nn.utils.rnn import pad_sequence
 from torchtext.experimental.vocab import Vocab
 
 from ..data import TensorWrapper, Batch
+from ..data import Dataset
 from .decoder import DecoderConfig
 from .tagger import SequenceTaggerConfig
 from .transition import ChunksTagsTranslator
 
 
-class SequenceTaggingDataset(torch.utils.data.Dataset):
+class SequenceTaggingDataset(Dataset):
     def __init__(self, data: List[dict], config: SequenceTaggerConfig=None):
         """
         Parameters
@@ -23,15 +24,12 @@ class SequenceTaggingDataset(torch.utils.data.Dataset):
             `chunks` should be [(chunk_type, chunk_start, chunk_end), ...].
             `chunks` is an optional key, which does not exist if the data are unlabeled. 
         """
-        super().__init__()
-        self.data = data
-        if config is not None:
-            self.config = config
-        else:
-            self.config = SequenceTaggerConfig()
+        if config is None:
+            config = SequenceTaggerConfig()
+        super().__init__(data, config)
         
-        self._is_labeled = ('chunks' in data[0])
         self.translator = ChunksTagsTranslator(scheme=self.config.decoder.scheme)
+        self._is_labeled = ('chunks' in data[0])
         if self._is_labeled:
             self._build_tags()
         
@@ -53,41 +51,7 @@ class SequenceTaggingDataset(torch.utils.data.Dataset):
             if self._is_labeled:
                 self._check_tag_vocabs()
                 
-        
-    def _build_token_vocab(self):
-        counter = Counter()
-        for curr_data in self.data:
-            counter.update(curr_data['tokens'].text)
-        self.config.embedder.token.vocab = Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + counter.most_common()), min_freq=1)
-        
-    def extend_token_vocab(self, *others):
-        counter = Counter()
-        for data in others:
-            for curr_data in data:
-                counter.update(curr_data['tokens'].text)
                 
-        existing_tokens = self.config.embedder.token.vocab.get_itos()
-        existing_set = set(existing_tokens)
-        self.config.embedder.token.vocab = Vocab(OrderedDict([(tok, 100) for tok in existing_tokens] + \
-                                               [(tok, freq) for tok, freq in counter.most_common() if tok not in existing_set]), min_freq=1)
-        
-    def _build_char_vocab(self):
-        counter = Counter()
-        for curr_data in self.data:
-            for tok in curr_data['tokens'].raw_text:
-                counter.update(tok)
-        self.config.embedder.char.vocab = Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + counter.most_common()), min_freq=1)
-        
-    def _build_enum_vocabs(self):
-        counters = {f: Counter() for f in self.config.embedder.enum.keys()}
-        for curr_data in self.data:
-            for f, c in counters.items():
-                c.update(getattr(curr_data['tokens'], f))
-        
-        for f, enum_config in self.config.embedder.enum.items():
-            enum_config.vocab = Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + counters[f].most_common()), min_freq=1)
-            
-            
     def _build_tags(self):
         for curr_data in self.data:
             curr_data['tags'] = self.translator.chunks2tags(curr_data['chunks'], len(curr_data['tokens']))
@@ -98,6 +62,16 @@ class SequenceTaggingDataset(torch.utils.data.Dataset):
         for curr_data in self.data:
             counter.update(curr_data['tags'])
         self.config.decoder.set_vocab(idx2tag=['<pad>'] + list(counter.keys()))
+            
+    
+    def _check_tag_vocabs(self):
+        counter = Counter()
+        for curr_data in self.data:
+            counter.update(curr_data['tags'])
+            
+        oov_tags = [tag for tag in counter if tag not in self.config.decoder.tag2idx]
+        if len(oov_tags) > 0:
+            raise RuntimeError(f"OOV tags exist: {oov_tags}")
             
     # TODO
     # def _build_cas_tag_vocabs(self):
@@ -110,33 +84,10 @@ class SequenceTaggingDataset(torch.utils.data.Dataset):
     #     self.config.decoder.set_vocabs(idx2cas_tag=['<pad>'] + list(cas_tag_counter.keys()), 
     #                                    idx2cas_type=['<pad>'] + list(cas_type_counter.keys()))
         
-    def _check_tag_vocabs(self):
-        counter = Counter()
-        for curr_data in self.data:
-            counter.update(curr_data['tags'])
-            
-        oov_tags = [tag for tag in counter if tag not in self.config.decoder.tag2idx]
-        if len(oov_tags) > 0:
-            raise RuntimeError(f"OOV tags exist: {oov_tags}")
-            
-        
-    def summary(self):
-        n_seqs = len(self.data)
-        print(f"The dataset consists {n_seqs:,} sequences")
-        
-        if 'raw_idx' in self.data[0]:
-            n_raws = len({curr_data['raw_idx'] for curr_data in self.data})
-            print(f"\tbuilt from {n_raws:,} raw entries")
-            
+    def extra_summary(self):
         n_chunks = sum(len(curr_data['chunks']) for curr_data in self.data)
-        print(f"The dataset has {n_chunks:,} chunks")
+        return f"The dataset has {n_chunks:,} chunks"
         
-        max_len = max([len(curr_data['tokens']) for curr_data in self.data])
-        print(f"The max sequence length is {max_len:,}")
-        
-        
-    def __len__(self):
-        return len(self.data)
         
     def __getitem__(self, i):
         curr_data = self.data[i]
@@ -163,7 +114,6 @@ class SequenceTaggingDataset(torch.utils.data.Dataset):
         return TensorWrapper(char_ids=char_ids, tok_ids=tok_ids, enum=enum_feats, val=val_feats, 
                              tokenized_raw_text=tokenized_raw_text, 
                              tags_obj=tags_obj)
-    
     
     
     def collate(self, batch_examples):

@@ -1,45 +1,80 @@
 # -*- coding: utf-8 -*-
+from typing import List
+from collections import Counter, OrderedDict
 import torch
 from torchtext.experimental.vocab import Vocab
 
 from ..nn.functional import seq_lens2mask
+from ..config import Config
 
 
-def _fetch_token_id(token: str, vocab: Vocab):
-    tried_set = set()
-    unk_id = vocab['<unk>']
-    for possible_token in [token, token.lower(), token.title(), token.upper()]:
-        if possible_token in tried_set:
-            continue
+class Dataset(torch.utils.data.Dataset):
+    def __init__(self, data: List[dict], config: Config):
+        """
+        Parameters
+        ----------
+        data : list of dict
+            [{'tokens': TokenSequence}, ...]
+        """
+        super().__init__()
+        self.data = data
+        self.config = config
         
-        token_id = vocab[possible_token]
-        if token_id != unk_id:
-            return token_id
-        tried_set.add(possible_token)
+    def __len__(self):
+        return len(self.data)
         
-    return unk_id
-
-
-def pad_seqs(seqs, padding_value=0.0, length=None):
-    # Alternative: `torch.nn.utils.rnn.pad_sequence` which pads a list of tensors.
-    maxlen = max(len(s) for s in seqs)
-    length = maxlen if length is None else max(length, maxlen)
+    def _build_token_vocab(self):
+        counter = Counter()
+        for curr_data in self.data:
+            counter.update(curr_data['tokens'].text)
+        self.config.embedder.token.vocab = Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + counter.most_common()), min_freq=1)
+        
+    def extend_token_vocab(self, *others):
+        counter = Counter()
+        for data in others:
+            for curr_data in data:
+                counter.update(curr_data['tokens'].text)
+                
+        existing_tokens = self.config.embedder.token.vocab.get_itos()
+        existing_set = set(existing_tokens)
+        self.config.embedder.token.vocab = Vocab(OrderedDict([(tok, 100) for tok in existing_tokens] + \
+                                               [(tok, freq) for tok, freq in counter.most_common() if tok not in existing_set]), min_freq=1)
+        
+    def _build_char_vocab(self):
+        counter = Counter()
+        for curr_data in self.data:
+            for tok in curr_data['tokens'].raw_text:
+                counter.update(tok)
+        self.config.embedder.char.vocab = Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + counter.most_common()), min_freq=1)
+        
+    def _build_enum_vocabs(self):
+        counters = {f: Counter() for f in self.config.embedder.enum.keys()}
+        for curr_data in self.data:
+            for f, c in counters.items():
+                c.update(getattr(curr_data['tokens'], f))
+        
+        for f, enum_config in self.config.embedder.enum.items():
+            enum_config.vocab = Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + counters[f].most_common()), min_freq=1)
+            
+            
+    def summary(self):
+        summary = []
+        n_seqs = len(self.data)
+        summary.append(f"The dataset consists {n_seqs:,} sequences")
+        
+        if 'raw_idx' in self.data[0]:
+            n_raws = len({curr_data['raw_idx'] for curr_data in self.data})
+            summary.append(f"\tbuilt from {n_raws:,} raw entries")
+            
+        max_len = max([len(curr_data['tokens']) for curr_data in self.data])
+        summary.append(f"The max sequence length is {max_len:,}")
+        
+        summary.append(self.extra_summary())
+        return "\n".join(summary)
+        
+    def extra_summary(self):
+        return ""
     
-    if isinstance(seqs[0][0], list):
-        # Each sequence is a sequence of lists (of values). 
-        padding_item = [padding_value] * len(seqs[0][0])
-    else:
-        # Each sequence is a sequence of indexes
-        padding_item = padding_value
-    
-    return [s + [padding_item for _ in range(length-len(s))] for s in seqs]
-
-
-def unpad_seqs(seqs, seq_lens):
-    """
-    Returns a List of List of values.
-    """
-    return [seq[:seq_len] for seq, seq_len in zip(seqs.cpu().tolist(), seq_lens.cpu().tolist())]
 
 
 class TensorWrapper(object):
@@ -122,3 +157,49 @@ class Batch(TensorWrapper):
         return "Batch with attributes: {}".format(", ".join(self.__dict__))
     
     
+
+def _fetch_token_id(token: str, vocab: Vocab):
+    tried_set = set()
+    unk_id = vocab['<unk>']
+    for possible_token in [token, token.lower(), token.title(), token.upper()]:
+        if possible_token in tried_set:
+            continue
+        
+        token_id = vocab[possible_token]
+        if token_id != unk_id:
+            return token_id
+        tried_set.add(possible_token)
+        
+    return unk_id
+
+
+def pad_seqs(seqs, padding_value=0.0, length=None):
+    """
+    Pad a list of list, making it prepared as a tensor. 
+    
+    """
+    # Alternative: `torch.nn.utils.rnn.pad_sequence` which pads a list of tensors.
+    maxlen = max(len(s) for s in seqs)
+    length = maxlen if length is None else max(length, maxlen)
+    
+    if isinstance(seqs[0][0], list):
+        # Each sequence is a sequence of lists (of values). 
+        padding_item = [padding_value] * len(seqs[0][0])
+    else:
+        # Each sequence is a sequence of indexes
+        padding_item = padding_value
+    
+    return [s + [padding_item for _ in range(length-len(s))] for s in seqs]
+
+
+def unpad_seqs(seqs, seq_lens):
+    """
+    Retrieve the list of list from a padded tensor. 
+    
+    Returns
+    -------
+    list
+        A list of list of values. 
+    """
+    return [seq[:seq_len] for seq, seq_len in zip(seqs.cpu().tolist(), seq_lens.cpu().tolist())]
+
