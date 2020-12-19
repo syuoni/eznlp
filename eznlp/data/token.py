@@ -368,10 +368,14 @@ class TokenSequence(object):
     
     
     @classmethod
-    def from_raw_text(cls, raw_text: str, spacy_nlp, additional_tok2tags=None, **kwargs):
-        token_list = [Token(tok.text, start=tok.idx, end=tok.idx+len(tok.text), lemma=tok.lemma_, 
-                            upos=tok.pos_, detailed_pos=tok.tag_, ent_tag='-'.join([tok.ent_iob_, tok.ent_type_]), 
-                            dep=tok.dep_, **kwargs) for tok in spacy_nlp(raw_text)]
+    def from_raw_text(cls, raw_text: str, tokenize_callback=None, additional_tok2tags=None, **kwargs):
+        if tokenize_callback is None:
+            token_list = [Token(tok_text) for tok_text in raw_text.split()]
+        elif isinstance(tokenize_callback, spacy.language.Language):
+            token_list = [Token(tok.text, start=tok.idx, end=tok.idx+len(tok.text), **kwargs) for tok in tokenize_callback(raw_text)]
+        else:
+            raise ValueError(f"Invalid `tokenize_callback` {tokenize_callback}")
+        
         tokens = cls(token_list)
         tokens.attach_additional_tags(additional_tok2tags=additional_tok2tags)
         return tokens

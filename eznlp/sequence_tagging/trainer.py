@@ -49,8 +49,6 @@ class SequenceTaggingTrainer(Trainer):
     
     def _batch_accuracy(self, batch: Batch, hidden: torch.Tensor):
         pred_paths = self.model.decode(batch, hidden)
-        # Here fetch the gold tags, instead of the modeling tags
-        
         gold_paths = [tags_obj.tags for tags_obj in batch.tags_objs]
         
         pred_paths = [t for path in pred_paths for t in path]

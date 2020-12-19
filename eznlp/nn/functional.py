@@ -37,7 +37,7 @@ def sequence_pooling(x: torch.FloatTensor, mask: torch.BoolTensor, mode: str='me
     Parameters
     ----------
     x: torch.FloatTensor (batch, step, hid_dim)
-    mask: torch.BoolTensor (batch, step)
+    mask: torch.BoolTensor (batch, hid_dim)
     mode: str
         'mean', 'max', 'min'
     """

@@ -13,13 +13,13 @@ from .crf import CRF
 
 class DecoderConfig(Config):
     def __init__(self, **kwargs):
+        self.in_dim = kwargs.pop('in_dim', None)
+        self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
+        
         self.arch = kwargs.pop('arch', 'CRF')
         if self.arch.lower() not in ('softmax', 'crf'):
             raise ValueError(f"Invalid decoder architecture {self.arch}")
             
-        self.in_dim = kwargs.pop('in_dim', None)
-        self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
-        
         self.scheme = kwargs.pop('scheme', 'BIOES')
         idx2tag = kwargs.pop('idx2tag', None)
         self.set_vocab(idx2tag)

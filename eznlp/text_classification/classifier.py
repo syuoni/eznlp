@@ -11,12 +11,12 @@ from ..encoder import EmbedderConfig, EncoderConfig, PreTrainedEmbedderConfig
 from .decoder import DecoderConfig
 
 
-class SequenceTaggerConfig(Config):
+class TextClassifierConfig(Config):
     def __init__(self, **kwargs):
         """
-        Configurations of a sequence tagger. 
+        Configurations of a text classifier. 
         
-        tagger
+        classifier
           ├─decoder
           └─intermediate
               ├─encoder
@@ -92,7 +92,7 @@ class SequenceTaggerConfig(Config):
         if self.intermediate is not None:
             name_elements.append(self.intermediate.arch)
         
-        name_elements.append(self.decoder.arch)
+        # name_elements.append(self.decoder.arch)
         # name_elements.append(self.decoder.cascade_mode)
         return '-'.join(name_elements)
     
@@ -105,15 +105,15 @@ class SequenceTaggerConfig(Config):
                     flair_bw_lm: flair.models.LanguageModel=None):
         # Only check validity at the most outside level
         assert self.is_valid
-        return SequenceTagger(self, pretrained_vectors, elmo, bert_like, flair_fw_lm, flair_bw_lm)
+        return TextClassifier(self, pretrained_vectors, elmo, bert_like, flair_fw_lm, flair_bw_lm)
     
     def __repr__(self):
         return self._repr_config_attrs(self.__dict__)
     
     
     
-class SequenceTagger(torch.nn.Module):
-    def __init__(self, config: SequenceTaggerConfig, 
+class TextClassifier(torch.nn.Module):
+    def __init__(self, config: TextClassifierConfig, 
                  pretrained_vectors: Vectors=None, 
                  elmo: allennlp.modules.elmo.Elmo=None, 
                  bert_like: transformers.PreTrainedModel=None, 
