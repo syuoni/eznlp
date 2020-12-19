@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from transformers import BertTokenizer, BertForMaskedLM
 from transformers import RobertaTokenizer, RobertaForMaskedLM
 
-from eznlp.sequence_tagging import parse_conll_file
+from eznlp.sequence_tagging.io import ConllIO
 from eznlp.language_modeling import MLMDataset, PMCMLMDataset, MLMTrainer
 
 
@@ -29,16 +29,7 @@ class TestMLM(object):
         bert4mlm, tokenizer = BERT4MLM_with_tokenizer
         bert4mlm = bert4mlm.to(device)
         
-        conll_config = {'raw_scheme': 'BIO1', 
-                        'scheme': 'BIOES', 
-                        'columns': ['text', 'pos_tag', 'chunking_tag', 'ner_tag'], 
-                        'trg_col': 'ner_tag', 
-                        'attach_additional_tags': False, 
-                        'skip_docstart': False, 
-                        'lower_case_mode': 'None'}
-    
-        train_data = parse_conll_file("assets/data/conll2003/eng.train", max_examples=200, **conll_config)
-        
+        train_data = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1').read("assets/data/conll2003/eng.train")
         train_set = MLMDataset(train_data, tokenizer)
         batch = [train_set[i] for i in range(4)]
         batch012 = train_set.collate(batch[:3]).to(device)
@@ -66,19 +57,18 @@ class TestMLM(object):
         roberta4mlm = roberta4mlm.to(device)
         
         files = glob.glob("assets/data/PMC/comm_use/Cells/*.txt")
-        train_set = PMCMLMDataset(files=files, tokenizer=tokenizer)
-        train_loader = DataLoader(train_set, batch_size=4, 
-                                  collate_fn=train_set.collate)
+        train_set = PMCMLMDataset(files=files, tokenizer=tokenizer, max_len=128)
+        train_loader = DataLoader(train_set, batch_size=4, collate_fn=train_set.collate)
         for batch in train_loader:
             batch = batch.to(device)
             break
         
         loss012, MLM_scores012 = roberta4mlm(input_ids=batch.MLM_tok_ids[:3], 
-                                              attention_mask=(~batch.attention_mask[:3]).type(torch.long), 
-                                              labels=batch.MLM_lab_ids[:3])
+                                             attention_mask=(~batch.attention_mask[:3]).type(torch.long), 
+                                             labels=batch.MLM_lab_ids[:3])
         loss123, MLM_scores123 = roberta4mlm(input_ids=batch.MLM_tok_ids[1:], 
-                                              attention_mask=(~batch.attention_mask[1:]).type(torch.long), 
-                                              labels=batch.MLM_lab_ids[1:])
+                                             attention_mask=(~batch.attention_mask[1:]).type(torch.long), 
+                                             labels=batch.MLM_lab_ids[1:])
         
         min_step = min(MLM_scores012.size(1), MLM_scores123.size(1))
         delta_MLM_scores = MLM_scores012[1:, :min_step] - MLM_scores123[:-1, :min_step]

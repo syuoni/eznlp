@@ -1,11 +1,9 @@
 # -*- coding: utf-8 -*-
 import random
 import torch
-from torch.utils.data import Dataset, IterableDataset
 from torch.nn.utils.rnn import pad_sequence
 
-from ..datasets_utils import TensorWrapper, Batch
-
+from ..dataset_utils import TensorWrapper, Batch
 
 
 class MLMHelper(object):
@@ -62,11 +60,11 @@ class MLMHelper(object):
         batch_MLM_lab_ids = pad_sequence(batch_MLM_lab_ids, batch_first=True, padding_value=self.MLM_label_mask_id)
         
         batch = Batch(seq_lens=seq_lens, MLM_tok_ids=batch_MLM_tok_ids, MLM_lab_ids=batch_MLM_lab_ids)
-        batch.build_masks({'attention_mask': (batch_MLM_tok_ids.size(), seq_lens)})
+        batch.build_masks({'attention_mask': (seq_lens, batch_MLM_tok_ids.size(1))})
         return batch
 
 
-class MLMDataset(Dataset):
+class MLMDataset(torch.utils.data.Dataset):
     """
     Dataset for Masked Language Modeling. 
     """
@@ -114,7 +112,7 @@ def _slice_chunk(chunk_id, num_chunks, num_items):
     return slice(start, end)
 
 
-class PMCMLMDataset(IterableDataset):
+class PMCMLMDataset(torch.utils.data.IterableDataset):
     """
     PMC Dataset for Masked Language Modeling. 
     """

@@ -1,18 +1,16 @@
 # -*- coding: utf-8 -*-
 import torch
-import torch.nn as nn
 
-from ..trainers import Trainer
+from ..trainer import Trainer
 
 
 class MLMTrainer(Trainer):
-    def __init__(self, model: nn.Module, optimizer=None, scheduler=None, 
+    def __init__(self, model: torch.nn.Module, optimizer=None, scheduler=None, 
                  device=None, grad_clip=1.0):
         super().__init__(model, optimizer=optimizer, scheduler=scheduler, 
                          device=device, grad_clip=grad_clip)
         
     def forward_batch(self, batch):
-        batch = batch.to(self.device)
         loss, *_ = self.model(input_ids=batch.MLM_tok_ids, 
                               attention_mask=(~batch.attention_mask).type(torch.long), 
                               labels=batch.MLM_lab_ids)
@@ -22,5 +20,4 @@ class MLMTrainer(Trainer):
             
         # None as a placeholder for accuracy
         return loss, None
-        
     

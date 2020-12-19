@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 import torch
-import torch.nn as nn
 
 
-class CRF(nn.Module):
+class CRF(torch.nn.Module):
     """Linear-chain conditional random field. 
     
     Given the source sequence $x = \{x_1, x_2, \dots, x_T \}$ and the target 
@@ -45,13 +44,13 @@ class CRF(nn.Module):
     def __init__(self, tag_dim: int, pad_idx: int=None, batch_first: bool=True):
         super().__init__()
         
-        self.sos_transitions = nn.Parameter(torch.empty(tag_dim))
-        self.transitions = nn.Parameter(torch.empty(tag_dim, tag_dim))
-        self.eos_transitions = nn.Parameter(torch.empty(tag_dim))
+        self.sos_transitions = torch.nn.Parameter(torch.empty(tag_dim))
+        self.transitions = torch.nn.Parameter(torch.empty(tag_dim, tag_dim))
+        self.eos_transitions = torch.nn.Parameter(torch.empty(tag_dim))
         
-        nn.init.uniform_(self.sos_transitions.data, -0.1, 0.1)
-        nn.init.uniform_(self.transitions.data, -0.1, 0.1)
-        nn.init.uniform_(self.eos_transitions.data, -0.1, 0.1)
+        torch.nn.init.uniform_(self.sos_transitions.data, -0.1, 0.1)
+        torch.nn.init.uniform_(self.transitions.data, -0.1, 0.1)
+        torch.nn.init.uniform_(self.eos_transitions.data, -0.1, 0.1)
         
         if pad_idx is not None:
             self.sos_transitions.data[pad_idx] = -1e4
@@ -63,9 +62,9 @@ class CRF(nn.Module):
         self.pad_idx = pad_idx
         self.batch_first = batch_first
         
-        
-    def __repr__(self):
-        return f"CRF(tag_dim={self.tag_dim}, pad_idx={self.pad_idx}, batch_first={self.batch_first})"
+    
+    def extra_repr(self):
+        return f"tag_dim={self.tag_dim}, pad_idx={self.pad_idx}, batch_first={self.batch_first}"
         
         
     def forward(self, emissions: torch.Tensor, tag_ids: torch.LongTensor, mask: torch.BoolTensor):

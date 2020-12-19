@@ -1,17 +1,11 @@
 # -*- coding: utf-8 -*-
 import torch
-from torch import Tensor
-import torch.nn as nn
-from torch.nn.utils.rnn import pad_sequence
 
-from ..datasets_utils import Batch, unpad_seqs
-from ..nn_utils import reinit_layer_
+from ..dataset_utils import Batch
 from ..config import Config
-from .crf import CRF
-from .transitions import ChunksTagsTranslator
 
-
-class DecoderConfig(Config):
+#TODO: 
+class CascadeDecoderConfig(Config):
     def __init__(self, **kwargs):
         # TODO: Seperate some methods...
         self.arch = kwargs.pop('arch', 'CRF')
@@ -19,7 +13,7 @@ class DecoderConfig(Config):
             raise ValueError(f"Invalid decoder architecture {self.arch}")
             
         self.in_dim = kwargs.pop('in_dim', None)
-        self.dropout = kwargs.pop('dropout', 0.5)
+        self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
         
         self.scheme = kwargs.pop('scheme', 'BIOES')
         self.translator = ChunksTagsTranslator(scheme=self.scheme)
@@ -56,7 +50,7 @@ class DecoderConfig(Config):
         
         
     def __repr__(self):
-        repr_attr_dict = {key: self.__dict__[key] for key in ['arch', 'in_dim', 'dropout', 'scheme', 'cascade_mode']}
+        repr_attr_dict = {key: self.__dict__[key] for key in ['arch', 'in_dim', 'scheme', 'cascade_mode', 'in_drop_rates']}
         return self._repr_non_config_attrs(repr_attr_dict)
         
     @property
@@ -185,79 +179,7 @@ class DecoderConfig(Config):
     
 
 
-class Decoder(nn.Module):
-    def __init__(self, config: DecoderConfig):
-        """
-        `Decoder` forward from hidden states to outputs. 
-        """
-        super().__init__()
-        self.config = config
-        self.dropout = nn.Dropout(config.dropout)
-        
-    def forward(self, batch: Batch, full_hidden: Tensor):
-        raise NotImplementedError("Not Implemented `forward`")
-        
-        
-    def decode(self, batch: Batch, full_hidden: Tensor):
-        raise NotImplementedError("Not Implemented `decode`")
-        
-        
-        
-class SoftMaxDecoder(Decoder):
-    def __init__(self, config: DecoderConfig):
-        super().__init__(config)
-        self.hid2tag = nn.Linear(config.in_dim, config.modeling_tag_voc_dim)
-        self.criterion = nn.CrossEntropyLoss(ignore_index=config.modeling_tag_pad_idx, reduction='sum')
-        reinit_layer_(self.hid2tag, 'sigmoid')
-        
-        
-    def forward(self, batch: Batch, full_hidden: Tensor):
-        # tag_feats: (batch, step, tag_dim)
-        tag_feats = self.hid2tag(self.dropout(full_hidden))
-        
-        batch_tag_ids = self.config.fetch_batch_modeling_tag_ids(batch.tags_objs)
-        losses = [self.criterion(tfeats[:slen], tids) for tfeats, tids, slen in zip(tag_feats, batch_tag_ids, batch.seq_lens.cpu().tolist())]
-        # `torch.stack`: Concatenates sequence of tensors along a new dimension. 
-        return torch.stack(losses, dim=0)
-    
-    
-    def decode(self, batch: Batch, full_hidden: Tensor):
-        # tag_feats: (batch, step, tag_dim)
-        tag_feats = self.hid2tag(full_hidden)
-        
-        best_paths = tag_feats.argmax(dim=-1)
-        batch_tag_ids = unpad_seqs(best_paths, batch.seq_lens)
-        return [self.config.ids2modeling_tags(tag_ids) for tag_ids in batch_tag_ids]
-        
-    
-class CRFDecoder(Decoder):
-    def __init__(self, config: DecoderConfig):
-        super().__init__(config)
-        self.hid2tag = nn.Linear(config.in_dim, config.modeling_tag_voc_dim)
-        self.crf = CRF(tag_dim=config.modeling_tag_voc_dim, 
-                       pad_idx=config.modeling_tag_pad_idx, 
-                       batch_first=True)
-        reinit_layer_(self.hid2tag, 'sigmoid')
-        
-        
-    def forward(self, batch: Batch, full_hidden: Tensor):
-        # tag_feats: (batch, step, tag_dim)
-        tag_feats = self.hid2tag(self.dropout(full_hidden))
-        
-        batch_tag_ids = self.config.fetch_batch_modeling_tag_ids(batch.tags_objs, padding=True)
-        losses = self.crf(tag_feats, batch_tag_ids, mask=batch.tok_mask)
-        return losses
-            
-        
-    def decode(self, batch: Batch, full_hidden: Tensor):
-        # tag_feats: (batch, step, tag_dim)
-        tag_feats = self.hid2tag(full_hidden)
-        
-        # List of List of predicted-tag-ids
-        batch_tag_ids = self.crf.decode(tag_feats, mask=batch.tok_mask)
-        return [self.config.ids2modeling_tags(tag_ids) for tag_ids in batch_tag_ids]
-    
-    
+
 class CascadeDecoder(Decoder):
     def __init__(self, config: DecoderConfig):
         super().__init__(config)
@@ -269,12 +191,12 @@ class CascadeDecoder(Decoder):
         else:
             raise ValueError(f"Invalid decoder architecture {config.arch}")
         
-        self.cas_hid2type = nn.Linear(config.in_dim, config.cas_type_voc_dim)
-        self.cas_criterion = nn.CrossEntropyLoss(ignore_index=config.cas_type_pad_idx, reduction='sum')
+        self.cas_hid2type = torch.nn.Linear(config.in_dim, config.cas_type_voc_dim)
+        self.cas_criterion = torch.nn.CrossEntropyLoss(ignore_index=config.cas_type_pad_idx, reduction='sum')
         reinit_layer_(self.cas_hid2type, 'sigmoid')
         
         
-    def forward(self, batch: Batch, full_hidden: Tensor):
+    def forward(self, batch: Batch, full_hidden: torch.Tensor):
         tag_losses = self.base_decoder(batch, full_hidden)
         
         # type_feats: (batch, step, type_dim)
@@ -295,7 +217,7 @@ class CascadeDecoder(Decoder):
         return tag_losses + torch.stack(type_losses, dim=0)
     
     
-    def decode(self, batch: Batch, full_hidden: Tensor):
+    def decode(self, batch: Batch, full_hidden: torch.Tensor):
         batch_cas_tags = self.base_decoder.decode(batch, full_hidden)
         
         # type_feats: (batch, step, type_dim)

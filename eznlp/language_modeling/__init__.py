@@ -1,3 +1,3 @@
 # -*- coding: utf-8 -*-
-from .datasets import MLMDataset, PMCMLMDataset
-from .trainers import MLMTrainer
+from .dataset import MLMDataset, PMCMLMDataset
+from .trainer import MLMTrainer

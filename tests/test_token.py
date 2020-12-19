@@ -175,6 +175,8 @@ class TestTokenSequence(object):
         
         assert tokens.raw_text == ["This", "is", "a", "-3.14", "demo", "."]
         assert tokens.text == ["this", "is", "a", "<-real1>", "demo", "."]
+        
+        tokens.build_pseudo_boundaries(sep_width=1)
         assert [e-s for s, e in zip(tokens.start, tokens.end)] == [len(tok) for tok in tokens.token_list]
         
         

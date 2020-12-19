@@ -1,38 +1,46 @@
 # -*- coding: utf-8 -*-
+from typing import List
 from collections import Counter, OrderedDict
 import torch
-from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
 from torchtext.experimental.vocab import Vocab
-from allennlp.modules.elmo import batch_to_ids as batch_to_elmo_char_ids
 
-from ..datasets_utils import TensorWrapper, Batch, _fetch_token_id
-from .decoders import DecoderConfig
-from .taggers import TaggerConfig
+from ..dataset_utils import TensorWrapper, Batch, _fetch_token_id
+from .decoder import DecoderConfig
+from .tagger import SequenceTaggerConfig
+from .transition import ChunksTagsTranslator
 
 
-class SequenceTaggingDataset(Dataset):
-    def __init__(self, data: list, config: TaggerConfig):
+class SequenceTaggingDataset(torch.utils.data.Dataset):
+    def __init__(self, data: List[dict], config: SequenceTaggerConfig=None):
         """
         Parameters
         ----------
-        data : list
-            [{'tokens': TokenSequence, 'tags': list of str}, ...]
+        data : list of dict
+            [{'tokens': TokenSequence, 
+              'chunks': list of tuple}, ...]
             
-            ``tags`` is an optional key, which does not exist if the data are unlabeled. 
+            `chunks` should be [(chunk_type, chunk_start, chunk_end), ...].
+            `chunks` is an optional key, which does not exist if the data are unlabeled. 
         """
         super().__init__()
         self.data = data
-        self.config = config
+        if config is not None:
+            self.config = config
+        else:
+            self.config = SequenceTaggerConfig()
         
-        self._is_labeled = ('tags' in data[0])
-        self._building_vocabs = (config.decoder.idx2tag is None)
+        self._is_labeled = ('chunks' in data[0])
+        self.translator = ChunksTagsTranslator(scheme=self.config.decoder.scheme)
+        if self._is_labeled:
+            self._build_tags()
         
+        self._building_vocabs = (self.config.decoder.idx2tag is None)
         if self._building_vocabs:
             assert self._is_labeled
             
             self._build_token_vocab()
-            self._build_tag_vocabs()
+            self._build_tag_vocab()
             
             if self.config.embedder.char is not None:
                 self._build_char_vocab()
@@ -51,7 +59,7 @@ class SequenceTaggingDataset(Dataset):
         for curr_data in self.data:
             counter.update(curr_data['tokens'].text)
         self.config.embedder.token.vocab = Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + counter.most_common()), min_freq=1)
-    
+        
     def extend_token_vocab(self, *others):
         counter = Counter()
         for data in others:
@@ -63,7 +71,6 @@ class SequenceTaggingDataset(Dataset):
         self.config.embedder.token.vocab = Vocab(OrderedDict([(tok, 100) for tok in existing_tokens] + \
                                                [(tok, freq) for tok, freq in counter.most_common() if tok not in existing_set]), min_freq=1)
         
-    
     def _build_char_vocab(self):
         counter = Counter()
         for curr_data in self.data:
@@ -81,41 +88,53 @@ class SequenceTaggingDataset(Dataset):
             enum_config.vocab = Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + counters[f].most_common()), min_freq=1)
             
             
-    def _build_tag_vocabs(self):
-        tag_counter = Counter()
-        cas_tag_counter = Counter()
-        cas_type_counter = Counter()
+    def _build_tags(self):
         for curr_data in self.data:
-            tag_counter.update(curr_data['tags'])
-            cas_tag_counter.update(self.config.decoder.build_cas_tags_by_tags(curr_data['tags']))
-            cas_type_counter.update(self.config.decoder.build_cas_types_by_tags(curr_data['tags']))
+            curr_data['tags'] = self.translator.chunks2tags(curr_data['chunks'], len(curr_data['tokens']))
             
-        self.config.decoder.set_vocabs(idx2tag=['<pad>'] + list(tag_counter.keys()), 
-                                       idx2cas_tag=['<pad>'] + list(cas_tag_counter.keys()), 
-                                       idx2cas_type=['<pad>'] + list(cas_type_counter.keys()))
+            
+    def _build_tag_vocab(self):
+        counter = Counter()
+        for curr_data in self.data:
+            counter.update(curr_data['tags'])
+        self.config.decoder.set_vocab(idx2tag=['<pad>'] + list(counter.keys()))
+            
+    # TODO
+    # def _build_cas_tag_vocabs(self):
+    #     cas_tag_counter = Counter()
+    #     cas_type_counter = Counter()
+    #     for curr_data in self.data:
+    #         cas_tag_counter.update(self.config.decoder.build_cas_tags_by_tags(curr_data['tags']))
+    #         cas_type_counter.update(self.config.decoder.build_cas_types_by_tags(curr_data['tags']))
+            
+    #     self.config.decoder.set_vocabs(idx2cas_tag=['<pad>'] + list(cas_tag_counter.keys()), 
+    #                                    idx2cas_type=['<pad>'] + list(cas_type_counter.keys()))
         
     def _check_tag_vocabs(self):
-        tag_counter = Counter()
+        counter = Counter()
         for curr_data in self.data:
-            tag_counter.update(curr_data['tags'])
+            counter.update(curr_data['tags'])
             
-        oov_tags = [tag for tag in tag_counter if tag not in self.config.decoder.tag2idx]
+        oov_tags = [tag for tag in counter if tag not in self.config.decoder.tag2idx]
         if len(oov_tags) > 0:
-            raise ValueError(f"OOV tags exist: {oov_tags}")
+            raise RuntimeError(f"OOV tags exist: {oov_tags}")
             
         
     def summary(self):
         n_seqs = len(self.data)
+        print(f"The dataset consists {n_seqs:,} sequences")
+        
         if 'raw_idx' in self.data[0]:
             n_raws = len({curr_data['raw_idx'] for curr_data in self.data})
-        else:
-            n_raws = n_seqs
+            print(f"\tbuilt from {n_raws:,} raw entries")
             
-        max_len = max([len(curr_data['tokens']) for curr_data in self.data])
-        print(f"The dataset consists {n_seqs} sequences built from {n_raws} raw entries")
-        print(f"The max sequence length is {max_len}")
+        n_chunks = sum(len(curr_data['chunks']) for curr_data in self.data)
+        print(f"The dataset has {n_chunks:,} chunks")
         
-    
+        max_len = max([len(curr_data['tokens']) for curr_data in self.data])
+        print(f"The max sequence length is {max_len:,}")
+        
+        
     def __len__(self):
         return len(self.data)
         
@@ -137,30 +156,12 @@ class SequenceTaggingDataset(Dataset):
         else:
             val_feats = None
             
-            
-        if self.config.elmo_embedder is not None:
-            elmo_tokenized_text = curr_data['tokens'].raw_text
-        else:
-            elmo_tokenized_text = None
-            
-        if self.config.bert_like_embedder is not None:
-            tokens = curr_data['tokens']
-            tokenizer = self.config.bert_like_embedder.tokenizer
-            
-            tokens.build_sub_tokens(tokenizer)
-            sub_tok_ids = torch.tensor([tokenizer.cls_token_id] + \
-                                        tokenizer.convert_tokens_to_ids(tokens.sub_tokens) + \
-                                       [tokenizer.sep_token_id])
-            ori_indexes = torch.tensor(tokens.ori_indexes)
-        else:
-            sub_tok_ids, ori_indexes = None, None
-            
-            
-        tags_obj = Tags(curr_data['tags'], self.config.decoder) if self._is_labeled else None
+        # Prepare text for pretrained embedders
+        tokenized_raw_text = curr_data['tokens'].raw_text
         
+        tags_obj = Tags(curr_data['tags'], self.config.decoder) if self._is_labeled else None
         return TensorWrapper(char_ids=char_ids, tok_ids=tok_ids, enum=enum_feats, val=val_feats, 
-                             elmo_tokenized_text=elmo_tokenized_text, 
-                             sub_tok_ids=sub_tok_ids, ori_indexes=ori_indexes, 
+                             tokenized_raw_text=tokenized_raw_text, 
                              tags_obj=tags_obj)
     
     
@@ -189,61 +190,39 @@ class SequenceTaggingDataset(Dataset):
         else:
             batch_val = None
         
+        # Prepare text for pretrained embedders
+        batch_tokenized_raw_text = [ex.tokenized_raw_text for ex in batch_examples]
         
-        if self.config.elmo_embedder is not None:
-            batch_tokenized_text = [ex.elmo_tokenized_text for ex in batch_examples]
-            batch_elmo_char_ids = batch_to_elmo_char_ids(batch_tokenized_text)
-        else:
-            batch_elmo_char_ids = None
-            
-        if self.config.bert_like_embedder is not None:
-            batch_sub_tok_ids = [ex.sub_tok_ids for ex in batch_examples]
-            sub_tok_seq_lens = torch.tensor([seq.size(0) for seq in batch_sub_tok_ids])
-            batch_sub_tok_ids = pad_sequence(batch_sub_tok_ids, batch_first=True, 
-                                             padding_value=self.config.bert_like_embedder.tokenizer.pad_token_id)
-            batch_ori_indexes = pad_sequence([ex.ori_indexes for ex in batch_examples], batch_first=True, 
-                                             padding_value=-1)
-        else:
-            batch_sub_tok_ids, sub_tok_seq_lens, batch_ori_indexes = None, None, None
-            
         batch_tags_objs = [ex.tags_obj for ex in batch_examples] if self._is_labeled else None
-        
-        
         batch = Batch(tok_ids=batch_tok_ids, seq_lens=seq_lens, 
                       char_ids=batch_char_ids, tok_lens=tok_lens, 
                       enum=batch_enum, val=batch_val, 
-                      elmo_char_ids=batch_elmo_char_ids, 
-                      sub_tok_ids=batch_sub_tok_ids, ori_indexes=batch_ori_indexes, sub_tok_seq_lens=sub_tok_seq_lens, 
+                      tokenized_raw_text=batch_tokenized_raw_text, 
                       tags_objs=batch_tags_objs)
         
-        batch.build_masks({'tok_mask': (batch_tok_ids.size(), seq_lens)})
+        batch.build_masks({'tok_mask': (seq_lens, batch_tok_ids.size(1))})
         if self.config.embedder.char is not None:
-            batch.build_masks({'char_mask': (batch_char_ids.size(), tok_lens)})
-        if self.config.bert_like_embedder is not None:
-            batch.build_masks({'sub_tok_mask': (batch_sub_tok_ids.size(), sub_tok_seq_lens)})
-            
+            batch.build_masks({'char_mask': (tok_lens, batch_char_ids.size(1))})
         return batch
-    
-    
     
     
 class Tags(TensorWrapper):
     def __init__(self, tags: list, config: DecoderConfig):
         self.tags = tags
-        self.cas_tags = config.build_cas_tags_by_tags(tags)
-        self.cas_types = config.build_cas_types_by_tags(tags)
-        self.cas_ent_slices, self.cas_ent_types = config.build_cas_ent_slices_and_types_by_tags(tags)
+        # self.cas_tags = config.build_cas_tags_by_tags(tags)
+        # self.cas_types = config.build_cas_types_by_tags(tags)
+        # self.cas_ent_slices, self.cas_ent_types = config.build_cas_ent_slices_and_types_by_tags(tags)
         
         self.tag_ids = torch.tensor(config.tags2ids(self.tags))
-        self.cas_tag_ids = torch.tensor(config.cas_tags2ids(self.cas_tags))
-        self.cas_type_ids = torch.tensor(config.cas_types2ids(self.cas_types))
-        self.cas_ent_type_ids = torch.tensor(config.cas_types2ids(self.cas_ent_types))
+        # self.cas_tag_ids = torch.tensor(config.cas_tags2ids(self.cas_tags))
+        # self.cas_type_ids = torch.tensor(config.cas_types2ids(self.cas_types))
+        # self.cas_ent_type_ids = torch.tensor(config.cas_types2ids(self.cas_ent_types))
         
     def _apply_to_tensors(self, func):
         self.tag_ids = func(self.tag_ids)
-        self.cas_tag_ids = func(self.cas_tag_ids)
-        self.cas_type_ids = func(self.cas_type_ids)
-        self.cas_ent_type_ids = func(self.cas_ent_type_ids)
+        # self.cas_tag_ids = func(self.cas_tag_ids)
+        # self.cas_type_ids = func(self.cas_type_ids)
+        # self.cas_ent_type_ids = func(self.cas_ent_type_ids)
         return self
     
     

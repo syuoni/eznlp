@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
+import warnings
 from typing import List, Mapping
 from collections import OrderedDict
 import torch
-import torch.nn as nn
 
 
 def _add_indents(config_str: str, num_spaces: int=2):
@@ -15,9 +15,20 @@ def _add_indents(config_str: str, num_spaces: int=2):
     
 
 class Config(object):
+    """
+    `Config` stores and validates configurations of a model or assembly. 
+    `Config.instantiate` is the suggested way to instantiate the model or assembly. 
+    
+    NOTE: 
+        `Config` are NOT suggested to process data or tensors. 
+        `Config` are NOT suggested to be registered as attribute of the corresponding model or assembly. 
+    """
     def __init__(self, **kwargs):
-        for key, attr in kwargs.items():
-            setattr(self, key, attr)
+        if len(kwargs) > 0:
+            warnings.warn(f"Some configurations are set without checking: {kwargs}, "
+                          "which may be never used.")
+            for key, attr in kwargs.items():
+                setattr(self, key, attr)
         
     @property
     def is_valid(self):
@@ -84,7 +95,7 @@ class ConfigList(Config):
     
     def instantiate(self):
         # NOTE: The order should be consistent here and in the corresponding `forward`. 
-        return nn.ModuleList([config.instantiate() for config in self])
+        return torch.nn.ModuleList([config.instantiate() for config in self])
     
     def __repr__(self):
         return self._repr_config_attrs({i: config for i, config in enumerate(self)})
@@ -136,7 +147,7 @@ class ConfigDict(Config):
     def instantiate(self):
         # NOTE: `torch.nn.ModuleDict` is an **ordered** dictionary
         # NOTE: The order should be preserved here. 
-        return nn.ModuleDict([(key, config.instantiate()) for key, config in self.items()])
+        return torch.nn.ModuleDict([(key, config.instantiate()) for key, config in self.items()])
     
     def __repr__(self):
         return self._repr_config_attrs(self.config_dict)

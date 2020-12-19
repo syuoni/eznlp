@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 import torch
-from torch import Tensor
 from torchtext.experimental.vocab import Vocab
-    
+
+from .nn.functional import seq_lens2mask
+
 
 def _fetch_token_id(token: str, vocab: Vocab):
     tried_set = set()
@@ -33,6 +34,7 @@ def pad_seqs(seqs, padding_value=0.0, length=None):
     
     return [s + [padding_item for _ in range(length-len(s))] for s in seqs]
 
+
 def unpad_seqs(seqs, seq_lens):
     """
     Returns a List of List of values.
@@ -42,42 +44,65 @@ def unpad_seqs(seqs, seq_lens):
 
 class TensorWrapper(object):
     def __init__(self, **kwargs):
-        for possible_name, possible_attr in kwargs.items():
-            if possible_attr is None or isinstance(possible_attr, (Tensor, TensorWrapper)):
+        for name, possible_attr in kwargs.items():
+            if possible_attr is None or isinstance(possible_attr, (torch.Tensor, TensorWrapper)):
+                pass
+            # The only non-tensor-like attribute allowed
+            elif name == 'tokenized_raw_text':
                 pass
             elif isinstance(possible_attr, list):
-                assert all(isinstance(sub_attr, (Tensor, TensorWrapper, str)) for sub_attr in possible_attr)
+                assert all(isinstance(sub_attr, (torch.Tensor, TensorWrapper)) for sub_attr in possible_attr)
             elif isinstance(possible_attr, dict):
-                assert all(isinstance(sub_attr, (Tensor, TensorWrapper, str)) for sub_attr in possible_attr.values())
+                assert all(isinstance(sub_attr, (torch.Tensor, TensorWrapper)) for sub_attr in possible_attr.values())
             else:
                 raise TypeError(f"Invalid input to `TensorWrapper`: {possible_attr}")
                 
-            setattr(self, possible_name, possible_attr)
+            setattr(self, name, possible_attr)
             
             
+    @property
+    def device(self):
+        for attr_name, attr in self.__dict__.items():
+            if isinstance(attr, (torch.Tensor, TensorWrapper)):
+                if attr.device is not None:
+                    return attr.device
+            elif attr_name == 'tokenized_raw_text':
+                pass
+            elif isinstance(attr, list) and len(attr) > 0:
+                attr0 = attr[0]
+                if attr0.device is not None:
+                    return attr0.device
+            elif isinstance(attr, dict) and len(attr) > 0:
+                attr0 = next(iter(attr.values()))
+                if attr0.device is not None:
+                    return attr0.device
+        else:
+            return None
+        
+        
     def _apply_to_tensors(self, func):
         """
         This function must return `self`.
         """
-        for attr_name in self.__dict__:
-            attr = getattr(self, attr_name)
-            if isinstance(attr, Tensor):
+        for attr_name, attr in self.__dict__.items():
+            if isinstance(attr, torch.Tensor):
                 setattr(self, attr_name, func(attr))
             elif isinstance(attr, TensorWrapper):
                 setattr(self, attr_name, attr._apply_to_tensors(func))
-            elif isinstance(attr, list):
-                if len(attr) == 0 or isinstance(attr[0], Tensor):
+            elif isinstance(attr, list) and len(attr) > 0:
+                attr0 = attr[0]
+                if isinstance(attr0, torch.Tensor):
                     setattr(self, attr_name, [func(x) for x in attr])
-                else:
+                elif isinstance(attr0, TensorWrapper):
                     setattr(self, attr_name, [x._apply_to_tensors(func) for x in attr])
-            elif isinstance(attr, dict):
-                if len(attr) == 0 or isinstance(list(attr.values())[0], Tensor):
+            elif isinstance(attr, dict) and len(attr) > 0:
+                attr0 = next(iter(attr.values()))
+                if isinstance(attr0, torch.Tensor):
                     setattr(self, attr_name, {k: func(v) for k, v in attr.items()})
-                else:
+                elif isinstance(attr0, TensorWrapper):
                     setattr(self, attr_name, {k: v._apply_to_tensors(func) for k, v in attr.items()})
-                    
         return self
-        
+    
     def pin_memory(self):
         return self._apply_to_tensors(lambda x: x.pin_memory())
     
@@ -85,27 +110,15 @@ class TensorWrapper(object):
         return self._apply_to_tensors(lambda x: x.to(*args, **kwargs))
         
 
-def _seq_lens2mask(shape, seq_lens):
-    """
-    shape: Tuple (batch_size, step)
-    seq_lens: Tensor (batch_size, )
-    """
-    return torch.arange(shape[1], device=seq_lens.device).repeat(shape[0], 1) >= seq_lens.unsqueeze(1)
-
-
 class Batch(TensorWrapper):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         
-        
     def build_masks(self, mask_config):
-        for mask_name, (mask_shape, lens) in mask_config.items():
-            setattr(self, mask_name, _seq_lens2mask(mask_shape, lens))
-    
-    
+        for mask_name, (lens, max_len) in mask_config.items():
+            setattr(self, mask_name, seq_lens2mask(lens, max_len))
+            
     def __repr__(self):
         return "Batch with attributes: {}".format(", ".join(self.__dict__))
     
-    def __str__(self):
-        return "Batch with attributes: {}".format(", ".join(self.__dict__))
-
+    

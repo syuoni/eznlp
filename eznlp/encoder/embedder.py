@@ -1,12 +1,10 @@
 # -*- coding: utf-8 -*-
 import torch
-from torch import Tensor
-import torch.nn as nn
 from torchtext.experimental.vectors import Vectors
 
-from .datasets_utils import Batch
-from .nn_utils import reinit_embedding_, reinit_layer_
-from .config import Config, ConfigwithVocab
+from ..dataset_utils import Batch
+from ..nn.init import reinit_embedding_, reinit_layer_
+from ..config import Config, ConfigwithVocab
 
 
 class EnumConfig(ConfigwithVocab):
@@ -18,13 +16,13 @@ class EnumConfig(ConfigwithVocab):
         return EnumEmbedding(self)
     
     
-class EnumEmbedding(nn.Module):
+class EnumEmbedding(torch.nn.Module):
     def __init__(self, config: EnumConfig):
         super().__init__()
-        self.emb = nn.Embedding(config.voc_dim, config.emb_dim, padding_idx=config.pad_idx)
+        self.emb = torch.nn.Embedding(config.voc_dim, config.emb_dim, padding_idx=config.pad_idx)
         reinit_embedding_(self.emb)
         
-    def forward(self, enum_ids: Tensor):
+    def forward(self, enum_ids: torch.Tensor):
         return self.emb(enum_ids)
     
 
@@ -41,16 +39,16 @@ class ValConfig(Config):
         return ValEmbedding(self)
     
     
-class ValEmbedding(nn.Module):
+class ValEmbedding(torch.nn.Module):
     def __init__(self, config: ValConfig):
         super().__init__()
         # NOTE: Two reasons why this layer does not have activation. 
         # (1) Activation function should been applied after batch-norm / layer-norm. 
         # (2) This layer is semantically an embedding layer, which typically does NOT require activation. 
-        self.proj = nn.Linear(config.in_dim, config.emb_dim)
+        self.proj = torch.nn.Linear(config.in_dim, config.emb_dim)
         reinit_layer_(self.proj, 'linear')
         
-    def forward(self, val_ins: Tensor):
+    def forward(self, val_ins: torch.Tensor):
         return self.proj(val_ins)
     
 
@@ -62,22 +60,22 @@ class TokenConfig(ConfigwithVocab):
         
         self.freeze = kwargs.pop('freeze', False)
         self.scale_grad_by_freq = kwargs.pop('scale_grad_by_freq', False)
+        self.unk_vector = kwargs.pop('unk_vector', 'zeros')
         super().__init__(**kwargs)
     
     def instantiate(self, pretrained_vectors: Vectors=None):
         return TokenEmbedding(self, pretrained_vectors=pretrained_vectors)
     
 
-class TokenEmbedding(nn.Module):
+class TokenEmbedding(torch.nn.Module):
     def __init__(self, config: TokenConfig, pretrained_vectors: Vectors=None):
         super().__init__()
-        self.word_emb = nn.Embedding(config.voc_dim, config.emb_dim, padding_idx=config.pad_idx, 
-                                     scale_grad_by_freq=config.scale_grad_by_freq)
-        reinit_embedding_(self.word_emb, itos=config.vocab.get_itos(), pretrained_vectors=pretrained_vectors)
+        self.word_emb = torch.nn.Embedding(config.voc_dim, config.emb_dim, padding_idx=config.pad_idx, scale_grad_by_freq=config.scale_grad_by_freq)
+        reinit_embedding_(self.word_emb, itos=config.vocab.get_itos(), pretrained_vectors=pretrained_vectors, unk_vector=config.unk_vector)
         self.freeze = config.freeze
         
         if config.use_pos_emb:
-            self.pos_emb = nn.Embedding(config.max_len, config.emb_dim)
+            self.pos_emb = torch.nn.Embedding(config.max_len, config.emb_dim)
             reinit_embedding_(self.pos_emb)
         
     @property
@@ -90,14 +88,10 @@ class TokenEmbedding(nn.Module):
         self._freeze = value
         self.word_emb.requires_grad_(not self._freeze)
         
-    def forward(self, tok_ids: Tensor):
+    def forward(self, tok_ids: torch.Tensor):
         # word_embedded: (batch, step, emb_dim)
-        if self.freeze:
-            with torch.no_grad():
-                word_embedded = self.word_emb(tok_ids)
-        else:
-            word_embedded = self.word_emb(tok_ids)
-            
+        word_embedded = self.word_emb(tok_ids)
+        
         # pos_embedded: (batch, step, emb_dim)
         if hasattr(self, 'pos_emb'):
             pos = torch.arange(word_embedded.size(1), device=word_embedded.device).repeat(word_embedded.size(0), 1)
@@ -152,7 +146,7 @@ class EmbedderConfig(Config):
         return self._repr_config_attrs(self.__dict__)
     
     
-class Embedder(nn.Module):
+class Embedder(torch.nn.Module):
     """
     `Embedder` forwards from inputs to embeddings. 
     """

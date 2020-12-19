@@ -252,14 +252,11 @@ class Token(object):
     
 class TokenSequence(object):
     """
-    A wrapper of a token list, providing sequential attribute access to all tokens. 
+    A wrapper of token list, providing sequential attribute access to all tokens. 
     """
     def __init__(self, token_list):
         self.token_list = token_list
-        if not hasattr(self.token_list[0], 'start'):
-            self._build_pseudo_boundaries()
-            
-            
+        
     def __getattr__(self, name):
         # NOTE: `__attr__` method is only invoked if the attribute wasn't found the usual ways, so 
         # it is good for implementing a fallback for missing attributes. While, `__getattribute__`
@@ -293,10 +290,10 @@ class TokenSequence(object):
         else:
             raise TypeError(f"Invalid subscript type of {i}")
             
-    def _build_pseudo_boundaries(self):
-        # Assign ``start`` and ``end`` at the token-level, to ensure consistency. 
+    def build_pseudo_boundaries(self, sep_width: int=1):
+        # Assign `start` and `end` at the token-level, to ensure consistency to spacy-tokenized ones.
         token_lens = np.array([len(tok) for tok in self.token_list])
-        token_ends = np.cumsum(token_lens + 1) - 1
+        token_ends = np.cumsum(token_lens + sep_width) - sep_width
         token_starts = token_ends - token_lens
         
         for tok, start, end in zip(self.token_list, token_starts, token_ends):
@@ -320,8 +317,8 @@ class TokenSequence(object):
             nested_sub_tokens = [tokenizer.tokenize(word) for word in self.raw_text]
             self.sub_tokens = [sub_tok for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
             self.ori_indexes = [i for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
-            
-            
+    
+    
     def spans_within_max_length(self, max_len):
         total_len = len(self.token_list)
         slice_start = 0
