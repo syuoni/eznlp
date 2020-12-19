@@ -2,8 +2,8 @@
 from tqdm import tqdm
 import torch
 
-from ..dataset_utils import Batch
-from ..trainer import Trainer
+from ..data import Batch
+from ..training import Trainer
 from .transition import ChunksTagsTranslator
 from .dataset import SequenceTaggingDataset
 from .metric import precision_recall_f1_report

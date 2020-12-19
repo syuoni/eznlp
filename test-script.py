@@ -16,9 +16,8 @@ from transformers import BertTokenizer, BertModel, BertForMaskedLM
 from transformers import RobertaTokenizer, RobertaModel, RobertaForMaskedLM
 
 
-from eznlp import Token, TokenSequence, count_params
-from eznlp.token import Full2Half
-from eznlp.dataset_utils import Batch
+from eznlp.data import Token, TokenSequence
+from eznlp.data import Batch
 from eznlp import ConfigList, ConfigDict
 from eznlp import CharConfig, TokenConfig, EnumConfig, ValConfig, EmbedderConfig
 from eznlp import EncoderConfig

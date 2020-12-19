@@ -4,7 +4,7 @@ import re
 from collections import Counter
 import pandas as pd
 
-from ..token import TokenSequence
+from ..data import TokenSequence
 
 
 def find_ascending(sequence: list, value, start=None, end=None):

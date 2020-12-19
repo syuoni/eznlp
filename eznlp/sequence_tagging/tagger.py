@@ -5,8 +5,7 @@ import allennlp.modules
 import transformers
 import flair
 
-from ..token import Token
-from ..dataset_utils import Batch
+from ..data import Token, Batch
 from ..config import Config
 from ..encoder import EmbedderConfig, EncoderConfig, PreTrainedEmbedderConfig
 from .decoder import DecoderConfig

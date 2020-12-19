@@ -3,7 +3,8 @@ from typing import List
 import torch
 from torch.nn.utils.rnn import pad_sequence
 
-from ..dataset_utils import Batch, unpad_seqs
+from ..data import Batch
+from ..data.dataset import unpad_seqs
 from ..nn.init import reinit_layer_
 from ..nn import CombinedDropout
 from ..config import Config

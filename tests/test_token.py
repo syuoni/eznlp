@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 import pytest
 
-from eznlp.token import Full2Half
-from eznlp import Token, TokenSequence
+from eznlp.data.token import Full2Half
+from eznlp.data import Token, TokenSequence
 
 
 def test_full2half():

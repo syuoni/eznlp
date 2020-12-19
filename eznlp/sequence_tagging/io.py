@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import re
 
-from ..token import TokenSequence
+from ..data import TokenSequence
 from .transition import ChunksTagsTranslator
 
 

@@ -3,9 +3,9 @@ import pytest
 import torch
 from torch.nn.utils.rnn import pad_sequence
 import flair
-from eznlp.dataset_utils import Batch
+from eznlp.data import Batch
 from eznlp import PreTrainedEmbedderConfig
-from eznlp import count_params
+from eznlp.training import count_params
 
 
 class TestFlairEmbedder(object):

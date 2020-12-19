@@ -3,7 +3,7 @@ import time
 import numpy as np
 import torch
 
-from .dataset_utils import Batch
+from ..data import Batch
 
 
 class Trainer(object):

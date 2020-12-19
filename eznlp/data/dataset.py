@@ -2,7 +2,7 @@
 import torch
 from torchtext.experimental.vocab import Vocab
 
-from .nn.functional import seq_lens2mask
+from ..nn.functional import seq_lens2mask
 
 
 def _fetch_token_id(token: str, vocab: Vocab):

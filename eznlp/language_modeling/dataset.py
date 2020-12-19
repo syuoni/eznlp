@@ -3,7 +3,7 @@ import random
 import torch
 from torch.nn.utils.rnn import pad_sequence
 
-from ..dataset_utils import TensorWrapper, Batch
+from ..data import TensorWrapper, Batch
 
 
 class MLMHelper(object):

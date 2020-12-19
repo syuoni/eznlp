@@ -2,7 +2,7 @@
 import torch
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
-from ..dataset_utils import Batch
+from ..data import Batch
 from ..nn.init import reinit_layer_, reinit_lstm_, reinit_gru_, reinit_transformer_encoder_layer_
 from ..nn import CombinedDropout
 from ..config import Config

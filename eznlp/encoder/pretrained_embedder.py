@@ -6,7 +6,7 @@ import allennlp.modules
 import transformers
 import flair
 
-from ..dataset_utils import Batch
+from ..data import Batch
 from ..nn import SequenceGroupAggregating
 from ..nn.functional import seq_lens2mask
 from ..config import Config

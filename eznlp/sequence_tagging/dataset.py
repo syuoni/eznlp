@@ -5,7 +5,7 @@ import torch
 from torch.nn.utils.rnn import pad_sequence
 from torchtext.experimental.vocab import Vocab
 
-from ..dataset_utils import TensorWrapper, Batch, _fetch_token_id
+from ..data import TensorWrapper, Batch
 from .decoder import DecoderConfig
 from .tagger import SequenceTaggerConfig
 from .transition import ChunksTagsTranslator

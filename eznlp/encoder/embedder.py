@@ -2,7 +2,7 @@
 import torch
 from torchtext.experimental.vectors import Vectors
 
-from ..dataset_utils import Batch
+from ..data import Batch
 from ..nn.init import reinit_embedding_, reinit_layer_
 from ..config import Config, ConfigwithVocab
 

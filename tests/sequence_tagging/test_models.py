@@ -5,7 +5,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 
 
-from eznlp import Token
+from eznlp.data import Token
 from eznlp import ConfigDict
 from eznlp import TokenConfig, CharConfig, EnumConfig, ValConfig, EmbedderConfig
 from eznlp import EncoderConfig, PreTrainedEmbedderConfig
