@@ -24,7 +24,7 @@ from eznlp import EncoderConfig
 from eznlp import PreTrainedEmbedderConfig
 from eznlp.vectors import Senna
 from eznlp.nn import SequencePooling, SequenceGroupAggregating
-from eznlp.sequence_tagging import DecoderConfig, SequenceTaggerConfig
+from eznlp.sequence_tagging import SequenceTaggingDecoderConfig, SequenceTaggerConfig
 from eznlp.sequence_tagging import SequenceTaggingDataset
 from eznlp.sequence_tagging import SequenceTaggingTrainer
 from eznlp.sequence_tagging import ChunksTagsTranslator
@@ -104,7 +104,7 @@ if __name__ == '__main__':
     #                               # flair_fw_embedder=PreTrainedEmbedderConfig(arch='Flair', out_dim=flair_fw_lm.hidden_size, freeze=True), 
     #                               # flair_bw_embedder=PreTrainedEmbedderConfig(arch='Flair', out_dim=flair_bw_lm.hidden_size, freeze=True),
     #                               intermediate=EncoderConfig(), 
-    #                               decoder =DecoderConfig(arch='CRF'))
+    #                               decoder=SequenceTaggingDecoderConfig(arch='CRF'))
     # train_set = SequenceTaggingDataset(train_data, config)
     # val_set   = SequenceTaggingDataset(val_data,   train_set.config)
     # test_set  = SequenceTaggingDataset(test_data,  train_set.config)
