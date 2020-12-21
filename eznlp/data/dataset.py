@@ -56,7 +56,7 @@ class Dataset(torch.utils.data.Dataset):
         for f, enum_config in self.config.embedder.enum.items():
             enum_config.vocab = Vocab(OrderedDict([('<unk>', 100), ('<pad>', 100)] + counters[f].most_common()), min_freq=1)
             
-            
+    @property
     def summary(self):
         summary = []
         n_seqs = len(self.data)
@@ -69,9 +69,11 @@ class Dataset(torch.utils.data.Dataset):
         max_len = max([len(curr_data['tokens']) for curr_data in self.data])
         summary.append(f"The max sequence length is {max_len:,}")
         
-        summary.append(self.extra_summary())
+        if self.extra_summary:
+            summary.append(self.extra_summary)
         return "\n".join(summary)
         
+    @property
     def extra_summary(self):
         return ""
     

@@ -34,7 +34,6 @@ class ModelConfig(Config):
         self.flair_bw_embedder: PreTrainedEmbedderConfig = kwargs.pop('flair_bw_embedder', None)
         
         self.intermediate: EncoderConfig = kwargs.pop('intermediate', None)
-        self.decoder: DecoderConfig = kwargs.pop('decoder', DecoderConfig())
         super().__init__(**kwargs)
         
     @property
@@ -91,28 +90,22 @@ class ModelConfig(Config):
         if self.intermediate is not None:
             name_elements.append(self.intermediate.arch)
         
-        name_elements.append(self.decoder.arch)
-        # name_elements.append(self.decoder.cascade_mode)
-        return '-'.join(name_elements)
+        if self.extra_name:
+            name_elements.append(self.extra_name)
+        
+        return "-".join(name_elements)
     
-    
-    def instantiate(self, 
-                    pretrained_vectors: Vectors=None, 
-                    elmo: allennlp.modules.elmo.Elmo=None, 
-                    bert_like: transformers.PreTrainedModel=None, 
-                    flair_fw_lm: flair.models.LanguageModel=None, 
-                    flair_bw_lm: flair.models.LanguageModel=None):
-        # Only check validity at the most outside level
-        assert self.is_valid
-        return SequenceTagger(self, pretrained_vectors, elmo, bert_like, flair_fw_lm, flair_bw_lm)
+    @property
+    def extra_name(self):
+        return ""
     
     def __repr__(self):
         return self._repr_config_attrs(self.__dict__)
     
     
     
-class SequenceTagger(torch.nn.Module):
-    def __init__(self, config: SequenceTaggerConfig, 
+class Model(torch.nn.Module):
+    def __init__(self, config: ModelConfig, 
                  pretrained_vectors: Vectors=None, 
                  elmo: allennlp.modules.elmo.Elmo=None, 
                  bert_like: transformers.PreTrainedModel=None, 
