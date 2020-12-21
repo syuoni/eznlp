@@ -9,7 +9,7 @@ from eznlp.data import Token
 from eznlp import ConfigDict
 from eznlp import TokenConfig, CharConfig, EnumConfig, ValConfig, EmbedderConfig
 from eznlp import EncoderConfig, PreTrainedEmbedderConfig
-from eznlp.sequence_tagging import DecoderConfig, SequenceTaggerConfig
+from eznlp.sequence_tagging import SequenceTaggingDecoderConfig, SequenceTaggerConfig
 from eznlp.sequence_tagging import SequenceTaggingDataset
 from eznlp.sequence_tagging import SequenceTaggingTrainer
 from eznlp.sequence_tagging.io import ConllIO
@@ -169,7 +169,7 @@ class TestTagger(object):
     @pytest.mark.parametrize("dec_arch", ['softmax', 'CRF'])
     def test_tagger(self, BIOES_data, enc_arch, shortcut, dec_arch, device):
         config = SequenceTaggerConfig(encoder=EncoderConfig(arch=enc_arch, shortcut=shortcut), 
-                                      decoder=DecoderConfig(arch=dec_arch))
+                                      decoder=SequenceTaggingDecoderConfig(arch=dec_arch))
         train_set, val_set, test_set = build_demo_datasets(*BIOES_data, config)
         tagger = config.instantiate().to(device)
         self.one_tagger_pass(tagger, train_set, device)

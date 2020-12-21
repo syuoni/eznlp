@@ -2,14 +2,9 @@
 import pytest
 import torch
 import torch.optim as optim
-from torch.utils.data import DataLoader
 
-
-from eznlp.data import Token
-from eznlp import ConfigDict
-from eznlp import TokenConfig, CharConfig, EnumConfig, ValConfig, EmbedderConfig
 from eznlp import EncoderConfig, PreTrainedEmbedderConfig
-from eznlp.text_classification import DecoderConfig, TextClassifierConfig
+from eznlp.text_classification import TextClassificationDecoderConfig, TextClassifierConfig
 from eznlp.text_classification import TextClassificationDataset
 from eznlp.text_classification import TextClassificationTrainer
 from eznlp.text_classification.io import TabularIO
@@ -53,11 +48,11 @@ class TestClassifier(object):
         trainer.eval_epoch([batch012])
         
     
-    
-    @pytest.mark.parametrize("enc_arch", ['CNN', 'LSTM', 'GRU', 'Transformer'])
-    @pytest.mark.parametrize("shortcut", [False, True])
-    def test_classifier(self, demo_data, enc_arch, shortcut, device):
-        config = TextClassifierConfig(encoder=EncoderConfig(arch=enc_arch, shortcut=shortcut))
+    @pytest.mark.parametrize("enc_arch", ['CNN', 'LSTM'])
+    @pytest.mark.parametrize("pooling", ['Max', 'Mean'])
+    def test_classifier(self, demo_data, enc_arch, pooling, device):
+        config = TextClassifierConfig(encoder=EncoderConfig(arch=enc_arch), 
+                                      decoder=TextClassificationDecoderConfig(pooling=pooling))
         train_set = build_demo_dataset(demo_data, config)
         classifier = config.instantiate().to(device)
         self.one_classifier_pass(classifier, train_set, device)

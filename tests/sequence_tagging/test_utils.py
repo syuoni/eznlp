@@ -4,7 +4,7 @@ import spacy
 import numpy as np
 
 from eznlp.data import TokenSequence
-from eznlp.sequence_tagging import DecoderConfig
+from eznlp.sequence_tagging import SequenceTaggingDecoderConfig
 from eznlp.sequence_tagging import ChunksTagsTranslator
 from eznlp.sequence_tagging import precision_recall_f1_report
 from eznlp.sequence_tagging.io import ConllIO
@@ -40,10 +40,10 @@ def BIOES_dec_config_example():
     idx2cas_tag = ['<pad>', 'O', 'B', 'I', 'E', 'S']
     idx2cas_type = ['<pad>', 'O', 'A', 'B', 'C']
     
-    dec_config_nocas = DecoderConfig(scheme='BIOES', cascade_mode='None', 
-                                     idx2tag=idx2tag, idx2cas_tag=idx2cas_tag, idx2cas_type=idx2cas_type)
-    dec_config_sliced = DecoderConfig(scheme='BIOES', cascade_mode='Sliced', 
-                                      idx2tag=idx2tag, idx2cas_tag=idx2cas_tag, idx2cas_type=idx2cas_type)
+    dec_config_nocas = SequenceTaggingDecoderConfig(scheme='BIOES', cascade_mode='None', 
+                                                    idx2tag=idx2tag, idx2cas_tag=idx2cas_tag, idx2cas_type=idx2cas_type)
+    dec_config_sliced = SequenceTaggingDecoderConfig(scheme='BIOES', cascade_mode='Sliced', 
+                                                     idx2tag=idx2tag, idx2cas_tag=idx2cas_tag, idx2cas_type=idx2cas_type)
     return dec_config_nocas, dec_config_sliced
 
 

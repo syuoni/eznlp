@@ -3,16 +3,12 @@ from typing import List
 import torch
 
 from ..data import Batch
-from ..nn.init import reinit_layer_
-from ..nn import CombinedDropout, SequencePooling
-from ..config import Config
+from ..nn import SequencePooling
+from ..decoder import DecoderConfig, Decoder
 
 
-class DecoderConfig(Config):
+class TextClassificationDecoderConfig(DecoderConfig):
     def __init__(self, **kwargs):
-        self.in_dim = kwargs.pop('in_dim', None)
-        self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
-        
         self.pooling = kwargs.pop('pooling', 'Max')
         if self.pooling.lower() not in ('max', 'mean'):
             raise ValueError(f"Invalid pooling method {self.pooling}")
@@ -39,22 +35,14 @@ class DecoderConfig(Config):
         return self.label2idx['<pad>']
     
     def instantiate(self):
-        return Decoder(self)
+        return TextClassificationDecoder(self)
         
     
         
-class Decoder(torch.nn.Module):
-    def __init__(self, config: DecoderConfig):
-        """
-        `Decoder` forward from hidden states to outputs. 
-        """
-        super().__init__()
+class TextClassificationDecoder(Decoder):
+    def __init__(self, config: TextClassificationDecoderConfig):
+        super().__init__(config)
         self.pooling = SequencePooling(mode=config.pooling)
-        
-        self.hid2logit = torch.nn.Linear(config.in_dim, config.voc_dim)
-        self.dropout = CombinedDropout(*config.in_drop_rates)
-        reinit_layer_(self.hid2logit, 'sigmoid')
-        
         self.idx2label = config.idx2label
         self.label2idx = config.label2idx
         self.criterion = torch.nn.CrossEntropyLoss(reduction='none')

@@ -8,7 +8,7 @@ import flair
 from ..data import Token, Batch
 from ..config import Config
 from ..encoder import EmbedderConfig, EncoderConfig, PreTrainedEmbedderConfig
-from .decoder import DecoderConfig
+from .decoder import SequenceTaggingDecoderConfig
 
 
 class SequenceTaggerConfig(Config):
@@ -35,7 +35,7 @@ class SequenceTaggerConfig(Config):
         self.flair_bw_embedder: PreTrainedEmbedderConfig = kwargs.pop('flair_bw_embedder', None)
         
         self.intermediate: EncoderConfig = kwargs.pop('intermediate', None)
-        self.decoder: DecoderConfig = kwargs.pop('decoder', DecoderConfig())
+        self.decoder: SequenceTaggingDecoderConfig = kwargs.pop('decoder', SequenceTaggingDecoderConfig())
         super().__init__(**kwargs)
         
     @property

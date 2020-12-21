@@ -8,7 +8,7 @@ import flair
 from ..data import Token, Batch
 from ..config import Config
 from ..encoder import EmbedderConfig, EncoderConfig, PreTrainedEmbedderConfig
-from .decoder import DecoderConfig
+from .decoder import TextClassificationDecoderConfig
 
 
 class TextClassifierConfig(Config):
@@ -35,7 +35,7 @@ class TextClassifierConfig(Config):
         self.flair_bw_embedder: PreTrainedEmbedderConfig = kwargs.pop('flair_bw_embedder', None)
         
         self.intermediate: EncoderConfig = kwargs.pop('intermediate', None)
-        self.decoder: DecoderConfig = kwargs.pop('decoder', DecoderConfig())
+        self.decoder: TextClassificationDecoderConfig = kwargs.pop('decoder', TextClassificationDecoderConfig())
         super().__init__(**kwargs)
         
     @property
