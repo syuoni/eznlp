@@ -15,7 +15,10 @@ class TextClassifierConfig(ModelConfig):
         
     @property
     def extra_name(self):
-        return self.decoder.pooling
+        if self.decoder.use_attention:
+            return self.decoder.attention_scoring
+        else:
+            return self.decoder.pooling_mode
     
     def instantiate(self, 
                     pretrained_vectors: Vectors=None, 

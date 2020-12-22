@@ -2,7 +2,7 @@
 import pytest
 import torch
 from eznlp.nn.functional import seq_lens2mask
-from eznlp.nn import SequencePooling, SequenceGroupAggregating
+from eznlp.nn import SequencePooling, SequenceAttention, SequenceGroupAggregating
 from eznlp.nn import LockedDropout, WordDropout
 
 
@@ -43,8 +43,9 @@ class TestDropout(object):
         
         
             
-class TestPooling(object):
-    def test_pooling(self):
+class TestSequencePooling(object):
+    @pytest.mark.parametrize("mode", ['Mean', 'Max', 'Min'])
+    def test_pooling(self, mode):
         BATCH_SIZE = 100
         MAX_LEN = 20
         HID_DIM = 50
@@ -53,15 +54,32 @@ class TestPooling(object):
         seq_lens = torch.randint(0, MAX_LEN, size=(BATCH_SIZE, )) + 1
         mask = seq_lens2mask(seq_lens, max_len=MAX_LEN)
         
-        mean_pooled = SequencePooling(mode='mean')(x, mask)
-        max_pooled  = SequencePooling(mode='max')(x, mask)
-        min_pooled  = SequencePooling(mode='min')(x, mask)
+        pooled = SequencePooling(mode=mode)(x, mask)
         
         for i in range(BATCH_SIZE):
-            assert (mean_pooled[i] - x[i, :seq_lens[i]].mean(dim=0)).abs().max().item() < 1e-6
-            assert (max_pooled[i]  - x[i, :seq_lens[i]].max(dim=0).values).abs().max().item() < 1e-6
-            assert (min_pooled[i]  - x[i, :seq_lens[i]].min(dim=0).values).abs().max().item() < 1e-6
+            if mode.lower() == 'mean':
+                assert (pooled[i] - x[i, :seq_lens[i]].mean(dim=0)).abs().max().item() < 1e-6
+            elif mode.lower() == 'max':
+                assert (pooled[i] - x[i, :seq_lens[i]].max(dim=0).values).abs().max().item() < 1e-6
+            elif mode.lower() == 'min':
+                assert (pooled[i] - x[i, :seq_lens[i]].min(dim=0).values).abs().max().item() < 1e-6
+                
             
+    @pytest.mark.parametrize("scoring", ['Dot', 'Multiplicative', 'Additive'])
+    def test_attention(self, scoring):
+        BATCH_SIZE = 100
+        MAX_LEN = 20
+        HID_DIM = 50
+        
+        x = torch.randn(BATCH_SIZE, MAX_LEN, HID_DIM)
+        seq_lens = torch.randint(0, MAX_LEN, size=(BATCH_SIZE, )) + 1
+        mask = seq_lens2mask(seq_lens, max_len=MAX_LEN)
+        
+        atten_values, atten_weight = SequenceAttention(HID_DIM, scoring=scoring)(x, mask, return_atten_weight=True)
+        assert (atten_weight[mask] == 0).all().item()
+        assert atten_values.size(0) == BATCH_SIZE
+        assert atten_values.size(1) == HID_DIM
+        
         
 class TestAggregateTensorByGroup(object):
     @pytest.mark.parametrize("x, group_by", [(torch.randn(1, 10, 20), 

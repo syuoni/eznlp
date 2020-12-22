@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import pytest
-import torch
 import torch.optim as optim
 
 from eznlp import EncoderConfig, PreTrainedEmbedderConfig
@@ -49,12 +48,22 @@ class TestClassifier(object):
         
     
     @pytest.mark.parametrize("enc_arch", ['CNN', 'LSTM'])
-    @pytest.mark.parametrize("pooling", ['Max', 'Mean'])
-    def test_classifier(self, demo_data, enc_arch, pooling, device):
+    @pytest.mark.parametrize("pooling_mode", ['Min', 'Max', 'Mean'])
+    def test_classifier(self, demo_data, enc_arch, pooling_mode, device):
         config = TextClassifierConfig(encoder=EncoderConfig(arch=enc_arch), 
-                                      decoder=TextClassificationDecoderConfig(pooling=pooling))
+                                      decoder=TextClassificationDecoderConfig(use_attention=False, 
+                                                                              pooling_mode=pooling_mode))
         train_set = build_demo_dataset(demo_data, config)
         classifier = config.instantiate().to(device)
         self.one_classifier_pass(classifier, train_set, device)
         
         
+    @pytest.mark.parametrize("enc_arch", ['CNN', 'LSTM'])
+    @pytest.mark.parametrize("attention_scoring", ['Dot', 'Multiplicative', 'Additive'])
+    def test_classifier_attention(self, demo_data, enc_arch, attention_scoring, device):
+        config = TextClassifierConfig(encoder=EncoderConfig(arch=enc_arch), 
+                                      decoder=TextClassificationDecoderConfig(use_attention=True, 
+                                                                              attention_scoring=attention_scoring))
+        train_set = build_demo_dataset(demo_data, config)
+        classifier = config.instantiate().to(device)
+        self.one_classifier_pass(classifier, train_set, device)

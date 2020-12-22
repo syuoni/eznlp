@@ -3,15 +3,17 @@ from typing import List
 import torch
 
 from ..data import Batch
-from ..nn import SequencePooling
+from ..nn import SequencePooling, SequenceAttention
 from ..decoder import DecoderConfig, Decoder
 
 
 class TextClassificationDecoderConfig(DecoderConfig):
     def __init__(self, **kwargs):
-        self.pooling = kwargs.pop('pooling', 'Attention')
-        if self.pooling.lower() not in ('max', 'min', 'mean', 'attention'):
-            raise ValueError(f"Invalid pooling method {self.pooling}")
+        self.use_attention = kwargs.pop('use_attention', True)
+        if self.use_attention:
+            self.attention_scoring = kwargs.pop('attention_scoring', 'Multiplicative')
+        else:
+            self.pooling_mode = kwargs.pop('pooling_mode', 'Mean')
             
         idx2label = kwargs.pop('idx2label', None)
         self.set_vocab(idx2label)
@@ -42,7 +44,11 @@ class TextClassificationDecoderConfig(DecoderConfig):
 class TextClassificationDecoder(Decoder):
     def __init__(self, config: TextClassificationDecoderConfig):
         super().__init__(config)
-        self.pooling = SequencePooling(mode=config.pooling)
+        if config.use_attention:
+            self.pooling = SequenceAttention(config.in_dim, scoring=config.attention_scoring)
+        else:
+            self.pooling = SequencePooling(mode=config.pooling_mode)
+            
         self.idx2label = config.idx2label
         self.label2idx = config.label2idx
         self.criterion = torch.nn.CrossEntropyLoss(reduction='none')
