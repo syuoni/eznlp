@@ -9,8 +9,8 @@ from ..decoder import DecoderConfig, Decoder
 
 class TextClassificationDecoderConfig(DecoderConfig):
     def __init__(self, **kwargs):
-        self.pooling = kwargs.pop('pooling', 'Max')
-        if self.pooling.lower() not in ('max', 'mean'):
+        self.pooling = kwargs.pop('pooling', 'Attention')
+        if self.pooling.lower() not in ('max', 'min', 'mean', 'attention'):
             raise ValueError(f"Invalid pooling method {self.pooling}")
             
         idx2label = kwargs.pop('idx2label', None)
