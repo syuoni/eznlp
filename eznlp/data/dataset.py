@@ -2,6 +2,7 @@
 from typing import List
 from collections import Counter, OrderedDict
 import torch
+from torch.nn.utils.rnn import pad_sequence
 from torchtext.experimental.vocab import Vocab
 
 from ..nn.functional import seq_lens2mask
@@ -77,23 +78,88 @@ class Dataset(torch.utils.data.Dataset):
     def extra_summary(self):
         return ""
     
-
-
+    def _get_basic_example(self, curr_data):
+        tok_ids = self.config.embedder.token.trans(curr_data['tokens'].text)
+        
+        if self.config.embedder.char is not None:
+            char_ids = [self.config.embedder.char.trans(tok) for tok in curr_data['tokens'].raw_text]
+        else:
+            char_ids = None
+        if self.config.embedder.enum is not None:
+            enum_feats = {f: enum_config.trans(getattr(curr_data['tokens'], f)) for f, enum_config in self.config.embedder.enum.items()}
+        else:
+            enum_feats = None
+        if self.config.embedder.val is not None:
+            val_feats = {f: val_config.trans(getattr(curr_data['tokens'], f)) for f, val_config in self.config.embedder.val.items()}
+        else:
+            val_feats = None
+            
+        # Prepare text for pretrained embedders
+        raw_text = curr_data['raw_text'] if 'raw_text' in curr_data else None
+        tokenized_raw_text = curr_data['tokens'].raw_text
+        
+        return TensorWrapper(char_ids=char_ids, tok_ids=tok_ids, enum=enum_feats, val=val_feats, 
+                             raw_text=raw_text, tokenized_raw_text=tokenized_raw_text)
+        
+        
+    def _build_basic_batch(self, batch_examples):
+        batch_tok_ids = [ex.tok_ids for ex in batch_examples]
+        seq_lens = torch.tensor([seq.size(0) for seq in batch_tok_ids])
+        batch_tok_ids = pad_sequence(batch_tok_ids, batch_first=True, padding_value=self.config.embedder.token.pad_idx)
+        
+        if self.config.embedder.char is not None:
+            batch_char_ids = [tok for ex in batch_examples for tok in ex.char_ids]
+            tok_lens = torch.tensor([tok.size(0) for tok in batch_char_ids])
+            batch_char_ids = pad_sequence(batch_char_ids, batch_first=True, padding_value=self.config.embedder.char.pad_idx)
+        else:
+            batch_char_ids, tok_lens = None, None
+            
+        if self.config.embedder.enum is not None:
+            batch_enum = {f: pad_sequence([ex.enum[f] for ex in batch_examples], batch_first=True, 
+                                          padding_value=enum_config.pad_idx) for f, enum_config in self.config.embedder.enum.items()}
+        else:
+            batch_enum = None
+            
+        if self.config.embedder.val is not None:
+            batch_val = {f: pad_sequence([ex.val[f] for ex in batch_examples], batch_first=True, 
+                                         padding_value=0.0) for f in self.config.embedder.val.keys()}
+        else:
+            batch_val = None
+        
+        # Prepare text for pretrained embedders
+        batch_raw_text = [ex.raw_text for ex in batch_examples] if batch_examples[0].raw_text is not None else None
+        batch_tokenized_raw_text = [ex.tokenized_raw_text for ex in batch_examples]
+        
+        batch = Batch(tok_ids=batch_tok_ids, seq_lens=seq_lens, 
+                      char_ids=batch_char_ids, tok_lens=tok_lens, 
+                      enum=batch_enum, val=batch_val, 
+                      raw_text=batch_raw_text, tokenized_raw_text=batch_tokenized_raw_text)
+        
+        batch.build_masks({'tok_mask': (seq_lens, batch_tok_ids.size(1))})
+        if self.config.embedder.char is not None:
+            batch.build_masks({'char_mask': (tok_lens, batch_char_ids.size(1))})
+            
+        return batch
+    
+    
+    
 class TensorWrapper(object):
     def __init__(self, **kwargs):
+        self.add_attributes(**kwargs)
+        
+    def add_attributes(self, **kwargs):
         for name, possible_attr in kwargs.items():
             if possible_attr is None or isinstance(possible_attr, (torch.Tensor, TensorWrapper)):
                 pass
-            # The only non-tensor-like attribute allowed
-            elif name == 'tokenized_raw_text':
+            # Exceptions for non-tensor-like attributes 
+            elif name in ('raw_text', 'tokenized_raw_text'):
                 pass
             elif isinstance(possible_attr, list):
                 assert all(isinstance(sub_attr, (torch.Tensor, TensorWrapper)) for sub_attr in possible_attr)
             elif isinstance(possible_attr, dict):
                 assert all(isinstance(sub_attr, (torch.Tensor, TensorWrapper)) for sub_attr in possible_attr.values())
             else:
-                raise TypeError(f"Invalid input to `TensorWrapper`: {possible_attr}")
-                
+                raise TypeError(f"Invalid input to `TensorWrapper`: {possible_attr}")    
             setattr(self, name, possible_attr)
             
             
