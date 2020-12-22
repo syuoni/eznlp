@@ -7,10 +7,11 @@ class TabularIO(object):
     An IO interface of Tabular-format files. 
     
     """
-    def __init__(self, text_col_id=0, label_col_id=1, tokenize_callback=None):
+    def __init__(self, text_col_id=0, label_col_id=1, tokenize_callback=None, **kwargs):
         self.text_col_id = text_col_id
         self.label_col_id = label_col_id
         self.tokenize_callback = tokenize_callback
+        self.kwargs = kwargs
         
     def read(self, file_path, encoding=None, sep=None, sentence_sep=None):
         data = []
@@ -23,7 +24,7 @@ class TabularIO(object):
                 if sentence_sep is not None:
                     raw_text = raw_text.replace(sentence_sep, "\n")
                 
-                tokens = TokenSequence.from_raw_text(raw_text, self.tokenize_callback)
+                tokens = TokenSequence.from_raw_text(raw_text, self.tokenize_callback, **self.kwargs)
                 label = line_seperated[self.label_col_id].strip()
                 data.append({'raw_text': raw_text, 'tokens': tokens, 'label': label})
                 

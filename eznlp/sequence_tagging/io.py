@@ -15,8 +15,8 @@ class ConllIO(object):
         For Conll2003, `line_sep_starts` should be `["-DOCSTART-"]`
         For OntoNotes5 (i.e., Conll2012), `line_sep_starts` should be `["#begin", "#end", "pt/"]`
     """
-    def __init__(self, text_col_id=0, tag_col_id=1, scheme='BIO1', 
-                 additional_col_id2name=None, line_sep_starts=None, breaking_for_types=True):
+    def __init__(self, text_col_id=0, tag_col_id=1, scheme='BIO1', additional_col_id2name=None, 
+                 line_sep_starts=None, breaking_for_types=True, **kwargs):
         self.text_col_id = text_col_id
         self.tag_col_id = tag_col_id
         
@@ -35,8 +35,9 @@ class ConllIO(object):
             self.line_sep_starts = line_sep_starts
             
         self.breaking_for_types = breaking_for_types
-            
-            
+        self.kwargs = kwargs
+        
+        
     def read(self, file_path, encoding=None, sep=None):
         data = []
         with open(file_path, 'r', encoding=encoding) as f:
@@ -49,7 +50,7 @@ class ConllIO(object):
                 if self._is_line_seperator(line):
                     if len(text) > 0:
                         additional_tags = {self.additional_col_id2name[col_id]: atags for col_id, atags in additional.items()}
-                        tokens = TokenSequence.from_tokenized_text(text, additional_tags)
+                        tokens = TokenSequence.from_tokenized_text(text, additional_tags, **self.kwargs)
                         chunks = self.translator.tags2chunks(tags, self.breaking_for_types)
                         data.append({'tokens': tokens, 'chunks': chunks})
                         
@@ -64,7 +65,7 @@ class ConllIO(object):
                         
             if len(text) > 0:
                 additional_tags = {self.additional_col_id2name[col_id]: atags for col_id, atags in additional.items()}
-                tokens = TokenSequence.from_tokenized_text(text, additional_tags)
+                tokens = TokenSequence.from_tokenized_text(text, additional_tags, **self.kwargs)
                 chunks = self.translator.tags2chunks(tags, self.breaking_for_types)
                 data.append({'tokens': tokens, 'chunks': chunks})
             
@@ -87,10 +88,11 @@ class BratIO(object):
     """
     An IO interface of brat-format files. 
     """
-    def __init__(self, use_attrs=None):
+    def __init__(self, use_attrs=None, **kwargs):
         self.use_attrs = use_attrs
         self.type_sep = "<s>"
         self.line_sep = "\r\n"
+        self.kwargs = kwargs
         
     def write(self, data, file_path, encoding=None):
         text_lines = []
@@ -183,7 +185,7 @@ class BratIO(object):
                 chunk_end = chunk_end_in_text - line_start
                 chunks.append((chunk_type, chunk_start, chunk_end))
                 
-        return {'tokens': TokenSequence.from_tokenized_text(list(text[line_start:line_end])),
+        return {'tokens': TokenSequence.from_tokenized_text(list(text[line_start:line_end]), **self.kwargs),
                 'chunks': chunks}
         
     def _parse_chunk_ann(self, ann):
