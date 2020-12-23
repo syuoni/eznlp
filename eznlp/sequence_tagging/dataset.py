@@ -3,7 +3,7 @@ from typing import List
 from collections import Counter
 import torch
 
-from ..data import Dataset
+from ..data import Dataset, TensorWrapper
 from .decoder import DecoderConfig
 from .tagger import SequenceTaggerConfig
 from .transition import ChunksTagsTranslator
@@ -46,7 +46,7 @@ class SequenceTaggingDataset(Dataset):
             self.config._update_dims(self.data[0]['tokens'][0])
         else:
             if self._is_labeled:
-                self._check_tag_vocabs()
+                self._check_tag_vocab()
                 
                 
     def _build_tags(self):
@@ -61,7 +61,7 @@ class SequenceTaggingDataset(Dataset):
         self.config.decoder.set_vocab(idx2tag=['<pad>'] + list(counter.keys()))
             
     
-    def _check_tag_vocabs(self):
+    def _check_tag_vocab(self):
         counter = Counter()
         for curr_data in self.data:
             counter.update(curr_data['tags'])
@@ -71,7 +71,7 @@ class SequenceTaggingDataset(Dataset):
             raise RuntimeError(f"OOV tags exist: {oov_tags}")
             
     # TODO
-    # def _build_cas_tag_vocabs(self):
+    # def _build_cas_tag_vocab(self):
     #     cas_tag_counter = Counter()
     #     cas_type_counter = Counter()
     #     for curr_data in self.data:
