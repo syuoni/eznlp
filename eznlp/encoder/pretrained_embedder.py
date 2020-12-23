@@ -25,6 +25,8 @@ class PreTrainedEmbedderConfig(Config):
             
         elif self.arch.lower() in ('bert', 'roberta', 'albert'):
             self.tokenizer = kwargs.pop('tokenizer')
+            #TODO: from non-tokenized?
+            self.from_tokenized = kwargs.pop('from_tokenized', True)
             self.agg_mode = kwargs.pop('agg_mode', 'mean')
             self.mix_layers = kwargs.pop('mix_layers', 'top')
             self.use_gamma = kwargs.pop('use_gamma', False)
@@ -127,10 +129,29 @@ class BertLikeEmbedder(PreTrainedEmbedder):
             self.gamma = torch.nn.Parameter(torch.tensor(1.0))
             
             
-    def _build_sub_token_ids(self, tokenized_raw_text: List[str]):
+    def _token_ids_from_tokenized(self, tokenized_raw_text: List[str]):
+        """
+        Further tokenize a pre-tokenized sentence. 
+        
+        Parameters
+        ----------
+        tokenized_raw_text : List[str]
+            e.g., ["I", "like", "this", "movie", "."]
+
+        Returns
+        -------
+        sub_tok_ids: torch.LongTensor
+            A 1D tensor of sub-token indexes.
+        ori_indexes: torch.LongTensor
+            A 1D tensor indicating each sub-token's original index in `tokenized_raw_text`.
+        """
         nested_sub_tokens = [self.tokenizer.tokenize(word) for word in tokenized_raw_text]
         sub_tokens = [sub_tok for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
         ori_indexes = [i for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
+        
+        # TODO: Longer sentence?
+        sub_tokens = sub_tokens[:self.tokenizer.max_len-2]
+        ori_indexes = ori_indexes[:self.tokenizer.max_len-2]
         
         sub_tok_ids = [self.tokenizer.cls_token_id] + \
                        self.tokenizer.convert_tokens_to_ids(sub_tokens) + \
@@ -138,11 +159,12 @@ class BertLikeEmbedder(PreTrainedEmbedder):
         
         # (step+2, ), (step, )
         return torch.tensor(sub_tok_ids), torch.tensor(ori_indexes)
-        
+    
     
     def forward(self, batch: Batch):
-        batch_sub_token_data = [self._build_sub_token_ids(text) for text in batch.tokenized_raw_text]
+        batch_sub_token_data = [self._token_ids_from_tokenized(text) for text in batch.tokenized_raw_text]
         batch_sub_tok_ids, batch_ori_indexes = list(zip(*batch_sub_token_data))
+        
         sub_tok_seq_lens = torch.tensor([sub_tok_ids.size(0) for sub_tok_ids in batch_sub_tok_ids])
         batch_sub_tok_mask = seq_lens2mask(sub_tok_seq_lens)
         batch_sub_tok_ids = pad_sequence(batch_sub_tok_ids, batch_first=True, padding_value=self.tokenizer.pad_token_id)
@@ -170,12 +192,13 @@ class BertLikeEmbedder(PreTrainedEmbedder):
         
         # agg_bert_outs: (batch, tok_step, hid_dim)
         agg_bert_outs = self.group_aggregating(bert_outs, batch_ori_indexes, agg_step=batch.tok_ids.size(1))
+            
         if self.use_gamma:
             return self.gamma * agg_bert_outs
         else:
             return agg_bert_outs
-    
-    
+        
+        
 class ELMoEmbedder(PreTrainedEmbedder):
     """
     An embedder based on ELMo representations. 

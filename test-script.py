@@ -78,8 +78,8 @@ if __name__ == '__main__':
     # elmo(elmo_char_ids)
     
     
-    # bert = BertModel.from_pretrained("assets/transformers_cache/bert-base-cased")
-    # tokenizer = BertTokenizer.from_pretrained("assets/transformers_cache/bert-base-cased")
+    bert = BertModel.from_pretrained("assets/transformers_cache/bert-base-uncased")
+    tokenizer = BertTokenizer.from_pretrained("assets/transformers_cache/bert-base-uncased")
     
     # encoded = tokenizer(batch_sentences, is_pretokenized=True, padding=True, return_tensors='pt')
     # bert_outs, _, hidden = bert(**encoded, output_hidden_states=True)
@@ -119,16 +119,18 @@ if __name__ == '__main__':
     # brat_data = brat_io.read("assets/data/brat/demo.txt", encoding='utf-8')
     # brat_io.write(brat_data, "assets/data/brat/demo-write.txt", encoding='utf-8')
     
-    # tabular_io = TabularIO(text_col_id=3, label_col_id=2)
-    # train_data = tabular_io.read("assets/data/Tang2015/yelp-2013-seg-20-20.dev.ss", encoding='utf-8', sep="\t\t", sentence_sep="<sssss>")
+    tabular_io = TabularIO(text_col_id=3, label_col_id=2)
+    train_data = tabular_io.read("assets/data/Tang2015/yelp-2013-seg-20-20.dev.ss", encoding='utf-8', sep="\t\t", sentence_sep="<sssss>")
     
-    # config = TextClassifierConfig()
-    # train_set = TextClassificationDataset(train_data, config)
+    config = TextClassifierConfig(encoder=None, 
+                                  bert_like_embedder=PreTrainedEmbedderConfig(arch='BERT', out_dim=bert.config.hidden_size, 
+                                                                              tokenizer=tokenizer, freeze=True))
+    train_set = TextClassificationDataset(train_data, config)
     
-    # classifier = config.instantiate()
+    classifier = config.instantiate(bert_like=bert)
     
-    # batch = train_set.collate([train_set[i] for i in range(0, 4)])
-    # losses, hidden = classifier(batch, return_hidden=True)
+    batch = train_set.collate([train_set[i] for i in range(0, 4)])
+    losses, hidden = classifier(batch, return_hidden=True)
     
     # optimizer = optim.AdamW(classifier.parameters())
     # trainer = TextClassificationTrainer(classifier, optimizer=optimizer, device=device)

@@ -67,3 +67,19 @@ class TestClassifier(object):
         train_set = build_demo_dataset(demo_data, config)
         classifier = config.instantiate().to(device)
         self.one_classifier_pass(classifier, train_set, device)
+        
+    @pytest.mark.parametrize("freeze", [False, True])
+    def test_classifier_bert_like(self, demo_data, bert_with_tokenizer, freeze, device):
+        bert, tokenizer = bert_with_tokenizer
+        bert_like_embedder_config = PreTrainedEmbedderConfig(arch='BERT', 
+                                                             out_dim=bert.config.hidden_size, 
+                                                             tokenizer=tokenizer, 
+                                                             freeze=freeze)
+        config = TextClassifierConfig(encoder=None, bert_like_embedder=bert_like_embedder_config)
+        
+        train_set = build_demo_dataset(demo_data, config)
+        classifier = config.instantiate(bert_like=bert).to(device)
+        self.one_classifier_pass(classifier, train_set, device)
+        
+        
+        
