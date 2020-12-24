@@ -81,6 +81,7 @@ class SequenceTaggingDataset(Dataset):
     #     self.config.decoder.set_vocabs(idx2cas_tag=['<pad>'] + list(cas_tag_counter.keys()), 
     #                                    idx2cas_type=['<pad>'] + list(cas_type_counter.keys()))
         
+    @property
     def extra_summary(self):
         n_chunks = sum(len(curr_data['chunks']) for curr_data in self.data)
         return f"The dataset has {n_chunks:,} chunks"

@@ -35,7 +35,7 @@ from eznlp.sequence_tagging.transition import find_ascending
 from eznlp.language_modeling import MLMDataset, PMCMLMDataset, MLMTrainer
 
 from eznlp.text_classification.io import TabularIO
-from eznlp.text_classification import TextClassifierConfig
+from eznlp.text_classification import TextClassificationDecoderConfig, TextClassifierConfig
 from eznlp.text_classification import TextClassificationDataset
 from eznlp.text_classification import TextClassificationTrainer
 
@@ -76,7 +76,6 @@ if __name__ == '__main__':
     
     # elmo_char_ids = batch_to_ids(batch_sentences)
     # elmo(elmo_char_ids)
-    
     
     bert = BertModel.from_pretrained("assets/transformers_cache/bert-base-uncased")
     tokenizer = BertTokenizer.from_pretrained("assets/transformers_cache/bert-base-uncased")
@@ -120,11 +119,16 @@ if __name__ == '__main__':
     # brat_io.write(brat_data, "assets/data/brat/demo-write.txt", encoding='utf-8')
     
     tabular_io = TabularIO(text_col_id=3, label_col_id=2)
-    train_data = tabular_io.read("assets/data/Tang2015/yelp-2013-seg-20-20.dev.ss", encoding='utf-8', sep="\t\t", sentence_sep="<sssss>")
+    train_data = tabular_io.read("assets/data/Tang2015/yelp-2013-seg-20-20.train.ss", encoding='utf-8', sep="\t\t", sentence_sep="<sssss>")
     
-    config = TextClassifierConfig(encoder=None, 
-                                  bert_like_embedder=PreTrainedEmbedderConfig(arch='BERT', out_dim=bert.config.hidden_size, 
-                                                                              tokenizer=tokenizer, freeze=True))
+    config = TextClassifierConfig(embedder=EmbedderConfig(token=TokenConfig(emb_dim=100, freeze=True)), 
+                                  encoder=None, 
+                                  bert_like_embedder=PreTrainedEmbedderConfig(arch='BERT', 
+                                                                              out_dim=bert.config.hidden_size, 
+                                                                              tokenizer=tokenizer, 
+                                                                              freeze=True), 
+                                  intermediate=EncoderConfig(arch='LSTM', hid_dim=200, num_layers=1, in_drop_rates=(0.5, 0.0, 0.0)), 
+                                  decoder=TextClassificationDecoderConfig(use_attention=True, attention_scoring='Multiplicative'))
     train_set = TextClassificationDataset(train_data, config)
     
     classifier = config.instantiate(bert_like=bert)
@@ -132,7 +136,7 @@ if __name__ == '__main__':
     batch = train_set.collate([train_set[i] for i in range(0, 4)])
     losses, hidden = classifier(batch, return_hidden=True)
     
-    # optimizer = optim.AdamW(classifier.parameters())
-    # trainer = TextClassificationTrainer(classifier, optimizer=optimizer, device=device)
-    # trainer.train_epoch([batch])
+    optimizer = optim.AdamW(classifier.parameters())
+    trainer = TextClassificationTrainer(classifier, optimizer=optimizer, device=device)
+    trainer.train_epoch([batch])
     

@@ -67,7 +67,10 @@ class Dataset(torch.utils.data.Dataset):
             n_raws = len({curr_data['raw_idx'] for curr_data in self.data})
             summary.append(f"\tbuilt from {n_raws:,} raw entries")
             
-        max_len = max([len(curr_data['tokens']) for curr_data in self.data])
+        seq_lens = [len(curr_data['tokens']) for curr_data in self.data]
+        ave_len = sum(seq_lens) / len(seq_lens)
+        max_len = max(seq_lens)
+        summary.append(f"The average sequence length is {ave_len:,.1f}")
         summary.append(f"The max sequence length is {max_len:,}")
         
         if self.extra_summary:
