@@ -2,9 +2,11 @@
 from typing import List
 from collections import Counter
 import torch
+import numpy as np
 
 from ..data import Dataset
 from .classifier import TextClassifierConfig
+from ..sequence_tagging.transition import find_ascending
 
 
 class TextClassificationDataset(Dataset):
@@ -42,7 +44,34 @@ class TextClassificationDataset(Dataset):
             if self._is_labeled:
                 self._check_label_vocab()
                 
+    def _truncate_tokens(self):
+        tokenizer = self.config.bert_like_embedder.tokenizer
+        max_len = tokenizer.max_len - 2
+        head_len = tokenizer.max_len // 4
+        tail_len = max_len - head_len
+        
+        for curr_data in self.data:
+            tokens = curr_data['tokens']
+            nested_sub_tokens = [tokenizer.tokenize(word) for word in tokens.raw_text]
+            sub_tok_seq_lens = [len(tok) for tok in nested_sub_tokens]
+            
+            if sum(sub_tok_seq_lens) > max_len:
+                cum_lens = np.cumsum(sub_tok_seq_lens).tolist()
+                find_head, head_end = find_ascending(cum_lens, head_len)
                 
+                tokens[:head_end+1]
+                
+                rev_cum_lens = np.cumsum(reversed(sub_tok_seq_lens)).tolist()
+                find_tail, t
+                
+                curr_head_len = 1
+                # curr_data['tokens'] = 
+                
+                
+                
+                
+                
+        
     def _build_label_vocab(self):
         counter = Counter([curr_data['label'] for curr_data in self.data])
         self.config.decoder.set_vocab(idx2label=list(counter.keys()))

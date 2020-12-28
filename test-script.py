@@ -126,6 +126,7 @@ if __name__ == '__main__':
                                   bert_like_embedder=PreTrainedEmbedderConfig(arch='BERT', 
                                                                               out_dim=bert.config.hidden_size, 
                                                                               tokenizer=tokenizer, 
+                                                                              from_tokenized=False, 
                                                                               freeze=True), 
                                   intermediate=EncoderConfig(arch='LSTM', hid_dim=200, num_layers=1, in_drop_rates=(0.5, 0.0, 0.0)), 
                                   decoder=TextClassificationDecoderConfig(use_attention=True, attention_scoring='Multiplicative'))
@@ -139,4 +140,6 @@ if __name__ == '__main__':
     optimizer = optim.AdamW(classifier.parameters())
     trainer = TextClassificationTrainer(classifier, optimizer=optimizer, device=device)
     trainer.train_epoch([batch])
+    
+    
     

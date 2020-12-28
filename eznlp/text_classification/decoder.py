@@ -74,4 +74,3 @@ class TextClassificationDecoder(Decoder):
         return [self.idx2label[label_id] for label_id in logits.argmax(dim=-1).cpu().tolist()]
         
         
-        

@@ -41,7 +41,7 @@ def find_ascending(sequence: list, value, start=None, end=None):
         if sequence[start] == value:
             return True, start
         elif sequence[start] < value:
-            return False, start+1
+            return False, start + 1
         else:
             return False, start
     
