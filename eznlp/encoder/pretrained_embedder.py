@@ -25,8 +25,8 @@ class PreTrainedEmbedderConfig(Config):
             
         elif self.arch.lower() in ('bert', 'roberta', 'albert'):
             self.tokenizer = kwargs.pop('tokenizer')
-            #TODO: from non-tokenized?
             self.from_tokenized = kwargs.pop('from_tokenized', True)
+            self.pre_truncation = kwargs.pop('pre_truncation', False)
             self.agg_mode = kwargs.pop('agg_mode', 'mean')
             self.mix_layers = kwargs.pop('mix_layers', 'top')
             self.use_gamma = kwargs.pop('use_gamma', False)

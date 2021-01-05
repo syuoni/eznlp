@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from tqdm import tqdm
+import tqdm
 import torch
 
 from ..data import Batch
@@ -30,7 +30,7 @@ class TextClassificationTrainer(Trainer):
         self.model.eval()
         labels = []
         with torch.no_grad():
-            for batch in tqdm(dataloader):
+            for batch in tqdm.tqdm(dataloader):
                 batch.to(self.device)
                 labels.extend(self.model.decode(batch))
         return labels

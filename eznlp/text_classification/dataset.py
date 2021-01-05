@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from typing import List
 from collections import Counter
+import tqdm
 import torch
 import numpy as np
 
@@ -26,6 +27,9 @@ class TextClassificationDataset(Dataset):
         
         self._is_labeled = ('label' in data[0])
         
+        if self.config.bert_like_embedder is not None and self.config.bert_like_embedder.pre_truncation:
+            self._truncate_tokens()
+            
         self._building_vocabs = (self.config.decoder.idx2label is None)
         if self._building_vocabs:
             assert self._is_labeled
@@ -44,13 +48,14 @@ class TextClassificationDataset(Dataset):
             if self._is_labeled:
                 self._check_label_vocab()
                 
+                
     def _truncate_tokens(self):
         tokenizer = self.config.bert_like_embedder.tokenizer
         max_len = tokenizer.max_len - 2
         head_len = tokenizer.max_len // 4
         tail_len = max_len - head_len
         
-        for curr_data in self.data:
+        for curr_data in tqdm.tqdm(self.data):
             tokens = curr_data['tokens']
             nested_sub_tokens = [tokenizer.tokenize(word) for word in tokens.raw_text]
             sub_tok_seq_lens = [len(tok) for tok in nested_sub_tokens]
@@ -58,20 +63,17 @@ class TextClassificationDataset(Dataset):
             if sum(sub_tok_seq_lens) > max_len:
                 cum_lens = np.cumsum(sub_tok_seq_lens).tolist()
                 find_head, head_end = find_ascending(cum_lens, head_len)
-                
-                tokens[:head_end+1]
-                
-                rev_cum_lens = np.cumsum(reversed(sub_tok_seq_lens)).tolist()
-                find_tail, t
-                
-                curr_head_len = 1
-                # curr_data['tokens'] = 
-                
-                
-                
+                if find_head:
+                    head_end += 1
+                    
+                rev_cum_lens = np.cumsum(sub_tok_seq_lens[::-1]).tolist()
+                find_tail, tail_begin = find_ascending(rev_cum_lens, tail_len)
+                if find_tail:
+                    tail_begin += 1
+                    
+                curr_data['tokens'] = tokens[:head_end] + tokens[-tail_begin:]
                 
                 
-        
     def _build_label_vocab(self):
         counter = Counter([curr_data['label'] for curr_data in self.data])
         self.config.decoder.set_vocab(idx2label=list(counter.keys()))

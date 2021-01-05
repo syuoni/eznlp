@@ -270,9 +270,6 @@ class TokenSequence(object):
     def __len__(self):
         return len(self.token_list)
     
-    def __str__(self):
-        return str(self.token_list)
-    
     def __repr__(self):
         return repr(self.token_list)
     
@@ -281,7 +278,10 @@ class TokenSequence(object):
 
     def __setstate__(self, token_list):
         self.token_list = token_list
-    
+        
+    def __add__(self, other):
+        return TokenSequence(self.token_list + other.token_list)
+        
     def __getitem__(self, i):
         if isinstance(i, int):
             return self.token_list[i]

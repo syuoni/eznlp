@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from tqdm import tqdm
+import tqdm
 import torch
 
 from ..data import Batch
@@ -35,7 +35,7 @@ class SequenceTaggingTrainer(Trainer):
         self.model.eval()
         paths = []
         with torch.no_grad():
-            for batch in tqdm(dataloader):
+            for batch in tqdm.tqdm(dataloader):
                 batch.to(self.device)
                 paths.extend(self.model.decode(batch))
         return paths
