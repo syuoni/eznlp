@@ -84,6 +84,8 @@ class ChunksTagsTranslator(object):
                               use_cols=['legal', 'end_of_chunk', 'start_of_chunk'])
         self.trans = {tr: trans.loc[tr].to_dict() for tr in trans.index.tolist()}
         
+    def __repr__(self):
+        return f"{self.__class__.__name__}(scheme={self.scheme})"
         
     def check_transitions_legal(self, tags: list):
         """
@@ -92,7 +94,17 @@ class ChunksTagsTranslator(object):
         # TODO: also check types
         padded_tags = ['O'] + [tag.split('-', maxsplit=1)[0] for tag in tags] + ['O']
         return all([self.trans[(prev_tag, this_tag)]['legal'] for prev_tag, this_tag in zip(padded_tags[:-1], padded_tags[1:])])
-
+        
+    
+    def chunks2group_by(self, chunks: list, seq_len: int):
+        group_by = [-1 for _ in range(seq_len)]
+        
+        for i, (chunk_type, chunk_start, chunk_end) in enumerate(chunks):
+            for j in range(chunk_start, chunk_end):
+                group_by[j] = i
+                
+        return group_by
+        
         
     def chunks2tags(self, chunks: list, seq_len: int):
         tags = ['O' for _ in range(seq_len)]
@@ -300,6 +312,5 @@ class ChunksTagsTranslator(object):
     def text_chunks2tags(self, text_chunks: list, raw_text: str, tokens: TokenSequence, **kwargs):
         chunks, errors, mismatches = self.text_chunks2chunks(text_chunks, raw_text, tokens, **kwargs)
         return self.chunks2tags(chunks, len(tokens), **kwargs), errors, mismatches
-    
     
     

@@ -66,7 +66,7 @@ class TestConllIO(object):
         
 class TestBratIO(object):
     def test_demo(self):
-        brat_io = BratIO(use_attrs=['Denied', 'Analyzed'])
+        brat_io = BratIO(attr_names=['Denied', 'Analyzed'])
         data = brat_io.read("assets/data/brat/demo.txt", encoding='utf-8')
         brat_io.write(data, "assets/data/brat/demo-write.txt", encoding='utf-8')
         

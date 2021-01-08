@@ -172,15 +172,13 @@ class TensorWrapper(object):
             if isinstance(attr, (torch.Tensor, TensorWrapper)):
                 if attr.device is not None:
                     return attr.device
-            elif attr_name == 'tokenized_raw_text':
-                pass
             elif isinstance(attr, list) and len(attr) > 0:
                 attr0 = attr[0]
-                if attr0.device is not None:
+                if isinstance(attr0, (torch.Tensor, TensorWrapper)):
                     return attr0.device
             elif isinstance(attr, dict) and len(attr) > 0:
                 attr0 = next(iter(attr.values()))
-                if attr0.device is not None:
+                if isinstance(attr0, (torch.Tensor, TensorWrapper)):
                     return attr0.device
         else:
             return None
@@ -208,10 +206,10 @@ class TensorWrapper(object):
                 elif isinstance(attr0, TensorWrapper):
                     setattr(self, attr_name, {k: v._apply_to_tensors(func) for k, v in attr.items()})
         return self
-    
+        
     def pin_memory(self):
         return self._apply_to_tensors(lambda x: x.pin_memory())
-    
+        
     def to(self, *args, **kwargs):
         return self._apply_to_tensors(lambda x: x.to(*args, **kwargs))
         
@@ -272,5 +270,8 @@ def unpad_seqs(seqs, seq_lens):
     list
         A list of list of values. 
     """
-    return [seq[:seq_len] for seq, seq_len in zip(seqs.cpu().tolist(), seq_lens.cpu().tolist())]
+    if isinstance(seq_lens, torch.LongTensor):
+        seq_lens = seq_lens.cpu().tolist()
+    
+    return [seq[:seq_len] for seq, seq_len in zip(seqs.cpu().tolist(), seq_lens)]
 

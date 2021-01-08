@@ -4,9 +4,8 @@ from collections import Counter
 import torch
 
 from ..data import Dataset, TensorWrapper
-from .decoder import DecoderConfig
+from .decoder import SequenceTaggingDecoderConfig
 from .tagger import SequenceTaggerConfig
-from .transition import ChunksTagsTranslator
 
 
 class SequenceTaggingDataset(Dataset):
@@ -16,7 +15,7 @@ class SequenceTaggingDataset(Dataset):
         ----------
         data : list of dict
             [{'tokens': TokenSequence, 
-              'chunks': list of tuple}, ...]
+              'chunks': list}, ...]
             
             `chunks` should be [(chunk_type, chunk_start, chunk_end), ...].
             `chunks` is an optional key, which does not exist if the data are unlabeled. 
@@ -25,21 +24,17 @@ class SequenceTaggingDataset(Dataset):
             config = SequenceTaggerConfig()
         super().__init__(data, config)
         
-        self.translator = ChunksTagsTranslator(scheme=self.config.decoder.scheme)
         self._is_labeled = ('chunks' in data[0])
-        if self._is_labeled:
-            self._build_tags()
+        self._is_building_vocabs = (self.config.decoder.idx2tag is None)
         
-        self._building_vocabs = (self.config.decoder.idx2tag is None)
-        if self._building_vocabs:
+        if self._is_building_vocabs:
             assert self._is_labeled
-            
             self._build_token_vocab()
             self._build_tag_vocab()
             
             if self.config.embedder.char is not None:
                 self._build_char_vocab()
-            
+                
             if self.config.embedder.enum is not None:
                 self._build_enum_vocabs()
                 
@@ -48,39 +43,34 @@ class SequenceTaggingDataset(Dataset):
             if self._is_labeled:
                 self._check_tag_vocab()
                 
-                
-    def _build_tags(self):
-        for curr_data in self.data:
-            curr_data['tags'] = self.translator.chunks2tags(curr_data['chunks'], len(curr_data['tokens']))
+        if self._is_labeled:
+            self._build_tags_objs()
             
             
     def _build_tag_vocab(self):
         counter = Counter()
         for curr_data in self.data:
-            counter.update(curr_data['tags'])
-        self.config.decoder.set_vocab(idx2tag=['<pad>'] + list(counter.keys()))
-            
-    
+            curr_tags = self.config.decoder.translator.chunks2tags(curr_data['chunks'], len(curr_data['tokens']))
+            counter.update(curr_tags)
+        self.config.decoder.idx2tag = ['<pad>'] + list(counter.keys())
+        
+        
     def _check_tag_vocab(self):
         counter = Counter()
         for curr_data in self.data:
-            counter.update(curr_data['tags'])
+            curr_tags = self.config.decoder.translator.chunks2tags(curr_data['chunks'], len(curr_data['tokens']))
+            counter.update(curr_tags)
             
-        oov_tags = [tag for tag in counter if tag not in self.config.decoder.tag2idx]
-        if len(oov_tags) > 0:
-            raise RuntimeError(f"OOV tags exist: {oov_tags}")
+        oov = [tag for tag in counter if tag not in self.config.decoder.tag2idx]
+        if len(oov) > 0:
+            raise RuntimeError(f"OOV tags exist: {oov}")
             
-    # TODO
-    # def _build_cas_tag_vocab(self):
-    #     cas_tag_counter = Counter()
-    #     cas_type_counter = Counter()
-    #     for curr_data in self.data:
-    #         cas_tag_counter.update(self.config.decoder.build_cas_tags_by_tags(curr_data['tags']))
-    #         cas_type_counter.update(self.config.decoder.build_cas_types_by_tags(curr_data['tags']))
             
-    #     self.config.decoder.set_vocabs(idx2cas_tag=['<pad>'] + list(cas_tag_counter.keys()), 
-    #                                    idx2cas_type=['<pad>'] + list(cas_type_counter.keys()))
-        
+    def _build_tags_objs(self):
+        for curr_data in self.data:
+            curr_data['tags_obj'] = Tags(curr_data, self.config.decoder)
+            
+            
     @property
     def extra_summary(self):
         n_chunks = sum(len(curr_data['chunks']) for curr_data in self.data)
@@ -91,7 +81,7 @@ class SequenceTaggingDataset(Dataset):
         curr_data = self.data[i]
         example = self._get_basic_example(curr_data)
         
-        tags_obj = Tags(curr_data['tags'], self.config.decoder) if self._is_labeled else None
+        tags_obj = curr_data['tags_obj'] if self._is_labeled else None
         example.add_attributes(tags_obj=tags_obj)
         return example
     
@@ -105,22 +95,21 @@ class SequenceTaggingDataset(Dataset):
     
     
 class Tags(TensorWrapper):
-    def __init__(self, tags: list, config: DecoderConfig):
-        self.tags = tags
-        # self.cas_tags = config.build_cas_tags_by_tags(tags)
-        # self.cas_types = config.build_cas_types_by_tags(tags)
-        # self.cas_ent_slices, self.cas_ent_types = config.build_cas_ent_slices_and_types_by_tags(tags)
-        
-        self.tag_ids = torch.tensor(config.tags2ids(self.tags))
-        # self.cas_tag_ids = torch.tensor(config.cas_tags2ids(self.cas_tags))
-        # self.cas_type_ids = torch.tensor(config.cas_types2ids(self.cas_types))
-        # self.cas_ent_type_ids = torch.tensor(config.cas_types2ids(self.cas_ent_types))
-        
-    def _apply_to_tensors(self, func):
-        self.tag_ids = func(self.tag_ids)
-        # self.cas_tag_ids = func(self.cas_tag_ids)
-        # self.cas_type_ids = func(self.cas_type_ids)
-        # self.cas_ent_type_ids = func(self.cas_ent_type_ids)
-        return self
+    """
+    Packaging of tags and chunks. 
     
+    Parameters
+    ----------
+    data_entry: dict
+        {'tokens': TokenSequence, 
+         'chunks': list}
+    """
+    def __init__(self, data_entry: dict, config: SequenceTaggingDecoderConfig):
+        self.chunks = data_entry['chunks']
+        self.tags = config.translator.chunks2tags(data_entry['chunks'], len(data_entry['tokens']))
+        self.tag_ids = torch.tensor([config.tag2idx[t] for t in self.tags], dtype=torch.long)
+        
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.tags})"
+        
     

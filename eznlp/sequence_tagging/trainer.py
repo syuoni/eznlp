@@ -4,7 +4,6 @@ import torch
 
 from ..data import Batch
 from ..training import Trainer
-from .transition import ChunksTagsTranslator
 from .dataset import SequenceTaggingDataset
 from .metric import precision_recall_f1_report
 
@@ -17,7 +16,6 @@ class SequenceTaggingTrainer(Trainer):
                  device=None, 
                  grad_clip=1.0):
         super().__init__(model, optimizer=optimizer, scheduler=scheduler, device=device, grad_clip=grad_clip)
-        self.translator = ChunksTagsTranslator(scheme=model.decoder.scheme)
         
         
     def forward_batch(self, batch):
@@ -43,7 +41,7 @@ class SequenceTaggingTrainer(Trainer):
     
     def predict_chunks(self, dataset: SequenceTaggingDataset, batch_size=32):
         paths = self.predict_tags(dataset, batch_size=batch_size)
-        chunks = [self.translator.tags2chunks(path) for path in paths]
+        chunks = [self.model.decoder.translator.tags2chunks(path) for path in paths]
         return chunks
     
     
@@ -58,13 +56,11 @@ class SequenceTaggingTrainer(Trainer):
     
     def _batch_f1(self, batch: Batch, hidden: torch.Tensor):
         pred_paths = self.model.decode(batch, hidden)
-        # Here fetch the gold tags, instead of the modeling tags
-        gold_paths = [tags_obj.tags for tags_obj in batch.tags_objs]
+        chunks_pred_data = [self.model.decoder.translator.tags2chunks(path) for path in pred_paths]
         
-        chunks_pred_data = [self.translator.tags2chunks(path) for path in pred_paths]
-        chunks_gold_data = [self.translator.tags2chunks(path) for path in gold_paths]
+        chunks_gold_data = [tags_obj.chunks for tags_obj in batch.tags_objs]
         scores, ave_scores = precision_recall_f1_report(chunks_gold_data, chunks_pred_data)
         # According to https://www.clips.uantwerpen.be/conll2000/chunking/output.html
         return ave_scores['micro']['f1']
-
-
+    
+    

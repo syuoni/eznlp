@@ -77,8 +77,8 @@ if __name__ == '__main__':
     # elmo_char_ids = batch_to_ids(batch_sentences)
     # elmo(elmo_char_ids)
     
-    bert = BertModel.from_pretrained("assets/transformers_cache/bert-base-uncased")
-    tokenizer = BertTokenizer.from_pretrained("assets/transformers_cache/bert-base-uncased")
+    # bert = BertModel.from_pretrained("assets/transformers_cache/bert-base-uncased")
+    # tokenizer = BertTokenizer.from_pretrained("assets/transformers_cache/bert-base-uncased")
     
     # encoded = tokenizer(batch_sentences, is_pretokenized=True, padding=True, return_tensors='pt')
     # bert_outs, _, hidden = bert(**encoded, output_hidden_states=True)
@@ -113,10 +113,19 @@ if __name__ == '__main__':
     # batch = train_set.collate([train_set[i] for i in range(0, 4)])
     # losses, hidden = tagger(batch, return_hidden=True)
     
-    # brat_io = BratIO(use_attrs=['Denied', 'Analyzed'])
-    # brat_data = brat_io.read("assets/data/brat/demo.txt", encoding='utf-8')
+    brat_io = BratIO(attr_names=['Denied', 'Analyzed'])
+    brat_data = brat_io.read("assets/data/brat/demo.txt", encoding='utf-8')
     # brat_io.write(brat_data, "assets/data/brat/demo-write.txt", encoding='utf-8')
     
+    # brat_set = SequenceTaggingDataset(brat_data)
+    # batch = brat_set.collate([brat_set[i] for i in range(0, 4)])
+    
+    # tagger = brat_set.config.instantiate()
+    # losses = tagger(batch)
+    # optimizer = optim.AdamW(tagger.parameters())
+    # trainer = SequenceTaggingTrainer(tagger, optimizer=optimizer, device=device)
+    # res = trainer.train_epoch([batch])
+    # print(res)
     # tabular_io = TabularIO(text_col_id=3, label_col_id=2)
     # train_data = tabular_io.read("assets/data/Tang2015/yelp-2013-seg-20-20.train.ss", encoding='utf-8', sep="\t\t", sentence_sep="<sssss>")
     
