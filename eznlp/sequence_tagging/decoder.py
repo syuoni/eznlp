@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from functools import cached_property
+from typing import List
 import torch
 from torch.nn.utils.rnn import pad_sequence
 
@@ -24,16 +24,23 @@ class SequenceTaggingDecoderConfig(DecoderConfig):
         repr_attr_dict = {key: self.__dict__[key] for key in ['arch', 'in_dim', 'scheme', 'in_drop_rates']}
         return self._repr_non_config_attrs(repr_attr_dict)
         
-    @cached_property
-    def translator(self):
-        return ChunksTagsTranslator(scheme=self.scheme)
+    @property
+    def scheme(self):
+        return self._scheme
+    
+    @scheme.setter
+    def scheme(self, scheme: str):
+        self._scheme = scheme
+        self.translator = ChunksTagsTranslator(scheme=scheme)
         
-    @cached_property
-    def tag2idx(self):
-        """
-        The first access to this property should be after `idx2tag` properly set. 
-        """
-        return {t: i for i, t in enumerate(self.idx2tag)}
+    @property
+    def idx2tag(self):
+        return self._idx2tag
+        
+    @idx2tag.setter
+    def idx2tag(self, idx2tag: List[str]):
+        self._idx2tag = idx2tag
+        self.tag2idx = {t: i for i, t in enumerate(self.idx2tag)} if idx2tag is not None else None
         
     @property
     def voc_dim(self):

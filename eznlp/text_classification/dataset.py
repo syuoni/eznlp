@@ -33,7 +33,6 @@ class TextClassificationDataset(Dataset):
         self._building_vocabs = (self.config.decoder.idx2label is None)
         if self._building_vocabs:
             assert self._is_labeled
-            
             self._build_token_vocab()
             self._build_label_vocab()
             
@@ -76,7 +75,7 @@ class TextClassificationDataset(Dataset):
                 
     def _build_label_vocab(self):
         counter = Counter([curr_data['label'] for curr_data in self.data])
-        self.config.decoder.set_vocab(idx2label=list(counter.keys()))
+        self.config.decoder.idx2label = list(counter.keys())
         
     def _check_label_vocab(self):
         counter = Counter([curr_data['label'] for curr_data in self.data])

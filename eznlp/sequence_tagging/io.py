@@ -132,6 +132,9 @@ class BratIO(object):
             chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text = text_chunk
             assert text[chunk_start_in_text:chunk_end_in_text].strip() == chunk_text.strip()
             
+        if len(text_chunks) == 0:
+            return []
+            
         # Build dataframe
         df = pd.DataFrame(text_chunks, index=['text', 'type', 'start_in_text', 'end_in_text']).T
         for attr_name in self.attr_names:

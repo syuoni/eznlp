@@ -43,10 +43,7 @@ class SequenceTaggingDataset(Dataset):
             if self._is_labeled:
                 self._check_tag_vocab()
                 
-        if self._is_labeled:
-            self._build_tags_objs()
-            
-            
+                
     def _build_tag_vocab(self):
         counter = Counter()
         for curr_data in self.data:
@@ -66,11 +63,6 @@ class SequenceTaggingDataset(Dataset):
             raise RuntimeError(f"OOV tags exist: {oov}")
             
             
-    def _build_tags_objs(self):
-        for curr_data in self.data:
-            curr_data['tags_obj'] = Tags(curr_data, self.config.decoder)
-            
-            
     @property
     def extra_summary(self):
         n_chunks = sum(len(curr_data['chunks']) for curr_data in self.data)
@@ -81,7 +73,7 @@ class SequenceTaggingDataset(Dataset):
         curr_data = self.data[i]
         example = self._get_basic_example(curr_data)
         
-        tags_obj = curr_data['tags_obj'] if self._is_labeled else None
+        tags_obj = Tags(curr_data, self.config.decoder) if self._is_labeled else None
         example.add_attributes(tags_obj=tags_obj)
         return example
     

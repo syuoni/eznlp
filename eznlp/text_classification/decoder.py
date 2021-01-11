@@ -15,18 +15,21 @@ class TextClassificationDecoderConfig(DecoderConfig):
         else:
             self.pooling_mode = kwargs.pop('pooling_mode', 'Mean')
             
-        idx2label = kwargs.pop('idx2label', None)
-        self.set_vocab(idx2label)
+        self.idx2label = kwargs.pop('idx2label', None)
         super().__init__(**kwargs)
-        
-        
-    def set_vocab(self, idx2label: List[str]):
-        self.idx2label = idx2label
-        self.label2idx = {l: i for i, l in enumerate(idx2label)} if idx2label is not None else None
         
     def __repr__(self):
         repr_attr_dict = {key: self.__dict__[key] for key in ['in_dim', 'in_drop_rates']}
         return self._repr_non_config_attrs(repr_attr_dict)
+        
+    @property
+    def idx2label(self):
+        return self._idx2label
+    
+    @idx2label.setter
+    def idx2label(self, idx2label: List[str]):
+        self._idx2label = idx2label
+        self.label2idx = {l: i for i, l in enumerate(idx2label)} if idx2label is not None else None
         
     @property
     def voc_dim(self):
@@ -40,7 +43,6 @@ class TextClassificationDecoderConfig(DecoderConfig):
         return TextClassificationDecoder(self)
         
     
-        
 class TextClassificationDecoder(Decoder):
     def __init__(self, config: TextClassificationDecoderConfig):
         super().__init__(config)
