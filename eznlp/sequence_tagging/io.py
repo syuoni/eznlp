@@ -196,13 +196,14 @@ class BratIO(object):
                 chunk_type, *attr_values = chunk_type.split(self.attr_sep)
                 text_chunk = (chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text)
                 chunk_lines.append(self._build_chunk_ann(f"T{chunk_idx}", text_chunk))
-                chunk_idx += 1
                 
                 for attr_name, attr_v in zip(self.attr_names, attr_values):
                     if attr_v == 'T':
                         attr_lines.append(self._build_attr_ann(f"A{attr_idx}", (attr_name, f"T{chunk_idx}")))
                         attr_idx += 1
                         
+                chunk_idx += 1
+                
             line_start = line_start + len(line_text) + len(self.line_sep)
             
         with open(file_path, 'w', encoding=encoding) as f:

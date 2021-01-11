@@ -4,6 +4,7 @@ from collections import OrderedDict, Counter
 import glob
 import pickle
 import numpy as np
+import pandas as pd
 import spacy
 import torch
 import torch.nn as nn
@@ -114,8 +115,44 @@ if __name__ == '__main__':
     # losses, hidden = tagger(batch, return_hidden=True)
     
     brat_io = BratIO(attr_names=['Denied', 'Analyzed'])
-    brat_data = brat_io.read("assets/data/brat/demo.txt", encoding='utf-8')
+    # brat_data = brat_io.read("assets/data/brat/demo.txt", encoding='utf-8')
     # brat_io.write(brat_data, "assets/data/brat/demo-write.txt", encoding='utf-8')
+    
+    file_path = "assets/data/brat/demo.txt"
+    encoding = 'utf-8'
+    self = brat_io
+    
+    with open(file_path, 'r', encoding=encoding) as f:
+        text = f.read()
+    with open(file_path.replace('.txt', '.ann'), 'r', encoding=encoding) as f:
+        anns = f.readlines()
+        
+    if ("\n" in text) and (self.line_sep not in text):
+        text = text.replace("\n", self.line_sep)
+        
+    # Parse chunks
+    text_chunks = dict([self._parse_chunk_ann(ann) for ann in anns if ann.startswith('T')])
+    # Check chunk text consistenty
+    for chunk_id, text_chunk in text_chunks.items():
+        chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text = text_chunk
+        assert text[chunk_start_in_text:chunk_end_in_text].strip() == chunk_text.strip()
+        
+    # Build dataframe
+    df = pd.DataFrame(text_chunks, index=['text', 'type', 'start_in_text', 'end_in_text']).T
+    for attr_name in self.attr_names:
+        df[attr_name] = 'F'
+    
+    
+    is_remove = [c == " " for c in text.replace("  ", " #")]
+    pre_remove = np.cumsum(is_remove).tolist()
+    text = text.replace("  ", " <#>").replace(" ", "").replace("<#>", " ")
+    
+    
+    
+    df['start_in_text'] = [idx - pre_remove[idx] + int(is_remove[idx]) for idx in df['start_in_text'].tolist()]
+    df['end_in_text'] = [idx - pre_remove[idx] + int(is_remove[idx]) for idx in df['end_in_text'].tolist()]
+    
+    
     
     # brat_set = SequenceTaggingDataset(brat_data)
     # batch = brat_set.collate([brat_set[i] for i in range(0, 4)])
