@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import re
+import numpy as np
 import pandas as pd
 
 from ..data import TokenSequence
@@ -89,8 +90,10 @@ class BratIO(object):
     """
     An IO interface of brat-format files. 
     """
-    def __init__(self, attr_names=None, **kwargs):
+    def __init__(self, attr_names=None, pre_inserted_spaces=True, tokenize_callback=None, **kwargs):
         self.attr_names = [] if attr_names is None else attr_names
+        self.pre_inserted_spaces = pre_inserted_spaces
+        self.tokenize_callback = tokenize_callback
         self.kwargs = kwargs
         self.line_sep = "\r\n"
         self.attr_sep = "<a>"
@@ -127,14 +130,14 @@ class BratIO(object):
             
         # Parse chunks
         text_chunks = dict([self._parse_chunk_ann(ann) for ann in anns if ann.startswith('T')])
-        # Check chunk text consistenty
-        for chunk_id, text_chunk in text_chunks.items():
-            chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text = text_chunk
-            assert text[chunk_start_in_text:chunk_end_in_text].strip() == chunk_text.strip()
-            
         if len(text_chunks) == 0:
             return []
-            
+        
+        if self.pre_inserted_spaces:
+            text, text_chunks = self._remove_pre_inserted_spaces(text, text_chunks)
+        
+        self._check_text_chunks(text, text_chunks)
+        
         # Build dataframe
         df = pd.DataFrame(text_chunks, index=['text', 'type', 'start_in_text', 'end_in_text']).T
         for attr_name in self.attr_names:
@@ -173,41 +176,82 @@ class BratIO(object):
             chunk_start = chunk_start_in_text - line_start
             chunk_end = chunk_end_in_text - line_start
             chunks.append((chunk_type, chunk_start, chunk_end))
-                    
+            
         return {'tokens': TokenSequence.from_tokenized_text(list(text[line_start:line_end]), **self.kwargs),
                 'chunks': chunks}
         
+    def _remove_pre_inserted_spaces(self, text: str, text_chunks: dict):
+        """
+        Chinese text may be tokenized and re-joined by spaces before annotation. 
+        """
+        is_inserted = [int(c == " ") for c in text.replace("  ", " #")]
+        num_inserted = np.cumsum(is_inserted).tolist()
+        # The positions of exact pre-inserted spaces should be mapped to positions NEXT to them
+        num_inserted = [n - i for n, i in zip(num_inserted, is_inserted)]
+        
+        text = text.replace("  ", " <#>").replace(" ", "").replace("<#>", " ")
+        
+        for chunk_id, text_chunk in text_chunks.items():
+            chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text = text_chunk
+            chunk_text = chunk_text.replace("  ", " <#>").replace(" ", "").replace("<#>", " ")
+            chunk_start_in_text -= num_inserted[chunk_start_in_text]
+            chunk_end_in_text -= num_inserted[chunk_end_in_text]
+            
+            text_chunks[chunk_id] = (chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text)
+            
+        return text, text_chunks
+        
     
+    def _check_text_chunks(self, text: str, text_chunks: dict):
+        # Check chunk text consistenty
+        for chunk_id, text_chunk in text_chunks.items():
+            chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text = text_chunk
+            assert text[chunk_start_in_text:chunk_end_in_text] == chunk_text
+            
+            
     def write(self, data, file_path, encoding=None):
         text_lines = []
-        chunk_lines, attr_lines = [], []
+        text_chunks = {}
         
         chunk_idx, attr_idx = 1, 1
+        chunk_lines, attr_lines = [], []
+        
         line_start = 0
         for curr_data in data:
             line_text = "".join(curr_data['tokens'].raw_text)
             text_lines.append(line_text)
             
-            for k, (chunk_type, chunk_start, chunk_end) in enumerate(curr_data['chunks']):
+            for chunk_type, chunk_start, chunk_end in curr_data['chunks']:
                 chunk_text = line_text[chunk_start:chunk_end]
                 chunk_start_in_text = chunk_start + line_start
                 chunk_end_in_text = chunk_end + line_start
                 
-                chunk_type, *attr_values = chunk_type.split(self.attr_sep)
                 text_chunk = (chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text)
-                chunk_lines.append(self._build_chunk_ann(f"T{chunk_idx}", text_chunk))
-                
-                for attr_name, attr_v in zip(self.attr_names, attr_values):
-                    if attr_v == 'T':
-                        attr_lines.append(self._build_attr_ann(f"A{attr_idx}", (attr_name, f"T{chunk_idx}")))
-                        attr_idx += 1
-                        
+                text_chunks[f"T{chunk_idx}"] = text_chunk
                 chunk_idx += 1
                 
             line_start = line_start + len(line_text) + len(self.line_sep)
             
+        text = self.line_sep.join(text_lines)
+        self._check_text_chunks(text, text_chunks)
+        
+        if self.pre_inserted_spaces:
+            text, text_chunks = self._insert_spaces(text, text_chunks)
+            
+        for chunk_id, text_chunk in text_chunks.items():
+            chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text = text_chunk
+            
+            chunk_type, *attr_values = chunk_type.split(self.attr_sep)
+            text_chunk = (chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text)
+            chunk_lines.append(self._build_chunk_ann(chunk_id, text_chunk))
+            
+            for attr_name, attr_v in zip(self.attr_names, attr_values):
+                if attr_v == 'T':
+                    attr_lines.append(self._build_attr_ann(f"A{attr_idx}", (attr_name, f"T{chunk_idx}")))
+                    attr_idx += 1
+                    
         with open(file_path, 'w', encoding=encoding) as f:
-            f.write("\n".join(text_lines))
+            f.write(text.replace(self.line_sep, "\n"))
             f.write("\n")
         with open(file_path.replace('.txt', '.ann'), 'w', encoding=encoding) as f:
             f.write("\n".join(chunk_lines))
@@ -216,4 +260,36 @@ class BratIO(object):
             f.write("\n")
             
             
+    def _tokenize_and_rejoin(self, text: str):
+        text = " ".join(self.tokenize_callback(text))
+        
+        text = text.replace("“ ", "“").replace(" ”", "”")
+        text = text.replace(" ／ ", "／")
+        text = text.replace(" ：", "：")
+        return text
+    
+    
+    def _insert_spaces(self, text: str, text_chunks: dict):
+        """
+        Chinese text may be tokenized and re-joined by spaces before annotation. 
+        """
+        ori_num_chars = len(text)
+        text = self.line_sep.join([self._tokenize_and_rejoin(line) for line in text.split(self.line_sep)])
+        
+        is_inserted = [int(c == " ") for c in text.replace("  ", " #")]
+        num_inserted = np.cumsum(is_inserted).tolist()
+        num_inserted = [n for n, i in zip(num_inserted, is_inserted) if i == 0]
+        assert len(num_inserted) == ori_num_chars
+        
+        for chunk_id, text_chunk in text_chunks.items():
+            chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text = text_chunk
+            chunk_start_in_text += num_inserted[chunk_start_in_text]
+            chunk_end_in_text += num_inserted[chunk_end_in_text] - int(num_inserted[chunk_end_in_text] > num_inserted[chunk_end_in_text-1])
+            assert text[chunk_start_in_text:chunk_end_in_text].replace(" ", "") == chunk_text.replace(" ", "")
+            chunk_text = text[chunk_start_in_text:chunk_end_in_text]
             
+            text_chunks[chunk_id] = (chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text)
+            
+        return text, text_chunks
+        
+        

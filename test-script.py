@@ -114,43 +114,49 @@ if __name__ == '__main__':
     # batch = train_set.collate([train_set[i] for i in range(0, 4)])
     # losses, hidden = tagger(batch, return_hidden=True)
     
-    brat_io = BratIO(attr_names=['Denied', 'Analyzed'])
-    # brat_data = brat_io.read("assets/data/brat/demo.txt", encoding='utf-8')
+    import jieba
+    brat_io = BratIO(attr_names=['Denied', 'Analyzed'], tokenize_callback=jieba.cut)
+    brat_data = brat_io.read("assets/data/brat/demo.txt", encoding='utf-8')
     # brat_io.write(brat_data, "assets/data/brat/demo-write.txt", encoding='utf-8')
     
     file_path = "assets/data/brat/demo.txt"
     encoding = 'utf-8'
     self = brat_io
+    data = brat_data
     
-    with open(file_path, 'r', encoding=encoding) as f:
-        text = f.read()
-    with open(file_path.replace('.txt', '.ann'), 'r', encoding=encoding) as f:
-        anns = f.readlines()
+    # # Build dataframe
+    # df = pd.DataFrame(text_chunks, index=['text', 'type', 'start_in_text', 'end_in_text']).T
+    # for attr_name in self.attr_names:
+    #     df[attr_name] = 'F'
+    
+    
+    text_lines = []
+    text_chunks = {}
+    
+    chunk_idx, attr_idx = 1, 1
+    line_start = 0
+    for curr_data in data:
+        line_text = "".join(curr_data['tokens'].raw_text)
+        text_lines.append(line_text)
         
-    if ("\n" in text) and (self.line_sep not in text):
-        text = text.replace("\n", self.line_sep)
+        for chunk_type, chunk_start, chunk_end in curr_data['chunks']:
+            chunk_text = line_text[chunk_start:chunk_end]
+            chunk_start_in_text = chunk_start + line_start
+            chunk_end_in_text = chunk_end + line_start
+            
+            text_chunk = (chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text)
+            text_chunks[f"T{chunk_idx}"] = text_chunk
+            chunk_idx += 1
+            
+        line_start = line_start + len(line_text) + len(self.line_sep)
         
-    # Parse chunks
-    text_chunks = dict([self._parse_chunk_ann(ann) for ann in anns if ann.startswith('T')])
-    # Check chunk text consistenty
-    for chunk_id, text_chunk in text_chunks.items():
-        chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text = text_chunk
-        assert text[chunk_start_in_text:chunk_end_in_text].strip() == chunk_text.strip()
-        
-    # Build dataframe
-    df = pd.DataFrame(text_chunks, index=['text', 'type', 'start_in_text', 'end_in_text']).T
-    for attr_name in self.attr_names:
-        df[attr_name] = 'F'
+    text = self.line_sep.join(text_lines)
+    
+    self._check_text_chunks(text, text_chunks)
     
     
-    is_remove = [c == " " for c in text.replace("  ", " #")]
-    pre_remove = np.cumsum(is_remove).tolist()
-    text = text.replace("  ", " <#>").replace(" ", "").replace("<#>", " ")
-    
-    
-    
-    df['start_in_text'] = [idx - pre_remove[idx] + int(is_remove[idx]) for idx in df['start_in_text'].tolist()]
-    df['end_in_text'] = [idx - pre_remove[idx] + int(is_remove[idx]) for idx in df['end_in_text'].tolist()]
+    # df['start_in_text'] = [idx - pre_remove[idx] + int(is_remove[idx]) for idx in df['start_in_text'].tolist()]
+    # df['end_in_text'] = [idx - pre_remove[idx] + int(is_remove[idx]) for idx in df['end_in_text'].tolist()]
     
     
     

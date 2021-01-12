@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import jieba
+import pytest
 from eznlp.sequence_tagging.io import ConllIO, BratIO
 
 
@@ -65,20 +67,27 @@ class TestConllIO(object):
         
         
 class TestBratIO(object):
-    def test_demo(self):
-        brat_io = BratIO(attr_names=['Denied', 'Analyzed'])
-        data = brat_io.read("assets/data/brat/demo.txt", encoding='utf-8')
-        brat_io.write(data, "assets/data/brat/demo-write.txt", encoding='utf-8')
+    @pytest.mark.parametrize("pre_inserted_spaces", [False, True])
+    def test_demo(self, pre_inserted_spaces):
+        brat_io = BratIO(attr_names=['Denied', 'Analyzed'], 
+                         pre_inserted_spaces=pre_inserted_spaces, 
+                         tokenize_callback=jieba.cut)
         
-        with open("assets/data/brat/demo.txt", encoding='utf-8') as f:
+        src_fn = "assets/data/brat/demo.txt"
+        mark = "spaces" if pre_inserted_spaces else "nospaces"
+        trg_fn = f"assets/data/brat/demo-write-{mark}.txt"
+        data = brat_io.read(src_fn, encoding='utf-8')
+        brat_io.write(data, trg_fn, encoding='utf-8')
+        
+        with open(src_fn, encoding='utf-8') as f:
             gold_text_lines = [line.strip() for line in f if line.strip() != ""]
-        with open("assets/data/brat/demo-write.txt", encoding='utf-8') as f:
+        with open(trg_fn, encoding='utf-8') as f:
             retr_text_lines = [line.strip() for line in f if line.strip() != ""]
         assert retr_text_lines == gold_text_lines
         
-        with open("assets/data/brat/demo.ann", encoding='utf-8') as f:
+        with open(src_fn, encoding='utf-8') as f:
             gold_ann_lines = [line.strip() for line in f if line.strip() != ""]
-        with open("assets/data/brat/demo-write.ann", encoding='utf-8') as f:
+        with open(trg_fn, encoding='utf-8') as f:
             retr_ann_lines = [line.strip() for line in f if line.strip() != ""]
         assert len(retr_ann_lines) == len(gold_ann_lines)
         
