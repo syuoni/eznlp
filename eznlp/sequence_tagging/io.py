@@ -99,7 +99,7 @@ class BratIO(object):
         self.attr_sep = "<a>"
         
     def _parse_chunk_ann(self, ann):
-        chunk_id, chunk_type_pos, chunk_text = ann.strip().split("\t")
+        chunk_id, chunk_type_pos, chunk_text = ann.rstrip(self.line_sep).split("\t")
         chunk_type, chunk_start_in_text, chunk_end_in_text = chunk_type_pos.split(" ")
         chunk_start_in_text = int(chunk_start_in_text)
         chunk_end_in_text = int(chunk_end_in_text)
@@ -110,7 +110,7 @@ class BratIO(object):
         return f"{chunk_id}\t{chunk_type} {chunk_start_in_text} {chunk_end_in_text}\t{chunk_text}"
     
     def _parse_attr_ann(self, ann):
-        attr_id, attr_name_and_chunk_id = ann.strip().split("\t")
+        attr_id, attr_name_and_chunk_id = ann.rstrip(self.line_sep).split("\t")
         attr_name, chunk_id = attr_name_and_chunk_id.split(" ")
         return attr_id, (attr_name, chunk_id)
     
@@ -124,6 +124,7 @@ class BratIO(object):
             text = f.read()
         with open(file_path.replace('.txt', '.ann'), 'r', encoding=encoding) as f:
             anns = f.readlines()
+            assert all(ann.startswith(('T', 'A', 'R')) for ann in anns)
             
         if ("\n" in text) and (self.line_sep not in text):
             text = text.replace("\n", self.line_sep)
@@ -135,7 +136,7 @@ class BratIO(object):
         
         if self.pre_inserted_spaces:
             text, text_chunks = self._remove_pre_inserted_spaces(text, text_chunks)
-        
+            
         self._check_text_chunks(text, text_chunks)
         
         # Build dataframe
@@ -188,6 +189,7 @@ class BratIO(object):
         num_inserted = np.cumsum(is_inserted).tolist()
         # The positions of exact pre-inserted spaces should be mapped to positions NEXT to them
         num_inserted = [n - i for n, i in zip(num_inserted, is_inserted)]
+        num_inserted.append(num_inserted[-1])
         
         text = text.replace("  ", " <#>").replace(" ", "").replace("<#>", " ")
         
@@ -280,6 +282,7 @@ class BratIO(object):
         num_inserted = np.cumsum(is_inserted).tolist()
         num_inserted = [n for n, i in zip(num_inserted, is_inserted) if i == 0]
         assert len(num_inserted) == ori_num_chars
+        num_inserted.append(num_inserted[-1])
         
         for chunk_id, text_chunk in text_chunks.items():
             chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text = text_chunk

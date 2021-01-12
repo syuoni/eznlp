@@ -119,46 +119,6 @@ if __name__ == '__main__':
     brat_data = brat_io.read("assets/data/brat/demo.txt", encoding='utf-8')
     # brat_io.write(brat_data, "assets/data/brat/demo-write.txt", encoding='utf-8')
     
-    file_path = "assets/data/brat/demo.txt"
-    encoding = 'utf-8'
-    self = brat_io
-    data = brat_data
-    
-    # # Build dataframe
-    # df = pd.DataFrame(text_chunks, index=['text', 'type', 'start_in_text', 'end_in_text']).T
-    # for attr_name in self.attr_names:
-    #     df[attr_name] = 'F'
-    
-    
-    text_lines = []
-    text_chunks = {}
-    
-    chunk_idx, attr_idx = 1, 1
-    line_start = 0
-    for curr_data in data:
-        line_text = "".join(curr_data['tokens'].raw_text)
-        text_lines.append(line_text)
-        
-        for chunk_type, chunk_start, chunk_end in curr_data['chunks']:
-            chunk_text = line_text[chunk_start:chunk_end]
-            chunk_start_in_text = chunk_start + line_start
-            chunk_end_in_text = chunk_end + line_start
-            
-            text_chunk = (chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text)
-            text_chunks[f"T{chunk_idx}"] = text_chunk
-            chunk_idx += 1
-            
-        line_start = line_start + len(line_text) + len(self.line_sep)
-        
-    text = self.line_sep.join(text_lines)
-    
-    self._check_text_chunks(text, text_chunks)
-    
-    
-    # df['start_in_text'] = [idx - pre_remove[idx] + int(is_remove[idx]) for idx in df['start_in_text'].tolist()]
-    # df['end_in_text'] = [idx - pre_remove[idx] + int(is_remove[idx]) for idx in df['end_in_text'].tolist()]
-    
-    
     
     # brat_set = SequenceTaggingDataset(brat_data)
     # batch = brat_set.collate([brat_set[i] for i in range(0, 4)])
