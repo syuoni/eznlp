@@ -23,7 +23,7 @@ from eznlp import ConfigList, ConfigDict
 from eznlp import CharConfig, TokenConfig, EnumConfig, ValConfig, EmbedderConfig
 from eznlp import EncoderConfig
 from eznlp import PreTrainedEmbedderConfig
-from eznlp.vectors import Senna
+from eznlp.vectors import load_vectors_from_file, Senna
 from eznlp.nn import SequencePooling, SequenceGroupAggregating
 from eznlp.sequence_tagging import SequenceTaggingDecoderConfig, SequenceTaggerConfig
 from eznlp.sequence_tagging import SequenceTaggingDataset
@@ -53,6 +53,9 @@ from flair.trainers import ModelTrainer
 
 if __name__ == '__main__':
     device = torch.device('cpu')
+    
+    vectors = load_vectors_from_file("assets/vector_cache/gigaword_chn.all.a2b.uni.ite50.vec", encoding='utf-8')
+    
     
     # batch_tokenized_text = [["I", "like", "it", "."], 
     #                         ["Do", "you", "love", "me", "?"], 
@@ -114,9 +117,9 @@ if __name__ == '__main__':
     # batch = train_set.collate([train_set[i] for i in range(0, 4)])
     # losses, hidden = tagger(batch, return_hidden=True)
     
-    import jieba
-    brat_io = BratIO(attr_names=['Denied', 'Analyzed'], tokenize_callback=jieba.cut)
-    brat_data = brat_io.read("assets/data/brat/demo.txt", encoding='utf-8')
+    # import jieba
+    # brat_io = BratIO(attr_names=['Denied', 'Analyzed'], tokenize_callback=jieba.cut)
+    # brat_data = brat_io.read("assets/data/brat/demo.txt", encoding='utf-8')
     # brat_io.write(brat_data, "assets/data/brat/demo-write.txt", encoding='utf-8')
     
     
