@@ -123,7 +123,7 @@ class BratIO(object):
         with open(file_path, 'r', encoding=encoding) as f:
             text = f.read()
         with open(file_path.replace('.txt', '.ann'), 'r', encoding=encoding) as f:
-            anns = f.readlines()
+            anns = [ann for ann in f.readlines() if not ann.strip() == ""]
             assert all(ann.startswith(('T', 'A', 'R')) for ann in anns)
             
         if ("\n" in text) and (self.line_sep not in text):
@@ -276,7 +276,8 @@ class BratIO(object):
         Chinese text may be tokenized and re-joined by spaces before annotation. 
         """
         ori_num_chars = len(text)
-        text = self.line_sep.join([self._tokenize_and_rejoin(line) for line in text.split(self.line_sep)])
+        # text = self.line_sep.join([self._tokenize_and_rejoin(line) for line in text.split(self.line_sep)])
+        text = self._tokenize_and_rejoin(text)
         
         is_inserted = [int(c == " ") for c in text.replace("  ", " #")]
         num_inserted = np.cumsum(is_inserted).tolist()
