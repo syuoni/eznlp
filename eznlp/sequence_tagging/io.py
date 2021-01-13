@@ -249,7 +249,7 @@ class BratIO(object):
             
             for attr_name, attr_v in zip(self.attr_names, attr_values):
                 if attr_v == 'T':
-                    attr_lines.append(self._build_attr_ann(f"A{attr_idx}", (attr_name, f"T{chunk_idx}")))
+                    attr_lines.append(self._build_attr_ann(f"A{attr_idx}", (attr_name, chunk_id)))
                     attr_idx += 1
                     
         with open(file_path, 'w', encoding=encoding) as f:
