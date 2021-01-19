@@ -80,15 +80,15 @@ class TestBratIO(object):
         brat_io.write(data, trg_fn, encoding='utf-8')
         
         with open(src_fn, encoding='utf-8') as f:
-            gold_text_lines = [line.strip() for line in f if line.strip() != ""]
+            gold_text_lines = [line.strip().replace(" ", "") for line in f if line.strip() != ""]
         with open(trg_fn, encoding='utf-8') as f:
-            retr_text_lines = [line.strip() for line in f if line.strip() != ""]
+            retr_text_lines = [line.strip().replace(" ", "") for line in f if line.strip() != ""]
         assert retr_text_lines == gold_text_lines
         
         with open(src_fn, encoding='utf-8') as f:
-            gold_ann_lines = [line.strip() for line in f if line.strip() != ""]
+            gold_ann_lines = [line.strip().replace(" ", "") for line in f if line.strip() != ""]
         with open(trg_fn, encoding='utf-8') as f:
-            retr_ann_lines = [line.strip() for line in f if line.strip() != ""]
+            retr_ann_lines = [line.strip().replace(" ", "") for line in f if line.strip() != ""]
         assert len(retr_ann_lines) == len(gold_ann_lines)
         
         gold_chunk_anns = [line.split("\t", 1)[1] for line in gold_ann_lines if line.startswith('T')]

@@ -97,6 +97,7 @@ class BratIO(object):
         self.kwargs = kwargs
         self.line_sep = "\r\n"
         self.attr_sep = "<a>"
+        self.inserted_mark = "😀"
         
     def _parse_chunk_ann(self, ann):
         chunk_id, chunk_type_pos, chunk_text = ann.rstrip(self.line_sep).split("\t")
@@ -134,9 +135,9 @@ class BratIO(object):
         if len(text_chunks) == 0:
             return []
         
+        text, text_chunks = self._clean_text_chunks(text, text_chunks)
         if self.pre_inserted_spaces:
-            text, text_chunks = self._remove_pre_inserted_spaces(text, text_chunks)
-            
+            text, text_chunks = self._remove_pre_inserted_spaces(text, text_chunks)    
         self._check_text_chunks(text, text_chunks)
         
         # Build dataframe
@@ -184,18 +185,24 @@ class BratIO(object):
     def _remove_pre_inserted_spaces(self, text: str, text_chunks: dict):
         """
         Chinese text may be tokenized and re-joined by spaces before annotation. 
+        
+        Any single space would be regarded as a inserted space; 
+        Any `N` consecutive spaces would be regared as one space (in the original text) with `N-1` inserted spaces. 
         """
-        is_inserted = [int(c == " ") for c in text.replace("  ", " #")]
+        text = re.sub("(?<! ) (?! )", self.inserted_mark, text)
+        text = re.sub(" {2,}", lambda x: " " + self.inserted_mark*(len(x.group())-1), text)
+        
+        is_inserted = [int(c == self.inserted_mark) for c in text]
         num_inserted = np.cumsum(is_inserted).tolist()
         # The positions of exact pre-inserted spaces should be mapped to positions NEXT to them
         num_inserted = [n - i for n, i in zip(num_inserted, is_inserted)]
         num_inserted.append(num_inserted[-1])
         
-        text = text.replace("  ", " <#>").replace(" ", "").replace("<#>", " ")
-        
+        text = text.replace(self.inserted_mark, "")
         for chunk_id, text_chunk in text_chunks.items():
             chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text = text_chunk
-            chunk_text = chunk_text.replace("  ", " <#>").replace(" ", "").replace("<#>", " ")
+            chunk_text = re.sub("(?<! ) (?! )", "", chunk_text)
+            chunk_text = re.sub(" {2,}", " ", chunk_text)
             chunk_start_in_text -= num_inserted[chunk_start_in_text]
             chunk_end_in_text -= num_inserted[chunk_end_in_text]
             
@@ -210,7 +217,16 @@ class BratIO(object):
             chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text = text_chunk
             assert text[chunk_start_in_text:chunk_end_in_text] == chunk_text
             
-            
+    def _clean_text_chunks(self, text: str, text_chunks: dict):
+        # Replace `\t` with ` `
+        text = re.sub("[ \t]", " ", text)
+        for chunk_id, text_chunk in text_chunks.items():
+            chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text = text_chunk
+            chunk_text = re.sub("[ \t]", " ", chunk_text)
+            text_chunks[chunk_id] = (chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text)
+        return text, text_chunks
+        
+    
     def write(self, data, file_path, encoding=None):
         text_lines = []
         text_chunks = {}
@@ -235,8 +251,9 @@ class BratIO(object):
             line_start = line_start + len(line_text) + len(self.line_sep)
             
         text = self.line_sep.join(text_lines)
-        self._check_text_chunks(text, text_chunks)
         
+        text, text_chunks = self._clean_text_chunks(text, text_chunks)
+        self._check_text_chunks(text, text_chunks)
         if self.pre_inserted_spaces:
             text, text_chunks = self._insert_spaces(text, text_chunks)
             
@@ -263,28 +280,35 @@ class BratIO(object):
             
             
     def _tokenize_and_rejoin(self, text: str):
-        text = " ".join(self.tokenize_callback(text))
-        
-        text = text.replace("“ ", "“").replace(" ”", "”")
-        text = text.replace(" ／ ", "／")
-        text = text.replace(" ：", "：")
+        tokenized = []
+        for tok in self.tokenize_callback(text):
+            if (not re.fullmatch("\s+", tok)) and (len(tokenized) > 0):
+                tokenized.append(self.inserted_mark)
+            tokenized.append(tok)
+            
+        text = "".join(tokenized)
+        text = re.sub(f"[“/]{self.inserted_mark}(?!\s)",    lambda x: x.group().replace(self.inserted_mark, ""), text)
+        text = re.sub(f"(?<!\s){self.inserted_mark}[”：/]", lambda x: x.group().replace(self.inserted_mark, ""), text)
         return text
     
     
     def _insert_spaces(self, text: str, text_chunks: dict):
         """
         Chinese text may be tokenized and re-joined by spaces before annotation. 
+        
+        Any `N` consecutive spaces (in the original text) would be inserted one 
+        additional space, resulting in `N+1` consecutive spaces. 
         """
         ori_num_chars = len(text)
-        # text = self.line_sep.join([self._tokenize_and_rejoin(line) for line in text.split(self.line_sep)])
-        text = self._tokenize_and_rejoin(text)
+        text = self.line_sep.join([self._tokenize_and_rejoin(line) for line in text.split(self.line_sep)])
         
-        is_inserted = [int(c == " ") for c in text.replace("  ", " #")]
+        is_inserted = [int(c == self.inserted_mark) for c in text]
         num_inserted = np.cumsum(is_inserted).tolist()
         num_inserted = [n for n, i in zip(num_inserted, is_inserted) if i == 0]
         assert len(num_inserted) == ori_num_chars
         num_inserted.append(num_inserted[-1])
         
+        text = text.replace(self.inserted_mark, " ")
         for chunk_id, text_chunk in text_chunks.items():
             chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text = text_chunk
             chunk_start_in_text += num_inserted[chunk_start_in_text]
