@@ -136,9 +136,10 @@ class BratIO(object):
             return []
         
         text, text_chunks = self._clean_text_chunks(text, text_chunks)
+        self._check_text_chunks(text, text_chunks)
         if self.pre_inserted_spaces:
             text, text_chunks = self._remove_pre_inserted_spaces(text, text_chunks)    
-        self._check_text_chunks(text, text_chunks)
+            self._check_text_chunks(text, text_chunks)
         
         # Build dataframe
         df = pd.DataFrame(text_chunks, index=['text', 'type', 'start_in_text', 'end_in_text']).T
@@ -201,10 +202,10 @@ class BratIO(object):
         text = text.replace(self.inserted_mark, "")
         for chunk_id, text_chunk in text_chunks.items():
             chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text = text_chunk
-            chunk_text = re.sub("(?<! ) (?! )", "", chunk_text)
-            chunk_text = re.sub(" {2,}", " ", chunk_text)
             chunk_start_in_text -= num_inserted[chunk_start_in_text]
             chunk_end_in_text -= num_inserted[chunk_end_in_text]
+            assert text[chunk_start_in_text:chunk_end_in_text].replace(" ", "") == chunk_text.replace(" ", "")
+            chunk_text = text[chunk_start_in_text:chunk_end_in_text]
             
             text_chunks[chunk_id] = (chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text)
             
@@ -256,6 +257,7 @@ class BratIO(object):
         self._check_text_chunks(text, text_chunks)
         if self.pre_inserted_spaces:
             text, text_chunks = self._insert_spaces(text, text_chunks)
+            self._check_text_chunks(text, text_chunks)
             
         for chunk_id, text_chunk in text_chunks.items():
             chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text = text_chunk
