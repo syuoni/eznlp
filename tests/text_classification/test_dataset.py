@@ -1,10 +1,14 @@
 # -*- coding: utf-8 -*-
+import pytest
+
 import pandas as pd
 from eznlp.encoder import PreTrainedEmbedderConfig
 from eznlp.text_classification import TextClassifierConfig, TextClassificationDataset
 from eznlp.text_classification.io import TabularIO
 
+
 class TestTextClassificationDataset(object):
+    @pytest.mark.slow
     def test_pre_truncation(self, bert_with_tokenizer):
         bert, tokenizer = bert_with_tokenizer
         bert_like_embedder_config = PreTrainedEmbedderConfig(arch='BERT', 

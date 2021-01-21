@@ -54,9 +54,6 @@ from flair.trainers import ModelTrainer
 if __name__ == '__main__':
     device = torch.device('cpu')
     
-    vectors = load_vectors_from_file("assets/vector_cache/gigaword_chn.all.a2b.uni.ite50.vec", encoding='utf-8')
-    
-    
     # batch_tokenized_text = [["I", "like", "it", "."], 
     #                         ["Do", "you", "love", "me", "?"], 
     #                         ["Sure", "!"], 
@@ -90,10 +87,8 @@ if __name__ == '__main__':
     
     # glove = GloVe(name='6B', dim=100, root="assets/vector_cache", validate_file=False)
     
-    # conll_io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', additional_col_id2name={1: 'pos_tag'})
-    # train_data = conll_io.read("assets/data/conll2003/eng.train")
-    # val_data   = conll_io.read("assets/data/conll2003/eng.testa")
-    # test_data  = conll_io.read("assets/data/conll2003/eng.testb")
+    conll_io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO2', additional_col_id2name={1: 'pos_tag'})
+    data = conll_io.read("assets/data/conll2003/demo.eng.train")
     
     # config = SequenceTaggerConfig(embedder=EmbedderConfig(
     #                                   token=TokenConfig(emb_dim=100), 
