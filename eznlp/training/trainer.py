@@ -66,7 +66,7 @@ class Trainer(object):
             epoch_losses.append(loss.item())
             epoch_metrics.append(possible_metric)
             
-        if any(epoch_metrics):
+        if all(m is not None for m in epoch_metrics):
             return np.mean(epoch_losses), np.mean(epoch_metrics)
         else:
             return np.mean(epoch_losses), None
@@ -84,7 +84,7 @@ class Trainer(object):
                 epoch_losses.append(loss.item())
                 epoch_metrics.append(possible_metric)
             
-        if any(epoch_metrics):
+        if all(m is not None for m in epoch_metrics):
             return np.mean(epoch_losses), np.mean(epoch_metrics)
         else:
             return np.mean(epoch_losses), None
@@ -136,7 +136,7 @@ class Trainer(object):
                         disp_running_info(eidx=eidx, sidx=sidx, lr=max_lr, 
                                           elapsed_secs=elapsed_secs, 
                                           loss=np.mean(train_losses),
-                                          metric=np.mean(train_metrics) if any(train_metrics) else None,
+                                          metric=np.mean(train_metrics) if all(m is not None for m in train_metrics) else None,
                                           partition='train')
                     train_losses, train_metrics = [], []
                     t0 = time.time()
@@ -155,7 +155,7 @@ class Trainer(object):
                         if (save_callback is not None) and save_by_loss:
                             save_callback(self.model)
                         
-                    if possible_eval_metric and possible_eval_metric > best_eval_metric:
+                    if (possible_eval_metric is not None) and possible_eval_metric > best_eval_metric:
                         best_eval_metric = possible_eval_metric
                         if (save_callback is not None) and (not save_by_loss):
                             save_callback(self.model)
