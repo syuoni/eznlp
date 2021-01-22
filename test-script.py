@@ -41,7 +41,6 @@ from eznlp.text_classification import TextClassificationDataset
 from eznlp.text_classification import TextClassificationTrainer
 
 from seqeval.metrics import classification_report
-from torchcrf import CRF
 from allennlp.modules.elmo import Elmo, batch_to_ids
 from allennlp.modules.token_embedders import ElmoTokenEmbedder
 from flair.data import Sentence, Corpus
@@ -87,8 +86,9 @@ if __name__ == '__main__':
     
     # glove = GloVe(name='6B', dim=100, root="assets/vector_cache", validate_file=False)
     
-    conll_io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO2', additional_col_id2name={1: 'pos_tag'})
-    data = conll_io.read("assets/data/conll2003/demo.eng.train")
+    # conll_io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO2', additional_col_id2name={1: 'pos_tag'})
+    # data = conll_io.read("assets/data/conll2003/demo.eng.train")
+    
     
     # config = SequenceTaggerConfig(embedder=EmbedderConfig(
     #                                   token=TokenConfig(emb_dim=100), 

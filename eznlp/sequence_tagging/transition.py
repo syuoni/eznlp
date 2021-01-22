@@ -76,12 +76,24 @@ class ChunksTagsTranslator(object):
     https://github.com/chakki-works/seqeval
     """
     def __init__(self, scheme='BIOES'):
-        assert scheme in ('BIO1', 'BIO2', 'BIOES', 'OntoNotes')
+        assert scheme in ('BIO1', 'BIO2', 'BIOES', 'BMES', 'BILOU', 'OntoNotes')
         self.scheme = scheme
         
         dirname = os.path.dirname(__file__)
-        trans = pd.read_excel(f"{dirname}/transition.xlsx", scheme, index_col=[0, 1], 
-                              use_cols=['legal', 'end_of_chunk', 'start_of_chunk'])
+        sheet_name = 'BIOES' if scheme in ('BMES', 'BILOU') else scheme
+        trans = pd.read_excel(f"{dirname}/transition.xlsx", sheet_name=sheet_name, 
+                              usecols=['from_tag', 'to_tag', 'legal', 'end_of_chunk', 'start_of_chunk'])
+        
+        if scheme in ('BMES', 'BILOU'):
+            # Mapping from BIOES to BMES/BILOU
+            if scheme == 'BMES':
+                mapper = {'B': 'B', 'I': 'M', 'O': 'O', 'E': 'E', 'S': 'S'}
+            elif scheme == 'BILOU':
+                mapper = {'B': 'B', 'I': 'I', 'O': 'O', 'E': 'L', 'S': 'U'}
+            trans['from_tag'] = trans['from_tag'].map(mapper)
+            trans['to_tag'] = trans['to_tag'].map(mapper)
+            
+        trans = trans.set_index(['from_tag', 'to_tag'])
         self.trans = {tr: trans.loc[tr].to_dict() for tr in trans.index.tolist()}
         
     def __repr__(self):
