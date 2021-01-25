@@ -134,7 +134,7 @@ class TestToken(object):
                                                      'apostrophe_end': True})])
     def test_en_shape_features(self, raw_text, expected_en_shape_features):
         tok = Token(raw_text)
-        for i, key in enumerate(tok.en_shape_feature_names):
+        for i, key in enumerate(tok._en_shape_feature_names):
             assert tok.en_shape_features[i] == expected_en_shape_features[key]
         
         
@@ -153,7 +153,7 @@ class TestToken(object):
         tok = Token(raw_text, number_mode='Marks')
         assert tok.raw_text == raw_text
         assert tok.text == num_mark
-        for i, key in enumerate(tok.num_feature_names):
+        for i, key in enumerate(tok._num_feature_names):
             assert tok.num_features[i] == (num_mark == key)
             
     
@@ -184,10 +184,7 @@ class TestTokenSequence(object):
         token_list = [Token(tok, case_mode='Lower', number_mode='Marks') for tok in "This is a -3.14 demo .".split()]
         tokens = TokenSequence(token_list)
         
-        assert tokens.bigram == ["this-<sep>-is", "is-<sep>-a", "a-<sep>-<-real1>", 
-                                 "<-real1>-<sep>-demo", "demo-<sep>-.", ".-<sep>-<pad>"]
-        assert tokens.trigram == ["this-<sep>-is-<sep>-a", "is-<sep>-a-<sep>-<-real1>", 
-                                  "a-<sep>-<-real1>-<sep>-demo", "<-real1>-<sep>-demo-<sep>-.", 
-                                  "demo-<sep>-.-<sep>-<pad>", ".-<sep>-<pad>-<sep>-<pad>"]
+        assert tokens.bigram  == ["this is", "is a", "a <-real1>", "<-real1> demo", "demo .", ". <pad>"]
+        assert tokens.trigram == ["this is a", "is a <-real1>", "a <-real1> demo", "<-real1> demo .", "demo . <pad>", ". <pad> <pad>"]
         
         

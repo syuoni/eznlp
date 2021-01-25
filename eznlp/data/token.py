@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
+from typing import List
+from collections import OrderedDict
 import string
 import re
-from collections import OrderedDict
-from hanziconv import HanziConv
+import hanziconv
 import spacy
-from spacy.tokenizer import Tokenizer
 import numpy as np
 
 
@@ -106,16 +106,19 @@ def _adaptive_lower(text):
 
 class Token(object):
     """
-    A token with attributes. 
-    """
-    num_feature_names = [f"<{num_type}{digits}>" for num_type in ['int', 'real', 'percent'] for digits in range(MAX_DIGITS+1)]
-    num_feature_names = num_feature_names + [f"<-{name[1:]}" for name in num_feature_names]
-    en_shape_feature_names = list(en_shape2criterion.keys())
+    A token at the modeling level (typically word level for English, character level for Chinese). 
     
-    basic_enum_fields = ['bigram', 'trigram', 'en_pattern', 'en_pattern_sum', 
-                         'prefix_2', 'prefix_3', 'prefix_4', 'prefix_5', 
-                         'suffix_2', 'suffix_3', 'suffix_4', 'suffix_5']
-    basic_val_fields = ['en_shape_features', 'num_features']
+    `Token` provides access to lower-level attributes (prefixes, suffixes). 
+    """
+    _num_feature_names = [f"<{num_type}{digits}>" for num_type in ['int', 'real', 'percent'] for digits in range(MAX_DIGITS+1)] \
+                       + [f"<-{num_type}{digits}>" for num_type in ['int', 'real', 'percent'] for digits in range(MAX_DIGITS+1)]
+    _en_shape_feature_names = list(en_shape2criterion.keys())
+    
+    _basic_enum_fields = ['bigram', 'trigram', 
+                          'en_pattern', 'en_pattern_sum', 
+                          'prefix_2', 'prefix_3', 'prefix_4', 'prefix_5', 
+                          'suffix_2', 'suffix_3', 'suffix_4', 'suffix_5']
+    _basic_val_fields = ['en_shape_features', 'num_features']
     
     def __init__(self, raw_text, case_mode='None', number_mode='None', to_half=True, to_zh_simplified=False, **kwargs):
         self.raw_text = raw_text
@@ -138,16 +141,13 @@ class Token(object):
             raise ValueError(f"invalid value of num_mode: {number_mode}")
             
         self.text = Full2Half.full2half(self.text) if to_half else self.text
-        self.text = HanziConv.toSimplified(self.text) if to_zh_simplified else self.text
+        self.text = hanziconv.HanziConv.toSimplified(self.text) if to_zh_simplified else self.text
         
         for k, v in kwargs.items():
             setattr(self, k, v)
             
     def __len__(self):
         return len(self.raw_text)
-        
-    def __str__(self):
-        return self.raw_text
     
     def __repr__(self):
         return self.raw_text
@@ -223,7 +223,7 @@ class Token(object):
         if not num_features.any():
             return self.text
         else:
-            return self.num_feature_names[num_features.tolist().index(True)]
+            return self._num_feature_names[num_features.tolist().index(True)]
         
     @property
     def en_pattern(self):
@@ -254,8 +254,10 @@ class TokenSequence(object):
     """
     A wrapper of token list, providing sequential attribute access to all tokens. 
     """
-    def __init__(self, token_list):
+    def __init__(self, token_list: List[Token], token_sep=" ", pad_token="<pad>"):
         self.token_list = token_list
+        self.token_sep = token_sep
+        self.pad_token = pad_token
         
     def __getattr__(self, name):
         # NOTE: `__attr__` method is only invoked if the attribute wasn't found the usual ways, so 
@@ -280,7 +282,7 @@ class TokenSequence(object):
         self.token_list = token_list
         
     def __add__(self, other):
-        return TokenSequence(self.token_list + other.token_list)
+        return TokenSequence(self.token_list + other.token_list, token_sep=self.token_sep, pad_token=self.pad_token)
         
     def __getitem__(self, i):
         if isinstance(i, int):
@@ -290,8 +292,13 @@ class TokenSequence(object):
         else:
             raise TypeError(f"Invalid subscript type of {i}")
             
-    def build_pseudo_boundaries(self, sep_width: int=1):
-        # Assign `start` and `end` at the token-level, to ensure consistency to spacy-tokenized ones.
+    def build_pseudo_boundaries(self, sep_width: int=None):
+        """
+        Assign `start` and `end` at the token-level, to ensure consistency to spacy-tokenized ones.
+        """
+        if sep_width is None:
+            sep_width = len(self.token_sep)
+        
         token_lens = np.array([len(tok) for tok in self.token_list])
         token_ends = np.cumsum(token_lens + sep_width) - sep_width
         token_starts = token_ends - token_lens
@@ -304,12 +311,12 @@ class TokenSequence(object):
     @property
     def bigram(self):
         unigram = self.text
-        return ['-<sep>-'.join(gram) for gram in zip(unigram, unigram[1:] + ['<pad>'])]
+        return [self.token_sep.join(gram) for gram in zip(unigram, unigram[1:]+[self.pad_token])]
     
     @property
     def trigram(self):
         unigram = self.text
-        return ['-<sep>-'.join(gram) for gram in zip(unigram, unigram[1:] + ['<pad>'], unigram[2:] + ['<pad>', '<pad>'])]
+        return [self.token_sep.join(gram) for gram in zip(unigram, unigram[1:]+[self.pad_token], unigram[2:]+[self.pad_token, self.pad_token])]
     
     
     def build_sub_tokens(self, tokenizer, rebuild=False):
@@ -403,12 +410,10 @@ def custom_spacy_tokenizer(nlp, custom_prefixes=None, custom_suffixes=None, cust
     else:
         infix_finditer = spacy.util.compile_infix_regex(tuple(list(nlp.Defaults.infixes) + custom_infixes)).finditer
 
-    return Tokenizer(nlp.vocab, rules=nlp.tokenizer.rules,
-                     prefix_search=prefix_search, 
-                     infix_finditer=infix_finditer, 
-                     suffix_search=suffix_search,
-                     token_match=nlp.tokenizer.token_match, 
-                     url_match=nlp.tokenizer.url_match) 
-
-    
-    
+    return spacy.tokenizer.Tokenizer(nlp.vocab, 
+                                     rules=nlp.tokenizer.rules,
+                                     prefix_search=prefix_search, 
+                                     infix_finditer=infix_finditer, 
+                                     suffix_search=suffix_search,
+                                     token_match=nlp.tokenizer.token_match, 
+                                     url_match=nlp.tokenizer.url_match) 

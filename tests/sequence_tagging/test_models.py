@@ -1,12 +1,10 @@
 # -*- coding: utf-8 -*-
 import pytest
 import torch
-import torch.optim as optim
-
 
 from eznlp.data import Token
 from eznlp import ConfigDict
-from eznlp import TokenConfig, CharConfig, EnumConfig, ValConfig, EmbedderConfig
+from eznlp import TokenConfig, EnumConfig, ValConfig, EmbedderConfig
 from eznlp import EncoderConfig, PreTrainedEmbedderConfig
 from eznlp.sequence_tagging import SequenceTaggingDecoderConfig, SequenceTaggerConfig
 from eznlp.sequence_tagging import SequenceTaggingDataset
@@ -14,8 +12,6 @@ from eznlp.sequence_tagging import SequenceTaggingTrainer
 
 
 
-        
-        
 class TestTagger(object):
     def one_tagger_pass(self, tagger, dataset, device):
         tagger.eval()
@@ -36,7 +32,7 @@ class TestTagger(object):
         best_paths123 = tagger.decode(batch123)
         assert best_paths012[1:] == best_paths123[:-1]
         
-        optimizer = optim.AdamW(tagger.parameters())
+        optimizer = torch.optim.AdamW(tagger.parameters())
         trainer = SequenceTaggingTrainer(tagger, optimizer=optimizer, device=device)
         trainer.train_epoch([batch012])
         trainer.eval_epoch([batch012])
@@ -114,8 +110,8 @@ class TestTagger(object):
         
     @pytest.mark.parametrize("enc_arch", ['CNN', 'LSTM'])
     def test_tagger_morefields(self, conll2003_demo, enc_arch, device):
-        embedder_config = EmbedderConfig(enum=ConfigDict([(f, EnumConfig(emb_dim=20)) for f in Token.basic_enum_fields]), 
-                                         val=ConfigDict([(f, ValConfig(emb_dim=20)) for f in Token.basic_val_fields]))
+        embedder_config = EmbedderConfig(enum=ConfigDict([(f, EnumConfig(emb_dim=20)) for f in Token._basic_enum_fields]), 
+                                         val=ConfigDict([(f, ValConfig(emb_dim=20)) for f in Token._basic_val_fields]))
         config = SequenceTaggerConfig(embedder=embedder_config, 
                                       encoder=EncoderConfig(arch=enc_arch))
         
@@ -139,7 +135,7 @@ class TestTagger(object):
         
         batch = dataset.collate([dataset[i] for i in range(0, 4)]).to(device)
         
-        optimizer = optim.AdamW(tagger.parameters())
+        optimizer = torch.optim.AdamW(tagger.parameters())
         trainer = SequenceTaggingTrainer(tagger, optimizer=optimizer, device=device)
         trainer.train_steps(train_loader=[batch, batch], eval_loader=[batch, batch], 
                             n_epochs=10, disp_every_steps=2, eval_every_steps=6)

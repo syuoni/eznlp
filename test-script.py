@@ -85,10 +85,10 @@ if __name__ == '__main__':
     
     
     # glove = GloVe(name='6B', dim=100, root="assets/vector_cache", validate_file=False)
+    # ctb50d = load_vectors_from_file("assets/vector_cache/ctb.50d.vec", encoding='utf-8')
     
     # conll_io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO2', additional_col_id2name={1: 'pos_tag'})
     # data = conll_io.read("assets/data/conll2003/demo.eng.train")
-    
     
     # config = SequenceTaggerConfig(embedder=EmbedderConfig(
     #                                   token=TokenConfig(emb_dim=100), 
