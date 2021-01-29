@@ -14,12 +14,12 @@ class TestTabularIO(object):
     def test_yelp2013(self):
         tabular_io = TabularIO(text_col_id=3, label_col_id=2)
         train_data = tabular_io.read("assets/data/Tang2015/yelp-2013-seg-20-20.train.ss", encoding='utf-8', sep="\t\t", sentence_sep="<sssss>")
-        val_data   = tabular_io.read("assets/data/Tang2015/yelp-2013-seg-20-20.dev.ss", encoding='utf-8', sep="\t\t", sentence_sep="<sssss>")
+        dev_data   = tabular_io.read("assets/data/Tang2015/yelp-2013-seg-20-20.dev.ss", encoding='utf-8', sep="\t\t", sentence_sep="<sssss>")
         test_data  = tabular_io.read("assets/data/Tang2015/yelp-2013-seg-20-20.test.ss", encoding='utf-8', sep="\t\t", sentence_sep="<sssss>")
         
         # 78_966
         assert len(train_data) == 62_522
-        assert len(val_data) == 7_773
+        assert len(dev_data) == 7_773
         assert len(test_data) == 8_671
         
         

@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
 import random
+import logging
 import torch
 from torch.nn.utils.rnn import pad_sequence
 
 from ..data import TensorWrapper, Batch
 from ..data import Dataset
+
+logger = logging.getLogger(__name__)
 
 
 class MLMHelper(object):
@@ -106,7 +109,7 @@ class PMCMLMDataset(torch.utils.data.IterableDataset):
         if mp_rank >= 0 and mp_world_size > 0 and mp_rank < mp_world_size:
             files = files[_slice_chunk(mp_rank, mp_world_size, len(files))]
         if verbose:
-            print(f"Totally {len(files)} files in the {mp_rank}-th process...")
+            logger.info(f"Totally {len(files)} files in the {mp_rank}-th process")
             
         self.files = files
         self.tokenizer = tokenizer
