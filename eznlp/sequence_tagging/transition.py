@@ -4,7 +4,7 @@ import re
 from collections import Counter
 import pandas as pd
 
-from ..token import TokenSequence
+from ..data import TokenSequence
 
 
 def find_ascending(sequence: list, value, start=None, end=None):
@@ -41,7 +41,7 @@ def find_ascending(sequence: list, value, start=None, end=None):
         if sequence[start] == value:
             return True, start
         elif sequence[start] < value:
-            return False, start+1
+            return False, start + 1
         else:
             return False, start
     
@@ -76,14 +76,28 @@ class ChunksTagsTranslator(object):
     https://github.com/chakki-works/seqeval
     """
     def __init__(self, scheme='BIOES'):
-        assert scheme in ('BIO1', 'BIO2', 'BIOES', 'OntoNotes')
+        assert scheme in ('BIO1', 'BIO2', 'BIOES', 'BMES', 'BILOU', 'OntoNotes')
         self.scheme = scheme
         
         dirname = os.path.dirname(__file__)
-        trans = pd.read_excel(f"{dirname}/transition.xlsx", scheme, index_col=[0, 1], 
-                              use_cols=['legal', 'end_of_chunk', 'start_of_chunk'])
+        sheet_name = 'BIOES' if scheme in ('BMES', 'BILOU') else scheme
+        trans = pd.read_excel(f"{dirname}/transition.xlsx", sheet_name=sheet_name, 
+                              usecols=['from_tag', 'to_tag', 'legal', 'end_of_chunk', 'start_of_chunk'])
+        
+        if scheme in ('BMES', 'BILOU'):
+            # Mapping from BIOES to BMES/BILOU
+            if scheme == 'BMES':
+                mapper = {'B': 'B', 'I': 'M', 'O': 'O', 'E': 'E', 'S': 'S'}
+            elif scheme == 'BILOU':
+                mapper = {'B': 'B', 'I': 'I', 'O': 'O', 'E': 'L', 'S': 'U'}
+            trans['from_tag'] = trans['from_tag'].map(mapper)
+            trans['to_tag'] = trans['to_tag'].map(mapper)
+            
+        trans = trans.set_index(['from_tag', 'to_tag'])
         self.trans = {tr: trans.loc[tr].to_dict() for tr in trans.index.tolist()}
         
+    def __repr__(self):
+        return f"{self.__class__.__name__}(scheme={self.scheme})"
         
     def check_transitions_legal(self, tags: list):
         """
@@ -92,7 +106,17 @@ class ChunksTagsTranslator(object):
         # TODO: also check types
         padded_tags = ['O'] + [tag.split('-', maxsplit=1)[0] for tag in tags] + ['O']
         return all([self.trans[(prev_tag, this_tag)]['legal'] for prev_tag, this_tag in zip(padded_tags[:-1], padded_tags[1:])])
-
+        
+    
+    def chunks2group_by(self, chunks: list, seq_len: int):
+        group_by = [-1 for _ in range(seq_len)]
+        
+        for i, (chunk_type, chunk_start, chunk_end) in enumerate(chunks):
+            for j in range(chunk_start, chunk_end):
+                group_by[j] = i
+                
+        return group_by
+        
         
     def chunks2tags(self, chunks: list, seq_len: int):
         tags = ['O' for _ in range(seq_len)]
@@ -300,6 +324,5 @@ class ChunksTagsTranslator(object):
     def text_chunks2tags(self, text_chunks: list, raw_text: str, tokens: TokenSequence, **kwargs):
         chunks, errors, mismatches = self.text_chunks2chunks(text_chunks, raw_text, tokens, **kwargs)
         return self.chunks2tags(chunks, len(tokens), **kwargs), errors, mismatches
-    
     
     

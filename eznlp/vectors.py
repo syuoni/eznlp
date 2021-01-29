@@ -13,3 +13,16 @@ def Senna(path: str, unk_tensor=None):
     vectors = torch.tensor(vectors)
     return Vectors(words, vectors, unk_tensor=unk_tensor)
     
+
+def load_vectors_from_file(path: str, encoding=None, unk_tensor=None):
+    words = []
+    vectors = []
+    with open(path, 'r', encoding=encoding) as f:
+        for line in f:
+            w, *vector = line.split()
+            words.append(w)
+            vectors.append([float(v) for v in vector])
+        
+    vectors = torch.tensor(vectors)
+    return Vectors(words, vectors, unk_tensor=unk_tensor)
+

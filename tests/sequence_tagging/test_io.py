@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import jieba
+import pytest
 from eznlp.sequence_tagging.io import ConllIO, BratIO
 
 
@@ -9,6 +11,8 @@ class TestConllIO(object):
     [1] Huang et al. 2015. Bidirectional LSTM-CRF models for sequence tagging. 
     [2] Chiu and Nichols. 2016. Named entity recognition with bidirectional LSTM-CNNs.
     [3] Jie and Lu. 2019. Dependency-guided LSTM-CRF for named entity recognition. 
+    [4] Zhang and Yang. 2018. Chinese NER Using Lattice LSTM. 
+    [5] Ma et al. 2020. Simplify the Usage of Lexicon in Chinese NER. 
     """
     def test_conll2003(self):
         conll_io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', additional_col_id2name={1: 'pos_tag'})
@@ -30,15 +34,16 @@ class TestConllIO(object):
         assert train_data[0]['tokens'][0].pos_tag == '-X-'
         
         
+    @pytest.mark.slow
     def test_ontonotes5(self):
         conll_io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', line_sep_starts=["#begin", "#end", "pt/"])
-        # train_data = conll_io.read("assets/data/conll2012/train.english.v4_gold_conll", encoding='utf-8')
+        train_data = conll_io.read("assets/data/conll2012/train.english.v4_gold_conll", encoding='utf-8')
         val_data   = conll_io.read("assets/data/conll2012/dev.english.v4_gold_conll", encoding='utf-8')
         test_data  = conll_io.read("assets/data/conll2012/test.english.v4_gold_conll", encoding='utf-8')
         
-        # assert len(train_data) == 59_924
-        # assert sum(len(ex['chunks']) for ex in train_data) == 81_828
-        # assert sum(len(ex['tokens']) for ex in train_data) == 1_088_503
+        assert len(train_data) == 59_924
+        assert sum(len(ex['chunks']) for ex in train_data) == 81_828
+        assert sum(len(ex['tokens']) for ex in train_data) == 1_088_503
         assert len(val_data) == 8_528
         assert sum(len(ex['chunks']) for ex in val_data) == 11_066
         assert sum(len(ex['tokens']) for ex in val_data) == 147_724
@@ -47,15 +52,16 @@ class TestConllIO(object):
         assert sum(len(ex['tokens']) for ex in test_data) == 152_728
         
         
+    @pytest.mark.slow
     def test_ontonotes5_chinese(self):
         conll_io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', line_sep_starts=["#begin", "#end", "pt/"])
-        # train_data = conll_io.read("assets/data/conll2012/train.chinese.v4_gold_conll", encoding='utf-8')
+        train_data = conll_io.read("assets/data/conll2012/train.chinese.v4_gold_conll", encoding='utf-8')
         val_data   = conll_io.read("assets/data/conll2012/dev.chinese.v4_gold_conll", encoding='utf-8')
         test_data  = conll_io.read("assets/data/conll2012/test.chinese.v4_gold_conll", encoding='utf-8')
         
-        # assert len(train_data) == 36_487
-        # assert sum(len(ex['chunks']) for ex in train_data) == 62_543
-        # assert sum(len(ex['tokens']) for ex in train_data) == 756_063
+        assert len(train_data) == 36_487
+        assert sum(len(ex['chunks']) for ex in train_data) == 62_543
+        assert sum(len(ex['tokens']) for ex in train_data) == 756_063
         assert len(val_data) == 6_083
         assert sum(len(ex['chunks']) for ex in val_data) == 9_104
         assert sum(len(ex['tokens']) for ex in val_data) == 110_034
@@ -64,22 +70,77 @@ class TestConllIO(object):
         assert sum(len(ex['tokens']) for ex in test_data) == 92_308
         
         
-class TestBratIO(object):
-    def test_demo(self):
-        brat_io = BratIO(use_attrs=['Denied', 'Analyzed'])
-        data = brat_io.read("assets/data/brat/demo.txt", encoding='utf-8')
-        brat_io.write(data, "assets/data/brat/demo-write.txt", encoding='utf-8')
+    def test_sighan2006(self):
+        conll_io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BIO2')
+        train_data = conll_io.read("assets/data/SIGHAN2006/train.txt", encoding='utf-8')
+        test_data  = conll_io.read("assets/data/SIGHAN2006/test.txt", encoding='utf-8')
         
-        with open("assets/data/brat/demo.txt", encoding='utf-8') as f:
-            gold_text_lines = [line.strip() for line in f if line.strip() != ""]
-        with open("assets/data/brat/demo-write.txt", encoding='utf-8') as f:
-            retr_text_lines = [line.strip() for line in f if line.strip() != ""]
+        assert len(train_data) == 46_364
+        assert sum(len(ex['chunks']) for ex in train_data) == 74_703
+        assert sum(len(ex['tokens']) for ex in train_data) == 2_169_879
+        assert len(test_data) == 4_365
+        assert sum(len(ex['chunks']) for ex in test_data) == 6_181
+        assert sum(len(ex['tokens']) for ex in test_data) == 172_601
+        
+        
+    def test_resume_ner(self):
+        conll_io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BMES')
+        train_data = conll_io.read("assets/data/ResumeNER/train.char.bmes", encoding='utf-8')
+        val_data   = conll_io.read("assets/data/ResumeNER/dev.char.bmes", encoding='utf-8')
+        test_data  = conll_io.read("assets/data/ResumeNER/test.char.bmes", encoding='utf-8')
+        
+        assert len(train_data) == 3_821
+        assert sum(len(ex['chunks']) for ex in train_data) == 13_440
+        assert sum(len(ex['tokens']) for ex in train_data) == 124_099
+        assert len(val_data) == 463
+        assert sum(len(ex['chunks']) for ex in val_data) == 1_497
+        assert sum(len(ex['tokens']) for ex in val_data) == 13_890
+        assert len(test_data) == 477
+        assert sum(len(ex['chunks']) for ex in test_data) == 1_630
+        assert sum(len(ex['tokens']) for ex in test_data) == 15_100
+        
+        
+    def test_weibo_ner(self):
+        conll_io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BIO2')
+        train_data = conll_io.read("assets/data/WeiboNER/weiboNER.conll.train", encoding='utf-8')
+        val_data   = conll_io.read("assets/data/WeiboNER/weiboNER.conll.dev", encoding='utf-8')
+        test_data  = conll_io.read("assets/data/WeiboNER/weiboNER.conll.test", encoding='utf-8')
+        
+        assert len(train_data) == 1_350
+        assert sum(len(ex['chunks']) for ex in train_data) == 1_391
+        assert sum(len(ex['tokens']) for ex in train_data) == 73_780
+        assert len(val_data) == 270
+        assert sum(len(ex['chunks']) for ex in val_data) == 305
+        assert sum(len(ex['tokens']) for ex in val_data) == 14_509
+        assert len(test_data) == 270
+        assert sum(len(ex['chunks']) for ex in test_data) == 320
+        assert sum(len(ex['tokens']) for ex in test_data) == 14_844
+        
+        
+        
+class TestBratIO(object):
+    @pytest.mark.parametrize("pre_inserted_spaces", [False, True])
+    def test_demo(self, pre_inserted_spaces):
+        brat_io = BratIO(attr_names=['Denied', 'Analyzed'], 
+                         pre_inserted_spaces=pre_inserted_spaces, 
+                         tokenize_callback=jieba.cut)
+        
+        src_fn = "assets/data/brat/demo.txt"
+        mark = "spaces" if pre_inserted_spaces else "nospaces"
+        trg_fn = f"assets/data/brat/demo-write-{mark}.txt"
+        data = brat_io.read(src_fn, encoding='utf-8')
+        brat_io.write(data, trg_fn, encoding='utf-8')
+        
+        with open(src_fn, encoding='utf-8') as f:
+            gold_text_lines = [line.strip().replace(" ", "") for line in f if line.strip() != ""]
+        with open(trg_fn, encoding='utf-8') as f:
+            retr_text_lines = [line.strip().replace(" ", "") for line in f if line.strip() != ""]
         assert retr_text_lines == gold_text_lines
         
-        with open("assets/data/brat/demo.ann", encoding='utf-8') as f:
-            gold_ann_lines = [line.strip() for line in f if line.strip() != ""]
-        with open("assets/data/brat/demo-write.ann", encoding='utf-8') as f:
-            retr_ann_lines = [line.strip() for line in f if line.strip() != ""]
+        with open(src_fn, encoding='utf-8') as f:
+            gold_ann_lines = [line.strip().replace(" ", "") for line in f if line.strip() != ""]
+        with open(trg_fn, encoding='utf-8') as f:
+            retr_ann_lines = [line.strip().replace(" ", "") for line in f if line.strip() != ""]
         assert len(retr_ann_lines) == len(gold_ann_lines)
         
         gold_chunk_anns = [line.split("\t", 1)[1] for line in gold_ann_lines if line.startswith('T')]

@@ -4,6 +4,7 @@ from collections import OrderedDict, Counter
 import glob
 import pickle
 import numpy as np
+import pandas as pd
 import spacy
 import torch
 import torch.nn as nn
@@ -16,26 +17,30 @@ from transformers import BertTokenizer, BertModel, BertForMaskedLM
 from transformers import RobertaTokenizer, RobertaModel, RobertaForMaskedLM
 
 
-from eznlp import Token, TokenSequence, count_params
-from eznlp.token import Full2Half
-from eznlp.dataset_utils import Batch
+from eznlp.data import Token, TokenSequence
+from eznlp.data import Batch
 from eznlp import ConfigList, ConfigDict
 from eznlp import CharConfig, TokenConfig, EnumConfig, ValConfig, EmbedderConfig
 from eznlp import EncoderConfig
 from eznlp import PreTrainedEmbedderConfig
-from eznlp.vectors import Senna
+from eznlp.vectors import load_vectors_from_file, Senna
 from eznlp.nn import SequencePooling, SequenceGroupAggregating
-from eznlp.sequence_tagging import DecoderConfig, SequenceTaggerConfig
+from eznlp.sequence_tagging import SequenceTaggingDecoderConfig, SequenceTaggerConfig
 from eznlp.sequence_tagging import SequenceTaggingDataset
 from eznlp.sequence_tagging import SequenceTaggingTrainer
 from eznlp.sequence_tagging import ChunksTagsTranslator
 from eznlp.sequence_tagging import precision_recall_f1_report
 from eznlp.sequence_tagging.io import ConllIO, BratIO
 from eznlp.sequence_tagging.transition import find_ascending
+
 from eznlp.language_modeling import MLMDataset, PMCMLMDataset, MLMTrainer
 
+from eznlp.text_classification.io import TabularIO
+from eznlp.text_classification import TextClassificationDecoderConfig, TextClassifierConfig
+from eznlp.text_classification import TextClassificationDataset
+from eznlp.text_classification import TextClassificationTrainer
+
 from seqeval.metrics import classification_report
-from torchcrf import CRF
 from allennlp.modules.elmo import Elmo, batch_to_ids
 from allennlp.modules.token_embedders import ElmoTokenEmbedder
 from flair.data import Sentence, Corpus
@@ -46,6 +51,8 @@ from flair.trainers import ModelTrainer
 
 
 if __name__ == '__main__':
+    device = torch.device('cpu')
+    
     # batch_tokenized_text = [["I", "like", "it", "."], 
     #                         ["Do", "you", "love", "me", "?"], 
     #                         ["Sure", "!"], 
@@ -53,8 +60,6 @@ if __name__ == '__main__':
     
     # batch_tok_lens = [[len(tok) for tok in sent] for sent in batch_tokenized_text]
     # batch_text = [" ".join(sent) for sent in batch_tokenized_text]
-    
-    
     
     # flair_fw_lm = LanguageModel.load_language_model("assets/flair/news-forward-0.4.1.pt")
     # flair_bw_lm = LanguageModel.load_language_model("assets/flair/news-backward-0.4.1.pt")
@@ -72,28 +77,18 @@ if __name__ == '__main__':
     # elmo_char_ids = batch_to_ids(batch_sentences)
     # elmo(elmo_char_ids)
     
-    
-    # bert = BertModel.from_pretrained("assets/transformers_cache/bert-base-cased")
-    # tokenizer = BertTokenizer.from_pretrained("assets/transformers_cache/bert-base-cased")
+    # bert = BertModel.from_pretrained("assets/transformers_cache/bert-base-uncased")
+    # tokenizer = BertTokenizer.from_pretrained("assets/transformers_cache/bert-base-uncased")
     
     # encoded = tokenizer(batch_sentences, is_pretokenized=True, padding=True, return_tensors='pt')
     # bert_outs, _, hidden = bert(**encoded, output_hidden_states=True)
     
     
     # glove = GloVe(name='6B', dim=100, root="assets/vector_cache", validate_file=False)
+    # ctb50d = load_vectors_from_file("assets/vector_cache/ctb.50d.vec", encoding='utf-8')
     
-    # conll_config = {'raw_scheme': 'BIO1', 
-    #                 'scheme': 'BIOES', 
-    #                 'columns': ['text', 'pos_tag', 'chunking_tag', 'ner_tag'], 
-    #                 'trg_col': 'ner_tag', 
-    #                 'attach_additional_tags': False, 
-    #                 'skip_docstart': False, 
-    #                 'lower_case_mode': 'None'}
-    
-    # train_data = parse_conll_file("assets/data/conll2003/eng.train", max_examples=200, **conll_config)
-    # val_data   = parse_conll_file("assets/data/conll2003/eng.testa", max_examples=10,  **conll_config)
-    # test_data  = parse_conll_file("assets/data/conll2003/eng.testb", max_examples=10,  **conll_config)
-    
+    # conll_io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO2', additional_col_id2name={1: 'pos_tag'})
+    # data = conll_io.read("assets/data/conll2003/demo.eng.train")
     
     # config = SequenceTaggerConfig(embedder=EmbedderConfig(
     #                                   token=TokenConfig(emb_dim=100), 
@@ -104,10 +99,10 @@ if __name__ == '__main__':
     #                               encoder=EncoderConfig(arch='LSTM', hid_dim=200, num_layers=1, shortcut=True),
     #                               # elmo_embedder=PreTrainedEmbedderConfig(arch='ELMo', out_dim=elmo.get_output_dim(), freeze=True), 
     #                               # bert_like_embedder=PreTrainedEmbedderConfig(arch='BERT', out_dim=bert.config.hidden_size, tokenizer=tokenizer, freeze=True), 
-    #                               flair_fw_embedder=PreTrainedEmbedderConfig(arch='Flair', out_dim=flair_fw_lm.hidden_size, freeze=True), 
-    #                               flair_bw_embedder=PreTrainedEmbedderConfig(arch='Flair', out_dim=flair_bw_lm.hidden_size, freeze=True),
+    #                               # flair_fw_embedder=PreTrainedEmbedderConfig(arch='Flair', out_dim=flair_fw_lm.hidden_size, freeze=True), 
+    #                               # flair_bw_embedder=PreTrainedEmbedderConfig(arch='Flair', out_dim=flair_bw_lm.hidden_size, freeze=True),
     #                               intermediate=EncoderConfig(), 
-    #                               decoder =DecoderConfig(arch='CRF'))
+    #                               decoder=SequenceTaggingDecoderConfig(arch='CRF'))
     # train_set = SequenceTaggingDataset(train_data, config)
     # val_set   = SequenceTaggingDataset(val_data,   train_set.config)
     # test_set  = SequenceTaggingDataset(test_data,  train_set.config)
@@ -117,9 +112,48 @@ if __name__ == '__main__':
     # batch = train_set.collate([train_set[i] for i in range(0, 4)])
     # losses, hidden = tagger(batch, return_hidden=True)
     
+    # import jieba
+    # brat_io = BratIO(attr_names=['Denied', 'Analyzed'], tokenize_callback=jieba.cut)
+    # brat_data = brat_io.read("assets/data/brat/demo.txt", encoding='utf-8')
+    # brat_io.write(brat_data, "assets/data/brat/demo-write.txt", encoding='utf-8')
     
-    brat_io = BratIO(use_attrs=['Denied', 'Analyzed'])
-    brat_data = brat_io.read("assets/data/brat/demo.txt", encoding='utf-8')
-    brat_io.write(brat_data, "assets/data/brat/demo-write.txt", encoding='utf-8')
+    
+    # brat_set = SequenceTaggingDataset(brat_data)
+    # batch = brat_set.collate([brat_set[i] for i in range(0, 4)])
+    
+    # tagger = brat_set.config.instantiate()
+    # losses = tagger(batch)
+    # optimizer = optim.AdamW(tagger.parameters())
+    # trainer = SequenceTaggingTrainer(tagger, optimizer=optimizer, device=device)
+    # res = trainer.train_epoch([batch])
+    # print(res)
+    # tabular_io = TabularIO(text_col_id=3, label_col_id=2)
+    # train_data = tabular_io.read("assets/data/Tang2015/yelp-2013-seg-20-20.train.ss", encoding='utf-8', sep="\t\t", sentence_sep="<sssss>")
+    
+    # config = TextClassifierConfig(embedder=EmbedderConfig(token=TokenConfig(emb_dim=100, freeze=True)), 
+    #                               encoder=None, 
+    #                               bert_like_embedder=PreTrainedEmbedderConfig(arch='BERT', 
+    #                                                                           out_dim=bert.config.hidden_size, 
+    #                                                                           tokenizer=tokenizer, 
+    #                                                                           from_tokenized=True, 
+    #                                                                           pre_truncation=False,
+    #                                                                           freeze=True), 
+    #                               intermediate=EncoderConfig(arch='LSTM', hid_dim=200, num_layers=1, in_drop_rates=(0.5, 0.0, 0.0)), 
+    #                               decoder=TextClassificationDecoderConfig(use_attention=True, attention_scoring='Multiplicative'))
+    # train_set = TextClassificationDataset(train_data, config)
+    
+    # classifier = config.instantiate(bert_like=bert)
+    
+    # batch = train_set.collate([train_set[i] for i in range(0, 4)])
+    # losses, hidden = classifier(batch, return_hidden=True)
+    
+    # optimizer = optim.AdamW(classifier.parameters())
+    # trainer = TextClassificationTrainer(classifier, optimizer=optimizer, device=device)
+    # trainer.train_epoch([batch])
+    
+    
+    import OpenHowNet
+    OpenHowNet.download()
+    
     
     

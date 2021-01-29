@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
+import logging
 import torch
 from torchtext.experimental.vectors import Vectors
 
-
 PRETRAINED_VEC_EPS = 1e-6
+logger = logging.getLogger(__name__)
+
+
 
 def _fetch_token_pretrained_vector(token: str, pretrained_vectors: Vectors):
     tried_set = set()
@@ -44,15 +47,19 @@ def reinit_embedding_(emb: torch.nn.Embedding, itos=None, pretrained_vectors=Non
         
         if emb.padding_idx is not None:
             torch.nn.init.zeros_(emb.weight.data[emb.padding_idx])
-        print(f"OOV tokens: {len(oov_tokens)} ({len(oov_tokens)/len(itos)*100:.2f}%)")
         ave_vec_abs = acc_vec_abs / (len(itos) - len(oov_tokens))
-        print(f"Pretrained      vector average absolute value: {ave_vec_abs:.4f}")
         
         if unk_vector.lower() == 'uniform':
             oov_vec_abs = uniform_range / 2
         elif unk_vector.lower() == 'zeros':
             oov_vec_abs = 0.0
-        print(f"OOV initialized vector average absolute value: {oov_vec_abs:.4f}")
+        
+        logger.info(
+            "Embedding initialization \n"
+            f"OOV tokens: {len(oov_tokens)} ({len(oov_tokens)/len(itos)*100:.2f}%) \n"
+            f"Pretrained      vector average absolute value: {ave_vec_abs:.4f} \n"
+            f"OOV initialized vector average absolute value: {oov_vec_abs:.4f}"
+        )
         return oov_tokens
     
     else:

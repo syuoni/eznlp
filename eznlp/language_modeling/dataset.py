@@ -3,7 +3,8 @@ import random
 import torch
 from torch.nn.utils.rnn import pad_sequence
 
-from ..dataset_utils import TensorWrapper, Batch
+from ..data import TensorWrapper, Batch
+from ..data import Dataset
 
 
 class MLMHelper(object):
@@ -64,31 +65,14 @@ class MLMHelper(object):
         return batch
 
 
-class MLMDataset(torch.utils.data.Dataset):
+class MLMDataset(Dataset):
     """
     Dataset for Masked Language Modeling. 
     """
     def __init__(self, data, tokenizer, MLM_prob=0.15):
-        super().__init__()
-        self.data = data
+        super().__init__(data, None)
         self.tokenizer = tokenizer
         self.mlm_helper = MLMHelper(tokenizer, MLM_prob=MLM_prob)
-        
-        
-    def summary(self):
-        n_seqs = len(self.data)
-        if 'raw_idx' in self.data[0]:
-            n_raws = len({curr_data['raw_idx'] for curr_data in self.data})
-        else:
-            n_raws = n_seqs
-            
-        max_len = max([len(curr_data['tokens']) for curr_data in self.data])
-        print(f"The dataset consists {n_seqs} sequences built from {n_raws} raw entries")
-        print(f"The max sequence length is {max_len}")
-        
-    
-    def __len__(self):
-        return len(self.data)
         
     def __getitem__(self, i):
         """

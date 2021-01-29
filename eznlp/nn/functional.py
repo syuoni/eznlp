@@ -37,7 +37,7 @@ def sequence_pooling(x: torch.FloatTensor, mask: torch.BoolTensor, mode: str='me
     Parameters
     ----------
     x: torch.FloatTensor (batch, step, hid_dim)
-    mask: torch.BoolTensor (batch, step)
+    mask: torch.BoolTensor (batch, hid_dim)
     mode: str
         'mean', 'max', 'min'
     """
@@ -66,7 +66,9 @@ def sequence_group_aggregating(x: torch.FloatTensor, group_by: torch.LongTensor,
         The tensor to be aggregate. 
     group_by : torch.LongTensor (batch, ori_step)
         The tensor indicating the positions after aggregation. 
-        Positions being negative values are NOT used in aggregation. 
+        The values of `x` with corresponding `group_by` being NEGATIVE are NOT used in aggregation. 
+        The after-aggregation positions NOT covered by `group_by` are ZEROS.
+        
     agg_mode: str
         'mean', 'max', 'min', 'first', 'last'
     agg_step: int
@@ -109,6 +111,7 @@ def _execute_pos_proj(x: torch.FloatTensor, pos_proj: torch.BoolTensor, agg_mode
         curr_proj_values = []
         for curr_pos_proj in pos_proj[k]:
             if curr_pos_proj.sum() == 0:
+                # Set non-covered positions as zeros
                 curr_proj_values.append(torch.zeros(x.size(-1)))
             elif agg_mode.lower() == 'max':
                 curr_proj_values.append(x[k, curr_pos_proj].max(dim=0).values)
