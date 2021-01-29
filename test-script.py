@@ -126,7 +126,6 @@ if __name__ == '__main__':
     # optimizer = optim.AdamW(tagger.parameters())
     # trainer = SequenceTaggingTrainer(tagger, optimizer=optimizer, device=device)
     # res = trainer.train_epoch([batch])
-    # print(res)
     # tabular_io = TabularIO(text_col_id=3, label_col_id=2)
     # train_data = tabular_io.read("assets/data/Tang2015/yelp-2013-seg-20-20.train.ss", encoding='utf-8', sep="\t\t", sentence_sep="<sssss>")
     
