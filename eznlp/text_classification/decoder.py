@@ -19,7 +19,7 @@ class TextClassificationDecoderConfig(DecoderConfig):
         super().__init__(**kwargs)
         
     def __repr__(self):
-        repr_attr_dict = {key: self.__dict__[key] for key in ['in_dim', 'in_drop_rates']}
+        repr_attr_dict = {key: getattr(self, key) for key in ['in_dim', 'in_drop_rates']}
         return self._repr_non_config_attrs(repr_attr_dict)
         
     @property

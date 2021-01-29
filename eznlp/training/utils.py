@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 from typing import Union, List
 from collections import defaultdict
+import logging
 import torch
+
+logger = logging.getLogger(__name__)
 
 
 def count_params(model_or_params: Union[torch.nn.Module, torch.nn.Parameter, List[torch.nn.Parameter]], 
@@ -21,8 +24,10 @@ def count_params(model_or_params: Union[torch.nn.Module, torch.nn.Parameter, Lis
     num_trainable = sum(p.numel() for p in model_or_params if p.requires_grad)
     num_frozen = sum(p.numel() for p in model_or_params if not p.requires_grad)
     if verbose:
-        print(f"The model has {num_trainable + num_frozen:,} parameters, "
-              f"in which {num_trainable:,} are trainable and {num_frozen:,} are frozen. ")
+        logger.info(
+            f"The model has {num_trainable + num_frozen:,} parameters, "
+            f"in which {num_trainable:,} are trainable and {num_frozen:,} are frozen. "
+        )
         
     if return_trainable:
         return num_trainable
@@ -47,9 +52,9 @@ def build_param_groups_with_keyword2lr(model: torch.nn.Module, keyword2lr: dict,
         lr_lambdas.append(keyword2lr[keyword])
         
     if verbose:
-        print(f"{len(param_groups)} parameter groups have been built")
+        logger.info(f"{len(param_groups)} parameter groups have been built")
         for keyword, params in keyword2params.items():
-            print(f"Keyword: {keyword} | Parameters: {len(params)}")
+            logger.info(f"Keyword: {keyword} | Parameters: {len(params)}")
         
     return param_groups, lr_lambdas
 
@@ -59,7 +64,7 @@ def check_param_groups_no_missing(param_groups: list, model: torch.nn.Module, ve
     num_model_params = count_params(model, verbose=False)
     is_equal = (num_grouped_params == num_model_params)
     if verbose:
-        print(f"Grouped parameters ({num_grouped_params:,}) == Model parameters ({num_model_params:,})? {is_equal}")
-    
+        logger.info(f"Grouped parameters ({num_grouped_params:,}) == Model parameters ({num_model_params:,})? {is_equal}")
+        
     return is_equal
 

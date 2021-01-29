@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
-import warnings
 from typing import List, Mapping
 from collections import OrderedDict
+import logging
 import torch
+
+logger = logging.getLogger(__name__)
 
 
 def _add_indents(config_str: str, num_spaces: int=2):
@@ -25,8 +27,7 @@ class Config(object):
     """
     def __init__(self, **kwargs):
         if len(kwargs) > 0:
-            warnings.warn(f"Some configurations are set without checking: {kwargs}, "
-                          "which may be never used.")
+            logger.warning(f"Some configurations are set without checking: {kwargs}, which may be never used.")
             for key, attr in kwargs.items():
                 setattr(self, key, attr)
         
