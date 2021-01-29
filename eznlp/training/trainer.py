@@ -24,18 +24,19 @@ class Trainer(object):
         
     def forward_batch(self, batch: Batch):
         """
-        Forward to loss (scalar) and optionally compute a metric (e.g, accuracy)
+        Forward to the loss (scalar). 
+        Optionally return the gold and predicted labels of the batch, for evaluation. 
         
         Returns
         -------
-        (loss, metric) or (loss, None). 
+        A Tuple of (loss, ) or (loss, y_gold, y_pred)
         """
         raise NotImplementedError("Not Implemented `forward_batch`")
         
         
     def backward_batch(self, loss: torch.Tensor):
         """
-        Backward propagation and update weights. 
+        Backward propagation and update the weights. 
         
         Parameters
         ----------
@@ -53,41 +54,56 @@ class Trainer(object):
         # Update weights
         self.optimizer.step()
         
+        
+    def evaluate(self, y_gold: list, y_pred: list):
+        """
+        Calculate the metric (i.e., accuracy or F1) evaluating the predicted results 
+        against the gold results. It typically evaluate over the full dataset, 
+        or compatibly over a batch. 
+        """
+        raise NotImplementedError("Not Implemented `evaluate`")
+        
     
     def train_epoch(self, dataloader: torch.utils.data.DataLoader):
         self.model.train()
         
-        epoch_losses, epoch_metrics = [], []
+        epoch_losses = []
+        epoch_y_gold, epoch_y_pred = [], []
         for batch in dataloader:
             batch = batch.to(self.device)
-            loss, possible_metric = self.forward_batch(batch)
+            loss, *possible_batch_y = self.forward_batch(batch)
             self.backward_batch(loss)
             
             epoch_losses.append(loss.item())
-            epoch_metrics.append(possible_metric)
+            if possible_batch_y:
+                epoch_y_gold.extend(possible_batch_y[0])
+                epoch_y_pred.extend(possible_batch_y[1])
             
-        if all(m is not None for m in epoch_metrics):
-            return np.mean(epoch_losses), np.mean(epoch_metrics)
+        if epoch_y_gold:
+            return (np.mean(epoch_losses), self.evaluate(epoch_y_gold, epoch_y_pred))
         else:
-            return np.mean(epoch_losses), None
+            return (np.mean(epoch_losses), )
         
         
     def eval_epoch(self, dataloader: torch.utils.data.DataLoader):
         self.model.eval()
         
-        epoch_losses, epoch_metrics = [], []
+        epoch_losses = []
+        epoch_y_gold, epoch_y_pred = [], []
         with torch.no_grad():
             for batch in dataloader:
                 batch = batch.to(self.device)
-                loss, possible_metric = self.forward_batch(batch)
+                loss, *possible_batch_y = self.forward_batch(batch)
                 
                 epoch_losses.append(loss.item())
-                epoch_metrics.append(possible_metric)
+                if possible_batch_y:
+                    epoch_y_gold.extend(possible_batch_y[0])
+                    epoch_y_pred.extend(possible_batch_y[1])
             
-        if all(m is not None for m in epoch_metrics):
-            return np.mean(epoch_losses), np.mean(epoch_metrics)
+        if epoch_y_gold:
+            return (np.mean(epoch_losses), self.evaluate(epoch_y_gold, epoch_y_pred))
         else:
-            return np.mean(epoch_losses), None
+            return (np.mean(epoch_losses), )
     
     
     def train_steps(self, 
@@ -115,7 +131,8 @@ class Trainer(object):
         # The `metric` must hold that it is better if higher, e.g., accuracy or F1. 
         best_eval_metric = 0.0
         
-        train_losses, train_metrics = [], []
+        train_losses = []
+        train_y_gold, train_y_pred = [], []
         eidx, sidx = 0, 0
         done_training = False
         t0 = time.time()
@@ -123,11 +140,13 @@ class Trainer(object):
         while eidx < n_epochs:
             for batch in train_loader:
                 batch = batch.to(self.device)
-                loss, possible_metric = self.forward_batch(batch)
+                loss, *possible_batch_y = self.forward_batch(batch)
                 self.backward_batch(loss)
                 
                 train_losses.append(loss.item())
-                train_metrics.append(possible_metric)
+                if possible_batch_y:
+                    train_y_gold.extend(possible_batch_y[0])
+                    train_y_pred.extend(possible_batch_y[1])
                 
                 if (sidx+1) % disp_every_steps == 0:
                     elapsed_secs = int(time.time() - t0)
@@ -136,13 +155,16 @@ class Trainer(object):
                         disp_running_info(eidx=eidx, sidx=sidx, lr=max_lr, 
                                           elapsed_secs=elapsed_secs, 
                                           loss=np.mean(train_losses),
-                                          metric=np.mean(train_metrics) if all(m is not None for m in train_metrics) else None,
+                                          metric=self.evaluate(train_y_gold, train_y_pred) if train_y_gold else None,
                                           partition='train')
-                    train_losses, train_metrics = [], []
+                    train_losses = []
+                    train_y_gold, train_y_pred = [], []
                     t0 = time.time()
                 
                 if (sidx+1) % eval_every_steps == 0 and eval_loader is not None:
-                    eval_loss, possible_eval_metric = self.eval_epoch(eval_loader)
+                    eval_loss, *possible_eval_metric = self.eval_epoch(eval_loader)
+                    possible_eval_metric = possible_eval_metric[0] if possible_eval_metric else None
+                    
                     elapsed_secs = int(time.time() - t0)
                     if verbose:
                         disp_running_info(elapsed_secs=elapsed_secs, 

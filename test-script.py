@@ -150,3 +150,10 @@ if __name__ == '__main__':
     # optimizer = optim.AdamW(classifier.parameters())
     # trainer = TextClassificationTrainer(classifier, optimizer=optimizer, device=device)
     # trainer.train_epoch([batch])
+    
+    
+    import OpenHowNet
+    OpenHowNet.download()
+    
+    
+    

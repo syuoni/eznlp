@@ -2,7 +2,6 @@
 import tqdm
 import torch
 
-from ..data import Batch
 from ..training import Trainer
 from .dataset import TextClassificationDataset
 
@@ -21,24 +20,25 @@ class TextClassificationTrainer(Trainer):
         losses, hidden = self.model(batch, return_hidden=True)
         loss = losses.mean()
         
-        acc = self._batch_accuracy(batch, hidden)
-        return loss, acc
+        batch_labels_pred = self.model.decode(batch, hidden)
+        batch_labels_gold = [self.model.decoder.idx2label[label_id] for label_id in batch.label_id.cpu().tolist()]
+        return loss, batch_labels_gold, batch_labels_pred
         
+    
+    def evaluate(self, y_gold: list, y_pred: list):
+        # Use accuracy
+        return sum(yp == yg for yp, yg in zip(y_gold, y_pred)) / len(y_gold)
+        
+    
     def predict_labels(self, dataset: TextClassificationDataset, batch_size=32):
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, collate_fn=dataset.collate)
         
         self.model.eval()
-        labels = []
+        set_labels = []
         with torch.no_grad():
             for batch in tqdm.tqdm(dataloader):
                 batch.to(self.device)
-                labels.extend(self.model.decode(batch))
-        return labels
-    
-    def _batch_accuracy(self, batch: Batch, hidden: torch.Tensor):
-        pred_labels = self.model.decode(batch, hidden)
-        gold_labels = [self.model.decoder.idx2label[label_id] for label_id in batch.label_id.cpu().tolist()]
-        
-        return sum(pl==gl for pl, gl in zip(pred_labels, gold_labels)) / len(gold_labels)
+                set_labels.extend(self.model.decode(batch))
+        return set_labels
     
     
