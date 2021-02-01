@@ -85,7 +85,9 @@ if __name__ == '__main__':
     
     
     # glove = GloVe(name='6B', dim=100, root="assets/vector_cache", validate_file=False)
-    # ctb50d = load_vectors_from_file("assets/vector_cache/ctb.50d.vec", encoding='utf-8')
+    ctb50d = load_vectors_from_file("assets/vector_cache/ctb.50d.vec", encoding='utf-8')
+    giga_uni = load_vectors_from_file("assets/vector_cache/gigaword_chn.all.a2b.uni.ite50.vec", encoding='utf-8')
+    giga_bi  = load_vectors_from_file("assets/vector_cache/gigaword_chn.all.a2b.bi.ite50.vec", encoding='utf-8')
     
     # conll_io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO2', additional_col_id2name={1: 'pos_tag'})
     # data = conll_io.read("assets/data/conll2003/demo.eng.train")
@@ -149,10 +151,6 @@ if __name__ == '__main__':
     # optimizer = optim.AdamW(classifier.parameters())
     # trainer = TextClassificationTrainer(classifier, optimizer=optimizer, device=device)
     # trainer.train_epoch([batch])
-    
-    
-    import OpenHowNet
-    OpenHowNet.download()
     
     
     
