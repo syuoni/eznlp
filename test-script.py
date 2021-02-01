@@ -53,6 +53,17 @@ from flair.trainers import ModelTrainer
 if __name__ == '__main__':
     device = torch.device('cpu')
     
+    import jieba
+    tokens = TokenSequence.from_tokenized_text(list("李明住在中山西路。"))
+    print(list(jieba.cut_for_search("".join(tokens.raw_text))))
+    
+    for tok in jieba.tokenize("".join(tokens.raw_text), mode='search'):
+        print(tok)
+        
+        
+    tokens.build_softwords(jieba.tokenize)
+        
+        
     # batch_tokenized_text = [["I", "like", "it", "."], 
     #                         ["Do", "you", "love", "me", "?"], 
     #                         ["Sure", "!"], 
@@ -66,7 +77,6 @@ if __name__ == '__main__':
     
     # (step, batch, hid_dim)
     # exp_flair_hidden = flair_lm.get_representation(batch_text, start_marker="\n", end_marker=" ")
-    
     
     # options_file = "assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_options.json"
     # weight_file = "assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_weights.hdf5"
@@ -85,9 +95,9 @@ if __name__ == '__main__':
     
     
     # glove = GloVe(name='6B', dim=100, root="assets/vector_cache", validate_file=False)
-    ctb50d = load_vectors_from_file("assets/vector_cache/ctb.50d.vec", encoding='utf-8')
-    giga_uni = load_vectors_from_file("assets/vector_cache/gigaword_chn.all.a2b.uni.ite50.vec", encoding='utf-8')
-    giga_bi  = load_vectors_from_file("assets/vector_cache/gigaword_chn.all.a2b.bi.ite50.vec", encoding='utf-8')
+    # ctb50d = load_vectors_from_file("assets/vector_cache/ctb.50d.vec", encoding='utf-8')
+    # giga_uni = load_vectors_from_file("assets/vector_cache/gigaword_chn.all.a2b.uni.ite50.vec", encoding='utf-8')
+    # giga_bi  = load_vectors_from_file("assets/vector_cache/gigaword_chn.all.a2b.bi.ite50.vec", encoding='utf-8')
     
     # conll_io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO2', additional_col_id2name={1: 'pos_tag'})
     # data = conll_io.read("assets/data/conll2003/demo.eng.train")

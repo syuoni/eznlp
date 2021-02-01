@@ -24,7 +24,7 @@ def RoBERTa4MLM_with_tokenizer():
 
 
 class TestMLM(object):
-    def test_covid19_mlm(self, conll2003_demo, BERT4MLM_with_tokenizer, device):
+    def test_conll2003(self, conll2003_demo, BERT4MLM_with_tokenizer, device):
         bert4mlm, tokenizer = BERT4MLM_with_tokenizer
         bert4mlm = bert4mlm.to(device)
         
@@ -50,7 +50,7 @@ class TestMLM(object):
         trainer.eval_epoch([batch012])
         
         
-    def test_PMC_mlm(self, RoBERTa4MLM_with_tokenizer, device):
+    def test_PMC(self, RoBERTa4MLM_with_tokenizer, device):
         roberta4mlm, tokenizer = RoBERTa4MLM_with_tokenizer
         roberta4mlm = roberta4mlm.to(device)
         

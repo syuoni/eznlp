@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 from typing import List
 from collections import OrderedDict
+from functools import cached_property
 import string
 import re
 import hanziconv
 import spacy
+import jieba
 import numpy as np
 
 
@@ -106,7 +108,7 @@ def _adaptive_lower(text):
 
 class Token(object):
     """
-    A token at the modeling level (typically word level for English, character level for Chinese). 
+    A token at the modeling level (e.g., word level for English text, or character level for Chinese text). 
     
     `Token` provides access to lower-level attributes (prefixes, suffixes). 
     """
@@ -114,10 +116,9 @@ class Token(object):
                        + [f"<-{num_type}{digits}>" for num_type in ['int', 'real', 'percent'] for digits in range(MAX_DIGITS+1)]
     _en_shape_feature_names = list(en_shape2criterion.keys())
     
-    _basic_enum_fields = ['bigram', 'trigram', 
-                          'en_pattern', 'en_pattern_sum', 
-                          'prefix_2', 'prefix_3', 'prefix_4', 'prefix_5', 
-                          'suffix_2', 'suffix_3', 'suffix_4', 'suffix_5']
+    _basic_enum_fields = ['prefix_2', 'prefix_3', 'prefix_4', 'prefix_5', 
+                          'suffix_2', 'suffix_3', 'suffix_4', 'suffix_5', 
+                          'en_pattern', 'en_pattern_sum']
     _basic_val_fields = ['en_shape_features', 'num_features']
     
     def __init__(self, raw_text, case_mode='None', number_mode='None', to_half=True, to_zh_simplified=False, **kwargs):
@@ -138,20 +139,20 @@ class Token(object):
         elif number_mode.lower() == 'zeros':
             self.text = digit_re.sub('0', self.text)
         else:
-            raise ValueError(f"invalid value of num_mode: {number_mode}")
+            raise ValueError(f"Invalid value of num_mode: {number_mode}")
             
         self.text = Full2Half.full2half(self.text) if to_half else self.text
         self.text = hanziconv.HanziConv.toSimplified(self.text) if to_zh_simplified else self.text
-        
         for k, v in kwargs.items():
             setattr(self, k, v)
+            
             
     def __len__(self):
         return len(self.raw_text)
     
     def __repr__(self):
         return self.raw_text
-            
+    
     @property    
     def prefix_2(self):
         return self.raw_text[:2]
@@ -254,6 +255,9 @@ class TokenSequence(object):
     """
     A wrapper of token list, providing sequential attribute access to all tokens. 
     """
+    _softword_idx2tag = ['B', 'M', 'E', 'S']
+    _softword_tag2idx = {t: i for i, t in enumerate(_softword_idx2tag)}
+    
     def __init__(self, token_list: List[Token], token_sep=" ", pad_token="<pad>"):
         self.token_list = token_list
         self.token_sep = token_sep
@@ -267,7 +271,7 @@ class TokenSequence(object):
         if hasattr(self.token_list[0], name):
             return [getattr(tok, name) for tok in self.token_list]
         else:
-            raise AttributeError(f"{type(self)} object has no attribute {name}")
+            raise AttributeError(f"type object {self.__class__.__name__} has no attribute {name}")
             
     def __len__(self):
         return len(self.token_list)
@@ -276,14 +280,15 @@ class TokenSequence(object):
         return repr(self.token_list)
     
     def __getstate__(self):
-        return self.token_list
-
-    def __setstate__(self, token_list):
-        self.token_list = token_list
+        return {'token_list': self.token_list, 
+                'token_sep': self.token_sep, 
+                'pad_token': self.pad_token}
         
-    def __add__(self, other):
-        return TokenSequence(self.token_list + other.token_list, token_sep=self.token_sep, pad_token=self.pad_token)
-        
+    def __setstate__(self, state: dict):
+        for name, value in state.items():
+            setattr(self, name, value)
+            
+            
     def __getitem__(self, i):
         if isinstance(i, int):
             return self.token_list[i]
@@ -292,41 +297,49 @@ class TokenSequence(object):
         else:
             raise TypeError(f"Invalid subscript type of {i}")
             
+    def __add__(self, other):
+        return TokenSequence(self.token_list + other.token_list, token_sep=self.token_sep, pad_token=self.pad_token)
+    
+    
     def build_pseudo_boundaries(self, sep_width: int=None):
-        """
-        Assign `start` and `end` at the token-level, to ensure consistency to spacy-tokenized ones.
-        """
         if sep_width is None:
             sep_width = len(self.token_sep)
         
         token_lens = np.array([len(tok) for tok in self.token_list])
-        token_ends = np.cumsum(token_lens + sep_width) - sep_width
-        token_starts = token_ends - token_lens
+        self.end = np.cumsum(token_lens + sep_width) - sep_width
+        self.start = self.end - token_lens
         
-        for tok, start, end in zip(self.token_list, token_starts, token_ends):
-            setattr(tok, 'start', start)
-            setattr(tok, 'end', end)
+        
+    def build_softwords(self, tokenize_callback):
+        self.softword = [np.zeros(len(self._softword_idx2tag), dtype=bool) for tok in self.token_list]
+        
+        if hasattr(tokenize_callback, '__self__') and isinstance(tokenize_callback.__self__, jieba.Tokenizer) and tokenize_callback.__name__.startswith('tokenize'):
+            pass
+        else:
+            raise ValueError(f"Invalid `tokenize_callback`: {tokenize_callback}")
             
-            
-    @property
+        for word_text, word_start, word_end in tokenize_callback("".join(self.raw_text)):
+            if word_end - word_start == 1:
+                self.softword[word_start][self._softword_tag2idx['S']] = True
+            else:
+                self.softword[word_start][self._softword_tag2idx['B']] = True
+                self.softword[word_end-1][self._softword_tag2idx['E']] = True
+                for k in range(word_start+1, word_end-1):
+                    self.softword[k][self._softword_tag2idx['M']] = True
+                    
+                    
+    @cached_property
     def bigram(self):
         unigram = self.text
         return [self.token_sep.join(gram) for gram in zip(unigram, unigram[1:]+[self.pad_token])]
     
-    @property
+    @cached_property
     def trigram(self):
         unigram = self.text
         return [self.token_sep.join(gram) for gram in zip(unigram, unigram[1:]+[self.pad_token], unigram[2:]+[self.pad_token, self.pad_token])]
+        
     
-    
-    def build_sub_tokens(self, tokenizer, rebuild=False):
-        if not hasattr(self, 'sub_tokens') or rebuild:
-            nested_sub_tokens = [tokenizer.tokenize(word) for word in self.raw_text]
-            self.sub_tokens = [sub_tok for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
-            self.ori_indexes = [i for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
-    
-    
-    def spans_within_max_length(self, max_len):
+    def spans_within_max_length(self, max_len: int):
         total_len = len(self.token_list)
         slice_start = 0
         
@@ -382,10 +395,15 @@ class TokenSequence(object):
             token_list = [Token(tok_text, **kwargs) for tok_text in raw_text.split()]
         elif isinstance(tokenize_callback, spacy.language.Language):
             token_list = [Token(tok.text, start=tok.idx, end=tok.idx+len(tok.text), **kwargs) for tok in tokenize_callback(raw_text)]
-        elif callable(tokenize_callback):
-            token_list = [Token(tok_text, **kwargs) for tok_text in tokenize_callback(raw_text)]
+        elif hasattr(tokenize_callback, '__self__') and isinstance(tokenize_callback.__self__, jieba.Tokenizer):
+            if tokenize_callback.__name__.startswith('tokenize'):
+                token_list = [Token(tok_text, start=tok_start, end=tok_end, **kwargs) for tok_text, tok_start, tok_end in tokenize_callback(raw_text)]
+            elif tokenize_callback.__name__.startswith('cut'):
+                token_list = [Token(tok_text, **kwargs) for tok_text in tokenize_callback(raw_text)]
+            else:
+                raise ValueError(f"Invalid method of `jieba.Tokenizer`: {tokenize_callback}")
         else:
-            raise ValueError(f"Invalid `tokenize_callback` {tokenize_callback}")
+            raise ValueError(f"Invalid `tokenize_callback`: {tokenize_callback}")
         
         tokens = cls(token_list, token_sep=token_sep, pad_token=pad_token)
         tokens.attach_additional_tags(additional_tok2tags=additional_tok2tags)

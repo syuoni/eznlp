@@ -81,9 +81,12 @@ class MLMDataset(Dataset):
         """
         Dynamic Masking.
         """
-        tokens = self.data[i]['tokens']
-        tokens.build_sub_tokens(self.tokenizer)
-        return self.mlm_helper.build_example(tokens.sub_tokens)
+        curr_data = self.data[i]
+        tokenized_raw_text = curr_data['tokens'].raw_text
+        
+        nested_sub_tokens = [self.tokenizer.tokenize(word) for word in tokenized_raw_text]
+        sub_tokens = [sub_tok for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
+        return self.mlm_helper.build_example(sub_tokens)
     
     def collate(self, batch_examples):
         return self.mlm_helper.collate(batch_examples)
