@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import pytest
+import pickle
 
 from eznlp.data.token import Full2Half
 from eznlp.data import Token, TokenSequence
@@ -188,3 +189,21 @@ class TestTokenSequence(object):
         assert tokens.trigram == ["this is a", "is a <-real1>", "a <-real1> demo", "<-real1> demo .", "demo . <pad>", ". <pad> <pad>"]
         
         
+    def test_pickle(self):
+        token_list = [Token(tok, case_mode='Lower', number_mode='Marks') for tok in "This is a -3.14 demo .".split()]
+        tokens = TokenSequence(token_list)
+        
+        with open("assets/data/tokens-demo.pkl", 'wb') as f:
+            pickle.dump(tokens, f)
+        with open("assets/data/tokens-demo.pkl", 'rb') as f:
+            tokens_loaded = pickle.load(f)
+            
+        assert tokens_loaded.text == tokens.text
+        assert tokens_loaded.raw_text == tokens.raw_text
+        assert tokens_loaded.token_sep == tokens.token_sep
+        assert tokens_loaded.pad_token == tokens.pad_token
+        
+        
+        
+    
+    
