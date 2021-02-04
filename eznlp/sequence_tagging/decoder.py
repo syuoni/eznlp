@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
 from typing import List
+from collections import Counter
 import torch
 from torch.nn.utils.rnn import pad_sequence
 
-from ..data import Batch
-from ..data.dataset import unpad_seqs
-from ..decoder import DecoderConfig, Decoder
+from ..data.wrapper import TensorWrapper, Batch
+from ..nn.utils import unpad_seqs
+from ..model.decoder import DecoderConfig, Decoder
 from .transition import ChunksTagsTranslator
 from .crf import CRF
+
 
 
 class SequenceTaggingDecoderConfig(DecoderConfig):
@@ -49,6 +51,21 @@ class SequenceTaggingDecoderConfig(DecoderConfig):
     @property
     def pad_idx(self):
         return self.tag2idx['<pad>']
+    
+    def build_vocab(self, *partitions):
+        counter = Counter()
+        for data in partitions:
+            for data_entry in data:
+                curr_tags = self.translator.chunks2tags(data_entry['chunks'], len(data_entry['tokens']))
+                counter.update(curr_tags)
+        self.idx2tag = ['<pad>'] + list(counter.keys())
+        
+        
+    def exemplify(self, data_entry: dict):
+        return Tags(data_entry, self)
+        
+    def batchify(self, batch_tags_objs: list):
+        return batch_tags_objs
         
     def instantiate(self):
         if self.arch.lower() == 'softmax':
@@ -56,6 +73,26 @@ class SequenceTaggingDecoderConfig(DecoderConfig):
         elif self.arch.lower() == 'crf':
             return SequenceTaggingCRFDecoder(self)
         
+        
+class Tags(TensorWrapper):
+    """
+    Packaging of tags and chunks. 
+    
+    Parameters
+    ----------
+    data_entry: dict
+        {'tokens': TokenSequence, 
+         'chunks': list}
+    """
+    def __init__(self, data_entry: dict, config: SequenceTaggingDecoderConfig):
+        self.chunks = data_entry['chunks']
+        self.tags = config.translator.chunks2tags(data_entry['chunks'], len(data_entry['tokens']))
+        self.tag_ids = torch.tensor([config.tag2idx[t] for t in self.tags], dtype=torch.long)
+        
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.tags})"
+    
+    
         
         
 class SequenceTaggingDecoder(Decoder):

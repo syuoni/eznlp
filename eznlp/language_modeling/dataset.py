@@ -2,10 +2,10 @@
 import random
 import logging
 import torch
-from torch.nn.utils.rnn import pad_sequence
 
-from ..data import TensorWrapper, Batch
-from ..data import Dataset
+from ..data.wrapper import TensorWrapper, Batch
+from ..data.dataset import Dataset
+from ..nn.functional import seq_lens2mask
 
 logger = logging.getLogger(__name__)
 
@@ -60,12 +60,14 @@ class MLMHelper(object):
             batch_MLM_lab_ids.append(ex.MLM_lab_ids)
         
         seq_lens = torch.tensor([s.size(0) for s in batch_MLM_tok_ids])
-        batch_MLM_tok_ids = pad_sequence(batch_MLM_tok_ids, batch_first=True, padding_value=self.pad_id)
-        batch_MLM_lab_ids = pad_sequence(batch_MLM_lab_ids, batch_first=True, padding_value=self.MLM_label_mask_id)
+        batch_MLM_tok_ids = torch.nn.utils.rnn.pad_sequence(batch_MLM_tok_ids, batch_first=True, padding_value=self.pad_id)
+        batch_MLM_lab_ids = torch.nn.utils.rnn.pad_sequence(batch_MLM_lab_ids, batch_first=True, padding_value=self.MLM_label_mask_id)
+        attention_mask = seq_lens2mask(seq_lens, batch_MLM_tok_ids.size(1))
         
-        batch = Batch(seq_lens=seq_lens, MLM_tok_ids=batch_MLM_tok_ids, MLM_lab_ids=batch_MLM_lab_ids)
-        batch.build_masks({'attention_mask': (seq_lens, batch_MLM_tok_ids.size(1))})
-        return batch
+        return Batch(seq_lens=seq_lens, 
+                     MLM_tok_ids=batch_MLM_tok_ids, 
+                     MLM_lab_ids=batch_MLM_lab_ids, 
+                     attention_mask=attention_mask)
 
 
 class MLMDataset(Dataset):

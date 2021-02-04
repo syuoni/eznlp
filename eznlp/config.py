@@ -19,31 +19,33 @@ def _add_indents(config_str: str, num_spaces: int=2):
 class Config(object):
     """
     `Config` stores and validates configurations of a model or assembly. 
+    `Config` defines the methods to process data and tensors. 
     `Config.instantiate` is the suggested way to instantiate the model or assembly. 
     
-    NOTE: 
-        `Config` are NOT suggested to process data or tensors. 
-        `Config` are NOT suggested to be registered as attribute of the corresponding model or assembly. 
+    `Config` are NOT suggested to be registered as attribute of the corresponding model or assembly. 
     """
+    
+    _cache_attr_names = ['vectors', 'elmo', 'bert_like', 'flair_lm']
+    
     def __init__(self, **kwargs):
         if len(kwargs) > 0:
-            logger.warning(f"Some configurations are set without checking: {kwargs}, which may be never used.")
+            logger.warning(f"Some configurations are set without checking: {kwargs}, "
+                           "which may be never used.")
             for key, attr in kwargs.items():
                 setattr(self, key, attr)
-        
+                
     @property
-    def is_valid(self):
-        for attr in self.__dict__.values():
-            if isinstance(attr, Config):
-                if not attr.is_valid:
+    def valid(self):
+        for name, attr in self.__dict__.items():
+            if name in self._cache_attr_names:
+                continue
+            elif isinstance(attr, Config):
+                if not attr.valid:
                     return False
             else:
                 if attr is None:
                     return False
         return True
-    
-    def instantiate(self):
-        raise NotImplementedError("Not Implemented `instantiate`")
         
     def __repr__(self):
         return self._repr_non_config_attrs(self.__dict__)
@@ -53,29 +55,29 @@ class Config(object):
         main_str += ', '.join(f"{key}={attr}" for key, attr in attr_dict.items())
         main_str += ')'
         return main_str
-    
+        
     def _repr_config_attrs(self, attr_dict: dict):
         main_str = self.__class__.__name__ + '(\n'
         main_str += '\n'.join(f"  ({key}): {_add_indents(repr(attr))}" for key, attr in attr_dict.items())
         main_str += '\n)'
         return main_str
+        
+    def instantiate(self):
+        raise NotImplementedError("Not Implemented `instantiate`")
     
     
 class ConfigList(Config):
     def __init__(self, config_list: List[Config]):
-        # NOTE: The order should be preserved. 
-        if isinstance(config_list, list):
-            assert all(isinstance(value, Config) for value in config_list)
-            self.config_list = config_list
-        else:
-            raise ValueError(f"Invalid type of config_list {config_list}")
+        if not isinstance(config_list, list):
+            config_list = list(config_list)
             
+        assert all(isinstance(c, Config) for c in config_list)
+        self.config_list = config_list
+        
+        
     @property
-    def is_valid(self):
-        for config in self.config_list:
-            if not config.is_valid:
-                return False
-        return True
+    def valid(self):
+        return all(c.valid for c in self.config_list)
     
     def __len__(self):
         return len(self.config_list)
@@ -86,42 +88,32 @@ class ConfigList(Config):
     def __getitem__(self, i):
         return self.config_list[i]
     
-    def __getattr__(self, name):
-        if name.endswith('_dim'):
-            return sum(getattr(config, name) for config in self)
-        elif name == 'arch':
-            return '-'.join(getattr(config, name) for config in self)
-        else:
-            raise AttributeError(f"{self.__class__.__name__} object has no attribute {name}")
-    
+    @property
+    def out_dim(self):
+        return sum(c.out_dim for c in self.config_list)
+        
     def instantiate(self):
         # NOTE: The order should be consistent here and in the corresponding `forward`. 
-        return torch.nn.ModuleList([config.instantiate() for config in self])
-    
+        return torch.nn.ModuleList([c.instantiate() for c in self.config_list])
+        
     def __repr__(self):
-        return self._repr_config_attrs({i: config for i, config in enumerate(self)})
-    
-    
+        return self._repr_config_attrs({i: c for i, c in enumerate(self.config_list)})
+        
+        
 class ConfigDict(Config):
     def __init__(self, config_dict: Mapping[str, Config]):
         # NOTE: `torch.nn.ModuleDict` is an **ordered** dictionary
-        # NOTE: The order should be consistent here and in the corresponding `forward`. 
-        if isinstance(config_dict, OrderedDict):
-            assert all(isinstance(value, Config) for key, value in config_dict.items())
-            self.config_dict = config_dict
-        elif isinstance(config_dict, list):
-            assert all(isinstance(value, Config) for key, value in config_dict)
-            self.config_dict = OrderedDict(config_dict)
-        else:
-            raise ValueError(f"Invalid type of config_dict {config_dict}")
+        if not isinstance(config_dict, OrderedDict):
+            config_dict = OrderedDict(config_dict)
+            
+        assert all(isinstance(c, Config) for c in config_dict.values())
+        self.config_dict = config_dict
+        
         
     @property
-    def is_valid(self):
-        for config in self.config_dict.values():
-            if not config.is_valid:
-                return False
-        return True
-    
+    def valid(self):
+        return all(c.valid for c in self.config_dict.values())
+        
     def __len__(self):
         return len(self.config_dict)
     
@@ -137,44 +129,15 @@ class ConfigDict(Config):
     def __getitem__(self, key):
         return self.config_dict[key]
     
-    def __getattr__(self, name):
-        if name.endswith('_dim'):
-            return sum(getattr(config, name) for config in self.values())
-        elif name == 'arch':
-            return '-'.join(getattr(config, name) for config in self.values())
-        else:
-            raise AttributeError(f"{self.__class__.__name__} object has no attribute {name}")
-    
+    @property
+    def out_dim(self):
+        return sum(c.out_dim for c in self.config_dict.values())
+        
     def instantiate(self):
-        # NOTE: `torch.nn.ModuleDict` is an **ordered** dictionary
-        # NOTE: The order should be preserved here. 
-        return torch.nn.ModuleDict([(key, config.instantiate()) for key, config in self.items()])
-    
+        # NOTE: The order should be consistent here and in the corresponding `forward`. 
+        return torch.nn.ModuleDict([(k, c.instantiate()) for k, c in self.config_dict.items()])
+        
     def __repr__(self):
         return self._repr_config_attrs(self.config_dict)
-    
-    
-class ConfigwithVocab(Config):
-    def __init__(self, **kwargs):
-        self.vocab = kwargs.pop('vocab', None)
-        super().__init__(**kwargs)
-        
-    def trans(self, tok_iter):
-        # It is generally recommended to return cpu tensors in multi-process loading. 
-        # See https://pytorch.org/docs/stable/data.html#single-and-multi-process-data-loading
-        return torch.tensor([self.vocab[tok] for tok in tok_iter], dtype=torch.long)
-        
-    @property
-    def voc_dim(self):
-        return len(self.vocab)
-        
-    @property
-    def pad_idx(self):
-        return self.vocab['<pad>']
-        
-    @property
-    def unk_idx(self):
-        return self.vocab['<unk>']
-    
     
     

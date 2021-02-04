@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
+from typing import Union, List
 import torch
+
 from .functional import sequence_pooling, sequence_group_aggregating
 from .init import reinit_layer_
 
@@ -211,5 +213,34 @@ class WordDropout(torch.nn.Module):
     
     def extra_repr(self):
         return f"p={self.p}, keep_exp={self.keep_exp}"
+    
+    
+class ScalarMix(torch.nn.Module):
+    """
+    Mix multi-layer hidden states by corresponding scalar weights. 
+    
+    Computes a parameterised scalar mixture of N tensors, 
+    ``mixture = gamma * \sum_k(s_k * tensor_k)``
+    where ``s = softmax(w)``, with `w` and `gamma` scalar parameters.
+    
+    References
+    ----------
+    [1] Peters et al. 2018. Deep contextualized word representations. 
+    [2] https://github.com/allenai/allennlp/blob/master/allennlp/modules/scalar_mix.py
+    """
+    def __init__(self, mix_dim: int):
+        super().__init__()
+        self.scalars = torch.nn.Parameter(torch.zeros(mix_dim))
+        
+    def __repr__(self):
+        return f"{self.__class__.__name__}(mix_dim={self.scalars.size(0)})"
+        
+    def forward(self, tensors: Union[torch.FloatTensor, List[torch.FloatTensor]]):
+        if isinstance(tensors, (list, tuple)):
+            tensors = torch.stack(tensors)
+        
+        norm_weights_shape = tuple([-1] + [1] * (tensors.dim()-1))
+        norm_weights = torch.nn.functional.softmax(self.scalars, dim=0).view(*norm_weights_shape)
+        return (tensors * norm_weights).sum(dim=0)
     
     

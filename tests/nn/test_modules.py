@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import pytest
 import torch
+
 from eznlp.nn.functional import seq_lens2mask
 from eznlp.nn import SequencePooling, SequenceAttention, SequenceGroupAggregating
 from eznlp.nn import LockedDropout, WordDropout

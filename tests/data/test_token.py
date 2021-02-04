@@ -193,9 +193,9 @@ class TestTokenSequence(object):
         token_list = [Token(tok, case_mode='Lower', number_mode='Marks') for tok in "This is a -3.14 demo .".split()]
         tokens = TokenSequence(token_list)
         
-        with open("assets/data/tokens-demo.pkl", 'wb') as f:
+        with open("data/tokens-demo.pkl", 'wb') as f:
             pickle.dump(tokens, f)
-        with open("assets/data/tokens-demo.pkl", 'rb') as f:
+        with open("data/tokens-demo.pkl", 'rb') as f:
             tokens_loaded = pickle.load(f)
             
         assert tokens_loaded.text == tokens.text

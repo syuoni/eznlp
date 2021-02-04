@@ -116,10 +116,11 @@ class Token(object):
                        + [f"<-{num_type}{digits}>" for num_type in ['int', 'real', 'percent'] for digits in range(MAX_DIGITS+1)]
     _en_shape_feature_names = list(en_shape2criterion.keys())
     
-    _basic_enum_fields = ['prefix_2', 'prefix_3', 'prefix_4', 'prefix_5', 
+    _basic_ohot_fields = ['text', 
+                          'prefix_2', 'prefix_3', 'prefix_4', 'prefix_5', 
                           'suffix_2', 'suffix_3', 'suffix_4', 'suffix_5', 
                           'en_pattern', 'en_pattern_sum']
-    _basic_val_fields = ['en_shape_features', 'num_features']
+    _basic_mhot_fields = ['en_shape_features', 'num_features']
     
     def __init__(self, raw_text, case_mode='None', number_mode='None', to_half=True, to_zh_simplified=False, **kwargs):
         self.raw_text = raw_text

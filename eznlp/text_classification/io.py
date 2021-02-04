@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from ..data import TokenSequence
+from ..data.token import TokenSequence
 
 
 class TabularIO(object):

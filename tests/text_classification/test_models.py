@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 import pytest
-import torch.optim as optim
+import torch
 
-from eznlp import EncoderConfig, PreTrainedEmbedderConfig
+from eznlp.model import EncoderConfig
+from eznlp.pretrained import BertLikeConfig
 from eznlp.text_classification import TextClassificationDecoderConfig, TextClassifierConfig
 from eznlp.text_classification import TextClassificationDataset
 from eznlp.text_classification import TextClassificationTrainer
@@ -29,7 +30,7 @@ class TestClassifier(object):
         pred_labels123 = classifier.decode(batch123)
         assert pred_labels012[1:] == pred_labels123[:-1]
         
-        optimizer = optim.AdamW(classifier.parameters())
+        optimizer = torch.optim.AdamW(classifier.parameters())
         trainer = TextClassificationTrainer(classifier, optimizer=optimizer, device=device)
         trainer.train_epoch([batch012])
         trainer.eval_epoch([batch012])
@@ -43,6 +44,7 @@ class TestClassifier(object):
                                                                               pooling_mode=pooling_mode))
         
         dataset = TextClassificationDataset(yelp2013_demo, config)
+        dataset.build_vocabs_and_dims()
         classifier = config.instantiate().to(device)
         self.one_classifier_pass(classifier, dataset, device)
         
@@ -55,20 +57,20 @@ class TestClassifier(object):
                                                                               attention_scoring=attention_scoring))
         
         dataset = TextClassificationDataset(yelp2013_demo, config)
+        dataset.build_vocabs_and_dims()
         classifier = config.instantiate().to(device)
         self.one_classifier_pass(classifier, dataset, device)
         
     @pytest.mark.parametrize("from_tokenized", [True, False])
     def test_classifier_bert_like(self, yelp2013_demo, bert_with_tokenizer, from_tokenized, device):
         bert, tokenizer = bert_with_tokenizer
-        bert_like_embedder_config = PreTrainedEmbedderConfig(arch='BERT', 
-                                                             out_dim=bert.config.hidden_size, 
-                                                             tokenizer=tokenizer, 
-                                                             from_tokenized=from_tokenized)
-        config = TextClassifierConfig(encoder=None, bert_like_embedder=bert_like_embedder_config)
+        config = TextClassifierConfig(ohots=None, 
+                                      encoder=None, 
+                                      bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert))
         
         dataset = TextClassificationDataset(yelp2013_demo, config)
-        classifier = config.instantiate(bert_like=bert).to(device)
+        dataset.build_vocabs_and_dims()
+        classifier = config.instantiate().to(device)
         self.one_classifier_pass(classifier, dataset, device)
         
         
