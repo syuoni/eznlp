@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
-from torchtext.experimental.vectors import Vectors
-import allennlp.modules
+from typing import List
+import torch
 import transformers
-import flair
 
-from ..data import Batch
-from ..model import ModelConfig, Model
+from ..data.wrapper import Batch
+from ..model.model import ModelConfig, Model
 from .decoder import TextClassificationDecoderConfig
 
 
@@ -15,38 +14,69 @@ class TextClassifierConfig(ModelConfig):
         super().__init__(**kwargs)
         
     @property
-    def extra_name(self):
-        if self.decoder.use_attention:
-            return self.decoder.attention_scoring
-        else:
-            return self.decoder.pooling_mode
+    def valid(self):
+        return super().valid and (self.decoder is not None) and self.decoder.valid
+        
+    @property
+    def name(self):
+        extra_name = self.decoder.attention_scoring if self.decoder.use_attention else self.decoder.pooling_mode
+        return "-".join([super().name, extra_name])
     
-    def instantiate(self, 
-                    pretrained_vectors: Vectors=None, 
-                    elmo: allennlp.modules.elmo.Elmo=None, 
-                    bert_like: transformers.PreTrainedModel=None, 
-                    flair_fw_lm: flair.models.LanguageModel=None, 
-                    flair_bw_lm: flair.models.LanguageModel=None):
-        # Only check validity at the most outside level
-        assert self.is_valid
-        if (self.bert_like_embedder is not None) and (not self.bert_like_embedder.from_tokenized):
-            assert len(self.optional_assemblies) == 1
-            return BERTTextClassifier(self, bert_like)
+    def build_vocabs_and_dims(self, *partitions):
+        super().build_vocabs_and_dims(*partitions)
+        
+        if self.intermediate is not None:
+            self.decoder.in_dim = self.intermediate.out_dim
         else:
-            return TextClassifier(self, pretrained_vectors, elmo, bert_like, flair_fw_lm, flair_bw_lm)
+            self.decoder.in_dim = self.full_hid_dim
+            
+        self.decoder.build_vocab(*partitions)
         
+    
+    def exemplify(self, data_entry: dict):
+        example = super().exemplify(data_entry['tokens'])
+        if 'label' in data_entry:
+            example['label_id'] = self.decoder.exemplify(data_entry)
+        return example
         
-        
+    
+    def batchify(self, batch_examples: List[dict]):
+        batch = super().batchify(batch_examples)
+        if 'label_id' in batch_examples[0]:
+            batch['label_ids'] = self.decoder.batchify([ex['label_id'] for ex in batch_examples])
+        return batch
+    
+    
+    def instantiate(self):
+        # Only check validity at the most outside level
+        assert self.valid
+        return TextClassifier(self)
+    
+    
 class TextClassifier(Model):
-    def __init__(self, config: TextClassifierConfig, 
-                 pretrained_vectors: Vectors=None, 
-                 elmo: allennlp.modules.elmo.Elmo=None, 
-                 bert_like: transformers.PreTrainedModel=None, 
-                 flair_fw_lm: flair.models.LanguageModel=None, 
-                 flair_bw_lm: flair.models.LanguageModel=None):
-        super().__init__(config, pretrained_vectors, elmo, bert_like, flair_fw_lm, flair_bw_lm)
+    def __init__(self, config: TextClassifierConfig):
+        super().__init__(config)
+        self.decoder = config.decoder.instantiate()
+        
+    def forward(self, batch: Batch, return_hidden: bool=False):
+        full_hidden = self.get_full_hidden(batch)
+        losses = self.decoder(batch, full_hidden)
+        
+        # Return `hidden` for the `decode` method, to avoid duplicated computation. 
+        if return_hidden:
+            return losses, full_hidden
+        else:
+            return losses
         
         
+    def decode(self, batch: Batch, full_hidden: torch.Tensor=None):
+        if full_hidden is None:
+            full_hidden = self.get_full_hidden(batch)
+            
+        return self.decoder.decode(batch, full_hidden)
+    
+    
+    
         
 class BERTTextClassifier(Model):
     def __init__(self, config: TextClassifierConfig, bert_like: transformers.PreTrainedModel=None):

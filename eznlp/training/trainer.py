@@ -4,7 +4,7 @@ import numpy as np
 import logging
 import torch
 
-from ..data import Batch
+from ..data.wrapper import Batch
 
 logger = logging.getLogger(__name__)
 

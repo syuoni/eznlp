@@ -1,73 +1,60 @@
 # -*- coding: utf-8 -*-
+from typing import List
 import logging
 import torch
-from torchtext.experimental.vectors import Vectors
 
-PRETRAINED_VEC_EPS = 1e-6
 logger = logging.getLogger(__name__)
 
 
 
-def _fetch_token_pretrained_vector(token: str, pretrained_vectors: Vectors):
-    tried_set = set()
-    for possible_token in [token, token.lower(), token.title(), token.upper()]:
-        if possible_token in tried_set:
-            continue
+def reinit_embedding_(embedding: torch.nn.Embedding):
+    uniform_range = (3 / embedding.weight.size(1)) ** 0.5
+    
+    torch.nn.init.uniform_(embedding.weight.data, -uniform_range, uniform_range)
+    if embedding.padding_idx is not None:
+        torch.nn.init.zeros_(embedding.weight.data[embedding.padding_idx])
         
-        pretrained_vec = pretrained_vectors[possible_token]
-        if pretrained_vec.abs().max().item() > PRETRAINED_VEC_EPS:
-            return pretrained_vec
-        tried_set.add(possible_token)
         
-    return None
+def reinit_embedding_by_pretrained_(embedding: torch.nn.Embedding, 
+                                    itos: List[str], 
+                                    vectors, 
+                                    oov_init: str='zeros'):
+    assert embedding.weight.size(0) == len(itos)
+    assert embedding.weight.size(1) == vectors.emb_dim
+    uniform_range = (3 / embedding.weight.size(1)) ** 0.5
+    
+    oov = []
+    acc_vec_abs = 0
+    for idx, tok in enumerate(itos):
+        pretrained_vec = vectors.lookup(tok)
+        if pretrained_vec is not None:
+            acc_vec_abs += pretrained_vec.abs().mean().item()
+            embedding.weight.data[idx].copy_(pretrained_vec)
+        else:
+            oov.append(tok)
+            if oov_init.lower() == 'zeros':
+                torch.nn.init.zeros_(embedding.weight.data[idx])
+            elif oov_init.lower() == 'uniform':
+                torch.nn.init.uniform_(embedding.weight.data[idx], -uniform_range, uniform_range)
+                
+    if embedding.padding_idx is not None:
+        torch.nn.init.zeros_(embedding.weight.data[embedding.padding_idx])
+    ave_vec_abs = acc_vec_abs / (len(itos) - len(oov))
+    
+    if oov_init.lower() == 'zeros':
+        oov_vec_abs = 0.0
+    elif oov_init.lower() == 'uniform':
+        oov_vec_abs = uniform_range / 2
+        
+    logger.info(
+        "Embedding initialization \n"
+        f"OOV tokens: {len(oov)} ({len(oov)/len(itos)*100:.2f}%) \n"
+        f"Pretrained      vector average absolute value: {ave_vec_abs:.4f} \n"
+        f"OOV initialized vector average absolute value: {oov_vec_abs:.4f}"
+    )
+    return oov
 
 
-def reinit_embedding_(emb: torch.nn.Embedding, itos=None, pretrained_vectors=None, unk_vector='uniform'):
-    emb_dim = emb.weight.size(1)
-    uniform_range = (3 / emb_dim) ** 0.5
-    
-    if (itos is not None) and (pretrained_vectors is not None):
-        assert emb.weight.size(0) == len(itos)
-        assert emb.weight.size(1) == pretrained_vectors['<unk>'].size(0)
-        
-        oov_tokens = []
-        acc_vec_abs = 0
-        for idx, tok in enumerate(itos):
-            pretrained_vec = _fetch_token_pretrained_vector(tok, pretrained_vectors)
-            
-            if pretrained_vec is None:
-                oov_tokens.append(tok)
-                if unk_vector.lower() == 'uniform':
-                    torch.nn.init.uniform_(emb.weight.data[idx], -uniform_range, uniform_range)
-                elif unk_vector.lower() == 'zeros':
-                    torch.nn.init.zeros_(emb.weight.data[idx])
-            else:
-                acc_vec_abs += pretrained_vec.abs().mean().item()
-                emb.weight.data[idx].copy_(pretrained_vec)
-        
-        if emb.padding_idx is not None:
-            torch.nn.init.zeros_(emb.weight.data[emb.padding_idx])
-        ave_vec_abs = acc_vec_abs / (len(itos) - len(oov_tokens))
-        
-        if unk_vector.lower() == 'uniform':
-            oov_vec_abs = uniform_range / 2
-        elif unk_vector.lower() == 'zeros':
-            oov_vec_abs = 0.0
-        
-        logger.info(
-            "Embedding initialization \n"
-            f"OOV tokens: {len(oov_tokens)} ({len(oov_tokens)/len(itos)*100:.2f}%) \n"
-            f"Pretrained      vector average absolute value: {ave_vec_abs:.4f} \n"
-            f"OOV initialized vector average absolute value: {oov_vec_abs:.4f}"
-        )
-        return oov_tokens
-    
-    else:
-        torch.nn.init.uniform_(emb.weight.data, -uniform_range, uniform_range)
-        if emb.padding_idx is not None:
-            torch.nn.init.zeros_(emb.weight.data[emb.padding_idx])
-        return None
-    
 
 def reinit_layer_(layer: torch.nn.Module, nonlinearity='relu'):
     """
@@ -86,7 +73,6 @@ def reinit_layer_(layer: torch.nn.Module, nonlinearity='relu'):
             else:
                 torch.nn.init.xavier_uniform_(param.data, 
                                               gain=torch.nn.init.calculate_gain(nonlinearity))
-            
         else:
             raise TypeError(f"Invalid Layer {layer}")
     

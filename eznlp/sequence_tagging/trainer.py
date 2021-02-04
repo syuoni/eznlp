@@ -2,7 +2,7 @@
 import tqdm
 import torch
 
-from ..training import Trainer
+from ..training.trainer import Trainer
 from .dataset import SequenceTaggingDataset
 from .metric import precision_recall_f1_report
 

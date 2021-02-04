@@ -3,18 +3,20 @@ import pytest
 import torch
 
 from eznlp.data import Token
-from eznlp import ConfigDict, EnumConfig, ValConfig, EmbedderConfig
+from eznlp.config import ConfigDict
+from eznlp.model import OneHotConfig, MultiHotConfig
 from eznlp.sequence_tagging import SequenceTaggerConfig, SequenceTaggingDataset
 
 
 class TestBatch(object):
     @pytest.mark.cuda
     def test_batch_to_cuda(self, conll2003_demo):
-        embedder_config = EmbedderConfig(enum=ConfigDict([(f, EnumConfig(emb_dim=20)) for f in Token.basic_enum_fields]), 
-                                         val=ConfigDict([(f, ValConfig(emb_dim=20)) for f in Token.basic_val_fields]))
-        config = SequenceTaggerConfig(embedder=embedder_config)
+        config = SequenceTaggerConfig(ohots=ConfigDict({f: OneHotConfig(field=f, emb_dim=20) for f in Token._basic_ohot_fields}), 
+                                      mhots=ConfigDict({f: MultiHotConfig(field=f, emb_dim=20) for f in Token._basic_mhot_fields}))
         
         dataset = SequenceTaggingDataset(conll2003_demo, config)
+        dataset.build_vocabs_and_dims()
+        
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=4, shuffle=True, collate_fn=dataset.collate, pin_memory=True)
         for batch in dataloader:
             break
@@ -35,6 +37,7 @@ class TestBatch(object):
         
     def test_batches(self, conll2003_demo, device):
         dataset = SequenceTaggingDataset(conll2003_demo)
+        dataset.build_vocabs_and_dims()
         
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=4, shuffle=True, collate_fn=dataset.collate)
         for batch in dataloader:

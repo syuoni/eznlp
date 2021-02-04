@@ -16,9 +16,9 @@ class TestConllIO(object):
     """
     def test_conll2003(self):
         conll_io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', additional_col_id2name={1: 'pos_tag'})
-        train_data = conll_io.read("assets/data/conll2003/eng.train")
-        dev_data   = conll_io.read("assets/data/conll2003/eng.testa")
-        test_data  = conll_io.read("assets/data/conll2003/eng.testb")
+        train_data = conll_io.read("data/conll2003/eng.train")
+        dev_data   = conll_io.read("data/conll2003/eng.testa")
+        test_data  = conll_io.read("data/conll2003/eng.testb")
         
         assert len(train_data) == 14_987
         assert sum(len(ex['chunks']) for ex in train_data) == 23_499
@@ -37,9 +37,9 @@ class TestConllIO(object):
     @pytest.mark.slow
     def test_ontonotes5(self):
         conll_io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', line_sep_starts=["#begin", "#end", "pt/"])
-        train_data = conll_io.read("assets/data/conll2012/train.english.v4_gold_conll", encoding='utf-8')
-        dev_data   = conll_io.read("assets/data/conll2012/dev.english.v4_gold_conll", encoding='utf-8')
-        test_data  = conll_io.read("assets/data/conll2012/test.english.v4_gold_conll", encoding='utf-8')
+        train_data = conll_io.read("data/conll2012/train.english.v4_gold_conll", encoding='utf-8')
+        dev_data   = conll_io.read("data/conll2012/dev.english.v4_gold_conll", encoding='utf-8')
+        test_data  = conll_io.read("data/conll2012/test.english.v4_gold_conll", encoding='utf-8')
         
         assert len(train_data) == 59_924
         assert sum(len(ex['chunks']) for ex in train_data) == 81_828
@@ -55,9 +55,9 @@ class TestConllIO(object):
     @pytest.mark.slow
     def test_ontonotes5_chinese(self):
         conll_io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', line_sep_starts=["#begin", "#end", "pt/"])
-        train_data = conll_io.read("assets/data/conll2012/train.chinese.v4_gold_conll", encoding='utf-8')
-        dev_data   = conll_io.read("assets/data/conll2012/dev.chinese.v4_gold_conll", encoding='utf-8')
-        test_data  = conll_io.read("assets/data/conll2012/test.chinese.v4_gold_conll", encoding='utf-8')
+        train_data = conll_io.read("data/conll2012/train.chinese.v4_gold_conll", encoding='utf-8')
+        dev_data   = conll_io.read("data/conll2012/dev.chinese.v4_gold_conll", encoding='utf-8')
+        test_data  = conll_io.read("data/conll2012/test.chinese.v4_gold_conll", encoding='utf-8')
         
         assert len(train_data) == 36_487
         assert sum(len(ex['chunks']) for ex in train_data) == 62_543
@@ -72,8 +72,8 @@ class TestConllIO(object):
         
     def test_sighan2006(self):
         conll_io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BIO2')
-        train_data = conll_io.read("assets/data/SIGHAN2006/train.txt", encoding='utf-8')
-        test_data  = conll_io.read("assets/data/SIGHAN2006/test.txt", encoding='utf-8')
+        train_data = conll_io.read("data/SIGHAN2006/train.txt", encoding='utf-8')
+        test_data  = conll_io.read("data/SIGHAN2006/test.txt", encoding='utf-8')
         
         assert len(train_data) == 46_364
         assert sum(len(ex['chunks']) for ex in train_data) == 74_703
@@ -85,9 +85,9 @@ class TestConllIO(object):
         
     def test_resume_ner(self):
         conll_io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BMES')
-        train_data = conll_io.read("assets/data/ResumeNER/train.char.bmes", encoding='utf-8')
-        dev_data   = conll_io.read("assets/data/ResumeNER/dev.char.bmes", encoding='utf-8')
-        test_data  = conll_io.read("assets/data/ResumeNER/test.char.bmes", encoding='utf-8')
+        train_data = conll_io.read("data/ResumeNER/train.char.bmes", encoding='utf-8')
+        dev_data   = conll_io.read("data/ResumeNER/dev.char.bmes", encoding='utf-8')
+        test_data  = conll_io.read("data/ResumeNER/test.char.bmes", encoding='utf-8')
         
         assert len(train_data) == 3_821
         assert sum(len(ex['chunks']) for ex in train_data) == 13_440
@@ -102,9 +102,9 @@ class TestConllIO(object):
         
     def test_weibo_ner(self):
         conll_io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BIO2')
-        train_data = conll_io.read("assets/data/WeiboNER/weiboNER.conll.train", encoding='utf-8')
-        dev_data   = conll_io.read("assets/data/WeiboNER/weiboNER.conll.dev", encoding='utf-8')
-        test_data  = conll_io.read("assets/data/WeiboNER/weiboNER.conll.test", encoding='utf-8')
+        train_data = conll_io.read("data/WeiboNER/weiboNER.conll.train", encoding='utf-8')
+        dev_data   = conll_io.read("data/WeiboNER/weiboNER.conll.dev", encoding='utf-8')
+        test_data  = conll_io.read("data/WeiboNER/weiboNER.conll.test", encoding='utf-8')
         
         assert len(train_data) == 1_350
         assert sum(len(ex['chunks']) for ex in train_data) == 1_391
@@ -125,9 +125,9 @@ class TestBratIO(object):
                          pre_inserted_spaces=pre_inserted_spaces, 
                          tokenize_callback=jieba.cut)
         
-        src_fn = "assets/data/brat/demo.txt"
+        src_fn = "data/brat/demo.txt"
         mark = "spaces" if pre_inserted_spaces else "nospaces"
-        trg_fn = f"assets/data/brat/demo-write-{mark}.txt"
+        trg_fn = f"data/brat/demo-write-{mark}.txt"
         data = brat_io.read(src_fn, encoding='utf-8')
         brat_io.write(data, trg_fn, encoding='utf-8')
         

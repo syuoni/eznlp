@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 from typing import List
+from collections import Counter
 import torch
 
-from ..data import Batch
-from ..nn import SequencePooling, SequenceAttention
-from ..decoder import DecoderConfig, Decoder
+from ..data.wrapper import Batch
+from ..nn.modules import SequencePooling, SequenceAttention
+from ..model.decoder import DecoderConfig, Decoder
+
 
 
 class TextClassificationDecoderConfig(DecoderConfig):
@@ -38,10 +40,24 @@ class TextClassificationDecoderConfig(DecoderConfig):
     @property
     def pad_idx(self):
         return self.label2idx['<pad>']
-    
+        
+    def build_vocab(self, *partitions):
+        counter = Counter()
+        for data in partitions:
+            counter.update([data_entry['label'] for data_entry in data])
+        self.idx2label = list(counter.keys())
+        
+        
+    def exemplify(self, data_entry: dict):
+        return torch.tensor(self.label2idx[data_entry['label']])
+        
+    def batchify(self, batch_label_ids: list):
+        return torch.stack(batch_label_ids)
+        
     def instantiate(self):
         return TextClassificationDecoder(self)
         
+    
     
 class TextClassificationDecoder(Decoder):
     def __init__(self, config: TextClassificationDecoderConfig):
@@ -63,7 +79,7 @@ class TextClassificationDecoder(Decoder):
         # logits: (batch, tag_dim)
         logits = self.hid2logit(pooled_hidden)
         
-        return self.criterion(logits, batch.label_id)
+        return self.criterion(logits, batch.label_ids)
     
     
     def decode(self, batch: Batch, full_hidden: torch.Tensor):

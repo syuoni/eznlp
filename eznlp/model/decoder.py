@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 import torch
 
-from .data import Batch
-from .nn.init import reinit_layer_
-from .nn import CombinedDropout
-from .config import Config
+from ..data.wrapper import Batch
+from ..nn.init import reinit_layer_
+from ..nn.modules import CombinedDropout
+from ..config import Config
 
 
 class DecoderConfig(Config):
@@ -12,7 +12,6 @@ class DecoderConfig(Config):
         self.in_dim = kwargs.pop('in_dim', None)
         self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
         super().__init__(**kwargs)
-        
         
     def __repr__(self):
         raise NotImplementedError("Not Implemented `__repr__`")

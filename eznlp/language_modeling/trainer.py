@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import torch
-from ..training import Trainer
+from ..training.trainer import Trainer
 
 
 class MLMTrainer(Trainer):

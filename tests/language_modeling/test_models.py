@@ -12,14 +12,14 @@ from eznlp.language_modeling import MLMDataset, PMCMLMDataset, MLMTrainer
 
 @pytest.fixture
 def BERT4MLM_with_tokenizer():
-    tokenizer = BertTokenizer.from_pretrained("assets/transformers_cache/bert-base-cased")
-    bert4mlm = BertForMaskedLM.from_pretrained("assets/transformers_cache/bert-base-cased")
+    tokenizer = BertTokenizer.from_pretrained("assets/transformers/bert-base-cased")
+    bert4mlm = BertForMaskedLM.from_pretrained("assets/transformers/bert-base-cased")
     return bert4mlm, tokenizer
 
 @pytest.fixture
 def RoBERTa4MLM_with_tokenizer():
-    tokenizer = RobertaTokenizer.from_pretrained("assets/transformers_cache/roberta-base")
-    roberta4mlm = RobertaForMaskedLM.from_pretrained("assets/transformers_cache/roberta-base")
+    tokenizer = RobertaTokenizer.from_pretrained("assets/transformers/roberta-base")
+    roberta4mlm = RobertaForMaskedLM.from_pretrained("assets/transformers/roberta-base")
     return roberta4mlm, tokenizer
 
 
@@ -54,7 +54,7 @@ class TestMLM(object):
         roberta4mlm, tokenizer = RoBERTa4MLM_with_tokenizer
         roberta4mlm = roberta4mlm.to(device)
         
-        files = glob.glob("assets/data/PMC/comm_use/Cells/*.txt")
+        files = glob.glob("data/PMC/comm_use/Cells/*.txt")
         train_set = PMCMLMDataset(files=files, tokenizer=tokenizer, max_len=128)
         train_loader = DataLoader(train_set, batch_size=4, collate_fn=train_set.collate)
         for batch in train_loader:

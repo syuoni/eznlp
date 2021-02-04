@@ -2,7 +2,7 @@
 import tqdm
 import torch
 
-from ..training import Trainer
+from ..training.trainer import Trainer
 from .dataset import TextClassificationDataset
 
 
@@ -21,7 +21,7 @@ class TextClassificationTrainer(Trainer):
         loss = losses.mean()
         
         batch_labels_pred = self.model.decode(batch, hidden)
-        batch_labels_gold = [self.model.decoder.idx2label[label_id] for label_id in batch.label_id.cpu().tolist()]
+        batch_labels_gold = [self.model.decoder.idx2label[label_id] for label_id in batch.label_ids.cpu().tolist()]
         return loss, batch_labels_gold, batch_labels_pred
         
     

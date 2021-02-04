@@ -1,16 +1,20 @@
 # -*- coding: utf-8 -*-
+from typing import List
+from collections import Counter
 import torch
+import torchtext
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence
 
-from ..nn import SequencePooling
+from ..data.token import TokenSequence
+from ..nn.modules import SequencePooling
+from ..nn.functional import seq_lens2mask
 from ..nn.init import reinit_embedding_, reinit_lstm_, reinit_gru_, reinit_layer_
-from ..config import ConfigwithVocab
+from ..config import Config
 
 
-class CharConfig(ConfigwithVocab):
+class CharConfig(Config):
     def __init__(self, **kwargs):
         self.arch = kwargs.pop('arch', 'CNN')
-        
         if self.arch.lower() not in ('cnn', 'lstm', 'gru'):
             raise ValueError(f"Invalid char-level architecture {self.arch}")
             
@@ -20,11 +24,50 @@ class CharConfig(ConfigwithVocab):
             if self.pooling.lower() not in ('max', 'mean'):
                 raise ValueError(f"Invalid pooling method {self.pooling}")
                 
+        self.vocab = kwargs.pop('vocab', None)
+        self.min_freq = kwargs.pop('min_freq', 1)
         self.emb_dim = kwargs.pop('emb_dim', 25)
         self.out_dim = kwargs.pop('out_dim', 50)
         self.drop_rate = kwargs.pop('drop_rate', 0.5)
         super().__init__(**kwargs)
+        
+    @property
+    def voc_dim(self):
+        return len(self.vocab)
+        
+    @property
+    def pad_idx(self):
+        return self.vocab['<pad>']
+        
+    @property
+    def unk_idx(self):
+        return self.vocab['<unk>']
     
+    def build_vocab(self, *partitions):
+        counter = Counter()
+        for data in partitions:
+            for curr_data in data:
+                for tok in curr_data['tokens'].raw_text:
+                    counter.update(tok)
+        self.vocab = torchtext.vocab.Vocab(counter, 
+                                           min_freq=self.min_freq, 
+                                           specials=('<unk>', '<pad>'), 
+                                           specials_first=True)
+        
+    def exemplify(self, tokens: TokenSequence):
+        ex_char_ids = [torch.tensor([self.vocab[x] for x in tok], dtype=torch.long) for tok in tokens.raw_text]
+        return {'char_ids': ex_char_ids}
+        
+    def batchify(self, batch_ex: List[dict]):
+        batch_char_ids = [char_ids for ex in batch_ex for char_ids in ex['char_ids']]
+        tok_lens = torch.tensor([tok.size(0) for tok in batch_char_ids])
+        char_mask = seq_lens2mask(tok_lens)
+        
+        batch_char_ids = pad_sequence(batch_char_ids, batch_first=True, padding_value=self.pad_idx)
+        return {'char_ids': batch_char_ids, 
+                'tok_lens': tok_lens, 
+                'char_mask': char_mask}
+        
     def instantiate(self):
         if self.arch.lower() == 'cnn':
             return CharCNN(self)
