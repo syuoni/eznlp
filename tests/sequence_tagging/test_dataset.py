@@ -21,18 +21,18 @@ class TestBatch(object):
         for batch in dataloader:
             break
         
-        assert batch.tok_ids.is_pinned()
-        assert batch.enum['en_pattern'].is_pinned()
-        assert batch.val['en_shape_features'].is_pinned()
+        assert batch.ohots['text'].is_pinned()
+        assert batch.ohots['en_pattern'].is_pinned()
+        assert batch.mhots['en_shape_features'].is_pinned()
         assert batch.seq_lens.is_pinned()
         assert batch.tags_objs[0].tag_ids.is_pinned()
         
         cpu = torch.device('cpu')
         gpu = torch.device('cuda:0')
-        assert batch.tok_ids.device == cpu
+        assert batch.ohots['text'].device == cpu
         batch = batch.to(gpu)
-        assert batch.tok_ids.device == gpu
-        assert not batch.tok_ids.is_pinned()
+        assert batch.ohots['text'].device == gpu
+        assert not batch.ohots['text'].is_pinned()
         
         
     def test_batches(self, conll2003_demo, device):

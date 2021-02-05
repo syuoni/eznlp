@@ -5,7 +5,7 @@ import torch
 from eznlp.data import Token
 from eznlp.config import ConfigDict
 from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig
-from eznlp.pretrained import ELMoConfig
+from eznlp.pretrained import ELMoConfig, BertLikeConfig, FlairConfig
 from eznlp.sequence_tagging import SequenceTaggingDecoderConfig, SequenceTaggerConfig
 from eznlp.sequence_tagging import SequenceTaggingDataset
 from eznlp.sequence_tagging import SequenceTaggingTrainer
@@ -82,33 +82,30 @@ class TestTagger(object):
         self.one_tagger_pass(tagger, dataset, device)
         
         
-    # @pytest.mark.parametrize("freeze", [False, True])
-    # def test_tagger_bert_like(self, conll2003_demo, bert_with_tokenizer, freeze, device):
-    #     bert, tokenizer = bert_with_tokenizer
-    #     bert_like_embedder_config = PreTrainedEmbedderConfig(arch='BERT', 
-    #                                                          out_dim=bert.config.hidden_size, 
-    #                                                          tokenizer=tokenizer, 
-    #                                                          freeze=freeze)
-    #     config = SequenceTaggerConfig(encoder=None, bert_like_embedder=bert_like_embedder_config)
+    @pytest.mark.parametrize("freeze", [False, True])
+    def test_tagger_bert_like(self, conll2003_demo, bert_with_tokenizer, freeze, device):
+        bert, tokenizer = bert_with_tokenizer
+        config = SequenceTaggerConfig(ohots=None, 
+                                      encoder=None, 
+                                      bert_like=BertLikeConfig(bert_like=bert, tokenizer=tokenizer, freeze=freeze))
         
-    #     dataset = SequenceTaggingDataset(conll2003_demo, config)
-    #     dataset.build_vocabs_and_dims()
-    #     tagger = config.instantiate(bert_like=bert).to(device)
-    #     self.one_tagger_pass(tagger, dataset, device)
+        dataset = SequenceTaggingDataset(conll2003_demo, config)
+        dataset.build_vocabs_and_dims()
+        tagger = config.instantiate().to(device)
+        self.one_tagger_pass(tagger, dataset, device)
         
         
-    # @pytest.mark.parametrize("freeze", [False, True])
-    # def test_tagger_flair(self, conll2003_demo, flair_fw_lm, flair_bw_lm, freeze, device):
-    #     flair_fw_embedder_config = PreTrainedEmbedderConfig(arch='Flair', out_dim=flair_fw_lm.hidden_size, freeze=freeze)
-    #     flair_bw_embedder_config = PreTrainedEmbedderConfig(arch='Flair', out_dim=flair_bw_lm.hidden_size, freeze=freeze)
-    #     config = SequenceTaggerConfig(encoder=None, 
-    #                                   flair_fw_embedder=flair_fw_embedder_config, 
-    #                                   flair_bw_embedder=flair_bw_embedder_config)
+    @pytest.mark.parametrize("freeze", [False, True])
+    def test_tagger_flair(self, conll2003_demo, flair_fw_lm, flair_bw_lm, freeze, device):
+        config = SequenceTaggerConfig(ohots=None, 
+                                      encoder=None, 
+                                      flair_fw=FlairConfig(flair_lm=flair_fw_lm, freeze=freeze),  
+                                      flair_bw=FlairConfig(flair_lm=flair_bw_lm, freeze=freeze))
         
-    #     dataset = SequenceTaggingDataset(conll2003_demo, config)
-    #     dataset.build_vocabs_and_dims()
-    #     tagger = config.instantiate(flair_fw_lm=flair_fw_lm, flair_bw_lm=flair_bw_lm).to(device)
-    #     self.one_tagger_pass(tagger, dataset, device)
+        dataset = SequenceTaggingDataset(conll2003_demo, config)
+        dataset.build_vocabs_and_dims()
+        tagger = config.instantiate().to(device)
+        self.one_tagger_pass(tagger, dataset, device)
         
         
     @pytest.mark.parametrize("enc_arch", ['CNN', 'LSTM'])

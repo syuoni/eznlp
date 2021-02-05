@@ -128,3 +128,4 @@ dmypy.json
 assets/*
 cache/*
 data/*
+scripts/*

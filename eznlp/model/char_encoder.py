@@ -142,7 +142,7 @@ class CharRNN(CharEncoder):
             
             
     def embedded2hidden(self, embedded: torch.Tensor, tok_lens: torch.Tensor, char_mask: torch.Tensor):
-        packed_embedded = torch.nn.utils.rnn.pack_padded_sequence(embedded, tok_lens, batch_first=True, enforce_sorted=False)
+        packed_embedded = torch.nn.utils.rnn.pack_padded_sequence(embedded, tok_lens.cpu(), batch_first=True, enforce_sorted=False)
         
         if isinstance(self.rnn, torch.nn.LSTM):
             # hidden: (num_layers*num_directions=2, batch*tok_step, hid_dim=out_dim/2)
