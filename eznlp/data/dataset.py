@@ -3,12 +3,12 @@ from typing import List
 import torch
 
 from ..nn.functional import seq_lens2mask
-from ..model.model import ModelConfig
+from ..config import Config
 from .wrapper import Batch
 
 
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self, data: List[dict], config: ModelConfig):
+    def __init__(self, data: List[dict], config: Config):
         """
         Parameters
         ----------

@@ -2,7 +2,7 @@
 from typing import List
 import torch
 
-from ..data.token import TokenSequence
+from ..token import TokenSequence
 from ..data.wrapper import Batch
 from ..config import Config, ConfigDict
 from .embedder import OneHotConfig

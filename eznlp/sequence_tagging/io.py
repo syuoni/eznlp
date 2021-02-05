@@ -3,7 +3,7 @@ import re
 import numpy as np
 import pandas as pd
 
-from ..data.token import TokenSequence
+from ..token import TokenSequence
 from .transition import ChunksTagsTranslator
 
 

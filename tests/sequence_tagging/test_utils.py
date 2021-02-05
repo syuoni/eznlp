@@ -3,7 +3,7 @@ import pytest
 import spacy
 import numpy as np
 
-from eznlp.data import TokenSequence
+from eznlp.token import TokenSequence
 from eznlp.sequence_tagging import SequenceTaggingDecoderConfig
 from eznlp.sequence_tagging import ChunksTagsTranslator
 from eznlp.sequence_tagging import precision_recall_f1_report

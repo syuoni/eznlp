@@ -2,7 +2,7 @@
 import pytest
 import torch
 
-from eznlp.data import Token
+from eznlp.token import Token
 from eznlp.config import ConfigDict
 from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig
 from eznlp.pretrained import ELMoConfig, BertLikeConfig, FlairConfig

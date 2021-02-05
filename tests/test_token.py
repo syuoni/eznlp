@@ -2,8 +2,8 @@
 import pytest
 import pickle
 
-from eznlp.data.token import Full2Half
-from eznlp.data import Token, TokenSequence
+from eznlp.token import Full2Half
+from eznlp.token import Token, TokenSequence
 
 
 def test_full2half():

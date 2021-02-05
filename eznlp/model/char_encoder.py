@@ -4,7 +4,7 @@ from collections import Counter
 import torch
 import torchtext
 
-from ..data.token import TokenSequence
+from ..token import TokenSequence
 from ..nn.modules import SequencePooling
 from ..nn.functional import seq_lens2mask
 from ..nn.init import reinit_embedding_, reinit_lstm_, reinit_gru_, reinit_layer_

@@ -3,7 +3,7 @@ from typing import List
 import torch
 import allennlp.modules
 
-from ..data.token import TokenSequence
+from ..token import TokenSequence
 from ..config import Config
 
 

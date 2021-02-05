@@ -4,7 +4,7 @@ import os
 import torch
 import flair
 
-from eznlp.data import TokenSequence
+from eznlp.token import TokenSequence
 from eznlp.pretrained import ELMoConfig, BertLikeConfig, FlairConfig
 from eznlp.training.utils import count_params
 

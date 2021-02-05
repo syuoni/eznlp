@@ -3,7 +3,7 @@ from typing import List
 import torch
 import flair
 
-from ..data.token import TokenSequence
+from ..token import TokenSequence
 from ..nn.modules import SequenceGroupAggregating
 from ..config import Config
 

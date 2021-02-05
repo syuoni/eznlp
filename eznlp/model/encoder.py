@@ -133,9 +133,9 @@ class RNNEncoder(Encoder):
         packed_embedded = torch.nn.utils.rnn.pack_padded_sequence(embedded, batch.seq_lens.cpu(), batch_first=True, enforce_sorted=False)
         
         if hasattr(self, 'h_0'):
-            h_0 = self.h_0.repeat(1, batch.tok_ids.size(0), 1)
+            h_0 = self.h_0.repeat(1, batch.size, 1)
             if hasattr(self, 'c_0'):
-                c_0 = self.c_0.repeat(1, batch.tok_ids.size(0), 1)
+                c_0 = self.c_0.repeat(1, batch.size, 1)
                 h_0 = (h_0, c_0)
             packed_rnn_outs, _ = self.rnn(packed_embedded, h_0)
         else:

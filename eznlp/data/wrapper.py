@@ -90,3 +90,11 @@ class Batch(TensorWrapper):
     def __repr__(self):
         return "Batch with attributes: {}".format(", ".join(self.__dict__))
         
+    @property
+    def size(self):
+        return self.seq_lens.size(0)
+    
+    @property
+    def step(self):
+        return self.seq_lens.max().item()
+        

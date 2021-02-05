@@ -3,7 +3,7 @@ from typing import List
 import torch
 import transformers
 
-from ..data.token import TokenSequence
+from ..token import TokenSequence
 from ..nn.modules import SequenceGroupAggregating, ScalarMix
 from ..nn.functional import seq_lens2mask
 from ..config import Config

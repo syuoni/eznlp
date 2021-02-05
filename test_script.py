@@ -13,7 +13,9 @@ import transformers
 import flair
 
 
-from eznlp.data.token import Token, TokenSequence
+from eznlp.model import OneHotConfig
+
+from eznlp.token import Token, TokenSequence
 from eznlp.data import Batch
 from eznlp.config import ConfigList, ConfigDict
 from eznlp.model import CharConfig, OneHotConfig, MultiHotConfig, EncoderConfig
@@ -50,22 +52,16 @@ if __name__ == '__main__':
     #     print(tok)
         
     # tokens.build_softwords(jieba.tokenize)
-        
-        
+    
     # batch_tokenized_text = [["I", "like", "it", "."], 
     #                         ["Do", "you", "love", "me", "?"], 
     #                         ["Sure", "!"], 
     #                         ["Future", "it", "out"]]
     
-    # batch_tok_lens = [[len(tok) for tok in sent] for sent in batch_tokenized_text]
-    # batch_text = [" ".join(sent) for sent in batch_tokenized_text]
     
     flair_fw_lm = flair.models.LanguageModel.load_language_model("assets/flair/news-forward-0.4.1.pt")
     flair_bw_lm = flair.models.LanguageModel.load_language_model("assets/flair/news-backward-0.4.1.pt")
-    
-    # (step, batch, hid_dim)
-    # exp_flair_hidden = flair_lm.get_representation(batch_text, start_marker="\n", end_marker=" ")
-    
+        
     options_file = "assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_options.json"
     weight_file = "assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_weights.hdf5"
     elmo = allennlp.modules.elmo.Elmo(options_file, weight_file, 1)
@@ -73,11 +69,8 @@ if __name__ == '__main__':
     bert = transformers.BertModel.from_pretrained("assets/transformers/bert-base-uncased")
     tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-uncased")
     
-    # encoded = tokenizer(batch_sentences, is_pretokenized=True, padding=True, return_tensors='pt')
-    # bert_outs, _, hidden = bert(**encoded, output_hidden_states=True)
-    
     glove = GloVe("assets/vectors/glove.6B.100d.txt", encoding='utf-8')
-    # senna = Senna("assets/vectors/Senna")
+    senna = Senna("assets/vectors/Senna")
     
     # ctb50d = Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
     # giga_uni = load_vectors_from_file("assets/vector_cache/gigaword_chn.all.a2b.uni.ite50.vec", encoding='utf-8')
@@ -103,11 +96,6 @@ if __name__ == '__main__':
     batch = train_set.collate([train_set[i] for i in range(0, 4)])
     losses, hidden = tagger(batch, return_hidden=True)
     
-    
-    torch.save(tagger, "tagger.pt")
-    torch.save(config, "tagger.config")
-    
-    config = torch.load("tagger.config")
     
     
     # import jieba
