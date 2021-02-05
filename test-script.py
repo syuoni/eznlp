@@ -9,9 +9,8 @@ import spacy
 import torch
 
 import allennlp.modules
-from transformers import BertTokenizer, BertModel, BertForMaskedLM
-from transformers import RobertaTokenizer, RobertaModel, RobertaForMaskedLM
-from flair.models import LanguageModel
+import transformers
+import flair
 
 
 from eznlp.data.token import Token, TokenSequence
@@ -61,8 +60,8 @@ if __name__ == '__main__':
     # batch_tok_lens = [[len(tok) for tok in sent] for sent in batch_tokenized_text]
     # batch_text = [" ".join(sent) for sent in batch_tokenized_text]
     
-    flair_fw_lm = LanguageModel.load_language_model("assets/flair/news-forward-0.4.1.pt")
-    flair_bw_lm = LanguageModel.load_language_model("assets/flair/news-backward-0.4.1.pt")
+    flair_fw_lm = flair.models.LanguageModel.load_language_model("assets/flair/news-forward-0.4.1.pt")
+    flair_bw_lm = flair.models.LanguageModel.load_language_model("assets/flair/news-backward-0.4.1.pt")
     
     # (step, batch, hid_dim)
     # exp_flair_hidden = flair_lm.get_representation(batch_text, start_marker="\n", end_marker=" ")
@@ -71,8 +70,8 @@ if __name__ == '__main__':
     weight_file = "assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_weights.hdf5"
     elmo = allennlp.modules.elmo.Elmo(options_file, weight_file, 1)
     
-    bert = BertModel.from_pretrained("assets/transformers/bert-base-uncased")
-    tokenizer = BertTokenizer.from_pretrained("assets/transformers/bert-base-uncased")
+    bert = transformers.BertModel.from_pretrained("assets/transformers/bert-base-uncased")
+    tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-uncased")
     
     # encoded = tokenizer(batch_sentences, is_pretokenized=True, padding=True, return_tensors='pt')
     # bert_outs, _, hidden = bert(**encoded, output_hidden_states=True)
@@ -105,6 +104,12 @@ if __name__ == '__main__':
     losses, hidden = tagger(batch, return_hidden=True)
     
     
+    torch.save(tagger, "tagger.pt")
+    torch.save(config, "tagger.config")
+    
+    config = torch.load("tagger.config")
+    
+    
     # import jieba
     # brat_io = BratIO(attr_names=['Denied', 'Analyzed'], tokenize_callback=jieba.cut)
     # brat_data = brat_io.read("assets/data/brat/demo.txt", encoding='utf-8')
@@ -120,34 +125,25 @@ if __name__ == '__main__':
     # trainer = SequenceTaggingTrainer(tagger, optimizer=optimizer, device=device)
     # res = trainer.train_epoch([batch])
     
-    tabular_io = TabularIO(text_col_id=3, label_col_id=2)
-    train_data = tabular_io.read("data/Tang2015/demo.yelp-2013-seg-20-20.train.ss", encoding='utf-8', sep="\t\t", sentence_sep="<sssss>")
     
-    config = TextClassifierConfig(ohots=None, 
-                                  encoder=None, 
-                                  bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert))
+    # tabular_io = TabularIO(text_col_id=3, label_col_id=2)
+    # train_data = tabular_io.read("data/Tang2015/demo.yelp-2013-seg-20-20.train.ss", encoding='utf-8', sep="\t\t", sentence_sep="<sssss>")
     
-    # config = TextClassifierConfig(embedder=EmbedderConfig(token=TokenConfig(emb_dim=100, freeze=True)), 
+    # config = TextClassifierConfig(ohots=None, 
     #                               encoder=None, 
-    #                               bert_like_embedder=PreTrainedEmbedderConfig(arch='BERT', 
-    #                                                                           out_dim=bert.config.hidden_size, 
-    #                                                                           tokenizer=tokenizer, 
-    #                                                                           from_tokenized=True, 
-    #                                                                           pre_truncation=False,
-    #                                                                           freeze=True), 
-    #                               intermediate=EncoderConfig(arch='LSTM', hid_dim=200, num_layers=1, in_drop_rates=(0.5, 0.0, 0.0)), 
-    #                               decoder=TextClassificationDecoderConfig(use_attention=True, attention_scoring='Multiplicative'))
-    train_set = TextClassificationDataset(train_data, config)
-    train_set.build_vocabs_and_dims()
+    #                               bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert))
     
-    classifier = config.instantiate()
+    # train_set = TextClassificationDataset(train_data, config)
+    # train_set.build_vocabs_and_dims()
     
-    batch = train_set.collate([train_set[i] for i in range(0, 4)])
-    losses, hidden = classifier(batch, return_hidden=True)
+    # classifier = config.instantiate()
     
-    optimizer = torch.optim.AdamW(classifier.parameters())
-    trainer = TextClassificationTrainer(classifier, optimizer=optimizer, device=device)
-    trainer.train_epoch([batch])
+    # batch = train_set.collate([train_set[i] for i in range(0, 4)])
+    # losses, hidden = classifier(batch, return_hidden=True)
+    
+    # optimizer = torch.optim.AdamW(classifier.parameters())
+    # trainer = TextClassificationTrainer(classifier, optimizer=optimizer, device=device)
+    # trainer.train_epoch([batch])
     
     
     

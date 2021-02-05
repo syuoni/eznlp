@@ -189,13 +189,13 @@ class TestTokenSequence(object):
         assert tokens.trigram == ["this is a", "is a <-real1>", "a <-real1> demo", "<-real1> demo .", "demo . <pad>", ". <pad> <pad>"]
         
         
-    def test_pickle(self):
+    def test_serialization(self):
         token_list = [Token(tok, case_mode='Lower', number_mode='Marks') for tok in "This is a -3.14 demo .".split()]
         tokens = TokenSequence(token_list)
         
-        with open("data/tokens-demo.pkl", 'wb') as f:
+        with open("cache/tokens-demo.pkl", 'wb') as f:
             pickle.dump(tokens, f)
-        with open("data/tokens-demo.pkl", 'rb') as f:
+        with open("cache/tokens-demo.pkl", 'rb') as f:
             tokens_loaded = pickle.load(f)
             
         assert tokens_loaded.text == tokens.text
@@ -204,6 +204,3 @@ class TestTokenSequence(object):
         assert tokens_loaded.pad_token == tokens.pad_token
         
         
-        
-    
-    

@@ -22,6 +22,12 @@ class ELMoConfig(Config):
         super().__init__(**kwargs)
         
         
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state['elmo'] = None
+        return state
+        
+        
     def exemplify(self, tokens: TokenSequence):
         return {'tokenized_raw_text': tokens.raw_text}
         

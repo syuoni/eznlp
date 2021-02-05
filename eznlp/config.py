@@ -24,9 +24,6 @@ class Config(object):
     
     `Config` are NOT suggested to be registered as attribute of the corresponding model or assembly. 
     """
-    
-    _cache_attr_names = ['vectors', 'elmo', 'bert_like', 'flair_lm']
-    
     def __init__(self, **kwargs):
         if len(kwargs) > 0:
             logger.warning(f"Some configurations are set without checking: {kwargs}, "
@@ -37,9 +34,7 @@ class Config(object):
     @property
     def valid(self):
         for name, attr in self.__dict__.items():
-            if name in self._cache_attr_names:
-                continue
-            elif isinstance(attr, Config):
+            if isinstance(attr, Config):
                 if not attr.valid:
                     return False
             else:

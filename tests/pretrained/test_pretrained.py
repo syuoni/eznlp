@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import pytest
+import os
 import torch
 import flair
 
@@ -54,6 +55,14 @@ class TestFlairEmbedder(object):
         assert count_params(flair_embedder, verbose=False) == expected_num_trainable_params
         
         
+    def test_serialization(self, flair_fw_lm):
+        config = FlairConfig(flair_lm=flair_fw_lm)
+        
+        config_path = "cache/flair_embedder.config"
+        torch.save(config, config_path)
+        assert os.path.getsize(config_path) < 1024 * 1024  # 1MB
+        
+        
 class TestELMoEmbbeder(object):
     @pytest.mark.parametrize("mix_layers", ['trainable', 'top', 'average'])
     @pytest.mark.parametrize("freeze", [True, False])
@@ -71,6 +80,15 @@ class TestELMoEmbbeder(object):
             expected_num_trainable_params += 1
         
         assert count_params(elmo_embedder, verbose=False) == expected_num_trainable_params
+        
+        
+    def test_serialization(self, elmo):
+        config = ELMoConfig(elmo=elmo)
+        
+        config_path = "cache/elmo_embedder.config"
+        torch.save(config, config_path)
+        assert os.path.getsize(config_path) < 1024 * 1024  # 1MB
+        
         
         
 class TestBertEmbedder(object):
@@ -92,5 +110,14 @@ class TestBertEmbedder(object):
             expected_num_trainable_params += 1
         
         assert count_params(bert_embedder, verbose=False) == expected_num_trainable_params
+        
+        
+    def test_serialization(self, bert_with_tokenizer):
+        bert, tokenizer = bert_with_tokenizer
+        config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert)
+        
+        config_path = "cache/bert_like_embedder.config"
+        torch.save(config, config_path)
+        assert os.path.getsize(config_path) < 1024 * 1024  # 1MB
         
         

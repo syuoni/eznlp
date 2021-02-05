@@ -286,10 +286,9 @@ class TokenSequence(object):
                 'pad_token': self.pad_token}
         
     def __setstate__(self, state: dict):
-        for name, value in state.items():
-            setattr(self, name, value)
-            
-            
+        self.__dict__.update(state)
+        
+        
     def __getitem__(self, i):
         if isinstance(i, int):
             return self.token_list[i]

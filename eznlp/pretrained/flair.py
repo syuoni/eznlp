@@ -31,6 +31,12 @@ class FlairConfig(Config):
         super().__init__(**kwargs)
         
         
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state['flair_lm'] = None
+        return state
+        
+        
     def exemplify(self, tokens: TokenSequence):
         tokenized_raw_text = tokens.raw_text
         if not self.is_forward:

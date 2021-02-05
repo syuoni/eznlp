@@ -33,6 +33,10 @@ class OneHotConfig(Config):
         super().__init__(**kwargs)
         
     @property
+    def valid(self):
+        return all(attr is not None for name, attr in self.__dict__.items() if name != 'vectors')
+        
+    @property
     def out_dim(self):
         return self.emb_dim
         
@@ -47,6 +51,12 @@ class OneHotConfig(Config):
     @property
     def unk_idx(self):
         return self.vocab['<unk>']
+    
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state['vectors'] = None
+        return state
+        
     
     def build_vocab(self, *partitions):
         counter = Counter()

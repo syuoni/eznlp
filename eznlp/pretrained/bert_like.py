@@ -29,6 +29,12 @@ class BertLikeConfig(Config):
         super().__init__(**kwargs)
         
         
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state['bert_like'] = None
+        return state
+        
+        
     def _token_ids_from_string(self, raw_text: str):
         """
         Tokenize a non-tokenized sentence (string), and convert to sub-token indexes. 
