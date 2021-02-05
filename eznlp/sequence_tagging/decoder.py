@@ -2,7 +2,6 @@
 from typing import List
 from collections import Counter
 import torch
-from torch.nn.utils.rnn import pad_sequence
 
 from ..data.wrapper import TensorWrapper, Batch
 from ..nn.utils import unpad_seqs
@@ -140,7 +139,9 @@ class SequenceTaggingCRFDecoder(SequenceTaggingDecoder):
         # logits: (batch, step, tag_dim)
         logits = self.hid2logit(self.dropout(full_hidden))
         
-        batch_tag_ids = pad_sequence([tags_obj.tag_ids for tags_obj in batch.tags_objs], batch_first=True, padding_value=self.crf.pad_idx)
+        batch_tag_ids = torch.nn.utils.rnn.pad_sequence([tags_obj.tag_ids for tags_obj in batch.tags_objs], 
+                                                        batch_first=True, 
+                                                        padding_value=self.crf.pad_idx)
         losses = self.crf(logits, batch_tag_ids, mask=batch.tok_mask)
         return losses
     

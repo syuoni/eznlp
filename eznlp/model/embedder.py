@@ -51,8 +51,8 @@ class OneHotConfig(Config):
     def build_vocab(self, *partitions):
         counter = Counter()
         for data in partitions:
-            for curr_data in data:
-                counter.update(getattr(curr_data['tokens'], self.field))
+            for data_entry in data:
+                counter.update(getattr(data_entry['tokens'], self.field))
         self.vocab = torchtext.vocab.Vocab(counter, 
                                            min_freq=self.min_freq, 
                                            specials=('<unk>', '<pad>'), 

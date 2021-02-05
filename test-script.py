@@ -7,7 +7,6 @@ import numpy as np
 import pandas as pd
 import spacy
 import torch
-from torch.utils.data import DataLoader
 
 import allennlp.modules
 from transformers import BertTokenizer, BertModel, BertForMaskedLM

@@ -28,8 +28,8 @@ class TextClassificationDataset(Dataset):
         head_len = tokenizer.max_len // 4
         tail_len = max_len - head_len
         
-        for curr_data in tqdm.tqdm(self.data):
-            tokens = curr_data['tokens']
+        for data_entry in tqdm.tqdm(self.data):
+            tokens = data_entry['tokens']
             nested_sub_tokens = [tokenizer.tokenize(word) for word in tokens.raw_text]
             sub_tok_seq_lens = [len(tok) for tok in nested_sub_tokens]
             
@@ -44,7 +44,7 @@ class TextClassificationDataset(Dataset):
                 if find_tail:
                     tail_begin += 1
                     
-                curr_data['tokens'] = tokens[:head_end] + tokens[-tail_begin:]
+                data_entry['tokens'] = tokens[:head_end] + tokens[-tail_begin:]
                 
     @property
     def summary(self):

@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import pytest
 import torch
-from torch.nn.utils.rnn import pad_sequence
 import flair
 
 from eznlp.data import TokenSequence
@@ -23,8 +22,9 @@ class TestFlairEmbedder(object):
         flair_emb = flair.embeddings.FlairEmbeddings(flair_lm)
         flair_sentences = [flair.data.Sentence(" ".join(sent), use_tokenizer=False) for sent in batch_tokenized_text]
         flair_emb.embed(flair_sentences)
-        expected = pad_sequence([torch.stack([tok.embedding for tok in sent]) for sent in flair_sentences], 
-                                batch_first=True, padding_value=0.0)
+        expected = torch.nn.utils.rnn.pad_sequence([torch.stack([tok.embedding for tok in sent]) for sent in flair_sentences], 
+                                                   batch_first=True, 
+                                                   padding_value=0.0)
         
         flair_config = FlairConfig(flair_lm=flair_lm, agg_mode=agg_mode)
         flair_embedder = flair_config.instantiate()

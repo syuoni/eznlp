@@ -83,8 +83,7 @@ class MLMDataset(Dataset):
         """
         Dynamic Masking.
         """
-        curr_data = self.data[i]
-        tokenized_raw_text = curr_data['tokens'].raw_text
+        tokenized_raw_text = self.data[i]['tokens'].raw_text
         
         nested_sub_tokens = [self.tokenizer.tokenize(word) for word in tokenized_raw_text]
         sub_tokens = [sub_tok for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]

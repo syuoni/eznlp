@@ -3,7 +3,6 @@ from typing import List
 from collections import Counter
 import torch
 import torchtext
-from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence
 
 from ..data.token import TokenSequence
 from ..nn.modules import SequencePooling
@@ -46,8 +45,8 @@ class CharConfig(Config):
     def build_vocab(self, *partitions):
         counter = Counter()
         for data in partitions:
-            for curr_data in data:
-                for tok in curr_data['tokens'].raw_text:
+            for data_entry in data:
+                for tok in data_entry['tokens'].raw_text:
                     counter.update(tok)
         self.vocab = torchtext.vocab.Vocab(counter, 
                                            min_freq=self.min_freq, 
@@ -63,7 +62,7 @@ class CharConfig(Config):
         tok_lens = torch.tensor([tok.size(0) for tok in batch_char_ids])
         char_mask = seq_lens2mask(tok_lens)
         
-        batch_char_ids = pad_sequence(batch_char_ids, batch_first=True, padding_value=self.pad_idx)
+        batch_char_ids = torch.nn.utils.rnn.pad_sequence(batch_char_ids, batch_first=True, padding_value=self.pad_idx)
         return {'char_ids': batch_char_ids, 
                 'tok_lens': tok_lens, 
                 'char_mask': char_mask}
@@ -99,7 +98,9 @@ class CharEncoder(torch.nn.Module):
         # Retrieve token-level steps
         # hidden: (batch, tok_step, out_dim)
         offsets = [0] + seq_lens.cumsum(dim=0).cpu().tolist()
-        hidden = pad_sequence([hidden[s:e] for s, e in zip(offsets[:-1], offsets[1:])], batch_first=True, padding_value=0.0)
+        hidden = torch.nn.utils.rnn.pad_sequence([hidden[s:e] for s, e in zip(offsets[:-1], offsets[1:])], 
+                                                 batch_first=True, 
+                                                 padding_value=0.0)
         return hidden
     
     
@@ -141,7 +142,7 @@ class CharRNN(CharEncoder):
             
             
     def embedded2hidden(self, embedded: torch.Tensor, tok_lens: torch.Tensor, char_mask: torch.Tensor):
-        packed_embedded = pack_padded_sequence(embedded, tok_lens, batch_first=True, enforce_sorted=False)
+        packed_embedded = torch.nn.utils.rnn.pack_padded_sequence(embedded, tok_lens, batch_first=True, enforce_sorted=False)
         
         if isinstance(self.rnn, torch.nn.LSTM):
             # hidden: (num_layers*num_directions=2, batch*tok_step, hid_dim=out_dim/2)

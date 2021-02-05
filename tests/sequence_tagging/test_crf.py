@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import torch
-from torchcrf import CRF as benchmarkCRF
+import torchcrf
 
 from eznlp.sequence_tagging.crf import CRF
 
@@ -15,8 +15,7 @@ class TestCRF(object):
         seq_lens = torch.randint(1, step, (batch_size, ))
         mask = (torch.arange(step).unsqueeze(0).repeat(batch_size, 1) >= seq_lens.unsqueeze(-1))
         
-        
-        bm_crf = benchmarkCRF(tag_dim, batch_first=True)
+        bm_crf = torchcrf.CRF(tag_dim, batch_first=True)
         llh = bm_crf(emissions, tag_ids, (~mask).type(torch.uint8), reduction='none')
         best_paths = bm_crf.decode(emissions, (~mask).type(torch.uint8))
         

@@ -2,24 +2,21 @@
 import pytest
 import glob
 import torch
-import torch.optim as optim
-from torch.utils.data import DataLoader
-from transformers import BertTokenizer, BertForMaskedLM
-from transformers import RobertaTokenizer, RobertaForMaskedLM
+import transformers
 
 from eznlp.language_modeling import MLMDataset, PMCMLMDataset, MLMTrainer
 
 
 @pytest.fixture
 def BERT4MLM_with_tokenizer():
-    tokenizer = BertTokenizer.from_pretrained("assets/transformers/bert-base-cased")
-    bert4mlm = BertForMaskedLM.from_pretrained("assets/transformers/bert-base-cased")
+    tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-cased")
+    bert4mlm = transformers.BertForMaskedLM.from_pretrained("assets/transformers/bert-base-cased")
     return bert4mlm, tokenizer
 
 @pytest.fixture
 def RoBERTa4MLM_with_tokenizer():
-    tokenizer = RobertaTokenizer.from_pretrained("assets/transformers/roberta-base")
-    roberta4mlm = RobertaForMaskedLM.from_pretrained("assets/transformers/roberta-base")
+    tokenizer = transformers.RobertaTokenizer.from_pretrained("assets/transformers/roberta-base")
+    roberta4mlm = transformers.RobertaForMaskedLM.from_pretrained("assets/transformers/roberta-base")
     return roberta4mlm, tokenizer
 
 
@@ -44,7 +41,7 @@ class TestMLM(object):
         delta_MLM_scores = MLM_scores012[1:, :min_step] - MLM_scores123[:-1, :min_step]
         assert delta_MLM_scores.abs().max().item() < 1e-4
         
-        optimizer = optim.AdamW(bert4mlm.parameters())
+        optimizer = torch.optim.AdamW(bert4mlm.parameters())
         trainer = MLMTrainer(bert4mlm, optimizer=optimizer, device=device)
         trainer.train_epoch([batch012])
         trainer.eval_epoch([batch012])
@@ -56,7 +53,7 @@ class TestMLM(object):
         
         files = glob.glob("data/PMC/comm_use/Cells/*.txt")
         train_set = PMCMLMDataset(files=files, tokenizer=tokenizer, max_len=128)
-        train_loader = DataLoader(train_set, batch_size=4, collate_fn=train_set.collate)
+        train_loader = torch.utils.data.DataLoader(train_set, batch_size=4, collate_fn=train_set.collate)
         for batch in train_loader:
             batch = batch.to(device)
             break
@@ -72,7 +69,7 @@ class TestMLM(object):
         delta_MLM_scores = MLM_scores012[1:, :min_step] - MLM_scores123[:-1, :min_step]
         assert delta_MLM_scores.abs().max().item() < 1e-4
         
-        optimizer = optim.AdamW(roberta4mlm.parameters(), lr=1e-4)
+        optimizer = torch.optim.AdamW(roberta4mlm.parameters(), lr=1e-4)
         trainer = MLMTrainer(roberta4mlm, optimizer=optimizer, device=device)
         trainer.train_epoch([batch])
         trainer.eval_epoch([batch])
