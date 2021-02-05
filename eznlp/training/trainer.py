@@ -112,7 +112,7 @@ class Trainer(object):
     def train_steps(self, 
                     train_loader: torch.utils.data.DataLoader, 
                     dev_loader: torch.utils.data.DataLoader=None, 
-                    n_epochs: int=10, 
+                    num_epochs: int=10, 
                     max_steps: int=None, 
                     disp_every_steps: int=None, 
                     eval_every_steps: int=None, 
@@ -140,7 +140,7 @@ class Trainer(object):
         done_training = False
         t0 = time.time()
         
-        while eidx < n_epochs:
+        while eidx < num_epochs:
             for batch in train_loader:
                 batch = batch.to(self.device)
                 loss, *possible_batch_y = self.forward_batch(batch)

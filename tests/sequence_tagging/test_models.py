@@ -140,5 +140,5 @@ class TestTagger(object):
         optimizer = torch.optim.AdamW(tagger.parameters())
         trainer = SequenceTaggingTrainer(tagger, optimizer=optimizer, device=device)
         trainer.train_steps(train_loader=[batch, batch], dev_loader=[batch, batch], 
-                            n_epochs=10, disp_every_steps=2, eval_every_steps=6)
+                            num_epochs=10, disp_every_steps=2, eval_every_steps=6)
         

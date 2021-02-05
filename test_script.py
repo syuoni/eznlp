@@ -12,12 +12,9 @@ import allennlp.modules
 import transformers
 import flair
 
-
-from eznlp.model import OneHotConfig
-
+from eznlp.config import ConfigList, ConfigDict
 from eznlp.token import Token, TokenSequence
 from eznlp.data import Batch
-from eznlp.config import ConfigList, ConfigDict
 from eznlp.model import CharConfig, OneHotConfig, MultiHotConfig, EncoderConfig
 from eznlp.pretrained import Vectors, GloVe, Senna
 from eznlp.pretrained import ELMoConfig, BertLikeConfig, FlairConfig
