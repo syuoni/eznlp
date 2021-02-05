@@ -125,9 +125,9 @@ class TestBratIO(object):
                          pre_inserted_spaces=pre_inserted_spaces, 
                          tokenize_callback=jieba.cut)
         
-        src_fn = "cache/brat/demo.txt"
+        src_fn = "data/brat/demo.txt"
         mark = "spaces" if pre_inserted_spaces else "nospaces"
-        trg_fn = f"cache/brat/demo-write-{mark}.txt"
+        trg_fn = f"data/brat/demo-write-{mark}.txt"
         data = brat_io.read(src_fn, encoding='utf-8')
         brat_io.write(data, trg_fn, encoding='utf-8')
         
