@@ -30,8 +30,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser = parse_basic_arguments(parser)
     
-    parser.add_argument('--dataset', default='ResumeNER', help="dataset name")
-    parser.add_argument('--scheme', default='BIOES', help="sequence tagging scheme")
+    parser.add_argument('--dataset', type=str, default='ResumeNER', help="dataset name")
+    parser.add_argument('--scheme', type=str, default='BIOES', help="sequence tagging scheme")
     parser.add_argument('--use_bigram', dest='use_bigram', default=False, action='store_true', help="whether to use bigram")
     parser.add_argument('--use_softword', dest='use_softword', default=False, action='store_true', help="whether to use softword")
     args = parser.parse_args()
@@ -39,7 +39,7 @@ if __name__ == '__main__':
     
     
     # Logging
-    timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M")
+    timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     save_path =  f"cache/{args.dataset}-{timestamp}"
     if not os.path.exists(save_path):
         os.makedirs(save_path)
@@ -65,10 +65,10 @@ if __name__ == '__main__':
         
         
     giga_uni = Vectors.load("assets/vectors/gigaword_chn.all.a2b.uni.ite50.vec", encoding='utf-8')
-    ohots_config = ConfigDict({'text': OneHotConfig(field='text', vectors=giga_uni, emb_dim=50)})
+    ohots_config = ConfigDict({'text': OneHotConfig(field='text', vectors=giga_uni, emb_dim=50, freeze=args.emb_freeze)})
     if args.use_bigram:
         giga_bi = Vectors.load("assets/vectors/gigaword_chn.all.a2b.bi.ite50.vec", encoding='utf-8')
-        ohots_config['bigram'] = OneHotConfig(field='bigram', vectors=giga_bi, emb_dim=50)
+        ohots_config['bigram'] = OneHotConfig(field='bigram', vectors=giga_bi, emb_dim=50, freeze=args.emb_freeze)
     
     mhots_config = None
     if args.use_softword:

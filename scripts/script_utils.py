@@ -17,12 +17,13 @@ def parse_basic_arguments(parser: argparse.ArgumentParser):
     parser.add_argument('--batch_size', type=int, default=32, help="batch size")
     parser.add_argument('--optimizer', type=str, default='AdamW', choices=['AdamW', 'SGD'], help="optimizer")
     parser.add_argument('--lr', type=float, default=0.001, help="learning rate")
-    parser.add_argument('--drop_rate', type=float, default=0.5, help="dropout rate")
     parser.add_argument('--grad_clip', type=float, default=5.0, help="gradient clip (negative values are set to `None`)")
     
     parser.add_argument('--emb_dim', type=int, default=100, help="embedding dim")
     parser.add_argument('--hid_dim', type=int, default=200, help="hidden dim")
-    parser.add_argument('--num_layers', type=int, default=1, help="number of layers")
+    parser.add_argument('--num_layers', type=int, default=2, help="number of layers")
+    parser.add_argument('--drop_rate', type=float, default=0.5, help="dropout rate")
+    parser.add_argument('--emb_freeze', dest='emb_freeze', default=False, action='store_true', help="whether to freeze embedding weights")
     return parser
     
 

@@ -34,8 +34,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser = parse_basic_arguments(parser)
     
-    parser.add_argument('--dataset', default='conll2003', help="dataset name")
-    parser.add_argument('--scheme', default='BIOES', help="sequence tagging scheme")
+    parser.add_argument('--dataset', type=str, default='conll2003', help="dataset name")
+    parser.add_argument('--scheme', type=str, default='BIOES', help="sequence tagging scheme")
     parser.add_argument('--no_char', dest='use_char', default=True, action='store_false', help="whether to use char")
     parser.add_argument('--use_elmo', dest='use_elmo', default=False, action='store_true', help="whether to use ELMo")
     parser.add_argument('--use_bert', dest='use_bert', default=False, action='store_true', help="whether to use BERT")
@@ -45,7 +45,7 @@ if __name__ == '__main__':
     
     
     # Logging
-    timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M")
+    timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     save_path =  f"cache/{args.dataset}-{timestamp}"
     if not os.path.exists(save_path):
         os.makedirs(save_path)
@@ -69,13 +69,13 @@ if __name__ == '__main__':
         torch.cuda.set_device(device)
         
     glove = GloVe("assets/vectors/glove.6B.100d.txt")
-    ohots_config = ConfigDict({'text': OneHotConfig(field='text', vectors=glove, emb_dim=100)})
+    ohots_config = ConfigDict({'text': OneHotConfig(field='text', vectors=glove, emb_dim=100, freeze=args.emb_freeze)})
     encoder_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=(args.drop_rate, 0.0, 0.0))
     intermediate_config = None
     
     char_config = None
     if args.use_char:
-        char_config = CharConfig(arch='CNN', emb_dim=16, out_dim=128, pooling='Max', drop_rate=0.5)
+        char_config = CharConfig(arch='CNN', emb_dim=16, out_dim=128, pooling='Max', drop_rate=args.drop_rate)
     
     elmo_config = None
     if args.use_elmo:
