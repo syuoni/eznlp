@@ -310,7 +310,7 @@ class TokenSequence(object):
         self.start = self.end - token_lens
         
         
-    def build_softwords(self, tokenize_callback):
+    def build_softwords(self, tokenize_callback, **kwargs):
         self.softword = [np.zeros(len(self._softword_idx2tag), dtype=bool) for tok in self.token_list]
         
         if hasattr(tokenize_callback, '__self__') and isinstance(tokenize_callback.__self__, jieba.Tokenizer) and tokenize_callback.__name__.startswith('tokenize'):
@@ -318,7 +318,7 @@ class TokenSequence(object):
         else:
             raise ValueError(f"Invalid `tokenize_callback`: {tokenize_callback}")
             
-        for word_text, word_start, word_end in tokenize_callback("".join(self.raw_text)):
+        for word_text, word_start, word_end in tokenize_callback("".join(self.raw_text), **kwargs):
             if word_end - word_start == 1:
                 self.softword[word_start][self._softword_tag2idx['S']] = True
             else:

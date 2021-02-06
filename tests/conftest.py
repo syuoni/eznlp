@@ -30,11 +30,10 @@ def yelp2013_demo():
 
 @pytest.fixture
 def elmo():
-    options_file = "assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_options.json"
-    weight_file = "assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_weights.hdf5"
-    return allennlp.modules.elmo.Elmo(options_file, weight_file, num_output_representations=1)
+    return allennlp.modules.Elmo(options_file="assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_options.json", 
+                                 weight_file="assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_weights.hdf5", 
+                                 num_output_representations=1)
     
-
 @pytest.fixture
 def bert_with_tokenizer():
     tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-cased")
