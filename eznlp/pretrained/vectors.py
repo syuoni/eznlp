@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 def _load_from_file(path: str, encoding=None):
+    logger.info(f"Loading vectors from {path}")
     words = []
     vectors = []
     with open(path, 'r', encoding=encoding) as f:

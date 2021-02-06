@@ -19,7 +19,7 @@ from eznlp.sequence_tagging import SequenceTaggingTrainer
 from eznlp.pretrained import GloVe, ELMoConfig, BertLikeConfig, FlairConfig
 from eznlp.training.utils import count_params
 
-from script_utils import load_data, evaluate_sequence_tagging
+from script_utils import parse_basic_arguments, load_data, evaluate_sequence_tagging
 
 
 SEED = 515
@@ -32,27 +32,20 @@ torch.backends.cudnn.deterministic = True
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--device', default='cpu', help="Device to run the model, `cpu` or `cuda:x`")
-    parser.add_argument('--num_epochs', type=int, default=50, help="Number of epochs")
-    parser.add_argument('--batch_size', type=int, default=32, help="Batch size")
-    parser.add_argument('--lr', type=float, default=0.001, help="Learning rate")
-    parser.add_argument('--drop_rate', type=float, default=0.5, help="Dropout rate")
-    parser.add_argument('--grad_clip', type=float, default=5.0, help="Gradient clip")
+    parser = parse_basic_arguments(parser)
     
-    parser.add_argument('--emb_dim', type=int, default=100)
-    parser.add_argument('--hid_dim', type=int, default=200)
-    parser.add_argument('--num_layers', type=int, default=2)
-    
-    parser.add_argument('--dataset', default='conll2003', help="Dataset name")
-    parser.add_argument('--scheme', default='BIOES', help="Sequence tagging scheme")
-    parser.add_argument('--use_char', type=bool, default=True)
-    parser.add_argument('--use_elmo', type=bool, default=False)
-    parser.add_argument('--use_bert', type=bool, default=False)
-    parser.add_argument('--use_flair', type=bool, default=False)
+    parser.add_argument('--dataset', default='conll2003', help="dataset name")
+    parser.add_argument('--scheme', default='BIOES', help="sequence tagging scheme")
+    parser.add_argument('--no_char', dest='use_char', default=True, action='store_false', help="whether to use char")
+    parser.add_argument('--use_elmo', dest='use_elmo', default=False, action='store_true', help="whether to use ELMo")
+    parser.add_argument('--use_bert', dest='use_bert', default=False, action='store_true', help="whether to use BERT")
+    parser.add_argument('--use_flair', dest='use_flair', default=False, action='store_true', help="whether to use Flair")
     args = parser.parse_args()
+    args.grad_clip = None if args.grad_clip < 0 else args.grad_clip
+    
     
     # Logging
-    timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M")
     save_path =  f"cache/{args.dataset}-{timestamp}"
     if not os.path.exists(save_path):
         os.makedirs(save_path)
@@ -93,6 +86,8 @@ if __name__ == '__main__':
         encoder_config = EncoderConfig(arch='Identity')
         intermediate_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=(args.drop_rate, 0.0, 0.0))
         
+    bert_like = None
+    
     flair_fw_config, flair_bw_config = None, None
     if args.use_flair:
         flair_fw_lm = flair.models.LanguageModel.load_language_model("assets/flair/news-forward-0.4.1.pt")
@@ -109,6 +104,7 @@ if __name__ == '__main__':
                                   char=char_config,
                                   encoder=encoder_config, 
                                   elmo=elmo_config, 
+                                  bert_like=bert_like, 
                                   flair_fw=flair_fw_config, 
                                   flair_bw=flair_bw_config, 
                                   intermediate=intermediate_config, 
@@ -129,16 +125,19 @@ if __name__ == '__main__':
     tagger = config.instantiate().to(device)
     count_params(tagger)
     
-    # import pdb; pdb.set_trace()
+    if args.debug:
+        import pdb; pdb.set_trace()
     
     # Training
     logger.info("---------- Training ----------")
     def save_callback(model):
         torch.save(model, f"{save_path}/{args.scheme}-{config.name}.pth")
         
+    if args.optimizer == 'SGD':
+        optimizer = torch.optim.SGD(tagger.parameters(), lr=args.lr)
+    elif args.optimizer == 'AdamW':
+        optimizer = torch.optim.AdamW(tagger.parameters(), lr=args.lr)
         
-    # optimizer = torch.optim.SGD(tagger.parameters(), lr=args.lr)
-    optimizer = torch.optim.AdamW(tagger.parameters(), lr=args.lr)
     # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.95)
     # scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=5)

@@ -9,6 +9,24 @@ from eznlp.sequence_tagging.io import ConllIO
 logger = logging.getLogger(__name__)
 
 
+def parse_basic_arguments(parser: argparse.ArgumentParser):
+    parser.add_argument('--debug', dest='debug', default=False, action='store_true', help="whether to use pdb")
+    
+    parser.add_argument('--device', type=str, default='cpu', help="device to run the model, `cpu` or `cuda:x`")
+    parser.add_argument('--num_epochs', type=int, default=50, help="number of epochs")
+    parser.add_argument('--batch_size', type=int, default=32, help="batch size")
+    parser.add_argument('--optimizer', type=str, default='AdamW', choices=['AdamW', 'SGD'], help="optimizer")
+    parser.add_argument('--lr', type=float, default=0.001, help="learning rate")
+    parser.add_argument('--drop_rate', type=float, default=0.5, help="dropout rate")
+    parser.add_argument('--grad_clip', type=float, default=5.0, help="gradient clip (negative values are set to `None`)")
+    
+    parser.add_argument('--emb_dim', type=int, default=100, help="embedding dim")
+    parser.add_argument('--hid_dim', type=int, default=200, help="hidden dim")
+    parser.add_argument('--num_layers', type=int, default=1, help="number of layers")
+    return parser
+    
+
+
 def load_data(args: argparse.Namespace):
     if args.dataset == 'conll2003':
         conll_io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', case_mode='None', number_mode='Zeros')

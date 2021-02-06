@@ -16,7 +16,7 @@ from eznlp.sequence_tagging import SequenceTaggingTrainer
 from eznlp.pretrained import Vectors
 from eznlp.training.utils import count_params
 
-from script_utils import load_data, evaluate_sequence_tagging
+from script_utils import parse_basic_arguments, load_data, evaluate_sequence_tagging
 
 
 SEED = 515
@@ -28,26 +28,18 @@ torch.backends.cudnn.deterministic = True
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--device', default='cpu', help="Device to run the model, `cpu` or `cuda:x`")
-    parser.add_argument('--num_epochs', type=int, default=50, help="Number of epochs")
-    parser.add_argument('--batch_size', type=int, default=32, help="Batch size")
-    parser.add_argument('--lr', type=float, default=0.001, help="Learning rate")
-    parser.add_argument('--drop_rate', type=float, default=0.5, help="Dropout rate")
-    parser.add_argument('--grad_clip', type=float, default=5.0, help="Gradient clip")
+    parser = parse_basic_arguments(parser)
     
-    parser.add_argument('--emb_dim', type=int, default=50)
-    parser.add_argument('--hid_dim', type=int, default=200)
-    parser.add_argument('--num_layers', type=int, default=1)
-    
-    parser.add_argument('--dataset', default='ResumeNER', help="Dataset name")
-    parser.add_argument('--scheme', default='BIOES', help="Sequence tagging scheme")
-    parser.add_argument('--use_bigram', type=bool, default=False)
-    parser.add_argument('--use_softword', type=bool, default=False)
+    parser.add_argument('--dataset', default='ResumeNER', help="dataset name")
+    parser.add_argument('--scheme', default='BIOES', help="sequence tagging scheme")
+    parser.add_argument('--use_bigram', dest='use_bigram', default=False, action='store_true', help="whether to use bigram")
+    parser.add_argument('--use_softword', dest='use_softword', default=False, action='store_true', help="whether to use softword")
     args = parser.parse_args()
+    args.grad_clip = None if args.grad_clip < 0 else args.grad_clip
     
     
     # Logging
-    timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M")
     save_path =  f"cache/{args.dataset}-{timestamp}"
     if not os.path.exists(save_path):
         os.makedirs(save_path)
@@ -102,14 +94,19 @@ if __name__ == '__main__':
     tagger = config.instantiate().to(device)
     count_params(tagger)
     
+    if args.debug:
+        import pdb; pdb.set_trace()
+    
     # Training
     logger.info("---------- Training ----------")
     def save_callback(model):
         torch.save(model, f"{save_path}/{args.scheme}-{config.name}.pth")
         
+    if args.optimizer == 'SGD':
+        optimizer = torch.optim.SGD(tagger.parameters(), lr=args.lr)
+    elif args.optimizer == 'AdamW':
+        optimizer = torch.optim.AdamW(tagger.parameters(), lr=args.lr)
         
-    # optimizer = torch.optim.SGD(tagger.parameters(), lr=args.lr)
-    optimizer = torch.optim.AdamW(tagger.parameters(), lr=args.lr)
     # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.95)
     # scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=5)

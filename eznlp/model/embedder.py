@@ -23,7 +23,7 @@ class OneHotConfig(Config):
         self.vectors: Vectors = kwargs.pop('vectors', None)
         if self.vectors is not None:
             if self.emb_dim != self.vectors.emb_dim:
-                logger.warning(f"`emb_dim` {self.emb_dim} does not equal `vectors.emb_dim` {self.vectors.emb_dim}" 
+                logger.warning(f"`emb_dim` {self.emb_dim} does not equal `vectors.emb_dim` {self.vectors.emb_dim} \n" 
                                f"Reset `emb_dim` to be {self.vectors.emb_dim}")
                 self.emb_dim = self.vectors.emb_dim
                 
