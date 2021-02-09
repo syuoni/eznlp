@@ -36,7 +36,8 @@ if __name__ == '__main__':
     
     parser.add_argument('--dataset', type=str, default='conll2003', help="dataset name")
     parser.add_argument('--scheme', type=str, default='BIOES', help="sequence tagging scheme")
-    parser.add_argument('--no_char', dest='use_char', default=True, action='store_false', help="whether to use char")
+    parser.add_argument('--dec_arch', type=str, default='CRF', help="decoder architecture")
+    parser.add_argument('--char_arch', type=str, default='CNN', help="character-level encoder")
     parser.add_argument('--use_elmo', dest='use_elmo', default=False, action='store_true', help="whether to use ELMo")
     parser.add_argument('--use_bert', dest='use_bert', default=False, action='store_true', help="whether to use BERT")
     parser.add_argument('--use_flair', dest='use_flair', default=False, action='store_true', help="whether to use Flair")
@@ -59,7 +60,8 @@ if __name__ == '__main__':
     logger.info("========== Starting ==========")
     logger.info(f"Batch size: {args.batch_size}")
     logger.info(f"Learning rate: {args.lr}")
-    logger.info(f"Use char: {args.use_char}")
+    logger.info(f"Decoder arch: {args.dec_arch}")
+    logger.info(f"Char arch: {args.char_arch}")
     
     
     # Preparing
@@ -73,10 +75,11 @@ if __name__ == '__main__':
     encoder_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=(args.drop_rate, 0.0, 0.0))
     intermediate_config = None
     
-    char_config = None
-    if args.use_char:
-        char_config = CharConfig(arch='CNN', emb_dim=16, out_dim=128, pooling='Max', drop_rate=args.drop_rate)
-    
+    if args.char_arch.lower() in ('cnn', 'lstm', 'gru'):
+        char_config = CharConfig(arch=args.char_arch, emb_dim=16, out_dim=128, pooling='Max', drop_rate=args.drop_rate)
+    else:
+        char_config = None
+        
     elmo_config = None
     if args.use_elmo:
         elmo = allennlp.modules.Elmo(options_file="assets/allennlp/elmo_2x4096_512_2048cnn_2xhighway_options.json", 
@@ -86,8 +89,19 @@ if __name__ == '__main__':
         encoder_config = EncoderConfig(arch='Identity')
         intermediate_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=(args.drop_rate, 0.0, 0.0))
         
-    bert_like = None
-    
+    bert_like_config = None
+    if args.use_bert:
+        # Cased tokenizer for NER task
+        tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-cased")
+        bert = transformers.BertModel.from_pretrained("assets/transformers/bert-base-cased")
+        bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False)
+        ohots_config = None
+        char_config = None
+        encoder_config = None
+        
+        transformers.get_linear_schedule_with_warmup
+        
+        
     flair_fw_config, flair_bw_config = None, None
     if args.use_flair:
         flair_fw_lm = flair.models.LanguageModel.load_language_model("assets/flair/news-forward-0.4.1.pt")
@@ -104,11 +118,11 @@ if __name__ == '__main__':
                                   char=char_config,
                                   encoder=encoder_config, 
                                   elmo=elmo_config, 
-                                  bert_like=bert_like, 
+                                  bert_like=bert_like_config, 
                                   flair_fw=flair_fw_config, 
                                   flair_bw=flair_bw_config, 
                                   intermediate=intermediate_config, 
-                                  decoder=SequenceTaggingDecoderConfig(arch='CRF', scheme=args.scheme, in_drop_rates=(args.drop_rate, 0.0, 0.0)))
+                                  decoder=SequenceTaggingDecoderConfig(arch=args.dec_arch, scheme=args.scheme, in_drop_rates=(args.drop_rate, 0.0, 0.0)))
     train_data, dev_data, test_data = load_data(args)
     
     train_set = SequenceTaggingDataset(train_data, config)
@@ -138,12 +152,17 @@ if __name__ == '__main__':
     elif args.optimizer == 'AdamW':
         optimizer = torch.optim.AdamW(tagger.parameters(), lr=args.lr)
         
+    if args.scheduler == 'None':
+        scheduler = None
+    elif args.scheduler == 'ReduceLROnPlateau':
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=5)
+        
     # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.95)
     # scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=5)
-    # scheduler = None
     
-    trainer = SequenceTaggingTrainer(tagger, optimizer=optimizer, scheduler=scheduler, device=device, grad_clip=args.grad_clip)
+    
+    trainer = SequenceTaggingTrainer(tagger, optimizer=optimizer, scheduler=scheduler, device=device, 
+                                     grad_clip=args.grad_clip, use_amp=args.use_amp)
     trainer.train_steps(train_loader=train_loader, dev_loader=dev_loader, num_epochs=args.num_epochs, 
                         save_callback=save_callback, save_by_loss=False)
     

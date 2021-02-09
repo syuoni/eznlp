@@ -14,13 +14,16 @@ class Trainer(object):
                  model: torch.nn.Module, 
                  optimizer: torch.optim.Optimizer=None, 
                  scheduler: torch.optim.lr_scheduler._LRScheduler=None, 
-                 device=None, 
-                 grad_clip: float=None):
+                 device: torch.device=None, 
+                 grad_clip: float=None, 
+                 use_amp: bool=False):
         self.model = model
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.device = device
         self.grad_clip = grad_clip
+        self.use_amp = use_amp
+        self.scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
         
         assert device is not None
         
@@ -47,15 +50,17 @@ class Trainer(object):
             A scalar tensor. 
         """
         # Backward propagation
-        self.optimizer.zero_grad()
-        loss.backward()
+        self.scaler.scale(loss).backward()
         
-        if self.grad_clip is not None:
+        if self.grad_clip is not None and self.grad_clip > 0:
+            self.scaler.unscale_(self.optimizer)
             # torch.nn.utils.clip_grad_value_(self.model.parameters(), self.grad_clip)
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
-        
+            
         # Update weights
-        self.optimizer.step()
+        self.scaler.step(self.optimizer)
+        self.scaler.update()
+        self.optimizer.zero_grad()
         
         
     def evaluate(self, y_gold: list, y_pred: list):
@@ -66,7 +71,7 @@ class Trainer(object):
         """
         raise NotImplementedError("Not Implemented `evaluate`")
         
-    
+        
     def train_epoch(self, dataloader: torch.utils.data.DataLoader):
         self.model.train()
         
@@ -74,7 +79,8 @@ class Trainer(object):
         epoch_y_gold, epoch_y_pred = [], []
         for batch in dataloader:
             batch = batch.to(self.device)
-            loss, *possible_batch_y = self.forward_batch(batch)
+            with torch.cuda.amp.autocast(enabled=self.use_amp):
+                loss, *possible_batch_y = self.forward_batch(batch)
             self.backward_batch(loss)
             
             epoch_losses.append(loss.item())
@@ -143,7 +149,8 @@ class Trainer(object):
         while eidx < num_epochs:
             for batch in train_loader:
                 batch = batch.to(self.device)
-                loss, *possible_batch_y = self.forward_batch(batch)
+                with torch.cuda.amp.autocast(enabled=self.use_amp):
+                    loss, *possible_batch_y = self.forward_batch(batch)
                 self.backward_batch(loss)
                 
                 train_losses.append(loss.item())

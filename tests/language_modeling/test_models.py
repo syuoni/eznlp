@@ -74,8 +74,4 @@ class TestMLM(object):
         trainer.train_epoch([batch])
         trainer.eval_epoch([batch])
         
-        # trainer.train_steps(train_loader=[batch, batch], 
-        #                     dev_loader=[batch, batch], 
-        #                     num_epochs=10, disp_every_steps=2, eval_every_steps=6)
-        
         

@@ -130,15 +130,16 @@ class TestTagger(object):
         self.one_tagger_pass(tagger, dataset, device)
         
         
-    def test_train_steps(self, conll2003_demo, device):
+    @pytest.mark.parametrize("use_amp", [False, True])
+    def test_train_steps(self, conll2003_demo, use_amp, device):
         dataset = SequenceTaggingDataset(conll2003_demo)
         dataset.build_vocabs_and_dims()
         tagger = dataset.config.instantiate().to(device)
         
-        batch = dataset.collate([dataset[i] for i in range(0, 4)]).to(device)
-        
+        dataloader = torch.utils.data.DataLoader(dataset, batch_size=4, shuffle=True, collate_fn=dataset.collate)
         optimizer = torch.optim.AdamW(tagger.parameters())
-        trainer = SequenceTaggingTrainer(tagger, optimizer=optimizer, device=device)
-        trainer.train_steps(train_loader=[batch, batch], dev_loader=[batch, batch], 
-                            num_epochs=10, disp_every_steps=2, eval_every_steps=6)
+        trainer = SequenceTaggingTrainer(tagger, optimizer=optimizer, use_amp=use_amp, device=device)
+        trainer.train_steps(train_loader=dataloader, 
+                            dev_loader=dataloader, 
+                            num_epochs=8, disp_every_steps=2, eval_every_steps=4)
         

@@ -39,6 +39,7 @@ class Vectors(object):
         
     def lookup(self, token: str):
         tried_set = set()
+        # Backup tokens
         for possible_token in [token, token.lower(), token.title(), token.upper()]:
             if possible_token in tried_set:
                 continue

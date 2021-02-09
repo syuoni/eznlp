@@ -4,13 +4,8 @@ from ..training.trainer import Trainer
 
 
 class MLMTrainer(Trainer):
-    def __init__(self, 
-                 model: torch.nn.Module, 
-                 optimizer=None, 
-                 scheduler=None, 
-                 device=None, 
-                 grad_clip=1.0):
-        super().__init__(model, optimizer=optimizer, scheduler=scheduler, device=device, grad_clip=grad_clip)
+    def __init__(self, model: torch.nn.Module, **kwargs):
+        super().__init__(model, **kwargs)
         
         
     def forward_batch(self, batch):
