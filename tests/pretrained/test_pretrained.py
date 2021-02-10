@@ -52,7 +52,7 @@ class TestFlairEmbedder(object):
             expected_num_trainable_params += count_params(flair_lm, return_trainable=False)
         if use_gamma:
             expected_num_trainable_params += 1
-        assert count_params(flair_embedder, verbose=False) == expected_num_trainable_params
+        assert count_params(flair_embedder) == expected_num_trainable_params
         
         
     def test_serialization(self, flair_fw_lm):
@@ -79,7 +79,7 @@ class TestELMoEmbbeder(object):
         if use_gamma:
             expected_num_trainable_params += 1
         
-        assert count_params(elmo_embedder, verbose=False) == expected_num_trainable_params
+        assert count_params(elmo_embedder) == expected_num_trainable_params
         
         
     def test_serialization(self, elmo):
@@ -109,7 +109,7 @@ class TestBertEmbedder(object):
         if use_gamma:
             expected_num_trainable_params += 1
         
-        assert count_params(bert_embedder, verbose=False) == expected_num_trainable_params
+        assert count_params(bert_embedder) == expected_num_trainable_params
         
         
     def test_serialization(self, bert_with_tokenizer):

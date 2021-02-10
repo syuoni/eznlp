@@ -17,7 +17,9 @@ from eznlp.sequence_tagging import SequenceTaggingDecoderConfig, SequenceTaggerC
 from eznlp.sequence_tagging import SequenceTaggingDataset
 from eznlp.sequence_tagging import SequenceTaggingTrainer
 from eznlp.pretrained import GloVe, ELMoConfig, BertLikeConfig, FlairConfig
-from eznlp.training.utils import count_params
+from eznlp.training.utils import LRLambda
+from eznlp.training.utils import count_params, collect_params, check_param_groups
+
 
 from script_utils import parse_basic_arguments, load_data, evaluate_sequence_tagging
 
@@ -40,6 +42,8 @@ if __name__ == '__main__':
     parser.add_argument('--char_arch', type=str, default='CNN', help="character-level encoder")
     parser.add_argument('--use_elmo', dest='use_elmo', default=False, action='store_true', help="whether to use ELMo")
     parser.add_argument('--use_bert', dest='use_bert', default=False, action='store_true', help="whether to use BERT")
+    parser.add_argument('--bert_lr', type=float, default=3e-5, help="learning rate for BERT")
+    parser.add_argument('--bert_drop_rate', type=float, default=0.2, help="dropout rate for BERT")
     parser.add_argument('--use_flair', dest='use_flair', default=False, action='store_true', help="whether to use Flair")
     args = parser.parse_args()
     args.grad_clip = None if args.grad_clip < 0 else args.grad_clip
@@ -93,14 +97,13 @@ if __name__ == '__main__':
     if args.use_bert:
         # Cased tokenizer for NER task
         tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-cased")
-        bert = transformers.BertModel.from_pretrained("assets/transformers/bert-base-cased")
+        bert = transformers.BertModel.from_pretrained("assets/transformers/bert-base-cased", 
+                                                      hidden_dropout_prob=args.bert_drop_rate, 
+                                                      attention_probs_dropout_prob=args.bert_drop_rate)
         bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False)
         ohots_config = None
         char_config = None
         encoder_config = None
-        
-        transformers.get_linear_schedule_with_warmup
-        
         
     flair_fw_config, flair_bw_config = None, None
     if args.use_flair:
@@ -139,9 +142,6 @@ if __name__ == '__main__':
     tagger = config.instantiate().to(device)
     count_params(tagger)
     
-    if args.debug:
-        import pdb; pdb.set_trace()
-    
     # Training
     logger.info("---------- Training ----------")
     def save_callback(model):
@@ -157,12 +157,28 @@ if __name__ == '__main__':
     elif args.scheduler == 'ReduceLROnPlateau':
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=5)
         
-    # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.95)
-    # scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
+    schedule_by_step = False
+    if args.use_bert:
+        param_groups = [{'params': list(tagger.bert_like.parameters()), 'lr': args.bert_lr}, 
+                        {'params': list(tagger.decoder.parameters()), 'lr': args.lr}]
+        assert check_param_groups(tagger, param_groups)
+        optimizer = torch.optim.AdamW(param_groups)
+        
+        # lr_lambda = LRLambda.constant_lr()
+        num_warmup_epochs = max(2, args.num_epochs // 5)
+        lr_lambda = LRLambda.linear_decay_lr_with_warmup(num_warmup_steps=len(train_loader)*num_warmup_epochs, 
+                                                         num_total_steps=len(train_loader)*args.num_epochs)
+        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
+        schedule_by_step = True
+        
+        
+    trainer = SequenceTaggingTrainer(tagger, 
+                                     optimizer=optimizer, scheduler=scheduler, schedule_by_step=schedule_by_step,
+                                     device=device, grad_clip=args.grad_clip, use_amp=args.use_amp)
     
+    if args.debug:
+        import pdb; pdb.set_trace()
     
-    trainer = SequenceTaggingTrainer(tagger, optimizer=optimizer, scheduler=scheduler, device=device, 
-                                     grad_clip=args.grad_clip, use_amp=args.use_amp)
     trainer.train_steps(train_loader=train_loader, dev_loader=dev_loader, num_epochs=args.num_epochs, 
                         save_callback=save_callback, save_by_loss=False)
     

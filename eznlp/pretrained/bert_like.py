@@ -94,6 +94,9 @@ class BertLikeConfig(Config):
         
         
     def exemplify(self, tokens: TokenSequence):
+        # https://github.com/google-research/bert/issues/223
+        
+        
         if self.from_tokenized:
             sub_tok_ids, ori_indexes = self._token_ids_from_tokenized(tokens.raw_text)
             return {'sub_tok_ids': sub_tok_ids, 

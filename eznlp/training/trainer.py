@@ -10,22 +10,32 @@ logger = logging.getLogger(__name__)
 
 
 class Trainer(object):
+    """
+    References
+    ----------
+    [1] https://pytorch.org/tutorials/recipes/recipes/amp_recipe.html
+    """
     def __init__(self, 
                  model: torch.nn.Module, 
                  optimizer: torch.optim.Optimizer=None, 
                  scheduler: torch.optim.lr_scheduler._LRScheduler=None, 
+                 schedule_by_step: bool=False, 
                  device: torch.device=None, 
                  grad_clip: float=None, 
                  use_amp: bool=False):
         self.model = model
+        
         self.optimizer = optimizer
+        if schedule_by_step:
+            assert not isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau)
         self.scheduler = scheduler
+        self.schedule_by_step = schedule_by_step
+        
+        assert device is not None
         self.device = device
         self.grad_clip = grad_clip
         self.use_amp = use_amp
         self.scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
-        
-        assert device is not None
         
         
     def forward_batch(self, batch: Batch):
@@ -61,18 +71,24 @@ class Trainer(object):
         self.scaler.step(self.optimizer)
         self.scaler.update()
         self.optimizer.zero_grad()
-        
-        
+        if self.scheduler is not None and self.schedule_by_step:
+            self.scheduler.step()
+            
+            
     def evaluate(self, y_gold: list, y_pred: list):
         """
         Calculate the metric (i.e., accuracy or F1) evaluating the predicted results 
-        against the gold results. It typically evaluate over a full dataset, or 
-        compatibly over a batch. 
+        against the gold results. This method should typically evaluate over a 
+        full dataset, although it also compatibly evaluates over a batch. 
         """
         raise NotImplementedError("Not Implemented `evaluate`")
         
         
     def train_epoch(self, dataloader: torch.utils.data.DataLoader):
+        """
+        Note: If `schedule_by_step` being False, `scheduler.step` should be 
+            properly called after this method. 
+        """
         self.model.train()
         
         epoch_losses = []
@@ -87,7 +103,7 @@ class Trainer(object):
             if possible_batch_y:
                 epoch_y_gold.extend(possible_batch_y[0])
                 epoch_y_pred.extend(possible_batch_y[1])
-            
+                
         if epoch_y_gold:
             return (np.mean(epoch_losses), self.evaluate(epoch_y_gold, epoch_y_pred))
         else:
@@ -108,7 +124,7 @@ class Trainer(object):
                 if possible_batch_y:
                     epoch_y_gold.extend(possible_batch_y[0])
                     epoch_y_pred.extend(possible_batch_y[1])
-            
+                    
         if epoch_y_gold:
             return (np.mean(epoch_losses), self.evaluate(epoch_y_gold, epoch_y_pred))
         else:
@@ -124,8 +140,7 @@ class Trainer(object):
                     eval_every_steps: int=None, 
                     save_callback=None, 
                     save_by_loss: bool=True, 
-                    save_every_steps: int=None, 
-                    verbose: bool=True):
+                    save_every_steps: int=None):
         
         max_steps = np.inf if max_steps is None else max_steps
         disp_every_steps = len(train_loader) if disp_every_steps is None else disp_every_steps
@@ -160,13 +175,12 @@ class Trainer(object):
                 
                 if (sidx+1) % disp_every_steps == 0:
                     elapsed_secs = int(time.time() - t0)
-                    if verbose:
-                        max_lr = max(group['lr'] for group in self.optimizer.param_groups)
-                        disp_running_info(eidx=eidx, sidx=sidx, lr=max_lr, 
-                                          elapsed_secs=elapsed_secs, 
-                                          loss=np.mean(train_losses),
-                                          metric=self.evaluate(train_y_gold, train_y_pred) if train_y_gold else None,
-                                          partition='train')
+                    lrs = [group['lr'] for group in self.optimizer.param_groups]
+                    disp_running_info(eidx=eidx, sidx=sidx, lrs=lrs, 
+                                      elapsed_secs=elapsed_secs, 
+                                      loss=np.mean(train_losses),
+                                      metric=self.evaluate(train_y_gold, train_y_pred) if train_y_gold else None,
+                                      partition='train')
                     train_losses = []
                     train_y_gold, train_y_pred = [], []
                     t0 = time.time()
@@ -176,11 +190,10 @@ class Trainer(object):
                     possible_dev_metric = possible_dev_metric[0] if possible_dev_metric else None
                     
                     elapsed_secs = int(time.time() - t0)
-                    if verbose:
-                        disp_running_info(elapsed_secs=elapsed_secs, 
-                                          loss=dev_loss, 
-                                          metric=possible_dev_metric, 
-                                          partition='dev')
+                    disp_running_info(elapsed_secs=elapsed_secs, 
+                                      loss=dev_loss, 
+                                      metric=possible_dev_metric, 
+                                      partition='dev')
                     
                     if dev_loss < best_dev_loss:
                         best_dev_loss = dev_loss
@@ -192,7 +205,7 @@ class Trainer(object):
                         if (save_callback is not None) and (not save_by_loss):
                             save_callback(self.model)
                     
-                    if self.scheduler is not None:
+                    if self.scheduler is not None and not self.schedule_by_step:
                         if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
                             if save_by_loss:
                                 assert self.scheduler.mode == 'min'
@@ -221,14 +234,14 @@ class Trainer(object):
             
             
 
-def disp_running_info(eidx=None, sidx=None, lr=None, elapsed_secs=None, loss=None, metric=None, partition='train'):
+def disp_running_info(eidx=None, sidx=None, lrs=None, elapsed_secs=None, loss=None, metric=None, partition='train'):
     disp_text = []
     if eidx is not None:
         disp_text.append(f"Epoch: {eidx+1}")
     if sidx is not None:
         disp_text.append(f"Step: {sidx+1}")
-    if lr is not None:
-        disp_text.append(f"LR: {lr:.6f}")
+    if lrs is not None:
+        disp_text.append("LR: <" + "|".join([f"{lr:.6f}" for lr in lrs]) + ">")
     if len(disp_text) > 0:
         logger.info(" | ".join(disp_text))
         

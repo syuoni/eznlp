@@ -108,12 +108,11 @@ class PMCMLMDataset(torch.utils.data.IterableDataset):
     PMC Dataset for Masked Language Modeling. 
     """
     def __init__(self, files, tokenizer, MLM_prob=0.15, max_len=512, shuffle=True, 
-                 mp_rank=0, mp_world_size=0, verbose=True):
+                 mp_rank=0, mp_world_size=0):
         super().__init__()
         if mp_rank >= 0 and mp_world_size > 0 and mp_rank < mp_world_size:
             files = files[_slice_chunk(mp_rank, mp_world_size, len(files))]
-        if verbose:
-            logger.info(f"Totally {len(files)} files in the {mp_rank}-th process")
+        logger.info(f"Totally {len(files)} files in the {mp_rank}-th process")
             
         self.files = files
         self.tokenizer = tokenizer
