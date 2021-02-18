@@ -153,7 +153,7 @@ class Trainer(object):
         
         best_dev_loss = np.inf
         # The `metric` must hold that it is better if higher, e.g., accuracy or F1. 
-        best_dev_metric = 0.0
+        best_dev_metric = -np.inf
         
         train_losses = []
         train_y_gold, train_y_pred = [], []
@@ -241,7 +241,7 @@ def disp_running_info(eidx=None, sidx=None, lrs=None, elapsed_secs=None, loss=No
     if sidx is not None:
         disp_text.append(f"Step: {sidx+1}")
     if lrs is not None:
-        disp_text.append("LR: <" + "|".join([f"{lr:.6f}" for lr in lrs]) + ">")
+        disp_text.append("LR: (" + "/".join([f"{lr:.6f}" for lr in lrs]) + ")")
     if len(disp_text) > 0:
         logger.info(" | ".join(disp_text))
         

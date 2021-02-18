@@ -44,10 +44,10 @@ if __name__ == '__main__':
     parser.add_argument('--use_bert', dest='use_bert', default=False, action='store_true', help="whether to use BERT")
     parser.add_argument('--bert_lr', type=float, default=3e-5, help="learning rate for BERT")
     parser.add_argument('--bert_drop_rate', type=float, default=0.2, help="dropout rate for BERT")
+    parser.add_argument('--use_bert_intermediate', dest='use_bert_intermediate', default=False, action='store_true', help="whether to use BERT BiLSTM")
     parser.add_argument('--use_flair', dest='use_flair', default=False, action='store_true', help="whether to use Flair")
     args = parser.parse_args()
     args.grad_clip = None if args.grad_clip < 0 else args.grad_clip
-    
     
     # Logging
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -99,11 +99,14 @@ if __name__ == '__main__':
         tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-cased")
         bert = transformers.BertModel.from_pretrained("assets/transformers/bert-base-cased", 
                                                       hidden_dropout_prob=args.bert_drop_rate, 
-                                                      attention_probs_dropout_prob=args.bert_drop_rate)
-        bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False)
+                                                      attention_probs_dropout_prob=0.2)
+        bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False, use_truecase=True)
         ohots_config = None
         char_config = None
         encoder_config = None
+        if args.use_bert_intermediate:
+            intermediate_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=(args.drop_rate, 0.0, 0.0))
+        
         
     flair_fw_config, flair_bw_config = None, None
     if args.use_flair:
@@ -111,7 +114,6 @@ if __name__ == '__main__':
         flair_bw_lm = flair.models.LanguageModel.load_language_model("assets/flair/news-backward-0.4.1.pt")
         flair_fw_config = FlairConfig(flair_lm=flair_fw_lm)
         flair_bw_config = FlairConfig(flair_lm=flair_bw_lm)
-        char_config = None
         encoder_config = EncoderConfig(arch='Identity')
         intermediate_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=(0.0, 0.05, args.drop_rate), 
                                             in_proj=True)
@@ -161,6 +163,9 @@ if __name__ == '__main__':
     if args.use_bert:
         param_groups = [{'params': list(tagger.bert_like.parameters()), 'lr': args.bert_lr}, 
                         {'params': list(tagger.decoder.parameters()), 'lr': args.lr}]
+        if args.use_bert_intermediate:
+            param_groups.append({'params': list(tagger.intermediate.parameters()), 'lr': args.lr})
+            
         assert check_param_groups(tagger, param_groups)
         optimizer = torch.optim.AdamW(param_groups)
         

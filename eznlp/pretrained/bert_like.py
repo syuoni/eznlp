@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 from typing import List
+import re
+import truecase
 import torch
 import transformers
 
@@ -22,6 +24,7 @@ class BertLikeConfig(Config):
         
         self.from_tokenized = kwargs.pop('from_tokenized', True)
         self.pre_truncation = kwargs.pop('pre_truncation', False)
+        self.use_truecase = kwargs.pop('use_truecase', False)
         self.agg_mode = kwargs.pop('agg_mode', 'mean')
         self.mix_layers = kwargs.pop('mix_layers', 'top')
         self.use_gamma = kwargs.pop('use_gamma', False)
@@ -94,16 +97,17 @@ class BertLikeConfig(Config):
         
         
     def exemplify(self, tokens: TokenSequence):
-        # https://github.com/google-research/bert/issues/223
-        
-        
+        tokenized_raw_text = tokens.raw_text
+        if self.use_truecase:
+            tokenized_raw_text = _truecase(tokenized_raw_text)
+            
         if self.from_tokenized:
-            sub_tok_ids, ori_indexes = self._token_ids_from_tokenized(tokens.raw_text)
+            sub_tok_ids, ori_indexes = self._token_ids_from_tokenized(tokenized_raw_text)
             return {'sub_tok_ids': sub_tok_ids, 
                     'ori_indexes': ori_indexes}
         else:
             # TODO:?
-            sub_tok_ids = self._token_ids_from_string(" ".join(tokens.raw_text))
+            sub_tok_ids = self._token_ids_from_string(" ".join(tokenized_raw_text))
             return {'sub_tok_ids': sub_tok_ids}
             
         
@@ -192,5 +196,35 @@ class BertLikeEmbedder(torch.nn.Module):
             bert_outs = self.group_aggregating(bert_outs, ori_indexes)    
             
         return bert_outs
-        
+    
+    
+    
+def _truecase(tokenized_raw_text: List[str]):
+    """
+    Get the truecased text. 
+    
+    Original:  ['FULL', 'FEES', '1.875', 'REOFFER', '99.32', 'SPREAD', '+20', 'BP']
+    Truecased: ['Full', 'fees', '1.875', 'Reoffer', '99.32', 'spread', '+20', 'BP']
+    
+    References
+    ----------
+    [1] https://github.com/google-research/bert/issues/223
+    [2] https://github.com/daltonfury42/truecase
+    """
+    new_tokenized = tokenized_raw_text.copy()
+    
+    word_lst = [(w, idx) for idx, w in enumerate(new_tokenized) if all(c.isalpha() for c in w)]
+    lst = [w for w, _ in word_lst if re.match(r'\b[A-Z\.\-]+\b', w)]
+    
+    if len(lst) > 0 and len(lst) == len(word_lst):
+        parts = truecase.get_true_case(' '.join(lst)).split()
+
+        # the trucaser have its own tokenization ...
+        # skip if the number of word dosen't match
+        if len(parts) == len(word_lst): 
+            for (w, idx), nw in zip(word_lst, parts):
+                new_tokenized[idx] = nw
+                
+    return new_tokenized
+    
     
