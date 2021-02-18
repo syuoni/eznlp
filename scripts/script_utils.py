@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 def parse_basic_arguments(parser: argparse.ArgumentParser):
     parser.add_argument('--debug', dest='debug', default=False, action='store_true', help="whether to use pdb for debug")
     
-    parser.add_argument('--device', type=str, default='cpu', help="device to run the model, `cpu` or `cuda:x`")
+    parser.add_argument('--device', type=str, default='cpu', help="device to run model, `cpu` or `cuda:x`")
     parser.add_argument('--num_epochs', type=int, default=100, help="number of epochs")
     parser.add_argument('--batch_size', type=int, default=32, help="batch size")
     parser.add_argument('--optimizer', type=str, default='AdamW', choices=['AdamW', 'SGD'], help="optimizer")

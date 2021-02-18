@@ -171,31 +171,34 @@ class BertLikeEmbedder(torch.nn.Module):
                 sub_tok_ids: torch.LongTensor, 
                 sub_tok_mask: torch.BoolTensor, 
                 ori_indexes: torch.LongTensor=None):
-        # bert_outs: (batch, sub_tok_step+2, hid_dim)
-        # hidden: list of (batch, sub_tok_step+2, hid_dim)
-        bert_outs, _, hidden = self.bert_like(input_ids=sub_tok_ids, 
-                                              attention_mask=(~sub_tok_mask).type(torch.long), 
-                                              output_hidden_states=True)
+        # last_hidden: (batch, sub_tok_step+2, hid_dim)
+        # pooler_output: (batch, hid_dim)
+        # hidden: a tuple of (batch, sub_tok_step+2, hid_dim)
+        bert_outs = self.bert_like(input_ids=sub_tok_ids, 
+                                   attention_mask=(~sub_tok_mask).type(torch.long), 
+                                   output_hidden_states=True)
+        bert_hidden = bert_outs['hidden_states']
         
+        # bert_hidden: (batch, sub_tok_step+2, hid_dim)
         if self.mix_layers.lower() == 'trainable':
-            bert_outs = self.scalar_mix(hidden)
+            bert_hidden = self.scalar_mix(bert_hidden)
         elif self.mix_layers.lower() == 'top':
-            pass
+            bert_hidden = bert_hidden[-1]
         elif self.mix_layers.lower() == 'average':
-            bert_outs = sum(hidden) / len(hidden)
+            bert_hidden = sum(bert_hidden) / len(bert_hidden)
         
         if self.use_gamma:
-            bert_outs = self.gamma * bert_outs
+            bert_hidden = self.gamma * bert_hidden
         
         # Remove the `[CLS]` and `[SEP]` positions. 
-        bert_outs = bert_outs[:, 1:-1]
+        bert_hidden = bert_hidden[:, 1:-1]
         sub_tok_mask = sub_tok_mask[:, 2:]
         
         if self.from_tokenized:
-            # bert_outs: (batch, tok_step, hid_dim)
-            bert_outs = self.group_aggregating(bert_outs, ori_indexes)    
+            # bert_hidden: (batch, tok_step, hid_dim)
+            bert_hidden = self.group_aggregating(bert_hidden, ori_indexes)
             
-        return bert_outs
+        return bert_hidden
     
     
     
