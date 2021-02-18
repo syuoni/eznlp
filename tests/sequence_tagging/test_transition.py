@@ -1,28 +1,25 @@
 # -*- coding: utf-8 -*-
 import pytest
 import spacy
-import numpy as np
 
 from eznlp.token import TokenSequence
-from eznlp.sequence_tagging import SequenceTaggingDecoderConfig
 from eznlp.sequence_tagging import ChunksTagsTranslator
-from eznlp.sequence_tagging import precision_recall_f1_report
-from eznlp.sequence_tagging.io import ConllIO
 from eznlp.sequence_tagging.transition import find_ascending
 
 
-def test_find_ascending():
-    for v in [-3, 2, 2.5, 9]:
-        x = list(range(5))
-        find, idx = find_ascending(x, v)
-        x.insert(idx, v)
-        
-        assert find == (v in list(range(5)))
-        assert len(x) == 6
-        assert all(x[i] <= x[i+1] for i in range(len(x)-1))
+@pytest.mark.parametrize("v", [-500, -3, 0, 2, 2.5, 9, 1234.56])
+def test_find_ascending(v):
+    N = 10
+    sequence = list(range(N))
+    find, idx = find_ascending(sequence, v)
+    sequence.insert(idx, v)
+    
+    assert find == (v in list(range(N)))
+    assert len(sequence) == N + 1
+    assert all(sequence[i] <= sequence[i+1] for i in range(N))
 
 
-@pytest.fixture
+@pytest.fixture(scope='module')
 def BIOES_tags_example():
     tags = ['O', 'O', 'S-A', 'B-B', 'E-B', 'O', 'S-B', 'O', 'B-C', 'I-C', 'I-C', 'E-C', 'S-C', '<pad>']
     cas_tags = ['O', 'O', 'S', 'B', 'E', 'O', 'S', 'O', 'B', 'I', 'I', 'E', 'S', '<pad>']
@@ -32,19 +29,6 @@ def BIOES_tags_example():
     cas_tag_ids = [1, 1, 5, 2, 4, 1, 5, 1, 2, 3, 3, 4, 5, 0]
     cas_type_ids = [1, 1, 2, 3, 3, 1, 3, 1, 4, 4, 4, 4, 4, 0]
     return (tags, cas_tags, cas_types), (tag_ids, cas_tag_ids, cas_type_ids)
-
-
-@pytest.fixture
-def BIOES_dec_config_example():
-    idx2tag = ['<pad>', 'O', 'B-A', 'I-A', 'E-A', 'S-A', 'B-B', 'I-B', 'E-B', 'S-B', 'B-C', 'I-C', 'E-C', 'S-C']
-    idx2cas_tag = ['<pad>', 'O', 'B', 'I', 'E', 'S']
-    idx2cas_type = ['<pad>', 'O', 'A', 'B', 'C']
-    
-    dec_config_nocas = SequenceTaggingDecoderConfig(scheme='BIOES', cascade_mode='None', 
-                                                    idx2tag=idx2tag, idx2cas_tag=idx2cas_tag, idx2cas_type=idx2cas_type)
-    dec_config_sliced = SequenceTaggingDecoderConfig(scheme='BIOES', cascade_mode='Sliced', 
-                                                     idx2tag=idx2tag, idx2cas_tag=idx2cas_tag, idx2cas_type=idx2cas_type)
-    return dec_config_nocas, dec_config_sliced
 
 
 class TestChunksTagsTranslator(object):
@@ -129,49 +113,4 @@ class TestChunksTagsTranslator(object):
         chunks = from_translator.tags2chunks(from_tags)
         from_tags_translated = to_translator.chunks2tags(chunks, len(from_tags))
         assert from_tags_translated == to_tags
-        
-        
-class TestMetrics(object):
-    @pytest.mark.parametrize("tags_gold_data, tags_pred_data, expected_ave_scores", 
-                             [([['B-A', 'B-B', 'O', 'B-A']], 
-                               [['O', 'B-B', 'B-C', 'B-A']], 
-                               {'macro': {'precision': 2/3, 'recall': 1/2, 'f1': 5/9}, 
-                                'micro': {'precision': 2/3, 'recall': 2/3, 'f1': 2/3}}), 
-                              ([['O', 'O', 'O', 'B-MISC', 'I-MISC', 'I-MISC', 'O'], 
-                                ['B-PER', 'I-PER', 'O']], 
-                               [['O', 'O', 'B-MISC', 'I-MISC', 'I-MISC', 'I-MISC', 'O'], 
-                                ['B-PER', 'I-PER', 'O']], 
-                               {'macro': {'precision': 0.5, 'recall': 0.5, 'f1': 0.5}, 
-                                'micro': {'precision': 0.5, 'recall': 0.5, 'f1': 0.5}})])
-    def test_example(self, tags_gold_data, tags_pred_data, expected_ave_scores):
-        translator = ChunksTagsTranslator(scheme='BIO2')
-        chunks_gold_data = [translator.tags2chunks(tags, False) for tags in tags_gold_data]
-        chunks_pred_data = [translator.tags2chunks(tags, False) for tags in tags_pred_data]
-        
-        scores, ave_scores = precision_recall_f1_report(chunks_gold_data, chunks_pred_data)
-        for key in ave_scores:
-            for score_key in ['precision', 'recall', 'f1']:
-                assert np.abs(ave_scores[key][score_key] - expected_ave_scores[key][score_key]) < 1e-6
-                
-                
-    def test_conll2000(self):
-        # https://www.clips.uantwerpen.be/conll2000/chunking/output.html
-        # https://github.com/chakki-works/seqeval
-        gold_data = ConllIO(text_col_id=0, tag_col_id=2, scheme='BIO2').read("data/conlleval/output.txt")
-        pred_data = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO2').read("data/conlleval/output.txt")
-        
-        chunks_gold_data = [ex['chunks'] for ex in gold_data]
-        chunks_pred_data = [ex['chunks'] for ex in pred_data]
-        
-        expected_ave_scores = {'macro': {'precision': 0.54880502,
-                                         'recall': 0.58776420, 
-                                         'f1': 0.55397552}, 
-                               'micro': {'precision': 0.68831169, 
-                                         'recall': 0.80827887, 
-                                         'f1': 0.74348697}}
-        scores, ave_scores = precision_recall_f1_report(chunks_gold_data, chunks_pred_data)
-        for key in ave_scores:
-            for score_key in ['precision', 'recall', 'f1']:
-                assert np.abs(ave_scores[key][score_key] - expected_ave_scores[key][score_key]) < 1e-6
-        
         

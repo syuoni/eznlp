@@ -9,7 +9,7 @@ from ..config import Config
 
 class ELMoConfig(Config):
     def __init__(self, **kwargs):
-        self.elmo: allennlp.modules.elmo.Elmo = kwargs.pop('elmo')
+        self.elmo: allennlp.modules.Elmo = kwargs.pop('elmo')
         self.out_dim = self.elmo.get_output_dim()
         
         self.arch = kwargs.pop('arch', 'ELMo')
@@ -88,5 +88,10 @@ class ELMoEmbedder(torch.nn.Module):
     def forward(self, char_ids: torch.LongTensor):
         # TODO: use `word_inputs`?
         elmo_outs = self.elmo(inputs=char_ids)
+        
+        # Reset lstm states if not stateful
+        if not self.lstm_stateful:
+            self.elmo._elmo_lstm._elmo_lstm.reset_states()
+        
         return elmo_outs['elmo_representations'][0]
         

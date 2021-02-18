@@ -12,7 +12,7 @@ from eznlp.sequence_tagging import SequenceTaggingDataset
 from eznlp.sequence_tagging import SequenceTaggingTrainer
 
 
-class BaseTestModel(object):
+class TestTagger(object):
     def _assert_batch_consistency(self):
         self.model.eval()
         
@@ -34,24 +34,21 @@ class BaseTestModel(object):
         
         
     def _assert_trainable(self):
+        optimizer = torch.optim.AdamW(self.model.parameters())
+        trainer = SequenceTaggingTrainer(self.model, optimizer=optimizer, device=self.device)
         dataloader = torch.utils.data.DataLoader(self.dataset, 
                                                  batch_size=4, 
                                                  shuffle=True, 
                                                  collate_fn=self.dataset.collate)
-        self.trainer.train_epoch(dataloader)
+        trainer.train_epoch(dataloader)
         
         
-        
-class TestTagger(BaseTestModel):
     def _setup_case(self, data, device):
         self.device = device
         
         self.dataset = SequenceTaggingDataset(copy.deepcopy(data), self.config)
         self.dataset.build_vocabs_and_dims()
         self.model = self.config.instantiate().to(self.device)
-        
-        optimizer = torch.optim.AdamW(self.model.parameters())
-        self.trainer = SequenceTaggingTrainer(self.model, optimizer=optimizer, device=self.device)
         
         
     @pytest.mark.parametrize("enc_arch", ['CNN', 'LSTM', 'GRU', 'Transformer'])
@@ -64,95 +61,85 @@ class TestTagger(BaseTestModel):
         self._assert_batch_consistency()
         self._assert_trainable()
         
+    def test_tagger_with_intermediate(self, conll2003_demo, device):
+        self.config = SequenceTaggerConfig(intermediate=EncoderConfig())
+        self._setup_case(conll2003_demo, device)
+        self._assert_batch_consistency()
+        self._assert_trainable()
         
-    @pytest.mark.parametrize("freeze", [False, True])
-    def test_word_embedding_initialization(self, freeze, glove100, conll2003_demo, device):
-        self.config = SequenceTaggerConfig(ohots=ConfigDict({'text': OneHotConfig(field='text', vectors=glove100, freeze=freeze)}))
+    def test_tagger_with_more_fields(self, conll2003_demo, device):
+        self.config = SequenceTaggerConfig(ohots=ConfigDict({f: OneHotConfig(field=f, emb_dim=20) for f in Token._basic_ohot_fields}), 
+                                           mhots=ConfigDict({f: MultiHotConfig(field=f, emb_dim=20) for f in Token._basic_mhot_fields}))
+        self._setup_case(conll2003_demo, device)
+        self._assert_batch_consistency()
+        self._assert_trainable()
         
+    @pytest.mark.parametrize("scheme", ['BIO1', 'BIO2'])
+    def test_tagger_with_alternative_schemes(self, scheme, conll2003_demo, device):
+        self.config = SequenceTaggerConfig(decoder=SequenceTaggingDecoderConfig(scheme=scheme))
         self._setup_case(conll2003_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
         
         
-#     def test_tagger_intermediate(self, conll2003_demo, device):
-#         config = SequenceTaggerConfig(intermediate=EncoderConfig())
+    @pytest.mark.parametrize("freeze", [False, True])
+    def test_tagger_with_pretrained_vector(self, freeze, glove100, conll2003_demo, device):
+        self.config = SequenceTaggerConfig(ohots=ConfigDict({'text': OneHotConfig(field='text', vectors=glove100, freeze=freeze)}))
+        self._setup_case(conll2003_demo, device)
+        self._assert_batch_consistency()
+        self._assert_trainable()
         
-#         dataset = SequenceTaggingDataset(conll2003_demo, config)
-#         dataset.build_vocabs_and_dims()
-#         tagger = config.instantiate().to(device)
-#         self.one_tagger_pass(tagger, dataset, device)
+    @pytest.mark.parametrize("freeze", [False, True])
+    def test_tagger_with_elmo(self, freeze, elmo, conll2003_demo, device):
+        elmo = copy.deepcopy(elmo)
+        self.config = SequenceTaggerConfig(ohots=None, 
+                                           encoder=None, 
+                                           elmo=ELMoConfig(elmo=elmo))
+        self._setup_case(conll2003_demo, device)
+        self._assert_batch_consistency()
+        self._assert_trainable()
         
+    @pytest.mark.parametrize("freeze", [False, True])
+    def test_tagger_with_bert_like(self, freeze, bert_like_with_tokenizer, conll2003_demo, device):
+        bert_like, tokenizer = copy.deepcopy(bert_like_with_tokenizer)
+        self.config = SequenceTaggerConfig(ohots=None, 
+                                           encoder=None, 
+                                           bert_like=BertLikeConfig(bert_like=bert_like, tokenizer=tokenizer, freeze=freeze))
+        self._setup_case(conll2003_demo, device)
+        self._assert_batch_consistency()
+        self._assert_trainable()
         
-#     @pytest.mark.parametrize("freeze", [False, True])
-#     def test_tagger_elmo(self, conll2003_demo, elmo, freeze, device):
-#         config = SequenceTaggerConfig(ohots=None, 
-#                                       encoder=None, 
-#                                       elmo=ELMoConfig(elmo=elmo))
-        
-#         dataset = SequenceTaggingDataset(conll2003_demo, config)
-#         dataset.build_vocabs_and_dims()
-#         tagger = config.instantiate().to(device)
-#         self.one_tagger_pass(tagger, dataset, device)
-        
-        
-#     @pytest.mark.parametrize("freeze", [False, True])
-#     def test_tagger_bert_like(self, conll2003_demo, bert_with_tokenizer, freeze, device):
-#         bert, tokenizer = bert_with_tokenizer
-#         config = SequenceTaggerConfig(ohots=None, 
-#                                       encoder=None, 
-#                                       bert_like=BertLikeConfig(bert_like=bert, tokenizer=tokenizer, freeze=freeze))
-        
-#         dataset = SequenceTaggingDataset(conll2003_demo, config)
-#         dataset.build_vocabs_and_dims()
-#         tagger = config.instantiate().to(device)
-#         self.one_tagger_pass(tagger, dataset, device)
-        
-        
-#     @pytest.mark.parametrize("freeze", [False, True])
-#     def test_tagger_flair(self, conll2003_demo, flair_fw_lm, flair_bw_lm, freeze, device):
-#         config = SequenceTaggerConfig(ohots=None, 
-#                                       encoder=None, 
-#                                       flair_fw=FlairConfig(flair_lm=flair_fw_lm, freeze=freeze),  
-#                                       flair_bw=FlairConfig(flair_lm=flair_bw_lm, freeze=freeze))
-        
-#         dataset = SequenceTaggingDataset(conll2003_demo, config)
-#         dataset.build_vocabs_and_dims()
-#         tagger = config.instantiate().to(device)
-#         self.one_tagger_pass(tagger, dataset, device)
+    @pytest.mark.parametrize("freeze", [False, True])
+    def test_tagger_with_flair(self, freeze, flair_fw_lm, flair_bw_lm, conll2003_demo, device):
+        flair_fw_lm = copy.deepcopy(flair_fw_lm)
+        flair_bw_lm = copy.deepcopy(flair_bw_lm)
+        self.config = SequenceTaggerConfig(ohots=None, 
+                                           encoder=None, 
+                                           flair_fw=FlairConfig(flair_lm=flair_fw_lm, freeze=freeze),  
+                                           flair_bw=FlairConfig(flair_lm=flair_bw_lm, freeze=freeze))
+        self._setup_case(conll2003_demo, device)
+        self._assert_batch_consistency()
+        self._assert_trainable()
         
         
-#     @pytest.mark.parametrize("enc_arch", ['CNN', 'LSTM'])
-#     def test_tagger_morefields(self, conll2003_demo, enc_arch, device):
-#         config = SequenceTaggerConfig(ohots=ConfigDict({f: OneHotConfig(field=f, emb_dim=20) for f in Token._basic_ohot_fields}), 
-#                                       mhots=ConfigDict({f: MultiHotConfig(field=f, emb_dim=20) for f in Token._basic_mhot_fields}), 
-#                                       encoder=EncoderConfig(arch=enc_arch))
+    @pytest.mark.parametrize("use_amp", [False, True])
+    def test_tagger_train_steps(self, use_amp, conll2003_demo, device):
+        if use_amp and device.type.startswith('cpu'):
+            pytest.skip("test requires cuda, while current session runs on cpu")
         
-#         dataset = SequenceTaggingDataset(conll2003_demo, config)
-#         dataset.build_vocabs_and_dims()
-#         tagger = config.instantiate().to(device)
-#         self.one_tagger_pass(tagger, dataset, device)
+        self.config = SequenceTaggerConfig()
+        self._setup_case(conll2003_demo, device)
         
+        optimizer = torch.optim.AdamW(self.model.parameters())
+        trainer = SequenceTaggingTrainer(self.model, optimizer=optimizer, use_amp=use_amp, device=self.device)
+        dataloader = torch.utils.data.DataLoader(self.dataset, 
+                                                 batch_size=4, 
+                                                 shuffle=True, 
+                                                 collate_fn=self.dataset.collate)
+        trainer.train_steps(train_loader=dataloader, 
+                            dev_loader=dataloader, 
+                            num_epochs=4, 
+                            disp_every_steps=1, 
+                            eval_every_steps=2)
         
-#     @pytest.mark.parametrize("scheme", ['BIO1', 'BIO2'])
-#     def test_tagger_schemes(self, conll2003_demo, scheme, device):
-#         config = SequenceTaggerConfig(decoder=SequenceTaggingDecoderConfig(scheme=scheme))
-        
-#         dataset = SequenceTaggingDataset(conll2003_demo, config)
-#         dataset.build_vocabs_and_dims()
-#         tagger = config.instantiate().to(device)
-#         self.one_tagger_pass(tagger, dataset, device)
-        
-        
-#     @pytest.mark.parametrize("use_amp", [False, True])
-#     def test_train_steps(self, conll2003_demo, use_amp, device):
-#         dataset = SequenceTaggingDataset(conll2003_demo)
-#         dataset.build_vocabs_and_dims()
-#         tagger = dataset.config.instantiate().to(device)
-        
-#         dataloader = torch.utils.data.DataLoader(dataset, batch_size=4, shuffle=True, collate_fn=dataset.collate)
-#         optimizer = torch.optim.AdamW(tagger.parameters())
-#         trainer = SequenceTaggingTrainer(tagger, optimizer=optimizer, use_amp=use_amp, device=device)
-#         trainer.train_steps(train_loader=dataloader, 
-#                             dev_loader=dataloader, 
-#                             num_epochs=8, disp_every_steps=2, eval_every_steps=4)
         

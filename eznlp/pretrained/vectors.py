@@ -97,6 +97,9 @@ class Vectors(object):
     
     
 class GloVe(Vectors):
+    """
+    https://nlp.stanford.edu/projects/glove/
+    """
     def __init__(self, path: str, encoding=None, **kwargs):
         if os.path.exists(f"{path}.pt"):
             itos, vectors = self.load_from_cache(path)

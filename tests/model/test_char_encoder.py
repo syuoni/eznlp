@@ -7,7 +7,7 @@ from eznlp.sequence_tagging import SequenceTaggerConfig, SequenceTaggingDataset
 
 class TestCharEncoder(object):
     @pytest.mark.parametrize("arch", ['CNN', 'LSTM', 'GRU'])
-    def test_char_encoder(self, conll2003_demo, arch, device):
+    def test_batch_consistency(self, arch, conll2003_demo, device):
         config = SequenceTaggerConfig(char=CharConfig(arch=arch))
         assert not config.valid
         dataset = SequenceTaggingDataset(conll2003_demo, config)
