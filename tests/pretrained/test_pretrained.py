@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import pytest
 import os
-import copy
 import torch
 import flair
 
@@ -14,8 +13,6 @@ from eznlp.training.utils import count_params
 class TestFlairEmbedder(object):
     @pytest.mark.parametrize("agg_mode", ['last', 'mean'])
     def test_flair_embeddings(self, agg_mode, flair_lm):
-        flair_lm = copy.deepcopy(flair_lm)
-        
         batch_tokenized_text = [["I", "like", "it", "."], 
                                 ["Do", "you", "love", "me", "?"], 
                                 ["Sure", "!"], 
@@ -43,7 +40,6 @@ class TestFlairEmbedder(object):
     @pytest.mark.parametrize("freeze", [True, False])
     @pytest.mark.parametrize("use_gamma", [True, False])
     def test_trainble_config(self, freeze, use_gamma, flair_lm):
-        flair_lm = copy.deepcopy(flair_lm)
         flair_config = FlairConfig(flair_lm=flair_lm, freeze=freeze, use_gamma=use_gamma)
         flair_embedder = flair_config.instantiate()
         
@@ -56,7 +52,6 @@ class TestFlairEmbedder(object):
         
         
     def test_serialization(self, flair_fw_lm):
-        flair_fw_lm = copy.deepcopy(flair_fw_lm)
         config = FlairConfig(flair_lm=flair_fw_lm)
         
         config_path = "cache/flair_embedder.config"
@@ -69,7 +64,6 @@ class TestELMoEmbbeder(object):
     @pytest.mark.parametrize("use_gamma", [True, False])
     @pytest.mark.parametrize("freeze", [True, False])
     def test_trainble_config(self, mix_layers, use_gamma, freeze, elmo):
-        elmo = copy.deepcopy(elmo)
         elmo_config = ELMoConfig(elmo=elmo, freeze=freeze, mix_layers=mix_layers, use_gamma=use_gamma)
         elmo_embedder = elmo_config.instantiate()
         
@@ -85,7 +79,6 @@ class TestELMoEmbbeder(object):
         
         
     def test_serialization(self, elmo):
-        elmo = copy.deepcopy(elmo)
         config = ELMoConfig(elmo=elmo)
         
         config_path = "cache/elmo_embedder.config"
@@ -99,7 +92,7 @@ class TestBertLikeEmbedder(object):
     @pytest.mark.parametrize("use_gamma", [True])
     @pytest.mark.parametrize("freeze", [True])
     def test_trainble_config(self, mix_layers, use_gamma, freeze, bert_like_with_tokenizer):
-        bert_like, tokenizer = copy.deepcopy(bert_like_with_tokenizer)
+        bert_like, tokenizer = bert_like_with_tokenizer
         bert_like_config = BertLikeConfig(bert_like=bert_like, tokenizer=tokenizer, 
                                           freeze=freeze, mix_layers=mix_layers, use_gamma=use_gamma)
         bert_like_embedder = bert_like_config.instantiate()
@@ -116,7 +109,7 @@ class TestBertLikeEmbedder(object):
         
         
     def test_serialization(self, bert_with_tokenizer):
-        bert, tokenizer = copy.deepcopy(bert_with_tokenizer)
+        bert, tokenizer = bert_with_tokenizer
         config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert)
         
         config_path = "cache/bert_embedder.config"

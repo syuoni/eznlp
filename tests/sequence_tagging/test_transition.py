@@ -19,7 +19,7 @@ def test_find_ascending(v):
     assert all(sequence[i] <= sequence[i+1] for i in range(N))
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture
 def BIOES_tags_example():
     tags = ['O', 'O', 'S-A', 'B-B', 'E-B', 'O', 'S-B', 'O', 'B-C', 'I-C', 'I-C', 'E-C', 'S-C', '<pad>']
     cas_tags = ['O', 'O', 'S', 'B', 'E', 'O', 'S', 'O', 'B', 'I', 'I', 'E', 'S', '<pad>']

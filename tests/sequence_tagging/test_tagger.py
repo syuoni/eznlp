@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import pytest
-import copy
 import torch
 
 from eznlp.token import Token
@@ -46,7 +45,7 @@ class TestTagger(object):
     def _setup_case(self, data, device):
         self.device = device
         
-        self.dataset = SequenceTaggingDataset(copy.deepcopy(data), self.config)
+        self.dataset = SequenceTaggingDataset(data, self.config)
         self.dataset.build_vocabs_and_dims()
         self.model = self.config.instantiate().to(self.device)
         
@@ -91,7 +90,6 @@ class TestTagger(object):
         
     @pytest.mark.parametrize("freeze", [False, True])
     def test_tagger_with_elmo(self, freeze, elmo, conll2003_demo, device):
-        elmo = copy.deepcopy(elmo)
         self.config = SequenceTaggerConfig(ohots=None, 
                                            encoder=None, 
                                            elmo=ELMoConfig(elmo=elmo))
@@ -101,7 +99,7 @@ class TestTagger(object):
         
     @pytest.mark.parametrize("freeze", [False, True])
     def test_tagger_with_bert_like(self, freeze, bert_like_with_tokenizer, conll2003_demo, device):
-        bert_like, tokenizer = copy.deepcopy(bert_like_with_tokenizer)
+        bert_like, tokenizer = bert_like_with_tokenizer
         self.config = SequenceTaggerConfig(ohots=None, 
                                            encoder=None, 
                                            bert_like=BertLikeConfig(bert_like=bert_like, tokenizer=tokenizer, freeze=freeze))
@@ -111,8 +109,6 @@ class TestTagger(object):
         
     @pytest.mark.parametrize("freeze", [False, True])
     def test_tagger_with_flair(self, freeze, flair_fw_lm, flair_bw_lm, conll2003_demo, device):
-        flair_fw_lm = copy.deepcopy(flair_fw_lm)
-        flair_bw_lm = copy.deepcopy(flair_bw_lm)
         self.config = SequenceTaggerConfig(ohots=None, 
                                            encoder=None, 
                                            flair_fw=FlairConfig(flair_lm=flair_fw_lm, freeze=freeze),  

@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import pytest
-import copy
 
 import pandas as pd
 from eznlp.pretrained import BertLikeConfig
@@ -11,7 +10,7 @@ from eznlp.text_classification.io import TabularIO
 class TestTextClassificationDataset(object):
     @pytest.mark.slow
     def test_pre_truncation(self, bert_with_tokenizer):
-        bert, tokenizer = copy.deepcopy(bert_with_tokenizer)
+        bert, tokenizer = bert_with_tokenizer
         config = TextClassifierConfig(ohots=None, 
                                       encoder=None, 
                                       bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert))
