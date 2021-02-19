@@ -5,6 +5,7 @@ import argparse
 import datetime
 import random
 import logging
+import pprint
 import numpy as np
 import torch
 import allennlp.modules
@@ -21,7 +22,7 @@ from eznlp.training.utils import LRLambda
 from eznlp.training.utils import count_params, collect_params, check_param_groups
 
 
-from script_utils import parse_basic_arguments, load_data, evaluate_sequence_tagging
+from utils import load_data, evaluate_sequence_tagging, header_format
 
 
 SEED = 515
@@ -34,7 +35,36 @@ torch.backends.cudnn.deterministic = True
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser = parse_basic_arguments(parser)
+    parser.add_argument('--debug', dest='debug', default=False, action='store_true', 
+                        help="whether to use pdb for debug")
+    
+    parser.add_argument('--device', type=str, default='cpu', 
+                        help="device to run model, `cpu` or `cuda:x`")
+    parser.add_argument('--use_amp', dest='use_amp', default=False, action='store_true', 
+                        help="whether to use amp")
+    parser.add_argument('--num_epochs', type=int, default=100, 
+                        help="number of epochs")
+    parser.add_argument('--batch_size', type=int, default=32, 
+                        help="batch size")
+    parser.add_argument('--grad_clip', type=float, default=5.0, 
+                        help="gradient clip (negative values are set to `None`)")
+    
+    parser.add_argument('--optimizer', type=str, default='AdamW', choices=['AdamW', 'SGD', 'Adadelta'], 
+                        help="optimizer")
+    parser.add_argument('--lr', type=float, default=0.001, 
+                        help="learning rate")
+    parser.add_argument('--finetune_lr', type=float, default=2e-5, 
+                        help="learning rate for finetuning")
+    parser.add_argument('--scheduler', type=str, default='None', choices=['None', 'ReduceLROnPlateau', 'LinearDecayWithWarmup'], 
+                        help='scheduler')
+    
+    parser.add_argument('--use_encoder', dest='use_encoder', default=False, action='store_true', help="whether to use ELMo")
+    parser.add_argument('--emb_dim', type=int, default=100, help="embedding dim")
+    parser.add_argument('--hid_dim', type=int, default=200, help="hidden dim")
+    parser.add_argument('--num_layers', type=int, default=2, help="number of layers")
+    parser.add_argument('--drop_rate', type=float, default=0.5, help="dropout rate")
+    parser.add_argument('--emb_freeze', dest='emb_freeze', default=False, action='store_true', help="whether to freeze embedding weights")
+    
     
     parser.add_argument('--dataset', type=str, default='conll2003', help="dataset name")
     parser.add_argument('--scheme', type=str, default='BIOES', help="sequence tagging scheme")
@@ -42,7 +72,7 @@ if __name__ == '__main__':
     parser.add_argument('--char_arch', type=str, default='CNN', help="character-level encoder")
     parser.add_argument('--use_elmo', dest='use_elmo', default=False, action='store_true', help="whether to use ELMo")
     parser.add_argument('--use_bert', dest='use_bert', default=False, action='store_true', help="whether to use BERT")
-    parser.add_argument('--bert_lr', type=float, default=3e-5, help="learning rate for BERT")
+    
     parser.add_argument('--bert_drop_rate', type=float, default=0.2, help="dropout rate for BERT")
     parser.add_argument('--use_bert_intermediate', dest='use_bert_intermediate', default=False, action='store_true', help="whether to use BERT BiLSTM")
     parser.add_argument('--use_flair', dest='use_flair', default=False, action='store_true', help="whether to use Flair")
@@ -61,15 +91,11 @@ if __name__ == '__main__':
                                   logging.StreamHandler(sys.stdout)])
     
     logger = logging.getLogger(__name__)
-    logger.info("========== Starting ==========")
-    logger.info(f"Batch size: {args.batch_size}")
-    logger.info(f"Learning rate: {args.lr}")
-    logger.info(f"Decoder arch: {args.dec_arch}")
-    logger.info(f"Char arch: {args.char_arch}")
-    
+    logger.info(header_format("Starting"))
+    logger.info(pprint.pformat(args.__dict__))
     
     # Preparing
-    logger.info("---------- Preparing ----------")
+    logger.info(header_format("Preparing", sep='='))
     device = torch.device(args.device)
     if device.type.startswith('cuda'):
         torch.cuda.set_device(device)
@@ -140,41 +166,33 @@ if __name__ == '__main__':
     dev_loader   = torch.utils.data.DataLoader(dev_set,   batch_size=args.batch_size, shuffle=False, num_workers=4, collate_fn=dev_set.collate)
     
     # Buiding the model
-    logger.info("---------- Building the model ----------")
+    logger.info(header_format("Building", sep='-'))
     tagger = config.instantiate().to(device)
     count_params(tagger)
     
     # Training
-    logger.info("---------- Training ----------")
+    logger.info(header_format("Training", sep='-'))
     def save_callback(model):
         torch.save(model, f"{save_path}/{args.scheme}-{config.name}.pth")
-        
-    if args.optimizer == 'SGD':
-        optimizer = torch.optim.SGD(tagger.parameters(), lr=args.lr)
-    elif args.optimizer == 'AdamW':
-        optimizer = torch.optim.AdamW(tagger.parameters(), lr=args.lr)
-        
+    
+    param_groups = [{'params': tagger.pretrained_parameters(), 'lr': args.finetune_lr}]
+    param_groups.append({'params': collect_params(tagger, param_groups), 'lr': args.lr})
+    assert check_param_groups(tagger, param_groups)
+    optimizer = getattr(torch.optim, args.optimizer)(param_groups)
+    
+    schedule_by_step = False
     if args.scheduler == 'None':
         scheduler = None
     elif args.scheduler == 'ReduceLROnPlateau':
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=5)
-        
-    schedule_by_step = False
-    if args.use_bert:
-        param_groups = [{'params': list(tagger.bert_like.parameters()), 'lr': args.bert_lr}, 
-                        {'params': list(tagger.decoder.parameters()), 'lr': args.lr}]
-        if args.use_bert_intermediate:
-            param_groups.append({'params': list(tagger.intermediate.parameters()), 'lr': args.lr})
-            
-        assert check_param_groups(tagger, param_groups)
-        optimizer = torch.optim.AdamW(param_groups)
+    else:
+        schedule_by_step = True
         
         # lr_lambda = LRLambda.constant_lr()
         num_warmup_epochs = max(2, args.num_epochs // 5)
         lr_lambda = LRLambda.linear_decay_lr_with_warmup(num_warmup_steps=len(train_loader)*num_warmup_epochs, 
                                                          num_total_steps=len(train_loader)*args.num_epochs)
         scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
-        schedule_by_step = True
         
         
     trainer = SequenceTaggingTrainer(tagger, 
@@ -188,7 +206,7 @@ if __name__ == '__main__':
                         save_callback=save_callback, save_by_loss=False)
     
     # Evaluating
-    logger.info("---------- Evaluating ----------")
+    logger.info(header_format("Evaluating", sep='-'))
     tagger = torch.load(f"{save_path}/{args.scheme}-{config.name}.pth", map_location=device)
     trainer = SequenceTaggingTrainer(tagger, device=device)
     
@@ -197,6 +215,7 @@ if __name__ == '__main__':
     logger.info("Evaluating on test-set")
     evaluate_sequence_tagging(trainer, test_set)
     
-    logger.info("========== Ending ==========")
+    logger.info(pprint.pformat(args.__dict__))
+    logger.info(header_format("Ending", sep='='))
     
     
