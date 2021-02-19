@@ -30,7 +30,8 @@ from eznlp.sequence_tagging import precision_recall_f1_report
 from eznlp.sequence_tagging.io import ConllIO, BratIO
 from eznlp.sequence_tagging.transition import find_ascending
 
-from eznlp.language_modeling import MLMDataset, PMCMLMDataset, MLMTrainer
+from eznlp.language_modeling import MaskedLMConfig
+from eznlp.language_modeling import MaskedLMDataset, FolderLikeMaskedLMDataset, MaskedLMTrainer
 
 from eznlp.text_classification.io import TabularIO
 from eznlp.text_classification import TextClassificationDecoderConfig, TextClassifierConfig
@@ -59,14 +60,14 @@ if __name__ == '__main__':
     # flair_fw_lm = flair.models.LanguageModel.load_language_model("assets/flair/news-forward-0.4.1.pt")
     # flair_bw_lm = flair.models.LanguageModel.load_language_model("assets/flair/news-backward-0.4.1.pt")
         
-    options_file = "assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_options.json"
-    weight_file = "assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_weights.hdf5"
-    elmo = allennlp.modules.Elmo(options_file, weight_file, 1)
-    batch_elmo_ids = allennlp.modules.elmo.batch_to_ids(batch_tokenized_raw_text)
+    # options_file = "assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_options.json"
+    # weight_file = "assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_weights.hdf5"
+    # elmo = allennlp.modules.Elmo(options_file, weight_file, 1)
+    # batch_elmo_ids = allennlp.modules.elmo.batch_to_ids(batch_tokenized_raw_text)
     
     
-    # bert = transformers.BertModel.from_pretrained("assets/transformers/bert-base-uncased")
-    # tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-uncased")
+    bert = transformers.BertModel.from_pretrained("assets/transformers/bert-base-uncased")
+    tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-uncased")
     
     
     # glove = GloVe("assets/vectors/glove.6B.100d.txt", encoding='utf-8')

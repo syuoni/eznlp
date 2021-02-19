@@ -76,6 +76,13 @@ def bert_like_with_tokenizer(request, bert_with_tokenizer, roberta_with_tokenize
     elif request.param == 'roberta':
         return roberta_with_tokenizer
 
+@pytest.fixture(params=['bert', 'roberta'])
+def bert_like4mlm_with_tokenizer(request, bert4mlm_with_tokenizer, roberta4mlm_with_tokenizer):
+    if request.param == 'bert':
+        return bert4mlm_with_tokenizer
+    elif request.param == 'roberta':
+        return roberta4mlm_with_tokenizer
+
 
 @pytest.fixture
 def flair_fw_lm():

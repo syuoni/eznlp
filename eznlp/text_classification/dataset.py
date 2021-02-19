@@ -24,8 +24,8 @@ class TextClassificationDataset(Dataset):
         
     def _truncate_tokens(self):
         tokenizer = self.config.bert_like.tokenizer
-        max_len = tokenizer.max_len - 2
-        head_len = tokenizer.max_len // 4
+        max_len = tokenizer.model_max_length - 2
+        head_len = tokenizer.model_max_length // 4
         tail_len = max_len - head_len
         
         for data_entry in tqdm.tqdm(self.data):
