@@ -36,16 +36,22 @@ def load_data(args: argparse.Namespace):
         train_data = conll_io.read("data/conll2003/eng.train")
         dev_data   = conll_io.read("data/conll2003/eng.testa")
         test_data  = conll_io.read("data/conll2003/eng.testb")
+    elif args.dataset == 'conll2012':
+        conll_io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', line_sep_starts=["#begin", "#end", "pt/"])
+        train_data = conll_io.read("data/conll2012/train.english.v4_gold_conll", encoding='utf-8')
+        dev_data   = conll_io.read("data/conll2012/dev.english.v4_gold_conll", encoding='utf-8')
+        test_data  = conll_io.read("data/conll2012/test.english.v4_gold_conll", encoding='utf-8')
     elif args.dataset == 'ResumeNER':
         conll_io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BMES', token_sep="", pad_token="")
         train_data = conll_io.read("data/ResumeNER/train.char.bmes", encoding='utf-8')
         dev_data   = conll_io.read("data/ResumeNER/dev.char.bmes", encoding='utf-8')
         test_data  = conll_io.read("data/ResumeNER/test.char.bmes", encoding='utf-8')
     elif args.dataset == 'WeiboNER':
-        conll_io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BIO2', token_sep="", pad_token="")
-        train_data = conll_io.read("data/WeiboNER/weiboNER.conll.train", encoding='utf-8')
-        dev_data   = conll_io.read("data/WeiboNER/weiboNER.conll.dev", encoding='utf-8')
-        test_data  = conll_io.read("data/WeiboNER/weiboNER.conll.test", encoding='utf-8')
+        conll_io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BIO2', token_sep="", pad_token="", 
+                           pre_text_normalizer=lambda x: x[0])
+        train_data = conll_io.read("data/WeiboNER/weiboNER_2nd_conll.train", encoding='utf-8')
+        dev_data   = conll_io.read("data/WeiboNER/weiboNER_2nd_conll.dev", encoding='utf-8')
+        test_data  = conll_io.read("data/WeiboNER/weiboNER_2nd_conll.test", encoding='utf-8')
     elif args.dataset == 'SIGHAN2006':
         conll_io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BIO2', token_sep="", pad_token="")
         train_data = conll_io.read("data/SIGHAN2006/train.txt", encoding='utf-8')

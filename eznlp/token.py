@@ -86,10 +86,9 @@ class Full2Half(object):
         return text.translate(Full2Half._h2f)
     
     
-SHORT_LEN = 3
-MAX_DIGITS = 4
 
-def _adaptive_lower(text):
+SHORT_LEN = 3
+def _adaptive_lower(text: str):
     if len(text) <= 1 or text.islower():
         return text
     
@@ -106,44 +105,91 @@ def _adaptive_lower(text):
     return text
 
 
+_case_normalizers = {'none': lambda x: x, 
+                     'lower': lambda x: x.lower(), 
+                     'adaptive-lower': lambda x: _adaptive_lower(x)}
+
+
+MAX_DIGITS = 4
+def _text_to_num_mark(text: str, return_nan_mark: bool=True):
+    if text.endswith('%'):
+        text4num = text[:-1]
+        is_percent = True
+    else:
+        text4num = text
+        is_percent = False
+        
+    try:
+        possible_value = float(text4num)
+    except:
+        if return_nan_mark:
+            return '<nan>'
+        else:
+            return text
+    else:
+        if abs(possible_value) < 1:
+            digits = 0
+        else:
+            digits = min(MAX_DIGITS, int(np.log10(abs(possible_value))) + 1)
+            
+        if is_percent:
+            num_type = 'percent'
+        elif '.' in text4num:
+            num_type = 'real'
+        else:
+            num_type = 'int'
+            
+        if possible_value < 0:
+            num_sign = '-'
+        else:
+            num_sign = ''
+            
+        return f"<{num_sign}{num_type}{digits}>"
+    
+    
+_number_normalizers = {'none': lambda x: x, 
+                       'marks': lambda x: _text_to_num_mark(x, return_nan_mark=False), 
+                       'zeros': lambda x: digit_re.sub('0', x)}
+
+
+def _pipline(*normalizers):
+    def pipline_normalizer(x):
+        for f in normalizers:
+            x = f(x)
+        return x
+    
+    return pipline_normalizer
+
+
 class Token(object):
     """
     A token at the modeling level (e.g., word level for English text, or character level for Chinese text). 
     
     `Token` provides access to lower-level attributes (prefixes, suffixes). 
     """
-    _num_feature_names = [f"<{num_type}{digits}>" for num_type in ['int', 'real', 'percent'] for digits in range(MAX_DIGITS+1)] \
-                       + [f"<-{num_type}{digits}>" for num_type in ['int', 'real', 'percent'] for digits in range(MAX_DIGITS+1)]
     _en_shape_feature_names = list(en_shape2criterion.keys())
     
-    _basic_ohot_fields = ['text', 
+    _basic_ohot_fields = ['text', 'num_mark', 
                           'prefix_2', 'prefix_3', 'prefix_4', 'prefix_5', 
                           'suffix_2', 'suffix_3', 'suffix_4', 'suffix_5', 
                           'en_pattern', 'en_pattern_sum']
-    _basic_mhot_fields = ['en_shape_features', 'num_features']
+    _basic_mhot_fields = ['en_shape_features']
     
-    def __init__(self, raw_text, case_mode='None', number_mode='None', to_half=True, to_zh_simplified=False, **kwargs):
+    def __init__(self, raw_text: str, pre_text_normalizer=None, 
+                 case_mode='None', number_mode='None', to_half=True, to_zh_simplified=False, 
+                 post_text_normalizer=None, **kwargs):
         self.raw_text = raw_text
-        if case_mode.lower() == 'none':
-            self.text = raw_text
-        elif case_mode.lower() == 'lower':
-            self.text = raw_text.lower()
-        elif case_mode.lower() == 'adaptive-lower':
-            self.text = _adaptive_lower(raw_text)
-        else:
-            raise ValueError(f"Invalid value of case_mode: {case_mode}")
+        if callable(pre_text_normalizer):
+            self.raw_text = pre_text_normalizer(self.raw_text)
             
-        if number_mode.lower() == 'none':
-            pass
-        elif number_mode.lower() == 'marks':
-            self.text = self.num_mark
-        elif number_mode.lower() == 'zeros':
-            self.text = digit_re.sub('0', self.text)
-        else:
-            raise ValueError(f"Invalid value of num_mode: {number_mode}")
-            
-        self.text = Full2Half.full2half(self.text) if to_half else self.text
-        self.text = hanziconv.HanziConv.toSimplified(self.text) if to_zh_simplified else self.text
+        pipline_normalizer = _pipline(_case_normalizers[case_mode.lower()], 
+                                      _number_normalizers[number_mode.lower()], 
+                                      lambda x: Full2Half.full2half(x) if to_half else x, 
+                                      lambda x: hanziconv.HanziConv.toSimplified(x) if to_zh_simplified else x)
+        self.text = pipline_normalizer(self.raw_text)
+        if callable(post_text_normalizer):
+            self.text = post_text_normalizer(self.text)
+        
         for k, v in kwargs.items():
             setattr(self, k, v)
             
@@ -187,45 +233,8 @@ class Token(object):
         return self.raw_text[-5:]
     
     @property
-    def num_features(self):
-        features = np.zeros((MAX_DIGITS + 1) * 6, dtype=bool)
-        
-        if self.raw_text.endswith('%'):
-            text4num = self.raw_text[:-1]
-            is_percent = True
-        else:
-            text4num = self.raw_text
-            is_percent = False
-            
-        try:
-            possible_value = float(text4num)
-        except:
-            return features
-        else:
-            if abs(possible_value) < 1:
-                offset = 0
-            else:
-                offset = min(MAX_DIGITS, int(np.log10(abs(possible_value))) + 1)
-                
-            if is_percent:
-                offset += (MAX_DIGITS + 1) * 2
-            elif '.' in text4num:
-                offset += (MAX_DIGITS + 1)
-                
-            if possible_value < 0:
-                offset += (MAX_DIGITS + 1) * 3
-                
-            features[offset] = True
-            return features
-        
-        
-    @property
     def num_mark(self):
-        num_features = self.num_features
-        if not num_features.any():
-            return self.text
-        else:
-            return self._num_feature_names[num_features.tolist().index(True)]
+        return _text_to_num_mark(self.raw_text, return_nan_mark=True)
         
     @property
     def en_pattern(self):

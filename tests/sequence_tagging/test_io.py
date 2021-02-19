@@ -117,6 +117,23 @@ class TestConllIO(object):
         assert sum(len(ex['tokens']) for ex in test_data) == 14_844
         
         
+    def test_weibo_ner_2nd(self):
+        conll_io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BIO2', pre_text_normalizer=lambda x: x[0])
+        train_data = conll_io.read("data/WeiboNER/weiboNER_2nd_conll.train", encoding='utf-8')
+        dev_data   = conll_io.read("data/WeiboNER/weiboNER_2nd_conll.dev", encoding='utf-8')
+        test_data  = conll_io.read("data/WeiboNER/weiboNER_2nd_conll.test", encoding='utf-8')
+        
+        assert len(train_data) == 1_350
+        assert sum(len(ex['chunks']) for ex in train_data) == 1_895
+        assert sum(len(ex['tokens']) for ex in train_data) == 73_778
+        assert len(dev_data) == 270
+        assert sum(len(ex['chunks']) for ex in dev_data) == 389
+        assert sum(len(ex['tokens']) for ex in dev_data) == 14_509
+        assert len(test_data) == 270
+        assert sum(len(ex['chunks']) for ex in test_data) == 418
+        assert sum(len(ex['tokens']) for ex in test_data) == 14_842
+        
+        
         
 class TestBratIO(object):
     @pytest.mark.parametrize("pre_inserted_spaces", [False, True])

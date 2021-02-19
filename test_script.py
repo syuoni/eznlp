@@ -66,9 +66,8 @@ if __name__ == '__main__':
     # batch_elmo_ids = allennlp.modules.elmo.batch_to_ids(batch_tokenized_raw_text)
     
     
-    bert = transformers.BertModel.from_pretrained("assets/transformers/bert-base-uncased")
-    tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-uncased")
-    
+    # bert = transformers.BertModel.from_pretrained("assets/transformers/bert-base-uncased")
+    # tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-uncased")
     
     # glove = GloVe("assets/vectors/glove.6B.100d.txt", encoding='utf-8')
     # senna = Senna("assets/vectors/Senna")
@@ -103,7 +102,7 @@ if __name__ == '__main__':
     # check_param_groups(tagger, param_groups)
     # optimizer = torch.optim.AdamW(param_groups)
     
-    # import jieba
+    
     # brat_io = BratIO(attr_names=['Denied', 'Analyzed'], tokenize_callback=jieba.cut)
     # brat_data = brat_io.read("assets/data/brat/demo.txt", encoding='utf-8')
     # brat_io.write(brat_data, "assets/data/brat/demo-write.txt", encoding='utf-8')

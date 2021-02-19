@@ -149,26 +149,32 @@ class TestToken(object):
                               ("2011", "<int4>"), 
                               ("-2011", "<-int4>"), 
                               ("123456", "<int4>"), 
-                              ("-123456", "<-int4>")])
-    def test_number_to_mark(self, raw_text, num_mark):
+                              ("-123456", "<-int4>"), 
+                              ("Jack888_7John", "<nan>"), 
+                              ("Jesus", "<nan>")])
+    def test_text_to_num_marks(self, raw_text, num_mark):
         tok = Token(raw_text, number_mode='Marks')
         assert tok.raw_text == raw_text
-        assert tok.text == num_mark
-        for i, key in enumerate(tok._num_feature_names):
-            assert tok.num_features[i] == (num_mark == key)
-            
-    
+        assert tok.num_mark == num_mark
+        
+        if num_mark == "<nan>":
+            assert tok.text == raw_text
+        else:
+            assert tok.text == num_mark
+        
+        
     @pytest.mark.parametrize("raw_text, zeros_text", 
                              [("5.44", "0.00"), 
                               ("-5.44", "-0.00"), 
-                              ("Jack888_7John", "Jack000_0John")])
-    def test_number_to_zero(self, raw_text, zeros_text):
+                              ("Jack888_7John", "Jack000_0John"), 
+                              ("Jesus", "Jesus")])
+    def test_text_to_zeros(self, raw_text, zeros_text):
         tok = Token(raw_text, number_mode='Zeros')
         assert tok.raw_text == raw_text
         assert tok.text == zeros_text
         
         
-
+        
 class TestTokenSequence(object):
     def test_text(self):
         token_list = [Token(tok, case_mode='Lower', number_mode='Marks') for tok in "This is a -3.14 demo .".split()]
