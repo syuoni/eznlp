@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from typing import Union, List
 import logging
+import subprocess
 import torch
 import numpy
 import matplotlib
@@ -118,4 +119,36 @@ def count_params(model_or_params: Union[torch.nn.Module, torch.nn.Parameter, Lis
         return num_trainable
     else:
         return num_trainable + num_frozen
+    
 
+def auto_device(min_memory: int=2048):
+    """
+    https://stackoverflow.com/questions/59567226/how-to-programmatically-determine-available-gpu-memory-with-tensorflow
+    """
+    logger.info("Automatically allocating device...")
+    
+    if not torch.cuda.is_available():
+        logger.info("Cuda device is unavailable, device `cpu` returned")
+        return torch.device('cpu')
+    
+    try:
+        COMMAND = "nvidia-smi --query-gpu=memory.free --format=csv"
+        free_memories = subprocess.check_output(COMMAND.split()).decode().strip().split('\n')[1:]
+        free_memories = [int(x.split()[0]) for x in free_memories]
+        assert len(free_memories) == torch.cuda.device_count()
+    except:
+        logger.warning("Cuda device information inquiry failed, device `cpu` returned")
+        return torch.device('cpu')
+    else:
+        selected_id = numpy.argmax(free_memories)
+        selected_mem = free_memories[selected_id]
+        if selected_mem < min_memory:
+            logger.warning(f"Cuda device `cuda:{selected_id}` with maximum free memory {selected_mem} MiB "
+                           f"fails to meet the requirement {min_memory} MiB, device `cpu` returned")
+            return torch.device('cpu')
+        else:
+            logger.info(f"Cuda device `cuda:{selected_id}` with free memory {selected_mem} MiB "
+                        f"successfully allocated, device `cuda:{selected_id}` returned")
+            return torch.device('cuda', selected_id)
+        
+        

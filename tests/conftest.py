@@ -5,6 +5,7 @@ import allennlp.modules
 import transformers
 import flair
 
+from eznlp import auto_device
 from eznlp.pretrained import GloVe
 from eznlp.sequence_tagging.io import ConllIO
 from eznlp.text_classification.io import TabularIO
@@ -17,7 +18,7 @@ def pytest_addoption(parser):
 def device(request):
     device_str = request.config.getoption('--device')
     if device_str == 'auto':
-        return torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        return auto_device()
     else:
         return torch.device(device_str)
     

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from collections import OrderedDict, Counter
 import argparse
+import logging
 import glob
 import pickle
 import numpy as np
@@ -13,6 +14,7 @@ import allennlp.modules
 import transformers
 import flair
 
+from eznlp import auto_device
 from eznlp.config import ConfigList, ConfigDict
 from eznlp.token import Token, TokenSequence
 from eznlp.data import Batch
@@ -39,8 +41,10 @@ from eznlp.text_classification import TextClassificationDataset
 from eznlp.text_classification import TextClassificationTrainer
 
 
+
 if __name__ == '__main__':
-    device = torch.device('cpu')
+    logging.basicConfig(level=logging.INFO)
+    device = auto_device()
     
     # import jieba
     # tokens = TokenSequence.from_tokenized_text(list("李明住在中山西路。"))

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import os
 import argparse
 import jieba
 import logging
@@ -56,10 +57,11 @@ def evaluate_sequence_tagging(trainer, dataset):
     micro_f1, macro_f1 = ave_scores['micro']['f1'], ave_scores['macro']['f1']
     logger.info(f"Micro F1-score: {micro_f1*100:2.3f}%")
     logger.info(f"Macro F1-score: {macro_f1*100:2.3f}%")
-    
+
+
 
 def header_format(content: str, sep='=', width=100):
-    side_width = width - len(content) - 2
+    side_width = max(width - len(content) - 2, 10)
     left_width = side_width // 2
     right_width = side_width - left_width
     return f"{sep*left_width} {content} {sep*right_width}"
