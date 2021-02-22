@@ -14,7 +14,7 @@ from eznlp.text_classification.io import TabularIO
 def pytest_addoption(parser):
     parser.addoption('--device', type=str, default='auto', help="device to run tests (`auto`, `cpu` or `cuda:x`)")
     
-@pytest.fixture
+@pytest.fixture(scope='session')
 def device(request):
     device_str = request.config.getoption('--device')
     if device_str == 'auto':

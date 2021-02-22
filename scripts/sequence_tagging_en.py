@@ -192,7 +192,8 @@ if __name__ == '__main__':
     
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     save_path =  f"cache/{args.dataset}-{timestamp}"
-    if not os.path.exists(save_path): os.makedirs(save_path)
+    if not os.path.exists(save_path): 
+        os.makedirs(save_path)
     logging.basicConfig(level=logging.INFO, 
                         format="[%(asctime)s %(levelname)s] %(message)s", 
                         datefmt="%Y-%m-%d %H:%M:%S", 
@@ -201,6 +202,7 @@ if __name__ == '__main__':
     
     logger = logging.getLogger(__name__)
     logger.info(header_format("Starting", sep='='))
+    logger.info(" ".join(sys.argv))
     logger.info(pprint.pformat(args.__dict__))
     
     
@@ -265,6 +267,7 @@ if __name__ == '__main__':
     logger.info("Evaluating on test-set")
     evaluate_sequence_tagging(trainer, test_set)
     
+    logger.info(" ".join(sys.argv))
     logger.info(pprint.pformat(args.__dict__))
     logger.info(header_format("Ending", sep='='))
     
