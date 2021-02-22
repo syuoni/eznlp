@@ -27,8 +27,11 @@ from utils import load_data, evaluate_sequence_tagging, header_format
 
 
 def parse_arguments(parser: argparse.ArgumentParser):
-    parser.add_argument('--pdb', default=False, action='store_true', 
-                        help="whether to use pdb for debug")
+    group_debug = parser.add_argument_group('debug')
+    group_debug.add_argument('--pdb', default=False, action='store_true', 
+                             help="whether to use pdb for debug")
+    group_debug.add_argument('--no_log_terminal', dest='log_terminal', default=True, action='store_false', 
+                             help="whether log to terminal")
     
     group_data = parser.add_argument_group('dataset')
     group_data.add_argument('--dataset', type=str, default='conll2003', 
@@ -159,18 +162,22 @@ def build_config(args: argparse.Namespace):
         flair_fw_config, flair_bw_config = None, None
         
         if args.use_roberta:
-            tokenizer =  transformers.RobertaTokenizer.from_pretrained("assets/transformers/roberta-base")
-            bert_like = transformers.RobertaModel.from_pretrained("assets/transformers/roberta-base", 
-                                                                  hidden_dropout_prob=args.bert_drop_rate, 
-                                                                  attention_probs_dropout_prob=0.2)
+            tokenizer =  transformers.RobertaTokenizer.from_pretrained("assets/transformers/roberta-base", 
+                                                                       add_prefix_space=True)
+            roberta = transformers.RobertaModel.from_pretrained("assets/transformers/roberta-base", 
+                                                                hidden_dropout_prob=args.bert_drop_rate, 
+                                                                attention_probs_dropout_prob=0.2)
+            bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=roberta, arch='RoBERTa', 
+                                              freeze=False, use_truecase=False)
         else:
             # Cased tokenizer for NER task
             tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-cased")
-            bert_like = transformers.BertModel.from_pretrained("assets/transformers/bert-base-cased", 
-                                                               hidden_dropout_prob=args.bert_drop_rate, 
-                                                               attention_probs_dropout_prob=0.2)
-        bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert_like, freeze=False, use_truecase=True)
-        
+            bert = transformers.BertModel.from_pretrained("assets/transformers/bert-base-cased", 
+                                                          hidden_dropout_prob=args.bert_drop_rate, 
+                                                          attention_probs_dropout_prob=0.2)
+            bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert, arch='BERT', 
+                                              freeze=False, use_truecase=True)
+            
     else:
         raise Exception("No sub-command specified")
         
@@ -189,16 +196,19 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     args = parse_arguments(parser)
     
-    
-    timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    # Use micro-seconds to ensure different timestamps while adopting multiprocessing
+    timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     save_path =  f"cache/{args.dataset}-{timestamp}"
     if not os.path.exists(save_path): 
         os.makedirs(save_path)
+        
+    handlers=[logging.FileHandler(f"{save_path}/training.log")]
+    if args.log_terminal:
+        handlers.append(logging.StreamHandler(sys.stdout))
     logging.basicConfig(level=logging.INFO, 
                         format="[%(asctime)s %(levelname)s] %(message)s", 
                         datefmt="%Y-%m-%d %H:%M:%S", 
-                        handlers=[logging.FileHandler(f"{save_path}/training.log"), 
-                                  logging.StreamHandler(sys.stdout)])
+                        handlers=handlers)
     
     logger = logging.getLogger(__name__)
     logger.info(header_format("Starting", sep='='))

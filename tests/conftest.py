@@ -47,28 +47,33 @@ def elmo():
                                  num_output_representations=1)
 
 
-bert_path = "assets/transformers/bert-base-cased"
-roberta_path = "assets/transformers/roberta-base"
+BERT_PATH = "assets/transformers/bert-base-cased"
+ROBERTA_PATH = "assets/transformers/roberta-base"
 
 @pytest.fixture
 def bert_with_tokenizer():
-    return (transformers.BertModel.from_pretrained(bert_path), 
-            transformers.BertTokenizer.from_pretrained(bert_path))
+    return (transformers.BertModel.from_pretrained(BERT_PATH), 
+            transformers.BertTokenizer.from_pretrained(BERT_PATH))
 
 @pytest.fixture
 def bert4mlm_with_tokenizer():
-    return (transformers.BertForMaskedLM.from_pretrained(bert_path), 
-            transformers.BertTokenizer.from_pretrained(bert_path))
+    return (transformers.BertForMaskedLM.from_pretrained(BERT_PATH), 
+            transformers.BertTokenizer.from_pretrained(BERT_PATH))
 
 @pytest.fixture
 def roberta_with_tokenizer():
-    return (transformers.RobertaModel.from_pretrained(roberta_path), 
-            transformers.RobertaTokenizer.from_pretrained(roberta_path))
+    """
+    The GPT-2/RoBERTa tokenizer expects a space before all the words. 
+    https://github.com/huggingface/transformers/issues/1196
+    https://github.com/pytorch/fairseq/blob/master/fairseq/models/roberta/hub_interface.py#L38-L56
+    """
+    return (transformers.RobertaModel.from_pretrained(ROBERTA_PATH), 
+            transformers.RobertaTokenizer.from_pretrained(ROBERTA_PATH, add_prefix_space=True))
 
 @pytest.fixture
 def roberta4mlm_with_tokenizer():
-    return (transformers.RobertaForMaskedLM.from_pretrained(roberta_path), 
-            transformers.RobertaTokenizer.from_pretrained(roberta_path))
+    return (transformers.RobertaForMaskedLM.from_pretrained(ROBERTA_PATH), 
+            transformers.RobertaTokenizer.from_pretrained(ROBERTA_PATH, add_prefix_space=True))
 
 @pytest.fixture(params=['bert', 'roberta'])
 def bert_like_with_tokenizer(request, bert_with_tokenizer, roberta_with_tokenizer):
