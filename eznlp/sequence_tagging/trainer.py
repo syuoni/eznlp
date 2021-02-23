@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import tqdm
 import torch
 
 from ..training.trainer import Trainer
@@ -35,7 +34,7 @@ class SequenceTaggingTrainer(Trainer):
         self.model.eval()
         set_tags = []
         with torch.no_grad():
-            for batch in tqdm.tqdm(dataloader):
+            for batch in dataloader:
                 batch.to(self.device)
                 set_tags.extend(self.model.decode(batch))
         return set_tags

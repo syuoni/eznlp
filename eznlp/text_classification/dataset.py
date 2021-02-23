@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from typing import List
-import tqdm
 import numpy as np
 
 from ..data.dataset import Dataset
@@ -28,7 +27,7 @@ class TextClassificationDataset(Dataset):
         head_len = tokenizer.model_max_length // 4
         tail_len = max_len - head_len
         
-        for data_entry in tqdm.tqdm(self.data):
+        for data_entry in self.data:
             tokens = data_entry['tokens']
             nested_sub_tokens = [tokenizer.tokenize(word) for word in tokens.raw_text]
             sub_tok_seq_lens = [len(tok) for tok in nested_sub_tokens]
