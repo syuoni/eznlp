@@ -84,6 +84,8 @@ class BertLikeConfig(Config):
             A 1D tensor indicating each sub-token's original index in `tokenized_raw_text`.
         """
         nested_sub_tokens = [self.tokenizer.tokenize(word) for word in tokenized_raw_text]
+        # The tokenizer returns an empty list if the input is a space-like string
+        nested_sub_tokens = [word if len(word) > 0 else [self.tokenizer.unk_token] for word in nested_sub_tokens]
         sub_tokens = [sub_tok for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
         ori_indexes = [i for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
         
