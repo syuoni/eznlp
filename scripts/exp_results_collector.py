@@ -3,6 +3,7 @@ import glob
 import re
 import argparse
 import logging
+import datetime
 import pandas as pd
 
 
@@ -22,7 +23,7 @@ if __name__ == '__main__':
                         datefmt="%Y-%m-%d %H:%M:%S")
     logger = logging.getLogger(__name__)
     
-    logging_fns = glob.glob(f"cache/{args.dataset}-*/training.log")
+    logging_fns = glob.glob(f"cache/{args.dataset}/*/training.log")
     exp_results = []
     for logging_fn in logging_fns:
         with open(logging_fn) as f:
@@ -40,6 +41,8 @@ if __name__ == '__main__':
             exp_results.append(exp_res)
             
             
+    timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     df = pd.DataFrame(exp_results)
-    df.to_excel(f"cache/{args.dataset}-collected.xlsx", index=False)
+    df.to_excel(f"cache/{args.dataset}-collected-{timestamp}.xlsx", index=False)
+    
     

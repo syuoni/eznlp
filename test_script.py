@@ -45,7 +45,7 @@ from eznlp.text_classification import TextClassificationTrainer
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     device = auto_device()
-    
+        
     # import jieba
     # tokens = TokenSequence.from_tokenized_text(list("李明住在中山西路。"))
     # print(list(jieba.cut_for_search("".join(tokens.raw_text))))
@@ -55,25 +55,25 @@ if __name__ == '__main__':
         
     # tokens.build_softwords(jieba.tokenize)
     
-    batch_tokenized_raw_text = [["I", "like", "it", "."], 
-                                ["Do", "you", "love", "me", "?"], 
-                                ["Sure", "!"], 
-                                ["Future", "it", "out"]]
+    # batch_tokenized_raw_text = [["I", "like", "it", "."], 
+    #                             ["Do", "you", "love", "me", "?"], 
+    #                             ["Sure", "!"], 
+    #                             ["Future", "it", "out"]]
     
     
-    flair_fw_lm = flair.models.LanguageModel.load_language_model("assets/flair/news-forward-0.4.1.pt")
-    flair_bw_lm = flair.models.LanguageModel.load_language_model("assets/flair/news-backward-0.4.1.pt")
+    # flair_fw_lm = flair.models.LanguageModel.load_language_model("assets/flair/news-forward-0.4.1.pt")
+    # flair_bw_lm = flair.models.LanguageModel.load_language_model("assets/flair/news-backward-0.4.1.pt")
         
-    options_file = "assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_options.json"
-    weight_file = "assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_weights.hdf5"
-    elmo = allennlp.modules.Elmo(options_file, weight_file, 1)
-    batch_elmo_ids = allennlp.modules.elmo.batch_to_ids(batch_tokenized_raw_text)
+    # options_file = "assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_options.json"
+    # weight_file = "assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_weights.hdf5"
+    # elmo = allennlp.modules.Elmo(options_file, weight_file, 1)
+    # batch_elmo_ids = allennlp.modules.elmo.batch_to_ids(batch_tokenized_raw_text)
     
     
-    bert = transformers.BertModel.from_pretrained("assets/transformers/bert-base-uncased")
-    tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-uncased")
+    # bert = transformers.BertModel.from_pretrained("assets/transformers/bert-base-uncased")
+    # tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-uncased")
     
-    glove = GloVe("assets/vectors/glove.6B.100d.txt", encoding='utf-8')
+    # glove = GloVe("assets/vectors/glove.6B.100d.txt", encoding='utf-8')
     # senna = Senna("assets/vectors/Senna")
     
     # ctb50d = Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
@@ -81,21 +81,21 @@ if __name__ == '__main__':
     # giga_bi  = load_vectors_from_file("assets/vector_cache/gigaword_chn.all.a2b.bi.ite50.vec", encoding='utf-8')
     
     
-    conll_io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO2')
-    train_data = conll_io.read("data/conll2003/demo.eng.train")
-    dev_data   = conll_io.read("data/conll2003/demo.eng.testa")
-    test_data  = conll_io.read("data/conll2003/demo.eng.testb")
+    # conll_io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO2')
+    # train_data = conll_io.read("data/conll2003/demo.eng.train")
+    # dev_data   = conll_io.read("data/conll2003/demo.eng.testa")
+    # test_data  = conll_io.read("data/conll2003/demo.eng.testb")
     
-    config = SequenceTaggerConfig(ohots=ConfigDict({'text': OneHotConfig(field='text', vectors=glove)}), 
-                                  char=CharConfig(),
-                                  elmo=ELMoConfig(elmo=elmo), 
-                                  bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert), 
-                                  flair_fw=FlairConfig(flair_lm=flair_fw_lm), 
-                                  flair_bw=FlairConfig(flair_lm=flair_bw_lm))
+    # config = SequenceTaggerConfig(ohots=ConfigDict({'text': OneHotConfig(field='text', vectors=glove)}), 
+    #                               char=CharConfig(),
+    #                               elmo=ELMoConfig(elmo=elmo), 
+    #                               bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert), 
+    #                               flair_fw=FlairConfig(flair_lm=flair_fw_lm), 
+    #                               flair_bw=FlairConfig(flair_lm=flair_bw_lm))
     
-    train_set = SequenceTaggingDataset(train_data, config)
-    train_set.build_vocabs_and_dims(dev_data, test_data)
-    tagger = config.instantiate()
+    # train_set = SequenceTaggingDataset(train_data, config)
+    # train_set.build_vocabs_and_dims(dev_data, test_data)
+    # tagger = config.instantiate()
     
     # batch = train_set.collate([train_set[i] for i in range(0, 4)])
     # losses, hidden = tagger(batch, return_hidden=True)
@@ -142,5 +142,11 @@ if __name__ == '__main__':
     # trainer = TextClassificationTrainer(classifier, optimizer=optimizer, device=device)
     # trainer.train_epoch([batch])
     
-    
-    
+    # for model_name in ["hfl/chinese-bert-wwm-ext", 
+    #                    "hfl/chinese-roberta-wwm-ext"]:
+    #     logging.info(f"Start downloading {model_name}...")
+    #     tokenizer = transformers.AutoTokenizer.from_pretrained(model_name)
+    #     model = transformers.AutoModelForPreTraining.from_pretrained(model_name)
+    #     tokenizer.save_pretrained(f"assets/transformers/{model_name}")
+    #     model.save_pretrained(f"assets/transformers/{model_name}")
+        

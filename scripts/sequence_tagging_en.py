@@ -63,7 +63,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
     group_model = parser.add_argument_group('model configurations')
     group_model.add_argument('--hid_dim', type=int, default=200, 
                              help="hidden dim")
-    group_model.add_argument('--num_layers', type=int, default=2, 
+    group_model.add_argument('--num_layers', type=int, default=1, 
                              help="number of encoder layers")
     group_model.add_argument('--drop_rate', type=float, default=0.5, 
                              help="dropout rate")
@@ -90,8 +90,8 @@ def parse_arguments(parser: argparse.ArgumentParser):
     
     parser_ft = subparsers.add_parser('finetune', aliases=['ft'], 
                                       help="train by finetuning pretrained models")
-    parser_ft.add_argument('--use_roberta', default=False, action='store_true', 
-                           help="whether to use RoBERTa")
+    parser_ft.add_argument('--bert_arch', type=str, default='BERT_base', 
+                           help="bert-like architecture")
     parser_ft.add_argument('--bert_drop_rate', type=float, default=0.2, 
                            help="dropout rate for BERT")
     parser_ft.add_argument('--use_interm', default=False, action='store_true', 
@@ -104,7 +104,6 @@ def parse_arguments(parser: argparse.ArgumentParser):
     torch.backends.cudnn.deterministic = True
     
     args.grad_clip = None if args.grad_clip < 0 else args.grad_clip
-    
     return args
     
 
@@ -161,22 +160,30 @@ def build_config(args: argparse.Namespace):
         elmo_config = None
         flair_fw_config, flair_bw_config = None, None
         
-        if args.use_roberta:
-            tokenizer =  transformers.RobertaTokenizer.from_pretrained("assets/transformers/roberta-base", 
-                                                                       add_prefix_space=True)
-            roberta = transformers.RobertaModel.from_pretrained("assets/transformers/roberta-base", 
-                                                                hidden_dropout_prob=args.bert_drop_rate, 
-                                                                attention_probs_dropout_prob=0.2)
-            bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=roberta, arch='RoBERTa', 
-                                              freeze=False, use_truecase=False)
-        else:
+        if args.bert_arch.startswith('BERT'):
             # Cased tokenizer for NER task
-            tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-cased")
-            bert = transformers.BertModel.from_pretrained("assets/transformers/bert-base-cased", 
-                                                          hidden_dropout_prob=args.bert_drop_rate, 
-                                                          attention_probs_dropout_prob=0.2)
-            bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert, arch='BERT', 
+            if args.bert_arch.endswith('base'):
+                PATH = "assets/transformers/bert-base-cased"
+            elif args.bert_arch.endswith('large'):
+                PATH = "assets/transformers/bert-large-cased"
+            
+            tokenizer = transformers.BertTokenizer.from_pretrained(PATH)
+            bert = transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, 
+                                                          attention_probs_dropout_prob=args.bert_drop_rate)
+            bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert, arch=args.bert_arch, 
                                               freeze=False, use_truecase=True)
+            
+        elif args.bert_arch.startswith('RoBERTa'):
+            if args.bert_arch.endswith('base'):
+                PATH = "assets/transformers/roberta-base"
+            elif args.bert_arch.endswith('large'):
+                PATH = "assets/transformers/roberta-large"
+            
+            tokenizer = transformers.RobertaTokenizer.from_pretrained(PATH, add_prefix_space=True)
+            roberta = transformers.RobertaModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, 
+                                                                attention_probs_dropout_prob=args.bert_drop_rate)
+            bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=roberta, arch=args.bert_arch, 
+                                              freeze=False, use_truecase=False)
             
     else:
         raise Exception("No sub-command specified")
@@ -198,8 +205,8 @@ if __name__ == '__main__':
     
     # Use micro-seconds to ensure different timestamps while adopting multiprocessing
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-    save_path =  f"cache/{args.dataset}-{timestamp}"
-    if not os.path.exists(save_path): 
+    save_path =  f"cache/{args.dataset}/{timestamp}"
+    if not os.path.exists(save_path):
         os.makedirs(save_path)
         
     handlers=[logging.FileHandler(f"{save_path}/training.log")]
