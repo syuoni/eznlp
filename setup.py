@@ -3,10 +3,10 @@ import os
 import re
 from setuptools import setup, find_packages
 
-here = os.path.dirname(os.path.realpath(__file__))
-with open(os.path.join(here, "README.md")) as f:
+HERE = os.path.dirname(os.path.realpath(__file__))
+with open(os.path.join(HERE, "README.md"), encoding='utf-8') as f:
     readme = f.read()
-with open(os.path.join(here, 'eznlp', '__init__.py')) as f:
+with open(os.path.join(HERE, 'eznlp', '__init__.py'), encoding='utf-8') as f:
     version = re.search(r'__version__ = (["\'])([^"\']*)\1', f.read())[2]
 
 
