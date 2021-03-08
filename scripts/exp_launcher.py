@@ -76,7 +76,7 @@ if __name__ == '__main__':
                        ["--optimizer AdamW --lr 1e-3 --finetune_lr 1e-5", 
                         "--optimizer AdamW --lr 5e-4 --finetune_lr 1e-5", 
                         "--optimizer AdamW --lr 2e-3 --finetune_lr 1e-5"], 
-                       ["--batch_size 64"], 
+                       ["--batch_size 48"], 
                        ["--scheduler LinearDecayWithWarmup"], 
                        ["--dec_arch SoftMax", "--dec_arch CRF"],
                        # ["", "--use_locked_drop"], 
