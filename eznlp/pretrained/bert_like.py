@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 from typing import List
+import re
+import truecase
 import torch
 import transformers
 
-from ..data.token import TokenSequence
+from ..token import TokenSequence
 from ..nn.modules import SequenceGroupAggregating, ScalarMix
 from ..nn.functional import seq_lens2mask
 from ..config import Config
@@ -22,11 +24,18 @@ class BertLikeConfig(Config):
         
         self.from_tokenized = kwargs.pop('from_tokenized', True)
         self.pre_truncation = kwargs.pop('pre_truncation', False)
+        self.use_truecase = kwargs.pop('use_truecase', False)
         self.agg_mode = kwargs.pop('agg_mode', 'mean')
         self.mix_layers = kwargs.pop('mix_layers', 'top')
         self.use_gamma = kwargs.pop('use_gamma', False)
         
         super().__init__(**kwargs)
+        
+        
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state['bert_like'] = None
+        return state
         
         
     def _token_ids_from_string(self, raw_text: str):
@@ -75,6 +84,8 @@ class BertLikeConfig(Config):
             A 1D tensor indicating each sub-token's original index in `tokenized_raw_text`.
         """
         nested_sub_tokens = [self.tokenizer.tokenize(word) for word in tokenized_raw_text]
+        # The tokenizer returns an empty list if the input is a space-like string
+        nested_sub_tokens = [word if len(word) > 0 else [self.tokenizer.unk_token] for word in nested_sub_tokens]
         sub_tokens = [sub_tok for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
         ori_indexes = [i for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
         
@@ -88,13 +99,17 @@ class BertLikeConfig(Config):
         
         
     def exemplify(self, tokens: TokenSequence):
+        tokenized_raw_text = tokens.raw_text
+        if self.use_truecase:
+            tokenized_raw_text = _truecase(tokenized_raw_text)
+            
         if self.from_tokenized:
-            sub_tok_ids, ori_indexes = self._token_ids_from_tokenized(tokens.raw_text)
+            sub_tok_ids, ori_indexes = self._token_ids_from_tokenized(tokenized_raw_text)
             return {'sub_tok_ids': sub_tok_ids, 
                     'ori_indexes': ori_indexes}
         else:
             # TODO:?
-            sub_tok_ids = self._token_ids_from_string(" ".join(tokens.raw_text))
+            sub_tok_ids = self._token_ids_from_string(" ".join(tokenized_raw_text))
             return {'sub_tok_ids': sub_tok_ids}
             
         
@@ -158,30 +173,63 @@ class BertLikeEmbedder(torch.nn.Module):
                 sub_tok_ids: torch.LongTensor, 
                 sub_tok_mask: torch.BoolTensor, 
                 ori_indexes: torch.LongTensor=None):
-        # bert_outs: (batch, sub_tok_step+2, hid_dim)
-        # hidden: list of (batch, sub_tok_step+2, hid_dim)
-        bert_outs, _, hidden = self.bert_like(input_ids=sub_tok_ids, 
-                                              attention_mask=(~sub_tok_mask).type(torch.long), 
-                                              output_hidden_states=True)
+        # last_hidden: (batch, sub_tok_step+2, hid_dim)
+        # pooler_output: (batch, hid_dim)
+        # hidden: a tuple of (batch, sub_tok_step+2, hid_dim)
+        bert_outs = self.bert_like(input_ids=sub_tok_ids, 
+                                   attention_mask=(~sub_tok_mask).type(torch.long), 
+                                   output_hidden_states=True)
+        bert_hidden = bert_outs['hidden_states']
         
+        # bert_hidden: (batch, sub_tok_step+2, hid_dim)
         if self.mix_layers.lower() == 'trainable':
-            bert_outs = self.scalar_mix(hidden)
+            bert_hidden = self.scalar_mix(bert_hidden)
         elif self.mix_layers.lower() == 'top':
-            pass
+            bert_hidden = bert_hidden[-1]
         elif self.mix_layers.lower() == 'average':
-            bert_outs = sum(hidden) / len(hidden)
+            bert_hidden = sum(bert_hidden) / len(bert_hidden)
         
         if self.use_gamma:
-            bert_outs = self.gamma * bert_outs
+            bert_hidden = self.gamma * bert_hidden
         
         # Remove the `[CLS]` and `[SEP]` positions. 
-        bert_outs = bert_outs[:, 1:-1]
+        bert_hidden = bert_hidden[:, 1:-1]
         sub_tok_mask = sub_tok_mask[:, 2:]
         
         if self.from_tokenized:
-            # bert_outs: (batch, tok_step, hid_dim)
-            bert_outs = self.group_aggregating(bert_outs, ori_indexes)    
+            # bert_hidden: (batch, tok_step, hid_dim)
+            bert_hidden = self.group_aggregating(bert_hidden, ori_indexes)
             
-        return bert_outs
-        
+        return bert_hidden
+    
+    
+    
+def _truecase(tokenized_raw_text: List[str]):
+    """
+    Get the truecased text. 
+    
+    Original:  ['FULL', 'FEES', '1.875', 'REOFFER', '99.32', 'SPREAD', '+20', 'BP']
+    Truecased: ['Full', 'fees', '1.875', 'Reoffer', '99.32', 'spread', '+20', 'BP']
+    
+    References
+    ----------
+    [1] https://github.com/google-research/bert/issues/223
+    [2] https://github.com/daltonfury42/truecase
+    """
+    new_tokenized = tokenized_raw_text.copy()
+    
+    word_lst = [(w, idx) for idx, w in enumerate(new_tokenized) if all(c.isalpha() for c in w)]
+    lst = [w for w, _ in word_lst if re.match(r'\b[A-Z\.\-]+\b', w)]
+    
+    if len(lst) > 0 and len(lst) == len(word_lst):
+        parts = truecase.get_true_case(' '.join(lst)).split()
+
+        # the trucaser have its own tokenization ...
+        # skip if the number of word dosen't match
+        if len(parts) == len(word_lst): 
+            for (w, idx), nw in zip(word_lst, parts):
+                new_tokenized[idx] = nw
+                
+    return new_tokenized
+    
     

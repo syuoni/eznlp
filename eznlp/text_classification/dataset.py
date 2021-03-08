@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from typing import List
-import tqdm
 import numpy as np
 
 from ..data.dataset import Dataset
@@ -24,12 +23,12 @@ class TextClassificationDataset(Dataset):
         
     def _truncate_tokens(self):
         tokenizer = self.config.bert_like.tokenizer
-        max_len = tokenizer.max_len - 2
-        head_len = tokenizer.max_len // 4
+        max_len = tokenizer.model_max_length - 2
+        head_len = tokenizer.model_max_length // 4
         tail_len = max_len - head_len
         
-        for curr_data in tqdm.tqdm(self.data):
-            tokens = curr_data['tokens']
+        for data_entry in self.data:
+            tokens = data_entry['tokens']
             nested_sub_tokens = [tokenizer.tokenize(word) for word in tokens.raw_text]
             sub_tok_seq_lens = [len(tok) for tok in nested_sub_tokens]
             
@@ -44,7 +43,7 @@ class TextClassificationDataset(Dataset):
                 if find_tail:
                     tail_begin += 1
                     
-                curr_data['tokens'] = tokens[:head_end] + tokens[-tail_begin:]
+                data_entry['tokens'] = tokens[:head_end] + tokens[-tail_begin:]
                 
     @property
     def summary(self):

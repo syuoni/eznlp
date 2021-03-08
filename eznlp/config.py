@@ -24,9 +24,6 @@ class Config(object):
     
     `Config` are NOT suggested to be registered as attribute of the corresponding model or assembly. 
     """
-    
-    _cache_attr_names = ['vectors', 'elmo', 'bert_like', 'flair_lm']
-    
     def __init__(self, **kwargs):
         if len(kwargs) > 0:
             logger.warning(f"Some configurations are set without checking: {kwargs}, "
@@ -37,9 +34,7 @@ class Config(object):
     @property
     def valid(self):
         for name, attr in self.__dict__.items():
-            if name in self._cache_attr_names:
-                continue
-            elif isinstance(attr, Config):
+            if isinstance(attr, Config):
                 if not attr.valid:
                     return False
             else:
@@ -67,8 +62,10 @@ class Config(object):
     
     
 class ConfigList(Config):
-    def __init__(self, config_list: List[Config]):
-        if not isinstance(config_list, list):
+    def __init__(self, config_list: List[Config]=None):
+        if config_list is None:
+            config_list = []
+        elif not isinstance(config_list, list):
             config_list = list(config_list)
             
         assert all(isinstance(c, Config) for c in config_list)
@@ -77,7 +74,7 @@ class ConfigList(Config):
         
     @property
     def valid(self):
-        return all(c.valid for c in self.config_list)
+        return len(self.config_list) > 0 and all(c.valid for c in self.config_list)
     
     def __len__(self):
         return len(self.config_list)
@@ -87,6 +84,14 @@ class ConfigList(Config):
     
     def __getitem__(self, i):
         return self.config_list[i]
+    
+    def __setitem__(self, i, c: Config):
+        assert isinstance(c, Config)
+        self.config_list[i] = c
+    
+    def append(self, c: Config):
+        assert isinstance(c, Config)
+        self.config_list.append(c)
     
     @property
     def out_dim(self):
@@ -101,9 +106,11 @@ class ConfigList(Config):
         
         
 class ConfigDict(Config):
-    def __init__(self, config_dict: Mapping[str, Config]):
+    def __init__(self, config_dict: Mapping[str, Config]=None):
+        if config_dict is None:
+            config_dict = {}
         # NOTE: `torch.nn.ModuleDict` is an **ordered** dictionary
-        if not isinstance(config_dict, OrderedDict):
+        elif not isinstance(config_dict, OrderedDict):
             config_dict = OrderedDict(config_dict)
             
         assert all(isinstance(c, Config) for c in config_dict.values())
@@ -112,7 +119,7 @@ class ConfigDict(Config):
         
     @property
     def valid(self):
-        return all(c.valid for c in self.config_dict.values())
+        return len(self.config_dict) > 0 and all(c.valid for c in self.config_dict.values())
         
     def __len__(self):
         return len(self.config_dict)
@@ -128,6 +135,10 @@ class ConfigDict(Config):
     
     def __getitem__(self, key):
         return self.config_dict[key]
+    
+    def __setitem__(self, key, c: Config):
+        assert isinstance(c, Config)
+        self.config_dict[key] = c
     
     @property
     def out_dim(self):

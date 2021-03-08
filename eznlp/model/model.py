@@ -2,7 +2,7 @@
 from typing import List
 import torch
 
-from ..data.token import TokenSequence
+from ..token import TokenSequence
 from ..data.wrapper import Batch
 from ..config import Config, ConfigDict
 from .embedder import OneHotConfig
@@ -183,4 +183,20 @@ class Model(torch.nn.Module):
         else:
             return full_hidden
         
+    def pretrained_parameters(self):
+        params = []
         
+        if hasattr(self, 'elmo'):
+            params.extend(self.elmo.elmo._elmo_lstm.parameters())
+        
+        if hasattr(self, 'bert_like'):
+            params.extend(self.bert_like.bert_like.parameters())
+            
+        if hasattr(self, 'flair_fw'):
+            params.extend(self.flair_fw.flair_lm.parameters())
+        if hasattr(self, 'flair_bw'):
+            params.extend(self.flair_bw.flair_lm.parameters())
+        
+        return params
+    
+    

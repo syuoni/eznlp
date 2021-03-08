@@ -3,7 +3,7 @@ import re
 import numpy as np
 import pandas as pd
 
-from ..data.token import TokenSequence
+from ..token import TokenSequence
 from .transition import ChunksTagsTranslator
 
 
@@ -236,11 +236,11 @@ class BratIO(object):
         chunk_lines, attr_lines = [], []
         
         line_start = 0
-        for curr_data in data:
-            line_text = "".join(curr_data['tokens'].raw_text)
+        for data_entry in data:
+            line_text = "".join(data_entry['tokens'].raw_text)
             text_lines.append(line_text)
             
-            for chunk_type, chunk_start, chunk_end in curr_data['chunks']:
+            for chunk_type, chunk_start, chunk_end in data_entry['chunks']:
                 chunk_text = line_text[chunk_start:chunk_end]
                 chunk_start_in_text = chunk_start + line_start
                 chunk_end_in_text = chunk_end + line_start

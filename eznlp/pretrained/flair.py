@@ -3,7 +3,7 @@ from typing import List
 import torch
 import flair
 
-from ..data.token import TokenSequence
+from ..token import TokenSequence
 from ..nn.modules import SequenceGroupAggregating
 from ..config import Config
 
@@ -29,6 +29,12 @@ class FlairConfig(Config):
         self.use_gamma = kwargs.pop('use_gamma', False)
         
         super().__init__(**kwargs)
+        
+        
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state['flair_lm'] = None
+        return state
         
         
     def exemplify(self, tokens: TokenSequence):

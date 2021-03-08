@@ -3,13 +3,13 @@ from typing import List
 import torch
 import allennlp.modules
 
-from ..data.token import TokenSequence
+from ..token import TokenSequence
 from ..config import Config
 
 
 class ELMoConfig(Config):
     def __init__(self, **kwargs):
-        self.elmo: allennlp.modules.elmo.Elmo = kwargs.pop('elmo')
+        self.elmo: allennlp.modules.Elmo = kwargs.pop('elmo')
         self.out_dim = self.elmo.get_output_dim()
         
         self.arch = kwargs.pop('arch', 'ELMo')
@@ -20,6 +20,12 @@ class ELMoConfig(Config):
         self.use_gamma = kwargs.pop('use_gamma', True)
         
         super().__init__(**kwargs)
+        
+        
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state['elmo'] = None
+        return state
         
         
     def exemplify(self, tokens: TokenSequence):
@@ -82,5 +88,10 @@ class ELMoEmbedder(torch.nn.Module):
     def forward(self, char_ids: torch.LongTensor):
         # TODO: use `word_inputs`?
         elmo_outs = self.elmo(inputs=char_ids)
+        
+        # Reset lstm states if not stateful
+        if not self.lstm_stateful:
+            self.elmo._elmo_lstm._elmo_lstm.reset_states()
+        
         return elmo_outs['elmo_representations'][0]
         

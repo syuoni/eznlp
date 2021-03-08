@@ -125,5 +125,6 @@ dmypy.json
 .pyre/
 
 # Data
-assets/
-data/
+assets/*
+cache/*
+data/*

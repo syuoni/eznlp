@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 def _load_from_file(path: str, encoding=None):
+    logger.info(f"Loading vectors from {path}")
     words = []
     vectors = []
     with open(path, 'r', encoding=encoding) as f:
@@ -38,6 +39,7 @@ class Vectors(object):
         
     def lookup(self, token: str):
         tried_set = set()
+        # Backup tokens
         for possible_token in [token, token.lower(), token.title(), token.upper()]:
             if possible_token in tried_set:
                 continue
@@ -95,6 +97,9 @@ class Vectors(object):
     
     
 class GloVe(Vectors):
+    """
+    https://nlp.stanford.edu/projects/glove/
+    """
     def __init__(self, path: str, encoding=None, **kwargs):
         if os.path.exists(f"{path}.pt"):
             itos, vectors = self.load_from_cache(path)

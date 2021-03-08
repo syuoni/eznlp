@@ -5,7 +5,7 @@ import logging
 import torch
 import torchtext
 
-from ..data.token import TokenSequence
+from ..token import TokenSequence
 from ..nn.init import reinit_embedding_, reinit_embedding_by_pretrained_, reinit_layer_
 from ..config import Config
 from ..pretrained.vectors import Vectors
@@ -23,7 +23,7 @@ class OneHotConfig(Config):
         self.vectors: Vectors = kwargs.pop('vectors', None)
         if self.vectors is not None:
             if self.emb_dim != self.vectors.emb_dim:
-                logger.warning(f"`emb_dim` {self.emb_dim} does not equal `vectors.emb_dim` {self.vectors.emb_dim}" 
+                logger.warning(f"`emb_dim` {self.emb_dim} does not equal `vectors.emb_dim` {self.vectors.emb_dim} \n" 
                                f"Reset `emb_dim` to be {self.vectors.emb_dim}")
                 self.emb_dim = self.vectors.emb_dim
                 
@@ -31,6 +31,10 @@ class OneHotConfig(Config):
         self.freeze = kwargs.pop('freeze', False)
         self.scale_grad_by_freq = kwargs.pop('scale_grad_by_freq', False)
         super().__init__(**kwargs)
+        
+    @property
+    def valid(self):
+        return all(attr is not None for name, attr in self.__dict__.items() if name != 'vectors')
         
     @property
     def out_dim(self):
@@ -48,11 +52,17 @@ class OneHotConfig(Config):
     def unk_idx(self):
         return self.vocab['<unk>']
     
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state['vectors'] = None
+        return state
+        
+    
     def build_vocab(self, *partitions):
         counter = Counter()
         for data in partitions:
-            for curr_data in data:
-                counter.update(getattr(curr_data['tokens'], self.field))
+            for data_entry in data:
+                counter.update(getattr(data_entry['tokens'], self.field))
         self.vocab = torchtext.vocab.Vocab(counter, 
                                            min_freq=self.min_freq, 
                                            specials=('<unk>', '<pad>'), 

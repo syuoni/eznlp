@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import tqdm
 import torch
 
 from ..training.trainer import Trainer
@@ -7,13 +6,8 @@ from .dataset import TextClassificationDataset
 
 
 class TextClassificationTrainer(Trainer):
-    def __init__(self, 
-                 model: torch.nn.Module, 
-                 optimizer=None, 
-                 scheduler=None, 
-                 device=None, 
-                 grad_clip=1.0):
-        super().__init__(model, optimizer=optimizer, scheduler=scheduler, device=device, grad_clip=grad_clip)
+    def __init__(self, model: torch.nn.Module, **kwargs):
+        super().__init__(model, **kwargs)
         
         
     def forward_batch(self, batch):
@@ -36,7 +30,7 @@ class TextClassificationTrainer(Trainer):
         self.model.eval()
         set_labels = []
         with torch.no_grad():
-            for batch in tqdm.tqdm(dataloader):
+            for batch in dataloader:
                 batch.to(self.device)
                 set_labels.extend(self.model.decode(batch))
         return set_labels

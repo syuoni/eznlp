@@ -1,10 +1,97 @@
 # -*- coding: utf-8 -*-
 from typing import Union, List
-from collections import defaultdict
 import logging
+import subprocess
 import torch
+import numpy
+import matplotlib
 
 logger = logging.getLogger(__name__)
+
+
+class LRLambda(object):
+    @staticmethod
+    def constant_lr():
+        return lambda step: 1.0
+    
+    @staticmethod
+    def constant_lr_with_warmup(num_warmup_steps: int):
+        assert num_warmup_steps >= 1
+        
+        def lr_lambda(step: int):
+            if step < num_warmup_steps:
+                return step / num_warmup_steps
+            else:
+                return 1.0
+        return lr_lambda
+    
+    @staticmethod
+    def linear_decay_lr_with_warmup(num_warmup_steps: int, num_total_steps: int):
+        assert num_warmup_steps >= 1
+        assert num_total_steps >= num_warmup_steps
+        
+        def lr_lambda(step: int):
+            if step < num_warmup_steps:
+                return step / num_warmup_steps
+            elif step < num_total_steps:
+                return (num_total_steps - step) / (num_total_steps - num_warmup_steps)
+            else:
+                return 0.0
+        return lr_lambda
+    
+    @staticmethod
+    def exp_decay_lr_with_warmup(num_warmup_steps: int, num_period_steps: int=None, gamma: float=0.9):
+        if num_period_steps is None:
+            num_period_steps = num_warmup_steps
+        assert num_warmup_steps >= 1
+        assert num_period_steps >= 1
+        assert 0 < gamma < 1
+        
+        def lr_lambda(step: int):
+            if step < num_warmup_steps:
+                return step / num_warmup_steps
+            else:
+                return gamma ** ((step - num_warmup_steps) / num_period_steps)
+        return lr_lambda
+    
+    @staticmethod
+    def plot_lr_lambda(lr_lambda, num_total_steps: int):
+        x = numpy.arange(0, num_total_steps, num_total_steps//200)
+        y = numpy.array([lr_lambda(xi) for xi in x])
+        
+        fig, ax = matplotlib.pyplot.subplots(figsize=(8, 3))
+        ax.plot(x, y)
+        
+        
+
+def collect_params(model: torch.nn.Module, param_groups: list):
+    """
+    Parameters
+    ----------
+    model : torch.nn.Module
+        Model
+    param_groups : list
+        [{'params': List[torch.nn.Parameter], 'lr': lr, ...}, ...]
+    """
+    existing = [params for group in param_groups for params in group['params']]
+    missing = []
+    for params in model.parameters():
+        if all(params is not e_params for e_params in existing):
+            missing.append(params)
+    return missing
+
+
+def check_param_groups(model: torch.nn.Module, param_groups: list, verbose=True):
+    num_grouped_params = sum(count_params(group['params'], verbose=False) for group in param_groups)
+    num_model_params = count_params(model, verbose=False)
+    is_equal = (num_grouped_params == num_model_params)
+    
+    if verbose:
+        if is_equal:
+            logger.info(f"Grouped parameters ({num_grouped_params:,}) == Model parameters ({num_model_params:,})")
+        else:
+            logger.warning(f"Grouped parameters ({num_grouped_params:,}) != Model parameters ({num_model_params:,})")
+    return is_equal
 
 
 def count_params(model_or_params: Union[torch.nn.Module, torch.nn.Parameter, List[torch.nn.Parameter]], 
@@ -23,48 +110,45 @@ def count_params(model_or_params: Union[torch.nn.Module, torch.nn.Parameter, Lis
         
     num_trainable = sum(p.numel() for p in model_or_params if p.requires_grad)
     num_frozen = sum(p.numel() for p in model_or_params if not p.requires_grad)
+    
     if verbose:
-        logger.info(
-            f"The model has {num_trainable + num_frozen:,} parameters, "
-            f"in which {num_trainable:,} are trainable and {num_frozen:,} are frozen. "
-        )
-        
+        logger.info(f"The model has {num_trainable + num_frozen:,} parameters, "
+                    f"in which {num_trainable:,} are trainable and {num_frozen:,} are frozen.")
+    
     if return_trainable:
         return num_trainable
     else:
         return num_trainable + num_frozen
+    
 
-
-def build_param_groups_with_keyword2lr(model: torch.nn.Module, keyword2lr: dict, verbose=True):
-    keyword2params = defaultdict(list)
-    for name, params in model.named_parameters():
-        for keyword in keyword2lr:
-            if name.startswith(keyword):
-                keyword2params[keyword].append(params)
-                break
+def auto_device(min_memory: int=2048):
+    """
+    https://stackoverflow.com/questions/59567226/how-to-programmatically-determine-available-gpu-memory-with-tensorflow
+    """
+    logger.info("Automatically allocating device...")
+    
+    if not torch.cuda.is_available():
+        logger.info("Cuda device is unavailable, device `cpu` returned")
+        return torch.device('cpu')
+    
+    try:
+        COMMAND = "nvidia-smi --query-gpu=memory.free --format=csv"
+        free_memories = subprocess.check_output(COMMAND.split()).decode().strip().split('\n')[1:]
+        free_memories = [int(x.split()[0]) for x in free_memories]
+        assert len(free_memories) == torch.cuda.device_count()
+    except:
+        logger.warning("Cuda device information inquiry failed, device `cpu` returned")
+        return torch.device('cpu')
+    else:
+        selected_id = numpy.argmax(free_memories)
+        selected_mem = free_memories[selected_id]
+        if selected_mem < min_memory:
+            logger.warning(f"Cuda device `cuda:{selected_id}` with maximum free memory {selected_mem} MiB "
+                           f"fails to meet the requirement {min_memory} MiB, device `cpu` returned")
+            return torch.device('cpu')
         else:
-            keyword2params['<default>'].append(params)
-            
-    param_groups = []
-    lr_lambdas = []
-    for keyword, params in keyword2params.items():
-        param_groups.append({'params': params})
-        lr_lambdas.append(keyword2lr[keyword])
+            logger.info(f"Cuda device `cuda:{selected_id}` with free memory {selected_mem} MiB "
+                        f"successfully allocated, device `cuda:{selected_id}` returned")
+            return torch.device('cuda', selected_id)
         
-    if verbose:
-        logger.info(f"{len(param_groups)} parameter groups have been built")
-        for keyword, params in keyword2params.items():
-            logger.info(f"Keyword: {keyword} | Parameters: {len(params)}")
         
-    return param_groups, lr_lambdas
-
-
-def check_param_groups_no_missing(param_groups: list, model: torch.nn.Module, verbose=True):
-    num_grouped_params = sum(count_params(group['params'], verbose=False) for group in param_groups)
-    num_model_params = count_params(model, verbose=False)
-    is_equal = (num_grouped_params == num_model_params)
-    if verbose:
-        logger.info(f"Grouped parameters ({num_grouped_params:,}) == Model parameters ({num_model_params:,})? {is_equal}")
-        
-    return is_equal
-

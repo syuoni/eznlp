@@ -24,7 +24,7 @@ class SequenceTaggingDataset(Dataset):
     def summary(self):
         summary = [super().summary]
         
-        n_chunks = sum(len(curr_data['chunks']) for curr_data in self.data)
+        n_chunks = sum(len(data_entry['chunks']) for data_entry in self.data)
         summary.append(f"The dataset has {n_chunks:,} chunks")
         return "\n".join(summary)
         

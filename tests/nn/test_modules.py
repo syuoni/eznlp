@@ -114,3 +114,4 @@ class TestAggregateTensorByGroup(object):
         
         agg_tensor_gold = torch.stack(agg_tensor_gold)
         assert (agg_tensor - agg_tensor_gold).abs().max().item() < 1e-6
+        

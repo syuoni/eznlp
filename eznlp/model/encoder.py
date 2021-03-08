@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import torch
-from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from ..data.wrapper import Batch
 from ..nn.init import reinit_layer_, reinit_lstm_, reinit_gru_, reinit_transformer_encoder_layer_
@@ -131,18 +130,18 @@ class RNNEncoder(Encoder):
             
         
     def embedded2hidden(self, batch: Batch, embedded: torch.Tensor):
-        packed_embedded = pack_padded_sequence(embedded, batch.seq_lens, batch_first=True, enforce_sorted=False)
+        packed_embedded = torch.nn.utils.rnn.pack_padded_sequence(embedded, batch.seq_lens.cpu(), batch_first=True, enforce_sorted=False)
         
         if hasattr(self, 'h_0'):
-            h_0 = self.h_0.repeat(1, batch.tok_ids.size(0), 1)
+            h_0 = self.h_0.repeat(1, batch.size, 1)
             if hasattr(self, 'c_0'):
-                c_0 = self.c_0.repeat(1, batch.tok_ids.size(0), 1)
+                c_0 = self.c_0.repeat(1, batch.size, 1)
                 h_0 = (h_0, c_0)
             packed_rnn_outs, _ = self.rnn(packed_embedded, h_0)
         else:
             packed_rnn_outs, _ = self.rnn(packed_embedded)
         # outs: (batch, step, hid_dim*num_directions)
-        rnn_outs, _ = pad_packed_sequence(packed_rnn_outs, batch_first=True, padding_value=0)
+        rnn_outs, _ = torch.nn.utils.rnn.pad_packed_sequence(packed_rnn_outs, batch_first=True, padding_value=0)
         return rnn_outs
     
 
