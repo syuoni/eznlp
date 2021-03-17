@@ -30,16 +30,20 @@ def mask2seq_lens(mask: torch.BoolTensor):
 
 
 
-def sequence_pooling(x: torch.FloatTensor, mask: torch.BoolTensor, mode: str='mean'):
+def sequence_pooling(x: torch.FloatTensor, 
+                     mask: torch.BoolTensor, 
+                     weight: torch.FloatTensor=None, 
+                     mode: str='mean'):
     """
     Pooling values over steps. 
     
     Parameters
     ----------
     x: torch.FloatTensor (batch, step, hid_dim)
-    mask: torch.BoolTensor (batch, hid_dim)
+    mask: torch.BoolTensor (batch, step)
+    weight: torch.FloatTensor (batch, step)
     mode: str
-        'mean', 'max', 'min'
+        'mean', 'max', 'min', 'wtd_mean'
     """
     if mode.lower() == 'mean':
         x_masked = x.masked_fill(mask.unsqueeze(-1), 0)
@@ -51,6 +55,13 @@ def sequence_pooling(x: torch.FloatTensor, mask: torch.BoolTensor, mode: str='me
     elif mode.lower() == 'min':
         x_masked = x.masked_fill(mask.unsqueeze(-1), float('inf'))
         return x_masked.min(dim=1).values
+        
+    elif mode.lower() == 'wtd_mean':
+        weight_masked = weight.masked_fill(mask, 0)
+        weight_masked_norm = torch.nn.functional.normalize(weight_masked.type(torch.float), p=1, dim=1)
+        # x_wtd_mean: (batch, hid_dim)
+        return weight_masked_norm.unsqueeze(1).bmm(x).squeeze(1)
+        
     else:
         raise ValueError(f"Invalid pooling mode {mode}")
         

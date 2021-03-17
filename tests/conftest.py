@@ -6,7 +6,7 @@ import transformers
 import flair
 
 from eznlp import auto_device
-from eznlp.pretrained import GloVe
+from eznlp.pretrained import Vectors, GloVe
 from eznlp.sequence_tagging.io import ConllIO
 from eznlp.text_classification.io import TabularIO
 
@@ -28,6 +28,10 @@ def conll2003_demo():
     return ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1').read("data/conll2003/demo.eng.train")
 
 @pytest.fixture
+def ResumeNER_demo():
+    return ConllIO(text_col_id=0, tag_col_id=1, scheme='BMES', token_sep="", pad_token="").read("data/ResumeNER/demo.train.char.bmes", encoding='utf-8')
+
+@pytest.fixture
 def yelp2013_demo():
     return TabularIO(text_col_id=3, label_col_id=2).read("data/Tang2015/demo.yelp-2013-seg-20-20.train.ss", 
                                                          encoding='utf-8', 
@@ -39,6 +43,9 @@ def yelp2013_demo():
 def glove100():
     return GloVe("assets/vectors/glove.6B.100d.txt", encoding='utf-8')
 
+@pytest.fixture
+def ctb50():
+    return Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
 
 @pytest.fixture
 def elmo():

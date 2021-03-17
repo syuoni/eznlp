@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from typing import List
+from typing import List, Iterable
 from collections import OrderedDict
 from functools import cached_property
 import string
@@ -268,10 +268,11 @@ class TokenSequence(object):
     _softword_idx2tag = ['B', 'M', 'E', 'S']
     _softword_tag2idx = {t: i for i, t in enumerate(_softword_idx2tag)}
     
-    def __init__(self, token_list: List[Token], token_sep=" ", pad_token="<pad>"):
+    def __init__(self, token_list: List[Token], token_sep=" ", pad_token="<pad>", softword_none_token="<none>"):
         self.token_list = token_list
         self.token_sep = token_sep
         self.pad_token = pad_token
+        self.softword_none_token = softword_none_token
         
     def __getattr__(self, name):
         # NOTE: `__attr__` method is only invoked if the attribute wasn't found the usual ways, so 
@@ -292,7 +293,8 @@ class TokenSequence(object):
     def __getstate__(self):
         return {'token_list': self.token_list, 
                 'token_sep': self.token_sep, 
-                'pad_token': self.pad_token}
+                'pad_token': self.pad_token, 
+                'softword_none_token': self.softword_none_token}
         
     def __setstate__(self, state: dict):
         self.__dict__.update(state)
@@ -319,15 +321,19 @@ class TokenSequence(object):
         self.start = self.end - token_lens
         
         
+    def _assert_for_softwords(self, tokenize_callback):
+        assert self.token_sep == ""
+        assert hasattr(tokenize_callback, '__self__')
+        assert isinstance(tokenize_callback.__self__, (jieba.Tokenizer, LexiconTokenizer))
+        assert tokenize_callback.__name__.startswith('tokenize')
+        
+        
     def build_softwords(self, tokenize_callback, **kwargs):
+        self._assert_for_softwords(tokenize_callback)
+        
         self.softword = [np.zeros(len(self._softword_idx2tag), dtype=bool) for tok in self.token_list]
         
-        if hasattr(tokenize_callback, '__self__') and isinstance(tokenize_callback.__self__, jieba.Tokenizer) and tokenize_callback.__name__.startswith('tokenize'):
-            pass
-        else:
-            raise ValueError(f"Invalid `tokenize_callback`: {tokenize_callback}")
-            
-        for word_text, word_start, word_end in tokenize_callback("".join(self.raw_text), **kwargs):
+        for word_text, word_start, word_end in tokenize_callback(self.token_sep.join(self.raw_text), **kwargs):
             if word_end - word_start == 1:
                 self.softword[word_start][self._softword_tag2idx['S']] = True
             else:
@@ -335,6 +341,27 @@ class TokenSequence(object):
                 self.softword[word_end-1][self._softword_tag2idx['E']] = True
                 for k in range(word_start+1, word_end-1):
                     self.softword[k][self._softword_tag2idx['M']] = True
+                    
+                    
+    def build_softlexicons(self, tokenize_callback, **kwargs):
+        self._assert_for_softwords(tokenize_callback)
+        
+        self.softlexicon = [[[] for t in self._softword_idx2tag] for tok in self.token_list]
+        
+        for word_text, word_start, word_end in tokenize_callback(self.token_sep.join(self.raw_text), **kwargs):
+            if word_end - word_start == 1:
+                self.softlexicon[word_start][self._softword_tag2idx['S']].append(word_text)
+            else:
+                self.softlexicon[word_start][self._softword_tag2idx['B']].append(word_text)
+                self.softlexicon[word_end-1][self._softword_tag2idx['E']].append(word_text)
+                for k in range(word_start+1, word_end-1):
+                    self.softlexicon[k][self._softword_tag2idx['M']].append(word_text)
+                    
+        # Add a special token to empty word sets
+        for word_sets in self.softlexicon:
+            for word_set in word_sets:
+                if len(word_set) == 0:
+                    word_set.append(self.softword_none_token)
                     
                     
     @cached_property
@@ -420,6 +447,21 @@ class TokenSequence(object):
     
     
     
+class LexiconTokenizer(object):
+    def __init__(self, lexicon: Iterable[str], max_len: int=10, return_singleton: bool=False):
+        self.lexicon = set(lexicon)
+        self.max_len = max_len
+        self.return_singleton = return_singleton
+        
+    def tokenize(self, text: str):
+        L = len(text)
+        for word_start in range(L):
+            for word_end in range(word_start+1, min(word_start+self.max_len, L)+1):
+                word_text = text[word_start:word_end]
+                if (self.return_singleton and word_end-word_start==1) or (word_text in self.lexicon):
+                    yield (word_text, word_start, word_end)
+                    
+                    
 def custom_spacy_tokenizer(nlp, custom_prefixes=None, custom_suffixes=None, custom_infixes=None):
     """
     References:

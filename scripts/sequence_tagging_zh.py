@@ -12,8 +12,9 @@ import torch
 import transformers
 
 from eznlp import auto_device
+from eznlp.token import LexiconTokenizer
 from eznlp.config import ConfigDict
-from eznlp.model import CharConfig, OneHotConfig, MultiHotConfig, EncoderConfig
+from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig, SoftLexiconConfig
 from eznlp.sequence_tagging import SequenceTaggingDecoderConfig, SequenceTaggerConfig
 from eznlp.sequence_tagging import SequenceTaggingDataset
 from eznlp.sequence_tagging import SequenceTaggingTrainer
@@ -77,12 +78,14 @@ def parse_arguments(parser: argparse.ArgumentParser):
                            help="embedding dim")
     parser_fs.add_argument('--emb_freeze', default=False, action='store_true', 
                            help="whether to freeze embedding weights")
-    parser_fs.add_argument('--use_encoder', default=False, action='store_true', 
-                           help="whether to use additional encoder layer")
+    parser_fs.add_argument('--use_interm1', default=False, action='store_true', 
+                           help="whether to use intermediate1")
     parser_fs.add_argument('--use_bigram', default=False, action='store_true', 
                            help="whether to use bigram")
     parser_fs.add_argument('--use_softword', default=False, action='store_true', 
                            help="whether to use softword")
+    parser_fs.add_argument('--use_softlexicon', default=False, action='store_true', 
+                           help="whether to use softlexicon")
     
     parser_ft = subparsers.add_parser('finetune', aliases=['ft'], 
                                       help="train by finetuning pretrained models")
@@ -90,8 +93,8 @@ def parse_arguments(parser: argparse.ArgumentParser):
                            help="bert-like architecture")
     parser_ft.add_argument('--bert_drop_rate', type=float, default=0.2, 
                            help="dropout rate for BERT")
-    parser_ft.add_argument('--use_interm', default=False, action='store_true', 
-                           help="whether to use additional LSTM layer over BERT")
+    parser_ft.add_argument('--use_interm2', default=False, action='store_true', 
+                           help="whether to use intermediate2")
     
     args = parser.parse_args()
     random.seed(args.seed)
@@ -123,23 +126,30 @@ def build_config(args: argparse.Namespace):
         else:
             mhots_config = None
         
-        if args.use_encoder:
-            encoder_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
+        if args.use_softlexicon:
+            ctb50 = Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
+            nested_ohots_config = ConfigDict({'softlexicon': SoftLexiconConfig(vectors=ctb50, emb_dim=50, freeze=args.emb_freeze)})
         else:
-            encoder_config = EncoderConfig(arch='Identity')
+            nested_ohots_config = None
             
-        interm_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
+        if args.use_interm1:
+            interm1_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
+        else:
+            interm1_config = None
+            
+        interm2_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
         bert_like_config = None
         
     elif args.command in ('finetune', 'ft'):
         ohots_config = None
         mhots_config = None
-        encoder_config = None
+        nested_ohots_config = None
+        interm1_config = None
         
-        if args.use_interm:
-            interm_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
+        if args.use_interm2:
+            interm2_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
         else:
-            interm_config = None
+            interm2_config = None
         
         if args.bert_arch.startswith('BERT'):
             PATH = "assets/transformers/hfl/chinese-bert-wwm-ext"
@@ -161,9 +171,10 @@ def build_config(args: argparse.Namespace):
         
     return SequenceTaggerConfig(ohots=ohots_config, 
                                 mhots=mhots_config, 
-                                encoder=encoder_config, 
+                                nested_ohots=nested_ohots_config, 
+                                intermediate1=interm1_config, 
                                 bert_like=bert_like_config, 
-                                intermediate=interm_config, 
+                                intermediate2=interm2_config, 
                                 decoder=decoder_config)
 
 
@@ -198,6 +209,14 @@ if __name__ == '__main__':
         torch.cuda.set_device(device)
         
     train_data, dev_data, test_data = load_data(args)
+    if args.use_softword or args.use_softlexicon:
+        ctb50 = Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
+        tokenizer = LexiconTokenizer(ctb50.itos)
+        for data in [train_data, dev_data, test_data]:
+            for data_entry in data:
+                data_entry['tokens'].build_softwords(tokenizer.tokenize)
+                data_entry['tokens'].build_softlexicons(tokenizer.tokenize)
+                
     config = build_config(args)
     
     train_set = SequenceTaggingDataset(train_data, config)

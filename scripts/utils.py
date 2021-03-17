@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-import os
 import argparse
-import jieba
 import logging
 
+from eznlp.token import LexiconTokenizer
+from eznlp.pretrained import Vectors
 from eznlp.sequence_tagging import precision_recall_f1_report
 from eznlp.sequence_tagging.io import ConllIO
 
@@ -40,11 +40,6 @@ def load_data(args: argparse.Namespace):
     else:
         raise Exception("Dataset does NOT exist", args.dataset)
         
-    if getattr(args, 'use_softword', False):
-        for data in [train_data, dev_data, test_data]:
-            for data_entry in data:
-                data_entry['tokens'].build_softwords(jieba.tokenize, mode='search')
-                
     return train_data, dev_data, test_data
 
 

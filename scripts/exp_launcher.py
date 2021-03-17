@@ -70,7 +70,7 @@ if __name__ == '__main__':
                        ["fs"], 
                        ["", "--use_elmo"], 
                        ["", "--use_flair"], 
-                       ["--char_arch LSTM", "--char_arch CNN"]]
+                       ["--char_arch LSTM", "--char_arch Conv"]]
         else:
             options = [["--num_epochs 50"], 
                        ["--optimizer AdamW --lr 1e-3 --finetune_lr 1e-5", 

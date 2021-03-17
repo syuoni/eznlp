@@ -25,8 +25,8 @@ class TextClassifierConfig(ModelConfig):
     def build_vocabs_and_dims(self, *partitions):
         super().build_vocabs_and_dims(*partitions)
         
-        if self.intermediate is not None:
-            self.decoder.in_dim = self.intermediate.out_dim
+        if self.intermediate2 is not None:
+            self.decoder.in_dim = self.intermediate2.out_dim
         else:
             self.decoder.in_dim = self.full_hid_dim
             
@@ -86,11 +86,11 @@ class BERTTextClassifier(Model):
         full_hidden, (seq_lens, mask) = self.bert_like_embedder(batch)
         # Replace seq_lens / mask
         batch.seq_lens = seq_lens
-        batch.tok_mask = mask
+        batch.mask = mask
         
-        if not hasattr(self, 'intermediate'):
+        if not hasattr(self, 'intermediate2'):
             return full_hidden
         else:
-            return self.intermediate(batch, full_hidden)
+            return self.intermediate2(batch, full_hidden)
         
         

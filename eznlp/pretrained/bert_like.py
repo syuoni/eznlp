@@ -116,7 +116,7 @@ class BertLikeConfig(Config):
     def batchify(self, batch_ex: List[dict]):
         batch_sub_tok_ids = [ex['sub_tok_ids'] for ex in batch_ex]
         sub_tok_seq_lens = torch.tensor([sub_tok_ids.size(0) for sub_tok_ids in batch_sub_tok_ids])
-        batch_sub_tok_mask = seq_lens2mask(sub_tok_seq_lens)
+        batch_sub_mask = seq_lens2mask(sub_tok_seq_lens)
         batch_sub_tok_ids = torch.nn.utils.rnn.pad_sequence(batch_sub_tok_ids, 
                                                             batch_first=True, 
                                                             padding_value=self.tokenizer.pad_token_id)
@@ -125,11 +125,11 @@ class BertLikeConfig(Config):
             batch_ori_indexes = [ex['ori_indexes'] for ex in batch_ex]
             batch_ori_indexes = torch.nn.utils.rnn.pad_sequence(batch_ori_indexes, batch_first=True, padding_value=-1)
             return {'sub_tok_ids': batch_sub_tok_ids, 
-                    'sub_tok_mask': batch_sub_tok_mask, 
+                    'sub_mask': batch_sub_mask, 
                     'ori_indexes': batch_ori_indexes}
         else:
             return {'sub_tok_ids': batch_sub_tok_ids, 
-                    'sub_tok_mask': batch_sub_tok_mask}
+                    'sub_mask': batch_sub_mask}
         
     def instantiate(self):
         return BertLikeEmbedder(self)
@@ -171,13 +171,13 @@ class BertLikeEmbedder(torch.nn.Module):
         
     def forward(self, 
                 sub_tok_ids: torch.LongTensor, 
-                sub_tok_mask: torch.BoolTensor, 
+                sub_mask: torch.BoolTensor, 
                 ori_indexes: torch.LongTensor=None):
         # last_hidden: (batch, sub_tok_step+2, hid_dim)
         # pooler_output: (batch, hid_dim)
         # hidden: a tuple of (batch, sub_tok_step+2, hid_dim)
         bert_outs = self.bert_like(input_ids=sub_tok_ids, 
-                                   attention_mask=(~sub_tok_mask).type(torch.long), 
+                                   attention_mask=(~sub_mask).type(torch.long), 
                                    output_hidden_states=True)
         bert_hidden = bert_outs['hidden_states']
         
@@ -194,7 +194,7 @@ class BertLikeEmbedder(torch.nn.Module):
         
         # Remove the `[CLS]` and `[SEP]` positions. 
         bert_hidden = bert_hidden[:, 1:-1]
-        sub_tok_mask = sub_tok_mask[:, 2:]
+        sub_mask = sub_mask[:, 2:]
         
         if self.from_tokenized:
             # bert_hidden: (batch, tok_step, hid_dim)

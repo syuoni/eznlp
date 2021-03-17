@@ -16,9 +16,10 @@ import flair
 
 from eznlp import auto_device
 from eznlp.config import ConfigList, ConfigDict
-from eznlp.token import Token, TokenSequence
+from eznlp.token import Token, TokenSequence, LexiconTokenizer
 from eznlp.data import Batch
-from eznlp.model import CharConfig, OneHotConfig, MultiHotConfig, EncoderConfig
+from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig
+from eznlp.model import NestedOneHotConfig, CharConfig, SoftLexiconConfig
 from eznlp.pretrained import Vectors, GloVe, Senna
 from eznlp.pretrained import ELMoConfig, BertLikeConfig, FlairConfig
 from eznlp.training.utils import collect_params, check_param_groups
@@ -45,9 +46,29 @@ from eznlp.text_classification import TextClassificationTrainer
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     device = auto_device()
-        
+    
+    ctb50 = Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
+    tokenizer = LexiconTokenizer(ctb50.itos)
+    
     # import jieba
-    # tokens = TokenSequence.from_tokenized_text(list("李明住在中山西路。"))
+    data = [{'tokens': TokenSequence.from_tokenized_text(list("李明住在中山西路。"), token_sep="")}, 
+            {'tokens': TokenSequence.from_tokenized_text(list("我爱北京天安门！"), token_sep="")}]
+    for data_entry in data:
+        data_entry['tokens'].build_softlexicons(tokenizer.tokenize)
+    
+    
+    config = NestedOneHotConfig(field='softlexicon', num_channels=4, squeeze=False)
+    config.build_vocab(data)
+    
+    
+    
+    # config.batchify([config.exemplify(data[0]['tokens']), 
+    #                  config.exemplify(data[1]['tokens'])])
+    
+    # embedder = config.instantiate()
+    # embedder
+    
+    
     # print(list(jieba.cut_for_search("".join(tokens.raw_text))))
     
     # for tok in jieba.tokenize("".join(tokens.raw_text), mode='search'):
@@ -81,10 +102,18 @@ if __name__ == '__main__':
     # giga_bi  = load_vectors_from_file("assets/vector_cache/gigaword_chn.all.a2b.bi.ite50.vec", encoding='utf-8')
     
     
-    # conll_io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO2')
-    # train_data = conll_io.read("data/conll2003/demo.eng.train")
-    # dev_data   = conll_io.read("data/conll2003/demo.eng.testa")
-    # test_data  = conll_io.read("data/conll2003/demo.eng.testb")
+    conll_io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO2')
+    train_data = conll_io.read("data/conll2003/demo.eng.train")
+    dev_data   = conll_io.read("data/conll2003/demo.eng.testa")
+    test_data  = conll_io.read("data/conll2003/demo.eng.testb")
+    
+    
+    config = NestedOneHotConfig(field='raw_text', encoder=EncoderConfig())
+    config.build_vocab(train_data)
+    
+    
+    
+    
     
     # config = SequenceTaggerConfig(ohots=ConfigDict({'text': OneHotConfig(field='text', vectors=glove)}), 
     #                               char=CharConfig(),
