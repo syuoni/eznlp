@@ -47,35 +47,6 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     device = auto_device()
     
-    ctb50 = Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
-    tokenizer = LexiconTokenizer(ctb50.itos)
-    
-    # import jieba
-    data = [{'tokens': TokenSequence.from_tokenized_text(list("李明住在中山西路。"), token_sep="")}, 
-            {'tokens': TokenSequence.from_tokenized_text(list("我爱北京天安门！"), token_sep="")}]
-    for data_entry in data:
-        data_entry['tokens'].build_softlexicons(tokenizer.tokenize)
-    
-    
-    config = NestedOneHotConfig(field='softlexicon', num_channels=4, squeeze=False)
-    config.build_vocab(data)
-    
-    
-    
-    # config.batchify([config.exemplify(data[0]['tokens']), 
-    #                  config.exemplify(data[1]['tokens'])])
-    
-    # embedder = config.instantiate()
-    # embedder
-    
-    
-    # print(list(jieba.cut_for_search("".join(tokens.raw_text))))
-    
-    # for tok in jieba.tokenize("".join(tokens.raw_text), mode='search'):
-    #     print(tok)
-        
-    # tokens.build_softwords(jieba.tokenize)
-    
     # batch_tokenized_raw_text = [["I", "like", "it", "."], 
     #                             ["Do", "you", "love", "me", "?"], 
     #                             ["Sure", "!"], 
@@ -101,19 +72,10 @@ if __name__ == '__main__':
     # giga_uni = load_vectors_from_file("assets/vector_cache/gigaword_chn.all.a2b.uni.ite50.vec", encoding='utf-8')
     # giga_bi  = load_vectors_from_file("assets/vector_cache/gigaword_chn.all.a2b.bi.ite50.vec", encoding='utf-8')
     
-    
-    conll_io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO2')
-    train_data = conll_io.read("data/conll2003/demo.eng.train")
-    dev_data   = conll_io.read("data/conll2003/demo.eng.testa")
-    test_data  = conll_io.read("data/conll2003/demo.eng.testb")
-    
-    
-    config = NestedOneHotConfig(field='raw_text', encoder=EncoderConfig())
-    config.build_vocab(train_data)
-    
-    
-    
-    
+    # conll_io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO2')
+    # train_data = conll_io.read("data/conll2003/demo.eng.train")
+    # dev_data   = conll_io.read("data/conll2003/demo.eng.testa")
+    # test_data  = conll_io.read("data/conll2003/demo.eng.testb")
     
     # config = SequenceTaggerConfig(ohots=ConfigDict({'text': OneHotConfig(field='text', vectors=glove)}), 
     #                               char=CharConfig(),
