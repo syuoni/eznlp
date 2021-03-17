@@ -91,9 +91,16 @@ if __name__ == '__main__':
     elif args.task == 'sequence_tagging_zh':
         if args.command in ('fs', 'from_scratch'):
             options = [["--num_epochs 100"], 
+                       ["--optimizer SGD --lr 0.1", 
+                        "--optimizer AdamW --lr 1e-3", 
+                        "--optimizer Adamax --lr 5e-3", 
+                        "--optimizer Adamax --lr 1.5e-3"], 
+                       ["--batch_size 8", "--batch_size 32"], 
+                       ["--num_layers 1", "--num_layers 2"], 
                        ["fs"], 
-                       ["", "--use_bigram"], 
-                       ["", "--use_softword"]]
+                       # ["", "--use_bigram"], 
+                       # ["", "--use_softword"], 
+                       ["", "--use_softlexicon"]]
         else:
             options = [["--num_epochs 50"], 
                        ["--optimizer AdamW --lr 1e-3 --finetune_lr 1e-5"], 

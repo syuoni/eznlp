@@ -106,12 +106,16 @@ class MultiHotConfig(Config):
     def __init__(self, **kwargs):
         self.field = kwargs.pop('field')
         self.in_dim = kwargs.pop('in_dim', None)
+        self.use_emb = kwargs.pop('use_emb', True)
         self.emb_dim = kwargs.pop('emb_dim', 50)
         super().__init__(**kwargs)
     
     @property
     def out_dim(self):
-        return self.emb_dim
+        if self.use_emb:
+            return self.emb_dim
+        else:
+            return self.in_dim
     
     def build_dim(self, tokens: TokenSequence):
         self.in_dim = getattr(tokens, self.field)[0].shape[0]
@@ -129,13 +133,17 @@ class MultiHotConfig(Config):
 class MultiHotEmbedder(torch.nn.Module):
     def __init__(self, config: MultiHotConfig):
         super().__init__()
-        # NOTE: Two reasons why this layer does not have activation. 
-        # (1) Activation function should been applied after batch-norm / layer-norm. 
-        # (2) This layer is semantically an embedding layer, which typically does NOT require activation. 
-        self.embedding = torch.nn.Linear(config.in_dim, config.emb_dim, bias=False)
-        reinit_layer_(self.embedding, 'linear')
+        if config.use_emb:
+            # NOTE: Two reasons why this layer does not have activation. 
+            # (1) Activation function should been applied after batch-norm / layer-norm. 
+            # (2) This layer is semantically an embedding layer, which typically does NOT require activation. 
+            self.embedding = torch.nn.Linear(config.in_dim, config.emb_dim, bias=False)
+            reinit_layer_(self.embedding, 'linear')
         
     def forward(self, x_values: torch.FloatTensor):
-        return self.embedding(x_values)
+        if hasattr(self, 'embedding'):
+            return self.embedding(x_values)
+        else:
+            return x_values
     
     

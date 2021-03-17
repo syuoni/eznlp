@@ -51,7 +51,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
                              help="gradient clip (negative values are set to `None`)")
     
     group_train.add_argument('--optimizer', type=str, default='AdamW', 
-                             help="optimizer", choices=['AdamW', 'SGD', 'Adadelta'])
+                             help="optimizer", choices=['AdamW', 'SGD', 'Adadelta', 'Adamax'])
     group_train.add_argument('--lr', type=float, default=0.001, 
                              help="learning rate")
     group_train.add_argument('--finetune_lr', type=float, default=2e-5, 
@@ -122,7 +122,7 @@ def build_config(args: argparse.Namespace):
             ohots_config['bigram'] = OneHotConfig(field='bigram', vectors=giga_bi, emb_dim=50, freeze=args.emb_freeze)
         
         if args.use_softword:
-            mhots_config = ConfigDict({'softword': MultiHotConfig(field='softword', emb_dim=20)})
+            mhots_config = ConfigDict({'softword': MultiHotConfig(field='softword', use_emb=False)})
         else:
             mhots_config = None
         

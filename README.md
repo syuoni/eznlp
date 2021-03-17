@@ -61,6 +61,10 @@ Configurations of our implementation:
 | RoBERTa-base + LSTM + CRF   | -                       | -            | 91.05 | 
 
 ### Named Entity Recognition (Chinese)
+Configurations of our implementation:
+* Character-based
+* Tagging scheme: BIOES
+
 #### SIGHAN 2006 / MSRA 
 | Model | Paper | Reported F1 | Our Implementation F1 | Notes |
 |:-----:|:-----:|:-----------:|:---------------------:|:-----:|

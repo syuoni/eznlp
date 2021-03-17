@@ -52,7 +52,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
                              help="gradient clip (negative values are set to `None`)")
     
     group_train.add_argument('--optimizer', type=str, default='AdamW', 
-                             help="optimizer", choices=['AdamW', 'SGD', 'Adadelta'])
+                             help="optimizer", choices=['AdamW', 'SGD', 'Adadelta', 'Adamax'])
     group_train.add_argument('--lr', type=float, default=0.001, 
                              help="learning rate")
     group_train.add_argument('--finetune_lr', type=float, default=2e-5, 
