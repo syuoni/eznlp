@@ -2,6 +2,8 @@
 import argparse
 import logging
 
+from eznlp.token import LexiconTokenizer
+from eznlp.pretrained import Vectors
 from eznlp.sequence_tagging import precision_recall_f1_report
 from eznlp.sequence_tagging.io import ConllIO
 
@@ -36,9 +38,22 @@ def load_data(args: argparse.Namespace):
         train_data = conll_io.read("data/SIGHAN2006/train.txt", encoding='utf-8')
         dev_data   = conll_io.read("data/SIGHAN2006/test.txt", encoding='utf-8')
         test_data  = conll_io.read("data/SIGHAN2006/test.txt", encoding='utf-8')
+        if args.command in ('finetune', 'ft'):
+            for data in [train_data, dev_data, test_data]:
+                for data_entry in data:
+                    data_entry['tokens'] = data_entry['tokens'][:510]
+                    
     else:
         raise Exception("Dataset does NOT exist", args.dataset)
         
+    if getattr(args, 'use_softword', False) or getattr(args, 'use_softlexicon', False):
+        ctb50 = Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
+        tokenizer = LexiconTokenizer(ctb50.itos)
+        for data in [train_data, dev_data, test_data]:
+            for data_entry in data:
+                data_entry['tokens'].build_softwords(tokenizer.tokenize)
+                data_entry['tokens'].build_softlexicons(tokenizer.tokenize)
+                
     return train_data, dev_data, test_data
 
 

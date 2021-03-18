@@ -82,7 +82,7 @@ if __name__ == '__main__':
                        # ["", "--use_locked_drop"], 
                        ["ft"], 
                        ["--bert_drop_rate 0.2"], 
-                       ["", "--use_interm"], 
+                       ["", "--use_interm2"], 
                        ["--bert_arch BERT_base", 
                         "--bert_arch RoBERTa_base", 
                         "--bert_arch BERT_large", 
@@ -120,7 +120,7 @@ if __name__ == '__main__':
                        ["--dec_arch CRF"],
                        ["ft"], 
                        ["--bert_drop_rate 0.2"], 
-                       ["", "--use_interm"], 
+                       ["", "--use_interm2"], 
                        ["--bert_arch BERT_base", "--bert_arch RoBERTa_base"]]
         
         

@@ -304,12 +304,18 @@ class TokenSequence(object):
         if isinstance(i, int):
             return self.token_list[i]
         elif isinstance(i, slice):
-            return TokenSequence(self.token_list[i], token_sep=self.token_sep, pad_token=self.pad_token)
+            return TokenSequence(self.token_list[i], 
+                                 token_sep=self.token_sep, 
+                                 pad_token=self.pad_token, 
+                                 softword_none_token=self.softword_none_token)
         else:
             raise TypeError(f"Invalid subscript type of {i}")
             
     def __add__(self, other):
-        return TokenSequence(self.token_list + other.token_list, token_sep=self.token_sep, pad_token=self.pad_token)
+        return TokenSequence(self.token_list + other.token_list, 
+                             token_sep=self.token_sep, 
+                             pad_token=self.pad_token, 
+                             softword_none_token=self.softword_none_token)
     
     
     def build_pseudo_boundaries(self, sep_width: int=None):
@@ -417,16 +423,16 @@ class TokenSequence(object):
     
     @classmethod
     def from_tokenized_text(cls, tokenized_text: list, additional_tags=None, additional_tok2tags=None, 
-                            token_sep=" ", pad_token="<pad>", **kwargs):
+                            token_sep=" ", pad_token="<pad>", softword_none_token="<none>", **kwargs):
         token_list = [Token(tok_text, **kwargs) for tok_text in tokenized_text]
-        tokens = cls(token_list, token_sep=token_sep, pad_token=pad_token)
+        tokens = cls(token_list, token_sep=token_sep, pad_token=pad_token, softword_none_token=softword_none_token)
         tokens.attach_additional_tags(additional_tags=additional_tags, additional_tok2tags=additional_tok2tags)
         return tokens
     
     
     @classmethod
     def from_raw_text(cls, raw_text: str, tokenize_callback=None, additional_tok2tags=None, 
-                      token_sep=" ", pad_token="<pad>", **kwargs):
+                      token_sep=" ", pad_token="<pad>", softword_none_token="<none>", **kwargs):
         if tokenize_callback is None:
             token_list = [Token(tok_text, **kwargs) for tok_text in raw_text.split()]
         elif isinstance(tokenize_callback, spacy.language.Language):
@@ -441,7 +447,7 @@ class TokenSequence(object):
         else:
             raise ValueError(f"Invalid `tokenize_callback`: {tokenize_callback}")
         
-        tokens = cls(token_list, token_sep=token_sep, pad_token=pad_token)
+        tokens = cls(token_list, token_sep=token_sep, pad_token=pad_token, softword_none_token=softword_none_token)
         tokens.attach_additional_tags(additional_tok2tags=additional_tok2tags)
         return tokens
     

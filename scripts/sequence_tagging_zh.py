@@ -12,7 +12,6 @@ import torch
 import transformers
 
 from eznlp import auto_device
-from eznlp.token import LexiconTokenizer
 from eznlp.config import ConfigDict
 from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig, SoftLexiconConfig
 from eznlp.sequence_tagging import SequenceTaggingDecoderConfig, SequenceTaggerConfig
@@ -209,14 +208,6 @@ if __name__ == '__main__':
         torch.cuda.set_device(device)
         
     train_data, dev_data, test_data = load_data(args)
-    if getattr(args, 'use_softword', False) or getattr(args, 'use_softlexicon', False):
-        ctb50 = Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
-        tokenizer = LexiconTokenizer(ctb50.itos)
-        for data in [train_data, dev_data, test_data]:
-            for data_entry in data:
-                data_entry['tokens'].build_softwords(tokenizer.tokenize)
-                data_entry['tokens'].build_softlexicons(tokenizer.tokenize)
-                
     config = build_config(args)
     
     train_set = SequenceTaggingDataset(train_data, config)

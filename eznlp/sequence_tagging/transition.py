@@ -125,7 +125,15 @@ class ChunksTagsTranslator(object):
         chunks = sorted(chunks, key=lambda ck: ck[2]-ck[1], reverse=True)
         
         for chunk_type, chunk_start, chunk_end in chunks:
-            # Make sure the target slice has NOT been labeled
+            # Make sure the target slice is contained in the sequence
+            # E.g., the sequence is truncated from a longer one
+            # This causes unretrievable chunks
+            if chunk_start < 0 or chunk_end > seq_len:
+                continue
+            
+            # Make sure the target slice has not been labeled
+            # E.g., nested entities
+            # This causes unretrievable chunks
             if not all(tags[k] == 'O' for k in range(chunk_start, chunk_end)):
                 continue
             
