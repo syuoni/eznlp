@@ -2,8 +2,6 @@
 import argparse
 import logging
 
-from eznlp.token import LexiconTokenizer
-from eznlp.pretrained import Vectors
 from eznlp.sequence_tagging import precision_recall_f1_report
 from eznlp.sequence_tagging.io import ConllIO
 
@@ -33,6 +31,7 @@ def load_data(args: argparse.Namespace):
         dev_data   = conll_io.read("data/WeiboNER/weiboNER_2nd_conll.dev", encoding='utf-8')
         test_data  = conll_io.read("data/WeiboNER/weiboNER_2nd_conll.test", encoding='utf-8')
     elif args.dataset == 'SIGHAN2006':
+        # https://github.com/v-mipeng/LexiconAugmentedNER/issues/3
         conll_io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BIO2', token_sep="", pad_token="")
         train_data = conll_io.read("data/SIGHAN2006/train.txt", encoding='utf-8')
         dev_data   = conll_io.read("data/SIGHAN2006/test.txt", encoding='utf-8')

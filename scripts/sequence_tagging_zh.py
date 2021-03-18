@@ -209,7 +209,7 @@ if __name__ == '__main__':
         torch.cuda.set_device(device)
         
     train_data, dev_data, test_data = load_data(args)
-    if args.use_softword or args.use_softlexicon:
+    if getattr(args, 'use_softword', False) or getattr(args, 'use_softlexicon', False):
         ctb50 = Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
         tokenizer = LexiconTokenizer(ctb50.itos)
         for data in [train_data, dev_data, test_data]:

@@ -104,8 +104,8 @@ Configurations of our implementation:
 
 
 ## Future Plans
-- [ ] SoftLexicon
-- [ ] Chaizi
+- [x] SoftLexicon
+- [ ] Radical-Level Features
 - [ ] Experiments on Chinese NER datasets
 - [ ] Experiments on text classification datasets
 - [ ] Focal loss (and combined to CRF?)
