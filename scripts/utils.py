@@ -6,6 +6,7 @@ from eznlp.token import LexiconTokenizer
 from eznlp.pretrained import Vectors
 from eznlp.sequence_tagging import precision_recall_f1_report
 from eznlp.sequence_tagging.io import ConllIO
+from eznlp.text_classification.io import TabularIO
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +28,7 @@ def load_data(args: argparse.Namespace):
         dev_data   = conll_io.read("data/ResumeNER/dev.char.bmes", encoding='utf-8')
         test_data  = conll_io.read("data/ResumeNER/test.char.bmes", encoding='utf-8')
     elif args.dataset == 'WeiboNER':
-        conll_io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BIO2', token_sep="", pad_token="", 
-                           pre_text_normalizer=lambda x: x[0])
+        conll_io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BIO2', token_sep="", pad_token="", pre_text_normalizer=lambda x: x[0])
         train_data = conll_io.read("data/WeiboNER/weiboNER_2nd_conll.train", encoding='utf-8')
         dev_data   = conll_io.read("data/WeiboNER/weiboNER_2nd_conll.dev", encoding='utf-8')
         test_data  = conll_io.read("data/WeiboNER/weiboNER_2nd_conll.test", encoding='utf-8')
@@ -42,7 +42,11 @@ def load_data(args: argparse.Namespace):
             for data in [train_data, dev_data, test_data]:
                 for data_entry in data:
                     data_entry['tokens'] = data_entry['tokens'][:510]
-                    
+    elif args.dataset == 'conll2012_zh':
+        conll_io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', line_sep_starts=["#begin", "#end", "pt/"], token_sep="", pad_token="")
+        train_data = conll_io.read("data/conll2012/train.chinese.v4_gold_conll", encoding='utf-8')
+        dev_data   = conll_io.read("data/conll2012/dev.chinese.v4_gold_conll", encoding='utf-8')
+        test_data  = conll_io.read("data/conll2012/test.chinese.v4_gold_conll", encoding='utf-8')
     else:
         raise Exception("Dataset does NOT exist", args.dataset)
         

@@ -64,38 +64,48 @@ Configurations of our implementation:
 Configurations of our implementation:
 * Character-based
 * Tagging scheme: BIOES
+* `From-scratch` models
+    * Optimizer: AdamW (lr=1e-3)
+    * Batch size: 32
+    * Number of epochs: 100
+* `Fine-tuining` models
+    * Optimizer: AdamW (lr=1e-3/2e-3, ft_lr=1e-5)
+    * Batch size: 48
+    * Number of epochs: 50
+    * Scheduler: Learning rate warmup at the first 20% steps followed by linear decay
+    * BERT/RoBERTa models are loaded with dropout rate of 0.2
 
 #### SIGHAN 2006 / MSRA 
 | Model | Paper | Reported F1 | Our Implementation F1 | Notes |
 |:-----:|:-----:|:-----------:|:---------------------:|:-----:|
-| LSTM + CRF                  | Zhang and Yang (2018) | 88.81 |
-| Bichar + LSTM + CRF         | Zhang and Yang (2018) | 91.87 |
+| LSTM + CRF                  | Zhang and Yang (2018) | 88.81 | 89.49 | num_layers=2 |
+| Bichar + LSTM + CRF         | Zhang and Yang (2018) | 91.87 | 92.02 | num_layers=2 |
 | Lattice-LSTM + CRF          | Zhang and Yang (2018) | 93.18 |
-| SoftLexicon + LSTM + CRF    | Ma et al. (2020)      | 93.66 |
-| BERT + CRF                  | Ma et al. (2020)      | 93.76 |
-| BERT + LSTM + CRF           | Ma et al. (2020)      | 94.83 |
+| SoftLexicon + LSTM + CRF    | Ma et al. (2020)      | 93.66 | 93.64 | num_layers=2; Adamax (lr=1e-3) |
+| BERT + CRF                  | Ma et al. (2020)      | 93.76 | 93.16 |
+| BERT + LSTM + CRF           | Ma et al. (2020)      | 94.83 | 93.13 |
 | SoftLexicon + BERT + CRF    | Ma et al. (2020)      | 95.42 |
 
 #### WeiboNER v2 
 | Model | Paper | Reported F1 | Our Implementation F1 | Notes |
 |:-----:|:-----:|:-----------:|:---------------------:|:-----:|
-| LSTM + CRF                  | Zhang and Yang (2018) | 52.77 |
-| Bichar + LSTM + CRF         | Zhang and Yang (2018) | 56.75 |
+| LSTM + CRF                  | Zhang and Yang (2018) | 52.77 | 50.19 | num_layers=2 |
+| Bichar + LSTM + CRF         | Zhang and Yang (2018) | 56.75 | 57.18 | num_layers=2 |
 | Lattice-LSTM + CRF          | Zhang and Yang (2018) | 58.79 |
-| SoftLexicon + LSTM + CRF    | Ma et al. (2020)      | 61.42 |
-| BERT + CRF                  | Ma et al. (2020)      | 63.80 | 68.85 |
-| BERT + LSTM + CRF           | Ma et al. (2020)      | 67.33 |
+| SoftLexicon + LSTM + CRF    | Ma et al. (2020)      | 61.42 | 61.17 | num_layers=2; Adamax (lr=5e-3) |
+| BERT + CRF                  | Ma et al. (2020)      | 63.80 | 68.79 |
+| BERT + LSTM + CRF           | Ma et al. (2020)      | 67.33 | 70.48 |
 | SoftLexicon + BERT + CRF    | Ma et al. (2020)      | 70.50 |
 
 #### ResumeNER 
 | Model | Paper | Reported F1 | Our Implementation F1 | Notes |
 |:-----:|:-----:|:-----------:|:---------------------:|:-----:|
-| LSTM + CRF                  | Zhang and Yang (2018) | 93.48 |
-| Bichar + LSTM + CRF         | Zhang and Yang (2018) | 94.41 |
+| LSTM + CRF                  | Zhang and Yang (2018) | 93.48 | 94.93 | num_layers=2 |
+| Bichar + LSTM + CRF         | Zhang and Yang (2018) | 94.41 | 94.51 | num_layers=2 |
 | Lattice-LSTM + CRF          | Zhang and Yang (2018) | 94.46 |
-| SoftLexicon + LSTM + CRF    | Ma et al. (2020)      | 95.53 |
-| BERT + CRF                  | Ma et al. (2020)      | 95.68 | 95.95 |
-| BERT + LSTM + CRF           | Ma et al. (2020)      | 95.51 |
+| SoftLexicon + LSTM + CRF    | Ma et al. (2020)      | 95.53 | 95.48 | num_layers=2; Adamax (lr=2e-3) | 
+| BERT + CRF                  | Ma et al. (2020)      | 95.68 | 95.68 |
+| BERT + LSTM + CRF           | Ma et al. (2020)      | 95.51 | 95.97 |
 | SoftLexicon + BERT + CRF    | Ma et al. (2020)      | 96.11 |
 
 #### OntoNotes v5 
