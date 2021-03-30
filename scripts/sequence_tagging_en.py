@@ -7,7 +7,7 @@ import random
 import pdb
 import logging
 import pprint
-import numpy as np
+import numpy
 import torch
 import allennlp.modules
 import transformers
@@ -99,7 +99,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
     
     args = parser.parse_args()
     random.seed(args.seed)
-    np.random.seed(args.seed)
+    numpy.random.seed(args.seed)
     torch.manual_seed(args.seed)
     torch.backends.cudnn.deterministic = True
     

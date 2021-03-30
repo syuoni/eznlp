@@ -2,7 +2,7 @@
 import os
 import re
 from collections import Counter
-import pandas as pd
+import pandas
 
 from ..token import TokenSequence
 
@@ -81,8 +81,8 @@ class ChunksTagsTranslator(object):
         
         dirname = os.path.dirname(__file__)
         sheet_name = 'BIOES' if scheme in ('BMES', 'BILOU') else scheme
-        trans = pd.read_excel(f"{dirname}/transition.xlsx", sheet_name=sheet_name, 
-                              usecols=['from_tag', 'to_tag', 'legal', 'end_of_chunk', 'start_of_chunk'])
+        trans = pandas.read_excel(f"{dirname}/transition.xlsx", sheet_name=sheet_name, 
+                                  usecols=['from_tag', 'to_tag', 'legal', 'end_of_chunk', 'start_of_chunk'])
         
         if scheme in ('BMES', 'BILOU'):
             # Mapping from BIOES to BMES/BILOU

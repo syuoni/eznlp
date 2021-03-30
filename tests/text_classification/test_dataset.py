@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import pytest
+import pandas
 
-import pandas as pd
 from eznlp.pretrained import BertLikeConfig
 from eznlp.text_classification import TextClassifierConfig, TextClassificationDataset
 from eznlp.text_classification.io import TabularIO
@@ -23,7 +23,7 @@ class TestTextClassificationDataset(object):
         dev_set = TextClassificationDataset(dev_data, config)
         dev_set._truncate_tokens()
         sub_lens = [sum(len(tokenizer.tokenize(word)) for word in data_entry['tokens'].raw_text) for data_entry in dev_set.data]
-        sub_lens = pd.Series(sub_lens)
+        sub_lens = pandas.Series(sub_lens)
         
         assert (sub_lens <= 510).all()
         assert (sub_lens == 510).sum() >= (len(sub_lens) / 2)

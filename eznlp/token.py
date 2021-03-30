@@ -7,7 +7,7 @@ import re
 import hanziconv
 import spacy
 import jieba
-import numpy as np
+import numpy
 
 
 zh_punctuation = "！？｡。＂＃＄％＆＇（）＊＋，－——／：；＜＝＞＠［＼］＾＿｀｛｜｝～｟｠｢｣､、〃《》「」『』【】〔〕〖〗〘〙〚〛〜〝〞〟〰〾〿–—‘’‛“”„‟…‧﹏"
@@ -130,7 +130,7 @@ def _text_to_num_mark(text: str, return_nan_mark: bool=True):
         if abs(possible_value) < 1:
             digits = 0
         else:
-            digits = min(MAX_DIGITS, int(np.log10(abs(possible_value))) + 1)
+            digits = min(MAX_DIGITS, int(numpy.log10(abs(possible_value))) + 1)
             
         if is_percent:
             num_type = 'percent'
@@ -253,7 +253,7 @@ class Token(object):
         
     @property
     def en_shape_features(self):
-        return np.array([criterion(self.raw_text) for criterion in en_shape2criterion.values()])
+        return numpy.array([criterion(self.raw_text) for criterion in en_shape2criterion.values()])
         
     @property
     def zh_shape_features(self):
@@ -322,8 +322,8 @@ class TokenSequence(object):
         if sep_width is None:
             sep_width = len(self.token_sep)
         
-        token_lens = np.array([len(tok) for tok in self.token_list])
-        self.end = np.cumsum(token_lens + sep_width) - sep_width
+        token_lens = numpy.array([len(tok) for tok in self.token_list])
+        self.end = numpy.cumsum(token_lens + sep_width) - sep_width
         self.start = self.end - token_lens
         
         
@@ -337,7 +337,7 @@ class TokenSequence(object):
     def build_softwords(self, tokenize_callback, **kwargs):
         self._assert_for_softwords(tokenize_callback)
         
-        self.softword = [np.zeros(len(self._softword_idx2tag), dtype=bool) for tok in self.token_list]
+        self.softword = [numpy.zeros(len(self._softword_idx2tag), dtype=bool) for tok in self.token_list]
         
         for word_text, word_start, word_end in tokenize_callback(self.token_sep.join(self.raw_text), **kwargs):
             if word_end - word_start == 1:

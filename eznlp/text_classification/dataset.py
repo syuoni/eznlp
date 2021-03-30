@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from typing import List
-import numpy as np
+import numpy
 
 from ..data.dataset import Dataset
 from .classifier import TextClassifierConfig
@@ -33,12 +33,12 @@ class TextClassificationDataset(Dataset):
             sub_tok_seq_lens = [len(tok) for tok in nested_sub_tokens]
             
             if sum(sub_tok_seq_lens) > max_len:
-                cum_lens = np.cumsum(sub_tok_seq_lens).tolist()
+                cum_lens = numpy.cumsum(sub_tok_seq_lens).tolist()
                 find_head, head_end = find_ascending(cum_lens, head_len)
                 if find_head:
                     head_end += 1
                     
-                rev_cum_lens = np.cumsum(sub_tok_seq_lens[::-1]).tolist()
+                rev_cum_lens = numpy.cumsum(sub_tok_seq_lens[::-1]).tolist()
                 find_tail, tail_begin = find_ascending(rev_cum_lens, tail_len)
                 if find_tail:
                     tail_begin += 1

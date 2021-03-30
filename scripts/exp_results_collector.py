@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
-import os
 import glob
 import re
 import argparse
 import logging
 import datetime
 import zipfile
-import pandas as pd
+import pandas
 
 
 dict_re = re.compile("\{[^\{\}]+\}")
@@ -47,7 +46,7 @@ if __name__ == '__main__':
             else:
                 exp_results.append(exp_res)
                 
-        df = pd.DataFrame(exp_results)
+        df = pandas.DataFrame(exp_results)
         df.to_excel(f"cache/{args.dataset}-collected-{timestamp}.xlsx", index=False)
         
     elif args.format == 'zip':

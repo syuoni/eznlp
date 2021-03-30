@@ -47,6 +47,13 @@ def load_data(args: argparse.Namespace):
         train_data = conll_io.read("data/conll2012/train.chinese.v4_gold_conll", encoding='utf-8')
         dev_data   = conll_io.read("data/conll2012/dev.chinese.v4_gold_conll", encoding='utf-8')
         test_data  = conll_io.read("data/conll2012/test.chinese.v4_gold_conll", encoding='utf-8')
+        
+    elif args.dataset == 'yelp2013':
+        tabular_io = TabularIO(text_col_id=3, label_col_id=2)
+        train_data = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.train.ss", encoding='utf-8', sep="\t\t", sentence_sep="<sssss>")
+        dev_data   = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.dev.ss", encoding='utf-8', sep="\t\t", sentence_sep="<sssss>")
+        test_data  = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.test.ss", encoding='utf-8', sep="\t\t", sentence_sep="<sssss>")
+        
     else:
         raise Exception("Dataset does NOT exist", args.dataset)
         

@@ -9,6 +9,7 @@ import pandas as pd
 import spacy
 import jieba
 import torch
+import torchtext
 
 import allennlp.modules
 import transformers

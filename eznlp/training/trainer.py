@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import time
-import numpy as np
+import numpy
 import logging
 import torch
 
@@ -105,9 +105,9 @@ class Trainer(object):
                 epoch_y_pred.extend(possible_batch_y[1])
                 
         if epoch_y_gold:
-            return (np.mean(epoch_losses), self.evaluate(epoch_y_gold, epoch_y_pred))
+            return (numpy.mean(epoch_losses), self.evaluate(epoch_y_gold, epoch_y_pred))
         else:
-            return (np.mean(epoch_losses), )
+            return (numpy.mean(epoch_losses), )
         
         
     def eval_epoch(self, dataloader: torch.utils.data.DataLoader):
@@ -126,9 +126,9 @@ class Trainer(object):
                     epoch_y_pred.extend(possible_batch_y[1])
                     
         if epoch_y_gold:
-            return (np.mean(epoch_losses), self.evaluate(epoch_y_gold, epoch_y_pred))
+            return (numpy.mean(epoch_losses), self.evaluate(epoch_y_gold, epoch_y_pred))
         else:
-            return (np.mean(epoch_losses), )
+            return (numpy.mean(epoch_losses), )
     
     
     def train_steps(self, 
@@ -142,18 +142,18 @@ class Trainer(object):
                     save_by_loss: bool=True, 
                     save_every_steps: int=None):
         
-        max_steps = np.inf if max_steps is None else max_steps
+        max_steps = numpy.inf if max_steps is None else max_steps
         disp_every_steps = len(train_loader) if disp_every_steps is None else disp_every_steps
         eval_every_steps = len(train_loader) if eval_every_steps is None else eval_every_steps
-        save_every_steps = np.inf if save_every_steps is None else save_every_steps
+        save_every_steps = numpy.inf if save_every_steps is None else save_every_steps
         if eval_every_steps % disp_every_steps != 0:
             raise ValueError(f"`eval_every_steps` {eval_every_steps} should be multiples of `disp_every_steps` {disp_every_steps}")
             
         self.model.train()
         
-        best_dev_loss = np.inf
+        best_dev_loss = numpy.inf
         # The `metric` must hold that it is better if higher, e.g., accuracy or F1. 
-        best_dev_metric = -np.inf
+        best_dev_metric = -numpy.inf
         
         train_losses = []
         train_y_gold, train_y_pred = [], []
@@ -178,7 +178,7 @@ class Trainer(object):
                     lrs = [group['lr'] for group in self.optimizer.param_groups]
                     disp_running_info(eidx=eidx, sidx=sidx, lrs=lrs, 
                                       elapsed_secs=elapsed_secs, 
-                                      loss=np.mean(train_losses),
+                                      loss=numpy.mean(train_losses),
                                       metric=self.evaluate(train_y_gold, train_y_pred) if train_y_gold else None,
                                       partition='train')
                     train_losses = []
@@ -260,7 +260,7 @@ def disp_running_info(eidx=None, sidx=None, lrs=None, elapsed_secs=None, loss=No
     if metric is not None:
         disp_text.append(f"{partition} Metric: {metric*100:.2f}%")
     else:
-        disp_text.append(f"{partition} PPL: {np.exp(loss):.3f}")
+        disp_text.append(f"{partition} PPL: {numpy.exp(loss):.3f}")
     if elapsed_secs is not None:
         mins, secs = elapsed_secs // 60, elapsed_secs % 60
         disp_text.append(f"Elapsed Time: {mins}m {secs}s")

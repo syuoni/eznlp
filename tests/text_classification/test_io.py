@@ -8,8 +8,16 @@ class TestTabularIO(object):
     """
     References
     ----------
-    [1] Chen et al. 2016. Neural sentiment classification with user and product attention. 
+    [1] Zhang et al. 2015. Character-level convolutional networks for text classification. NIPS 2015.
+    [2] Chen et al. 2016. Neural sentiment classification with user and product attention. 
     """
+    def test_yelp_full(self):
+        # TODO:
+        tabular_io = TabularIO(text_col_id=1, label_col_id=0)
+        tabular_io.read("data/yelp_review_full/test.csv", sep=",")
+        
+    
+    
     @pytest.mark.slow
     def test_yelp2013(self):
         tabular_io = TabularIO(text_col_id=3, label_col_id=2)
@@ -21,5 +29,4 @@ class TestTabularIO(object):
         assert len(train_data) == 62_522
         assert len(dev_data) == 7_773
         assert len(test_data) == 8_671
-        
         

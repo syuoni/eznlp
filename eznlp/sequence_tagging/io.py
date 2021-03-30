@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import re
-import numpy as np
-import pandas as pd
+import numpy
+import pandas
 
 from ..token import TokenSequence
 from .transition import ChunksTagsTranslator
@@ -142,7 +142,7 @@ class BratIO(object):
             self._check_text_chunks(text, text_chunks)
         
         # Build dataframe
-        df = pd.DataFrame(text_chunks, index=['text', 'type', 'start_in_text', 'end_in_text']).T
+        df = pandas.DataFrame(text_chunks, index=['text', 'type', 'start_in_text', 'end_in_text']).T
         for attr_name in self.attr_names:
             df[attr_name] = 'F'
             
@@ -169,7 +169,7 @@ class BratIO(object):
         return data
     
     
-    def _build_entry(self, text: str, df: pd.DataFrame, line_start=None, line_end=None):
+    def _build_entry(self, text: str, df: pandas.DataFrame, line_start=None, line_end=None):
         line_start = 0 if line_start is None else line_start
         line_end = len(text) if line_end is None else line_end
         
@@ -194,7 +194,7 @@ class BratIO(object):
         text = re.sub(" {2,}", lambda x: " " + self.inserted_mark*(len(x.group())-1), text)
         
         is_inserted = [int(c == self.inserted_mark) for c in text]
-        num_inserted = np.cumsum(is_inserted).tolist()
+        num_inserted = numpy.cumsum(is_inserted).tolist()
         # The positions of exact pre-inserted spaces should be mapped to positions NEXT to them
         num_inserted = [n - i for n, i in zip(num_inserted, is_inserted)]
         num_inserted.append(num_inserted[-1])
@@ -305,7 +305,7 @@ class BratIO(object):
         text = self.line_sep.join([self._tokenize_and_rejoin(line) for line in text.split(self.line_sep)])
         
         is_inserted = [int(c == self.inserted_mark) for c in text]
-        num_inserted = np.cumsum(is_inserted).tolist()
+        num_inserted = numpy.cumsum(is_inserted).tolist()
         num_inserted = [n for n, i in zip(num_inserted, is_inserted) if i == 0]
         assert len(num_inserted) == ori_num_chars
         num_inserted.append(num_inserted[-1])
