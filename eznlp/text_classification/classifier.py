@@ -22,8 +22,7 @@ class TextClassifierConfig(ModelConfig):
         
     @property
     def name(self):
-        extra_name = self.decoder.attention_scoring if self.decoder.use_attention else self.decoder.pooling_mode
-        return "-".join([super().name, extra_name])
+        return "-".join([super().name, self.decoder.agg_mode])
         
     def build_vocabs_and_dims(self, *partitions):
         super().build_vocabs_and_dims(*partitions)

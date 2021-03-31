@@ -16,14 +16,15 @@ import flair
 from eznlp import auto_device
 from eznlp.config import ConfigDict
 from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig, CharConfig
-from eznlp.sequence_tagging import SequenceTaggingDecoderConfig, SequenceTaggerConfig
-from eznlp.sequence_tagging import SequenceTaggingDataset
-from eznlp.sequence_tagging import SequenceTaggingTrainer
+from eznlp.text_classification import TextClassificationDecoderConfig, TextClassifierConfig
+from eznlp.text_classification import TextClassificationDataset
+from eznlp.text_classification import TextClassificationTrainer
+from eznlp.text_classification import truncate_for_bert_like
 from eznlp.pretrained import GloVe, ELMoConfig, BertLikeConfig, FlairConfig
 from eznlp.training.utils import LRLambda
 from eznlp.training.utils import count_params, collect_params, check_param_groups
 
-from utils import load_data, evaluate_sequence_tagging, header_format
+from utils import load_data, evaluate_text_classification, header_format
 
 
 def parse_arguments(parser: argparse.ArgumentParser):
@@ -34,7 +35,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
                              help="whether log to terminal")
     
     group_data = parser.add_argument_group('dataset')
-    group_data.add_argument('--dataset', type=str, default='yelp_full', 
+    group_data.add_argument('--dataset', type=str, default='yelp2013', 
                             help="dataset name")
     
     group_train = parser.add_argument_group('training hyper-parameters')
@@ -44,7 +45,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
                              help="whether to use amp")
     group_train.add_argument('--num_epochs', type=int, default=50, 
                              help="number of epochs")
-    group_train.add_argument('--batch_size', type=int, default=32, 
+    group_train.add_argument('--batch_size', type=int, default=64, 
                              help="batch size")
     group_train.add_argument('--grad_clip', type=float, default=5.0, 
                              help="gradient clip (negative values are set to `None`)")
@@ -67,8 +68,8 @@ def parse_arguments(parser: argparse.ArgumentParser):
                              help="dropout rate")
     group_model.add_argument('--use_locked_drop', default=False, action='store_true', 
                              help="whether to use locked dropout")
-    group_model.add_argument('--dec_arch', type=str, default='CRF', 
-                             help="decoder architecture")
+    group_model.add_argument('--agg_mode', type=str, default='multiplicative_attention', 
+                             help="aggregating mode")
     
     subparsers = parser.add_subparsers(dest='command', help="sub-commands")
     parser_fs = subparsers.add_parser('from_scratch', aliases=['fs'], 
@@ -77,8 +78,6 @@ def parse_arguments(parser: argparse.ArgumentParser):
                            help="embedding dim")
     parser_fs.add_argument('--emb_freeze', default=False, action='store_true', 
                            help="whether to freeze embedding weights")
-    parser_fs.add_argument('--char_arch', type=str, default='LSTM', 
-                           help="character-level encoder architecture")
     parser_fs.add_argument('--use_interm1', default=False, action='store_true', 
                            help="whether to use intermediate1")
     parser_fs.add_argument('--use_elmo', default=False, action='store_true', 
@@ -111,17 +110,11 @@ def build_config(args: argparse.Namespace):
     else:
         drop_rates = (args.drop_rate, 0.0, 0.0)
         
-    decoder_config = SequenceTaggingDecoderConfig(arch=args.dec_arch, scheme=args.scheme, in_drop_rates=drop_rates)
+    decoder_config = TextClassificationDecoderConfig(agg_mode=args.agg_mode, in_drop_rates=drop_rates)
     
     if args.command in ('from_scratch', 'fs'):
         glove = GloVe("assets/vectors/glove.6B.100d.txt")
-        ohots_config = ConfigDict({'text': OneHotConfig(field='text', vectors=glove, emb_dim=100, freeze=args.emb_freeze)})
-        char_config = CharConfig(emb_dim=16, 
-                                 encoder=EncoderConfig(arch=args.char_arch, 
-                                                       hid_dim=128, 
-                                                       num_layers=1, 
-                                                       in_drop_rates=(args.drop_rate, 0.0, 0.0)))
-        nested_ohots_config = ConfigDict({'char': char_config})
+        ohots_config = ConfigDict({'text': OneHotConfig(field='text', min_freq=5, vectors=glove, emb_dim=100, freeze=args.emb_freeze)})
         
         if args.use_interm1:
             interm1_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
@@ -150,7 +143,6 @@ def build_config(args: argparse.Namespace):
         
     elif args.command in ('finetune', 'ft'):
         ohots_config = None
-        nested_ohots_config = None
         interm1_config = None
         
         if args.use_interm2:
@@ -162,11 +154,10 @@ def build_config(args: argparse.Namespace):
         flair_fw_config, flair_bw_config = None, None
         
         if args.bert_arch.startswith('BERT'):
-            # Cased tokenizer for NER task
             if args.bert_arch.endswith('base'):
-                PATH = "assets/transformers/bert-base-cased"
+                PATH = "assets/transformers/bert-base-uncased"
             elif args.bert_arch.endswith('large'):
-                PATH = "assets/transformers/bert-large-cased"
+                PATH = "assets/transformers/bert-large-uncased"
             
             tokenizer = transformers.BertTokenizer.from_pretrained(PATH)
             bert = transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, 
@@ -189,8 +180,7 @@ def build_config(args: argparse.Namespace):
     else:
         raise Exception("No sub-command specified")
         
-    return SequenceTaggerConfig(ohots=ohots_config, 
-                                nested_ohots=nested_ohots_config, 
+    return TextClassifierConfig(ohots=ohots_config, 
                                 intermediate1=interm1_config, 
                                 elmo=elmo_config, 
                                 flair_fw=flair_fw_config, 
@@ -228,14 +218,21 @@ if __name__ == '__main__':
     device = auto_device()
     if device.type.startswith('cuda'):
         torch.cuda.set_device(device)
+        temp = torch.randn(100).to(device)
         
     train_data, dev_data, test_data = load_data(args)
+    # train_data, dev_data, test_data = train_data[:1000], dev_data[:1000], test_data[:1000]
     config = build_config(args)
     
-    train_set = SequenceTaggingDataset(train_data, config)
+    if args.command in ('finetune', 'ft'):
+        train_data = truncate_for_bert_like(train_data, config.bert_like.tokenizer, verbose=args.log_terminal)
+        dev_data   = truncate_for_bert_like(dev_data,   config.bert_like.tokenizer, verbose=args.log_terminal)
+        test_data  = truncate_for_bert_like(test_data,  config.bert_like.tokenizer, verbose=args.log_terminal)
+        
+    train_set = TextClassificationDataset(train_data, config)
     train_set.build_vocabs_and_dims(dev_data, test_data)
-    dev_set   = SequenceTaggingDataset(dev_data,  train_set.config)
-    test_set  = SequenceTaggingDataset(test_data, train_set.config)
+    dev_set   = TextClassificationDataset(dev_data,  train_set.config)
+    test_set  = TextClassificationDataset(test_data, train_set.config)
     
     logger.info(train_set.summary)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  num_workers=4, collate_fn=train_set.collate)
@@ -243,13 +240,13 @@ if __name__ == '__main__':
     
     
     logger.info(header_format("Building", sep='-'))
-    tagger = config.instantiate().to(device)
-    count_params(tagger)
+    classifier = config.instantiate().to(device)
+    count_params(classifier)
     
     logger.info(header_format("Training", sep='-'))
-    param_groups = [{'params': tagger.pretrained_parameters(), 'lr': args.finetune_lr}]
-    param_groups.append({'params': collect_params(tagger, param_groups), 'lr': args.lr})
-    assert check_param_groups(tagger, param_groups)
+    param_groups = [{'params': classifier.pretrained_parameters(), 'lr': args.finetune_lr}]
+    param_groups.append({'params': collect_params(classifier, param_groups), 'lr': args.lr})
+    assert check_param_groups(classifier, param_groups)
     optimizer = getattr(torch.optim, args.optimizer)(param_groups)
     
     schedule_by_step = False
@@ -266,24 +263,24 @@ if __name__ == '__main__':
         scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
         
         
-    trainer = SequenceTaggingTrainer(tagger, optimizer=optimizer, scheduler=scheduler, schedule_by_step=schedule_by_step,
-                                     device=device, grad_clip=args.grad_clip, use_amp=args.use_amp)
+    trainer = TextClassificationTrainer(classifier, optimizer=optimizer, scheduler=scheduler, schedule_by_step=schedule_by_step,
+                                        device=device, grad_clip=args.grad_clip, use_amp=args.use_amp)
     if args.pdb: 
         pdb.set_trace()
         
     def save_callback(model):
-        torch.save(model, f"{save_path}/{args.scheme}-{config.name}.pth")
+        torch.save(model, f"{save_path}/{config.name}.pth")
     trainer.train_steps(train_loader=train_loader, dev_loader=dev_loader, num_epochs=args.num_epochs, 
                         save_callback=save_callback, save_by_loss=False)
     
     logger.info(header_format("Evaluating", sep='-'))
-    tagger = torch.load(f"{save_path}/{args.scheme}-{config.name}.pth", map_location=device)
-    trainer = SequenceTaggingTrainer(tagger, device=device)
+    classifier = torch.load(f"{save_path}/{config.name}.pth", map_location=device)
+    trainer = TextClassificationTrainer(classifier, device=device)
     
     logger.info("Evaluating on dev-set")
-    evaluate_sequence_tagging(trainer, dev_set)
+    evaluate_text_classification(trainer, dev_set)
     logger.info("Evaluating on test-set")
-    evaluate_sequence_tagging(trainer, test_set)
+    evaluate_text_classification(trainer, test_set)
     
     logger.info(" ".join(sys.argv))
     logger.info(pprint.pformat(args.__dict__))

@@ -20,7 +20,7 @@ def load_data(args: argparse.Namespace):
         dev_data   = conll_io.read("data/conll2003/eng.testa")
         test_data  = conll_io.read("data/conll2003/eng.testb")
     elif args.dataset == 'conll2012':
-        conll_io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', line_sep_starts=["#begin", "#end", "pt/"])
+        conll_io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', line_sep_starts=["#begin", "#end", "pt/"], case_mode='None', number_mode='Zeros')
         train_data = conll_io.read("data/conll2012/train.english.v4_gold_conll", encoding='utf-8')
         dev_data   = conll_io.read("data/conll2012/dev.english.v4_gold_conll", encoding='utf-8')
         test_data  = conll_io.read("data/conll2012/test.english.v4_gold_conll", encoding='utf-8')
@@ -51,14 +51,16 @@ def load_data(args: argparse.Namespace):
         test_data  = conll_io.read("data/conll2012/test.chinese.v4_gold_conll", encoding='utf-8')
         
     elif args.dataset == 'yelp2013':
-        tabular_io = TabularIO(text_col_id=3, label_col_id=2, mapping={"<sssss>": "\n"}, case_mode='lower')
+        tabular_io = TabularIO(text_col_id=3, label_col_id=2, mapping={"<sssss>": "\n"}, verbose=args.log_terminal, 
+                               case_mode='Lower', number_mode='None')
         train_data = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.train.ss", encoding='utf-8', sep="\t\t")
         dev_data   = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.dev.ss", encoding='utf-8', sep="\t\t")
         test_data  = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.test.ss", encoding='utf-8', sep="\t\t")
         
     elif args.dataset == 'yelp_full':
         spacy_nlp_en = spacy.load("en_core_web_sm", disable=['tagger', 'parser', 'ner'])
-        tabular_io = TabularIO(text_col_id=1, label_col_id=0, mapping={"\\n": "\n", '\\"': '"'}, tokenize_callback=spacy_nlp_en, case_mode='lower')
+        tabular_io = TabularIO(text_col_id=1, label_col_id=0, mapping={"\\n": "\n", '\\"': '"'}, tokenize_callback=spacy_nlp_en, verbose=args.log_terminal, 
+                               case_mode='Lower', number_mode='None')
         train_data = tabular_io.read("data/yelp_review_full/train.csv", sep=",")
         test_data  = tabular_io.read("data/yelp_review_full/test.csv", sep=",")
         
@@ -74,8 +76,6 @@ def load_data(args: argparse.Namespace):
                 data_entry['tokens'].build_softwords(tokenizer.tokenize)
                 data_entry['tokens'].build_softlexicons(tokenizer.tokenize)
                 
-                
-                
     return train_data, dev_data, test_data
 
 
@@ -90,6 +90,13 @@ def evaluate_sequence_tagging(trainer, dataset):
     logger.info(f"Macro F1-score: {macro_f1*100:2.3f}%")
 
 
+def evaluate_text_classification(trainier, dataset):
+    set_labels_pred = trainier.predict_labels(dataset)
+    set_labels_gold = [ex['label'] for ex in dataset.data]
+    
+    acc = trainier.evaluate(set_labels_gold, set_labels_pred)
+    logger.info(f"Accuracy: {acc*100:2.3f}%")
+    
 
 def header_format(content: str, sep='=', width=100):
     side_width = max(width - len(content) - 2, 10)

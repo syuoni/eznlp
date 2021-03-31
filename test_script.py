@@ -47,7 +47,7 @@ from eznlp.text_classification import TextClassificationTrainer
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     device = auto_device()
-        
+    
     # batch_tokenized_raw_text = [["I", "like", "it", "."], 
     #                             ["Do", "you", "love", "me", "?"], 
     #                             ["Sure", "!"], 

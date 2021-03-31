@@ -104,7 +104,6 @@ if __name__ == '__main__':
                        ["--batch_size 8", "--batch_size 16", "--batch_size 32"], 
                        ["--num_layers 1", "--num_layers 2"], 
                        ["fs"], 
-                       # ["", "--use_bigram"], 
                        # ["", "--use_softword"], 
                        ["", "--use_bigram", "--use_softlexicon"]]
         else:
@@ -123,7 +122,35 @@ if __name__ == '__main__':
                        ["", "--use_interm2"], 
                        ["--bert_arch BERT_base", "--bert_arch RoBERTa_base"]]
         
-        
+    elif args.task == 'text_classification_en':
+        if args.command in ('fs', 'from_scratch'):
+            options = [["--num_epochs 50"], 
+                       ["--optimizer AdamW --lr 5e-4", 
+                        "--optimizer AdamW --lr 1e-3", 
+                        "--optimizer AdamW --lr 2e-3", 
+                        "--optimizer Adadelta --lr 0.5",
+                        "--optimizer Adadelta --lr 1.0",
+                        "--optimizer Adadelta --lr 2.0"], 
+                       ["--batch_size 64"], 
+                       ["--num_layers 1", "--num_layers 2"], 
+                       ["--agg_mode max_pooling", "--agg_mode multiplicative_attention"], 
+                       ["fs"]]
+        else:
+            options = [["--num_epochs 10"], 
+                       ["--optimizer AdamW --lr 5e-4 --finetune_lr 1e-5", 
+                        "--optimizer AdamW --lr 1e-3 --finetune_lr 1e-5", 
+                        "--optimizer AdamW --lr 2e-3 --finetune_lr 1e-5", 
+                        "--optimizer AdamW --lr 5e-4 --finetune_lr 2e-5", 
+                        "--optimizer AdamW --lr 1e-3 --finetune_lr 2e-5", 
+                        "--optimizer AdamW --lr 2e-3 --finetune_lr 2e-5"], 
+                       ["--batch_size 32"], 
+                       ["--scheduler LinearDecayWithWarmup"], 
+                       ["ft"], 
+                       ["--bert_drop_rate 0.2"], 
+                       ["", "--use_interm2"], 
+                       ["--bert_arch BERT_base", "--bert_arch RoBERTa_base"]]
+            
+            
     if args.num_workers > 0:
         options.insert(0, ["--no_log_terminal"])
         

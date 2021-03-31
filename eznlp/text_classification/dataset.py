@@ -1,11 +1,15 @@
 # -*- coding: utf-8 -*-
 from typing import List
+import tqdm
+import logging
 import numpy
 import transformers
 
 from ..data.dataset import Dataset
 from .classifier import TextClassifierConfig
 from ..sequence_tagging.transition import find_ascending
+
+logger = logging.getLogger(__name__)
 
 
 class TextClassificationDataset(Dataset):
@@ -32,7 +36,7 @@ class TextClassificationDataset(Dataset):
     
     
     
-def truncate_for_bert_like(data: list, tokenizer: transformers.PreTrainedTokenizer, mode: str='head+tail'):
+def truncate_for_bert_like(data: list, tokenizer: transformers.PreTrainedTokenizer, mode: str='head+tail', verbose=True):
     """
     Truncation methods:
         1. head-only: keep the first 510 tokens;
@@ -52,8 +56,8 @@ def truncate_for_bert_like(data: list, tokenizer: transformers.PreTrainedTokeniz
         head_len = tokenizer.model_max_length // 4
         tail_len = max_len - head_len
         
-        
-    for data_entry in data:
+    n_truncated = 0
+    for data_entry in tqdm.tqdm(data, disable=not verbose, ncols=100, desc="Truncating data"):
         tokens = data_entry['tokens']
         nested_sub_tokens = [tokenizer.tokenize(word) for word in tokens.raw_text]
         sub_tok_seq_lens = [len(tok) for tok in nested_sub_tokens]
@@ -77,6 +81,9 @@ def truncate_for_bert_like(data: list, tokenizer: transformers.PreTrainedTokeniz
                 data_entry['tokens'] = tokens[-tail_begin:]
             else:
                 data_entry['tokens'] = tokens[:head_end] + tokens[-tail_begin:]
+                
+            n_truncated += 1
             
+    logger.info(f"Truncated sequences: {n_truncated} ({n_truncated/len(data)*100:.2f}%)")
     return data
     
