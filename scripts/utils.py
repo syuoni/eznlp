@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import argparse
 import logging
+import spacy
+import sklearn
 
 from eznlp.token import LexiconTokenizer
 from eznlp.pretrained import Vectors
@@ -49,11 +51,18 @@ def load_data(args: argparse.Namespace):
         test_data  = conll_io.read("data/conll2012/test.chinese.v4_gold_conll", encoding='utf-8')
         
     elif args.dataset == 'yelp2013':
-        tabular_io = TabularIO(text_col_id=3, label_col_id=2)
-        train_data = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.train.ss", encoding='utf-8', sep="\t\t", sentence_sep="<sssss>")
-        dev_data   = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.dev.ss", encoding='utf-8', sep="\t\t", sentence_sep="<sssss>")
-        test_data  = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.test.ss", encoding='utf-8', sep="\t\t", sentence_sep="<sssss>")
+        tabular_io = TabularIO(text_col_id=3, label_col_id=2, mapping={"<sssss>": "\n"}, case_mode='lower')
+        train_data = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.train.ss", encoding='utf-8', sep="\t\t")
+        dev_data   = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.dev.ss", encoding='utf-8', sep="\t\t")
+        test_data  = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.test.ss", encoding='utf-8', sep="\t\t")
         
+    elif args.dataset == 'yelp_full':
+        spacy_nlp_en = spacy.load("en_core_web_sm", disable=['tagger', 'parser', 'ner'])
+        tabular_io = TabularIO(text_col_id=1, label_col_id=0, mapping={"\\n": "\n", '\\"': '"'}, tokenize_callback=spacy_nlp_en, case_mode='lower')
+        train_data = tabular_io.read("data/yelp_review_full/train.csv", sep=",")
+        test_data  = tabular_io.read("data/yelp_review_full/test.csv", sep=",")
+        
+        train_data, dev_data = sklearn.model_selection.train_test_split(train_data, test_size=0.1, random_state=args.seed)
     else:
         raise Exception("Dataset does NOT exist", args.dataset)
         
@@ -64,6 +73,8 @@ def load_data(args: argparse.Namespace):
             for data_entry in data:
                 data_entry['tokens'].build_softwords(tokenizer.tokenize)
                 data_entry['tokens'].build_softlexicons(tokenizer.tokenize)
+                
+                
                 
     return train_data, dev_data, test_data
 

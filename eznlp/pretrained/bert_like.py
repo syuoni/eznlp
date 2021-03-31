@@ -141,10 +141,6 @@ class BertLikeEmbedder(torch.nn.Module):
     the pretrained model have been properly set. 
     `torch.no_grad()` enforces the result of every computation in its context 
     to have `requires_grad=False`, even when the inputs have `requires_grad=True`.
-    
-    References
-    ----------
-    [1] C. Sun, et al. 2019. How to Fine-Tune BERT for Text Classification?
     """
     def __init__(self, config: BertLikeConfig):
         super().__init__()
