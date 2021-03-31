@@ -51,21 +51,21 @@ class TestClassifier(object):
     @pytest.mark.parametrize("enc_arch", ['Conv', 'LSTM'])
     @pytest.mark.parametrize("agg_mode", ['min_pooling', 'max_pooling', 'mean_pooling', 
                                           'dot_attention', 'multiplicative_attention', 'additive_attention'])
-    def test_classifier(self, enc_arch, agg_mode, yelp2013_demo, device):
+    def test_classifier(self, enc_arch, agg_mode, yelp_full_demo, device):
         self.config = TextClassifierConfig(intermediate2=EncoderConfig(arch=enc_arch), 
                                            decoder=TextClassificationDecoderConfig(agg_mode=agg_mode))
-        self._setup_case(yelp2013_demo, device)
+        self._setup_case(yelp_full_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
         
         
     @pytest.mark.parametrize("from_tokenized", [True, False])
-    def test_classifier_with_bert_like(self, from_tokenized, yelp2013_demo, bert_with_tokenizer, device):
+    def test_classifier_with_bert_like(self, from_tokenized, yelp_full_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
         self.config = TextClassifierConfig(ohots=None, 
-                                           bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert), 
+                                           bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, from_tokenized=from_tokenized), 
                                            intermediate2=None)
-        self._setup_case(yelp2013_demo, device)
+        self._setup_case(yelp_full_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
         

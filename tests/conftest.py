@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import pytest
+import spacy
 import torch
 import allennlp.modules
 import transformers
@@ -13,6 +14,18 @@ from eznlp.text_classification.io import TabularIO
 
 def pytest_addoption(parser):
     parser.addoption('--device', type=str, default='auto', help="device to run tests (`auto`, `cpu` or `cuda:x`)")
+    parser.addoption('--runslow', default=False, action='store_true', help="whether to run slow tests")
+    
+def pytest_configure(config):
+    config.addinivalue_line("markers", "slow: mark test as slow")
+    
+def pytest_collection_modifyitems(config, items):
+    if not config.getoption("--runslow"):
+        skip_slow = pytest.mark.skip(reason="need --runslow option to run")
+        for item in items:
+            if "slow" in item.keywords:
+                item.add_marker(skip_slow)
+    
     
 @pytest.fixture(scope='session')
 def device(request):
@@ -24,6 +37,11 @@ def device(request):
     
     
 @pytest.fixture
+def spacy_nlp_en():
+    return spacy.load("en_core_web_sm", disable=['tagger', 'parser', 'ner'])
+
+
+@pytest.fixture
 def conll2003_demo():
     return ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1').read("data/conll2003/demo.eng.train")
 
@@ -32,12 +50,11 @@ def ResumeNER_demo():
     return ConllIO(text_col_id=0, tag_col_id=1, scheme='BMES', token_sep="", pad_token="").read("data/ResumeNER/demo.train.char.bmes", encoding='utf-8')
 
 @pytest.fixture
-def yelp2013_demo():
-    return TabularIO(text_col_id=3, label_col_id=2).read("data/Tang2015/demo.yelp-2013-seg-20-20.train.ss", 
-                                                         encoding='utf-8', 
-                                                         sep="\t\t", 
-                                                         sentence_sep="<sssss>")
-
+def yelp_full_demo(spacy_nlp_en):
+    return TabularIO(text_col_id=1, label_col_id=0, 
+                     mapping={"\\n": "\n", '\\"': '"'}, 
+                     tokenize_callback=spacy_nlp_en, 
+                     case_mode='lower').read("data/yelp_review_full/demo.train.csv", sep=",")
 
 @pytest.fixture
 def glove100():

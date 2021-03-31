@@ -70,6 +70,7 @@ class TestConllIO(object):
         assert sum(len(ex['tokens']) for ex in test_data) == 92_308
         
         
+    @pytest.mark.slow
     def test_sighan2006(self):
         conll_io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BIO2')
         train_data = conll_io.read("data/SIGHAN2006/train.txt", encoding='utf-8')

@@ -14,6 +14,8 @@ class SequenceTaggerConfig(ModelConfig):
     
     @property
     def valid(self):
+        if self.bert_like is not None and not self.bert_like.from_tokenized:
+            return False
         return super().valid and (self.decoder is not None) and self.decoder.valid
         
     @property

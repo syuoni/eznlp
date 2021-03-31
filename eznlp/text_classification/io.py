@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import tqdm
 import pandas
 
 from ..token import TokenSequence
@@ -9,26 +10,24 @@ class TabularIO(object):
     An IO interface of Tabular-format files. 
     
     """
-    def __init__(self, text_col_id=0, label_col_id=1, tokenize_callback=None, **kwargs):
+    def __init__(self, text_col_id=0, label_col_id=1, mapping=None, tokenize_callback=None, **kwargs):
         self.text_col_id = text_col_id
         self.label_col_id = label_col_id
+        self.mapping = {} if mapping is None else mapping
         self.tokenize_callback = tokenize_callback
         self.kwargs = kwargs
         
-    def read(self, file_path, encoding=None, sep=None, sentence_sep=None):
+    def read(self, file_path, encoding=None, sep=None):
+        df = pandas.read_csv(file_path, header=None, dtype=str, encoding=encoding, sep=sep, engine='python')
+        
         data = []
-        with open(file_path, 'r', encoding=encoding) as f:
-            for line in f:
-                line = line.strip()
+        for _, line in tqdm.tqdm(df.iterrows(), total=df.shape[0], disable=df.shape[0]<10_000, desc="loading tabular data"):
+            raw_text, label = line.iloc[self.text_col_id].strip(), line.iloc[self.label_col_id].strip()
+            for pattern, repl in self.mapping.items():
+                raw_text = raw_text.replace(pattern, repl)
                 
-                line_seperated = line.split(sep)
-                raw_text = line_seperated[self.text_col_id].strip()
-                if sentence_sep is not None:
-                    raw_text = raw_text.replace(sentence_sep, "\n")
-                
-                tokens = TokenSequence.from_raw_text(raw_text, self.tokenize_callback, **self.kwargs)
-                label = line_seperated[self.label_col_id].strip()
-                data.append({'raw_text': raw_text, 'tokens': tokens, 'label': label})
-                
+            tokens = TokenSequence.from_raw_text(raw_text, self.tokenize_callback, **self.kwargs)
+            data.append({'tokens': tokens, 'label': label})
+            
         return data
     

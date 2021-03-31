@@ -53,12 +53,8 @@ class BertLikeConfig(Config):
             A 1D tensor of sub-token indexes.
         """
         sub_tokens = self.tokenizer.tokenize(raw_text)
-        
-        # Recommended by Sun et al. (2019)
-        if len(sub_tokens) > (self.tokenizer.max_len - 2):
-            head_len = self.tokenizer.max_len // 4
-            tail_len = self.tokenizer.max_len - 2 - head_len
-            sub_tokens = sub_tokens[:head_len] + sub_tokens[-tail_len:]
+        # Sequence longer than maximum length should be pre-processed
+        assert len(sub_tokens) <= self.tokenizer.model_max_length - 2
         
         sub_tok_ids = [self.tokenizer.cls_token_id] + \
                        self.tokenizer.convert_tokens_to_ids(sub_tokens) + \
@@ -88,8 +84,9 @@ class BertLikeConfig(Config):
         nested_sub_tokens = [word if len(word) > 0 else [self.tokenizer.unk_token] for word in nested_sub_tokens]
         sub_tokens = [sub_tok for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
         ori_indexes = [i for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
+        # Sequence longer than maximum length should be pre-processed
+        assert len(sub_tokens) <= self.tokenizer.model_max_length - 2
         
-        # TODO: Sentence longer than 512?
         sub_tok_ids = [self.tokenizer.cls_token_id] + \
                        self.tokenizer.convert_tokens_to_ids(sub_tokens) + \
                       [self.tokenizer.sep_token_id]
@@ -108,7 +105,7 @@ class BertLikeConfig(Config):
             return {'sub_tok_ids': sub_tok_ids, 
                     'ori_indexes': ori_indexes}
         else:
-            # TODO:?
+            # Use rejoined tokenized raw text here
             sub_tok_ids = self._token_ids_from_string(" ".join(tokenized_raw_text))
             return {'sub_tok_ids': sub_tok_ids}
             

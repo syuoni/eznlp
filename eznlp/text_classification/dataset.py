@@ -21,7 +21,11 @@ class TextClassificationDataset(Dataset):
             config = TextClassifierConfig()
         super().__init__(data, config)
         
-    def _truncate_tokens(self):
+        
+    def truncate_for_bert_like(self):
+        """
+        Recommended by Sun et al. (2019)
+        """
         tokenizer = self.config.bert_like.tokenizer
         max_len = tokenizer.model_max_length - 2
         head_len = tokenizer.model_max_length // 4
@@ -44,7 +48,8 @@ class TextClassificationDataset(Dataset):
                     tail_begin += 1
                     
                 data_entry['tokens'] = tokens[:head_end] + tokens[-tail_begin:]
-                
+        
+        
     @property
     def summary(self):
         summary = [super().summary]
