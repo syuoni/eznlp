@@ -41,7 +41,7 @@ from eznlp.text_classification.io import TabularIO
 from eznlp.text_classification import TextClassificationDecoderConfig, TextClassifierConfig
 from eznlp.text_classification import TextClassificationDataset
 from eznlp.text_classification import TextClassificationTrainer
-
+from eznlp.text_classification import truncate_for_bert_like
 
 
 if __name__ == '__main__':
@@ -62,8 +62,8 @@ if __name__ == '__main__':
     # elmo = allennlp.modules.Elmo(options_file, weight_file, 1)
     # batch_elmo_ids = allennlp.modules.elmo.batch_to_ids(batch_tokenized_raw_text)
     
-    # bert = transformers.BertModel.from_pretrained("assets/transformers/bert-base-uncased")
-    # tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-uncased")
+    bert = transformers.BertModel.from_pretrained("assets/transformers/bert-base-uncased")
+    tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-uncased")
     
     # glove = GloVe("assets/vectors/glove.6B.100d.txt", encoding='utf-8')
     # senna = Senna("assets/vectors/Senna")
@@ -117,9 +117,22 @@ if __name__ == '__main__':
     # tabular_io = TabularIO(text_col_id=3, label_col_id=2)
     # train_data = tabular_io.read("data/Tang2015/demo.yelp-2013-seg-20-20.train.ss", encoding='utf-8', sep="\t\t", sentence_sep="<sssss>")
     
-    # config = TextClassifierConfig(ohots=None, 
-    #                               encoder=None, 
-    #                               bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert))
+    spacy_nlp_en = spacy.load("en_core_web_sm", disable=['tagger', 'parser', 'ner'])
+    tabular_io = TabularIO(text_col_id=1, label_col_id=0, mapping={"\\n": "\n", '\\"': '"'}, tokenize_callback=spacy_nlp_en, case_mode='lower')
+    # train_data = tabular_io.read("data/yelp_review_full/train.csv", sep=",")
+    test_data  = tabular_io.read("data/yelp_review_full/test.csv", sep=",")
+    
+    config = TextClassifierConfig(ohots=None, 
+                                  intermediate2=None,
+                                  bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert))
+    
+    test_data  = truncate_for_bert_like(test_data,  config.bert_like.tokenizer)
+    
+    for data_entry in test_data:
+        config.bert_like.exemplify(data_entry['tokens'])
+        
+        
+    
     
     # train_set = TextClassificationDataset(train_data, config)
     # train_set.build_vocabs_and_dims()

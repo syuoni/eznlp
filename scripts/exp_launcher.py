@@ -125,16 +125,15 @@ if __name__ == '__main__':
     elif args.task == 'text_classification_en':
         if args.command in ('fs', 'from_scratch'):
             options = [["--num_epochs 50"], 
-                       ["--optimizer AdamW --lr 5e-4", 
-                        "--optimizer AdamW --lr 1e-3", 
-                        "--optimizer AdamW --lr 2e-3", 
-                        "--optimizer Adadelta --lr 0.5",
+                       ["--optimizer Adadelta --lr 0.5",
                         "--optimizer Adadelta --lr 1.0",
                         "--optimizer Adadelta --lr 2.0"], 
                        ["--batch_size 64"], 
                        ["--num_layers 1", "--num_layers 2"], 
                        ["--agg_mode max_pooling", "--agg_mode multiplicative_attention"], 
-                       ["fs"]]
+                       ["fs"], 
+                       # ["", "--use_elmo"], 
+                       ]
         else:
             options = [["--num_epochs 10"], 
                        ["--optimizer AdamW --lr 5e-4 --finetune_lr 1e-5", 

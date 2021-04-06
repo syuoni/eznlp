@@ -6,6 +6,37 @@ This repository consists of:
 * `eznlp.language_modeling`
 
 ## Experiments
+### Text Classification (English)
+Configurations of our implementation:
+* Word embeddings are initialized with GloVe
+* `From-scratch` models
+    * Optimizer: Adadelta (lr=0.5)
+    * Batch size: 64
+    * Number of epochs: 50
+* `Fine-tuining` models
+    * Optimizer: AdamW (lr=1e-3/2e-3, ft_lr=1e-5)
+    * Batch size: 32
+    * Number of epochs: 10
+    * Scheduler: Learning rate warmup at the first 20% steps followed by linear decay
+    * BERT/RoBERTa models are loaded with dropout rate of 0.2
+
+#### Yelp Full
+| Model | Paper | Reported Acc. | Our Implementation Acc. | Notes |
+|:-----:|:-----:|:-------------:|:-----------------------:|:-----:|
+| LSTM + MaxPooling        | Zhang et al. (2015) | 58.17 | 
+| LSTM + Attention         | -                   | -     | 
+| BERT-base + Attention    | Sun et al. (2019)   | 69.94 | 
+| RoBERTa-base + Attention | -                   | -     | 
+
+#### Yelp 2013 (with User and Product IDs)
+| Model | Paper | Reported Acc. | Our Implementation Acc. | Notes |
+|:-----:|:-----:|:-------------:|:-----------------------:|:-----:|
+| LSTM + MaxPooling        | Chen et al. (2016) | 62.7 | 64.96 | num_layers=2 |
+| LSTM + Attention         | Chen et al. (2016) | 63.1 | 64.84 | num_layers=2 |
+| BERT-base + Attention    | -                  | -    | 68.76 |
+| RoBERTa-base + Attention | -                  | -    | 70.80 |
+
+
 ### Named Entity Recognition (English)
 Configurations of our implementation:
 * Tagging scheme: BIOES
@@ -81,9 +112,11 @@ Configurations of our implementation:
 | LSTM + CRF                  | Zhang and Yang (2018) | 88.81 | 89.49 | num_layers=2 |
 | Bichar + LSTM + CRF         | Zhang and Yang (2018) | 91.87 | 92.02 | num_layers=2 |
 | Lattice-LSTM + CRF          | Zhang and Yang (2018) | 93.18 |
+| FLAT + CRF                  | Li et al. (2019)      | 94.35 |
 | SoftLexicon + LSTM + CRF    | Ma et al. (2020)      | 93.66 | 93.64 | num_layers=2; Adamax (lr=1e-3) |
 | BERT + CRF                  | Ma et al. (2020)      | 93.76 | 93.16 |
 | BERT + LSTM + CRF           | Ma et al. (2020)      | 94.83 | 93.13 |
+| FLAT + BERT + CRF           | Li et al. (2019)      | 96.09 |
 | SoftLexicon + BERT + CRF    | Ma et al. (2020)      | 95.42 |
 
 #### WeiboNER v2 
@@ -92,9 +125,11 @@ Configurations of our implementation:
 | LSTM + CRF                  | Zhang and Yang (2018) | 52.77 | 50.19 | num_layers=2 |
 | Bichar + LSTM + CRF         | Zhang and Yang (2018) | 56.75 | 57.18 | num_layers=2 |
 | Lattice-LSTM + CRF          | Zhang and Yang (2018) | 58.79 |
+| FLAT + CRF                  | Li et al. (2019)      | 63.42 |
 | SoftLexicon + LSTM + CRF    | Ma et al. (2020)      | 61.42 | 61.17 | num_layers=2; Adamax (lr=5e-3) |
 | BERT + CRF                  | Ma et al. (2020)      | 63.80 | 68.79 |
 | BERT + LSTM + CRF           | Ma et al. (2020)      | 67.33 | 70.48 |
+| FLAT + BERT + CRF           | Li et al. (2019)      | 68.55 |
 | SoftLexicon + BERT + CRF    | Ma et al. (2020)      | 70.50 |
 
 #### ResumeNER 
@@ -103,21 +138,21 @@ Configurations of our implementation:
 | LSTM + CRF                  | Zhang and Yang (2018) | 93.48 | 94.93 | num_layers=2 |
 | Bichar + LSTM + CRF         | Zhang and Yang (2018) | 94.41 | 94.51 | num_layers=2 |
 | Lattice-LSTM + CRF          | Zhang and Yang (2018) | 94.46 |
+| FLAT + CRF                  | Li et al. (2019)      | 94.93 |
 | SoftLexicon + LSTM + CRF    | Ma et al. (2020)      | 95.53 | 95.48 | num_layers=2; Adamax (lr=2e-3) | 
 | BERT + CRF                  | Ma et al. (2020)      | 95.68 | 95.68 |
 | BERT + LSTM + CRF           | Ma et al. (2020)      | 95.51 | 95.97 |
+| FLAT + BERT + CRF           | Li et al. (2019)      | 95.86 |
 | SoftLexicon + BERT + CRF    | Ma et al. (2020)      | 96.11 |
 
-#### OntoNotes v5 
-
-
+### Relation Extraction
 
 
 ## Future Plans
 - [x] SoftLexicon
 - [ ] Radical-Level Features
-- [ ] Experiments on Chinese NER datasets
-- [ ] Experiments on text classification datasets
+- [x] Experiments on Chinese NER datasets
+- [x] Experiments on text classification datasets
 - [ ] Focal loss (and combined to CRF?)
 - [ ] Relation Extraction
 - [ ] Span-based models (e.g., SpERT)
@@ -125,13 +160,17 @@ Configurations of our implementation:
 
 
 ## References
+* Zhang, X., Zhao, J., and LeCun, Y. (2015). Character-level convolutional networks for text classification. *NIPS 2015*.
 * Lample, G., Ballesteros, M., Subramanian, S., Kawakami, K., and Dyer, C. (2016). Neural Architectures for Named Entity Recognition. *NAACL-HLT 2016*.
 * Ma, X., and Hovy, E. (2016). End-to-end Sequence Labeling via Bi-directional LSTM-CNNs-CRF. *ACL 2016*.
 * Chiu, J. P., and Nichols, E. (2016). Named Entity Recognition with Bidirectional LSTM-CNNs. *TACL*, 4:357-370.
+* Chen, H., Sun, M., Tu, C., Lin, Y., and Liu, Z. (2016). Neural sentiment classification with user and product attention. *EMNLP 2016*.
 * Peters, M., Neumann, M., Iyyer, M., Gardner, M., Clark, C., Lee, K., and Zettlemoyer, L. (2018). Deep Contextualized Word Representations. *NAACL-HLT 2018*.
 * Akbik, A., Blythe, D., and Vollgraf, R. (2018). Contextual String Embeddings for Sequence Labeling. *COLING 2018*.
 * Akbik, A., Bergmann, T., and Vollgraf, R. (2019). Pooled Contextualized Embeddings for Named Entity Recognition. *NAACL-HLT 2019*.
 * Zhang, Y., and Yang, J. (2018). Chinese NER Using Lattice LSTM. *ACL 2018*.
 * Devlin, J., Chang, M. W., Lee, K., and Toutanova, K. (2018). BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding. *NAACL-HLT 2019*.
 * Liu, Y., Ott, M., Goyal, N., Du, J., Joshi, M., Chen, D., ... and Stoyanov, V. (2019). RoBERTa: A Robustly Optimized BERT Pretraining Approach. arXiv preprint arXiv:1907.11692. 
+* Sun, C., Qiu, X., Xu, Y., and Huang, X. (2019). How to fine-tune BERT for text classification? *CCL 2019*.
+* Li, X., Yan, H., Qiu, X., and Huang, X. J. (2020). FLAT: Chinese NER using flat-lattice transformer. *ACL 2020*.
 * Ma, R., Peng, M., Zhang, Q., Wei, Z., and Huang, X. J. (2020). Simplify the Usage of Lexicon in Chinese NER. *ACL 2020*.

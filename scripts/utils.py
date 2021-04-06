@@ -2,7 +2,7 @@
 import argparse
 import logging
 import spacy
-import sklearn
+import sklearn.model_selection
 
 from eznlp.token import LexiconTokenizer
 from eznlp.pretrained import Vectors
