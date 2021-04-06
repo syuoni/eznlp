@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import pytest
 
-from eznlp.text_classification.io import TabularIO
+from eznlp.text_classification.io import TabularIO, FolderIO
 
 
 class TestTabularIO(object):
@@ -12,6 +12,16 @@ class TestTabularIO(object):
     [2] Tang et al. 2015. Document modeling with gated recurrent neural network for sentiment classification. EMNLP 2015.
     [2] Chen et al. 2016. Neural sentiment classification with user and product attention. EMNLP 2016.
     """
+    @pytest.mark.slow
+    def test_imdb(self, spacy_nlp_en):
+        folder_io = FolderIO(categories=["pos", "neg"], mapping={"<br />": "\n"}, tokenize_callback=spacy_nlp_en, case_mode='lower')
+        train_data = folder_io.read("data/imdb/train", encoding='utf-8')
+        test_data  = folder_io.read("data/imdb/test", encoding='utf-8')
+        
+        assert len(train_data) == 25_000
+        assert len(test_data) == 25_000
+    
+    
     @pytest.mark.slow
     def test_yelp_full(self, spacy_nlp_en):
         tabular_io = TabularIO(text_col_id=1, label_col_id=0, mapping={"\\n": "\n", '\\"': '"'}, tokenize_callback=spacy_nlp_en, case_mode='lower')
@@ -33,7 +43,7 @@ class TestTabularIO(object):
         
         
     @pytest.mark.slow
-    def test_imdb(self):
+    def test_imdb_with_up(self):
         tabular_io = TabularIO(text_col_id=3, label_col_id=2, mapping={"<sssss>": "\n"}, case_mode='lower')
         train_data = tabular_io.read("data/Tang2015/imdb.train.txt.ss", encoding='utf-8', sep="\t\t")
         dev_data   = tabular_io.read("data/Tang2015/imdb.dev.txt.ss", encoding='utf-8', sep="\t\t")

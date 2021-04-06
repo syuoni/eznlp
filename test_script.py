@@ -38,7 +38,7 @@ from eznlp.sequence_tagging.io import ConllIO, BratIO
 from eznlp.language_modeling import MaskedLMConfig
 from eznlp.language_modeling import MaskedLMDataset, FolderLikeMaskedLMDataset, MaskedLMTrainer
 
-from eznlp.text_classification.io import TabularIO
+from eznlp.text_classification.io import TabularIO, FolderIO
 from eznlp.text_classification import TextClassificationDecoderConfig, TextClassifierConfig
 from eznlp.text_classification import TextClassificationDataset
 from eznlp.text_classification import TextClassificationTrainer
@@ -117,14 +117,14 @@ if __name__ == '__main__':
     # tabular_io = TabularIO(text_col_id=3, label_col_id=2)
     # train_data = tabular_io.read("data/Tang2015/demo.yelp-2013-seg-20-20.train.ss", encoding='utf-8', sep="\t\t", sentence_sep="<sssss>")
     
-    spacy_nlp_en = spacy.load("en_core_web_sm", disable=['tagger', 'parser', 'ner'])
-    tabular_io = TabularIO(text_col_id=1, label_col_id=0, mapping={"\\n": "\n", '\\"': '"'}, tokenize_callback=spacy_nlp_en, case_mode='lower')
+    # spacy_nlp_en = spacy.load("en_core_web_sm", disable=['tagger', 'parser', 'ner'])
+    # tabular_io = TabularIO(text_col_id=1, label_col_id=0, mapping={"\\n": "\n", '\\"': '"'}, tokenize_callback=spacy_nlp_en, case_mode='lower')
     # train_data = tabular_io.read("data/yelp_review_full/train.csv", sep=",")
-    test_data  = tabular_io.read("data/yelp_review_full/test.csv", sep=",")
+    # test_data  = tabular_io.read("data/yelp_review_full/test.csv", sep=",")
     
-    config = TextClassifierConfig(ohots=None, 
-                                  intermediate2=None,
-                                  bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert))
+    # config = TextClassifierConfig(ohots=None, 
+    #                               intermediate2=None,
+    #                               bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert))
     
     # train_set = TextClassificationDataset(train_data, config)
     # train_set.build_vocabs_and_dims()

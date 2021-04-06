@@ -20,6 +20,14 @@ Configurations of our implementation:
     * Scheduler: Learning rate warmup at the first 20% steps followed by linear decay
     * BERT/RoBERTa models are loaded with dropout rate of 0.2
 
+#### IMDb
+| Model | Paper | Reported Acc. | Our Implementation Acc. | Notes |
+|:-----:|:-----:|:-------------:|:-----------------------:|:-----:|
+| LSTM + MaxPooling        | - |  | 
+| LSTM + Attention         | - | -     | 
+| BERT-base + Attention    | - |  | 
+| RoBERTa-base + Attention | - | -     | 
+
 #### Yelp Full
 | Model | Paper | Reported Acc. | Our Implementation Acc. | Notes |
 |:-----:|:-----:|:-------------:|:-----------------------:|:-----:|

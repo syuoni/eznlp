@@ -13,6 +13,9 @@ from eznlp.text_classification.io import TabularIO
 logger = logging.getLogger(__name__)
 
 
+spacy_nlp_en = spacy.load("en_core_web_sm", disable=['tagger', 'parser', 'ner'])
+
+
 def load_data(args: argparse.Namespace):
     if args.dataset == 'conll2003':
         conll_io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', case_mode='None', number_mode='Zeros')
@@ -57,13 +60,18 @@ def load_data(args: argparse.Namespace):
         dev_data   = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.dev.ss", encoding='utf-8', sep="\t\t")
         test_data  = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.test.ss", encoding='utf-8', sep="\t\t")
         
+    elif args.dataset == 'imdb':
+        folder_io = FolderIO(categories=["pos", "neg"], mapping={"<br />": "\n"}, tokenize_callback=spacy_nlp_en, verbose=args.log_terminal, 
+                             case_mode='lower', number_mode='None')
+        train_data = folder_io.read("data/imdb/train", encoding='utf-8')
+        test_data  = folder_io.read("data/imdb/test", encoding='utf-8')
+        train_data, dev_data = sklearn.model_selection.train_test_split(train_data, test_size=0.2, random_state=args.seed)
+        
     elif args.dataset == 'yelp_full':
-        spacy_nlp_en = spacy.load("en_core_web_sm", disable=['tagger', 'parser', 'ner'])
         tabular_io = TabularIO(text_col_id=1, label_col_id=0, mapping={"\\n": "\n", '\\"': '"'}, tokenize_callback=spacy_nlp_en, verbose=args.log_terminal, 
                                case_mode='Lower', number_mode='None')
         train_data = tabular_io.read("data/yelp_review_full/train.csv", sep=",")
         test_data  = tabular_io.read("data/yelp_review_full/test.csv", sep=",")
-        
         train_data, dev_data = sklearn.model_selection.train_test_split(train_data, test_size=0.1, random_state=args.seed)
     else:
         raise Exception("Dataset does NOT exist", args.dataset)

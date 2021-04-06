@@ -84,9 +84,7 @@ class BertLikeConfig(Config):
         ori_indexes: torch.LongTensor
             A 1D tensor indicating each sub-token's original index in `tokenized_raw_text`.
         """
-        nested_sub_tokens = [self.tokenizer.tokenize(word) for word in tokenized_raw_text]
-        # The tokenizer returns an empty list if the input is a space-like string
-        nested_sub_tokens = [word if len(word) > 0 else [self.tokenizer.unk_token] for word in nested_sub_tokens]
+        nested_sub_tokens = _tokenized2nested(tokenized_raw_text, self.tokenizer)
         sub_tokens = [sub_tok for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
         ori_indexes = [i for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
         # Sequence longer than maximum length should be pre-processed
@@ -231,6 +229,20 @@ def _truecase(tokenized_raw_text: List[str]):
     return new_tokenized
 
 
+def _tokenized2nested(tokenized_raw_text: List[str], tokenizer: transformers.PreTrainedTokenizer, max_len: int=5):
+    nested_sub_tokens = []
+    for word in tokenized_raw_text:
+        sub_tokens = tokenizer.tokenize(word)
+        if len(sub_tokens) == 0:
+            # The tokenizer returns an empty list if the input is a space-like string
+            sub_tokens = [tokenizer.unk_token]
+        elif len(sub_tokens) > max_len:
+            # The tokenizer may return a very long list if the input is a url
+            sub_tokens = sub_tokens[:5]
+        nested_sub_tokens.append(sub_tokens)
+        
+    return nested_sub_tokens
+
 
 def truncate_for_bert_like(data: list, tokenizer: transformers.PreTrainedTokenizer, mode: str='head+tail', verbose=True):
     """
@@ -255,9 +267,7 @@ def truncate_for_bert_like(data: list, tokenizer: transformers.PreTrainedTokeniz
     n_truncated = 0
     for data_entry in tqdm.tqdm(data, disable=not verbose, ncols=100, desc="Truncating data"):
         tokens = data_entry['tokens']
-        nested_sub_tokens = [tokenizer.tokenize(word) for word in tokens.raw_text]
-        # The tokenizer returns an empty list if the input is a space-like string
-        nested_sub_tokens = [word if len(word) > 0 else [tokenizer.unk_token] for word in nested_sub_tokens]
+        nested_sub_tokens = _tokenized2nested(tokens.raw_text, tokenizer)
         sub_tok_seq_lens = [len(tok) for tok in nested_sub_tokens]
         
         if sum(sub_tok_seq_lens) > max_len:
@@ -274,10 +284,13 @@ def truncate_for_bert_like(data: list, tokenizer: transformers.PreTrainedTokeniz
                 tail_begin += 1
                 
             if tail_len == 0:
+                assert head_end > 0
                 data_entry['tokens'] = tokens[:head_end]
             elif head_len == 0:
+                assert tail_begin > 0
                 data_entry['tokens'] = tokens[-tail_begin:]
             else:
+                assert head_end > 0 and tail_begin > 0
                 data_entry['tokens'] = tokens[:head_end] + tokens[-tail_begin:]
                 
             n_truncated += 1

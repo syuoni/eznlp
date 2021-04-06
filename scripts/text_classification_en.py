@@ -35,7 +35,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
                              help="whether log to terminal")
     
     group_data = parser.add_argument_group('dataset')
-    group_data.add_argument('--dataset', type=str, default='yelp2013', 
+    group_data.add_argument('--dataset', type=str, default='imdb', 
                             help="dataset name")
     
     group_train = parser.add_argument_group('training hyper-parameters')
