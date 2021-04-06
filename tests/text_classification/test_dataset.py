@@ -2,7 +2,7 @@
 import pytest
 import pandas
 
-from eznlp.text_classification import truncate_for_bert_like
+from eznlp.pretrained.bert_like import truncate_for_bert_like
 from eznlp.text_classification.io import TabularIO
 
 

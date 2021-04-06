@@ -16,6 +16,7 @@ import transformers
 import flair
 
 from eznlp import auto_device
+from eznlp.utils import find_ascending
 from eznlp.config import ConfigList, ConfigDict
 from eznlp.token import Token, TokenSequence, LexiconTokenizer
 from eznlp.data import Batch
@@ -23,6 +24,7 @@ from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig
 from eznlp.model import NestedOneHotConfig, CharConfig, SoftLexiconConfig
 from eznlp.pretrained import Vectors, GloVe, Senna
 from eznlp.pretrained import ELMoConfig, BertLikeConfig, FlairConfig
+from eznlp.pretrained.bert_like import truncate_for_bert_like
 from eznlp.training.utils import collect_params, check_param_groups
 
 
@@ -32,7 +34,6 @@ from eznlp.sequence_tagging import SequenceTaggingTrainer
 from eznlp.sequence_tagging import ChunksTagsTranslator
 from eznlp.sequence_tagging import precision_recall_f1_report
 from eznlp.sequence_tagging.io import ConllIO, BratIO
-from eznlp.sequence_tagging.transition import find_ascending
 
 from eznlp.language_modeling import MaskedLMConfig
 from eznlp.language_modeling import MaskedLMDataset, FolderLikeMaskedLMDataset, MaskedLMTrainer
@@ -41,7 +42,6 @@ from eznlp.text_classification.io import TabularIO
 from eznlp.text_classification import TextClassificationDecoderConfig, TextClassifierConfig
 from eznlp.text_classification import TextClassificationDataset
 from eznlp.text_classification import TextClassificationTrainer
-from eznlp.text_classification import truncate_for_bert_like
 
 
 if __name__ == '__main__':
@@ -125,14 +125,6 @@ if __name__ == '__main__':
     config = TextClassifierConfig(ohots=None, 
                                   intermediate2=None,
                                   bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert))
-    
-    test_data  = truncate_for_bert_like(test_data,  config.bert_like.tokenizer)
-    
-    for data_entry in test_data:
-        config.bert_like.exemplify(data_entry['tokens'])
-        
-        
-    
     
     # train_set = TextClassificationDataset(train_data, config)
     # train_set.build_vocabs_and_dims()
