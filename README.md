@@ -23,26 +23,26 @@ Configurations of our implementation:
 #### IMDb
 | Model | Paper | Reported Acc. | Our Implementation Acc. | Notes |
 |:-----:|:-----:|:-------------:|:-----------------------:|:-----:|
-| LSTM + MaxPooling        | - |  | 
-| LSTM + Attention         | - | -     | 
-| BERT-base + Attention    | - |  | 
-| RoBERTa-base + Attention | - | -     | 
+| LSTM + MaxPooling        | -                    | -     | 
+| LSTM + Attention         | McCann et al. (2017) | 91.1  | 
+| BERT-base + Attention    | Sun et al. (2019)    | 94.60 | 
+| RoBERTa-base + Attention | -                    | -     | 
 
 #### Yelp Full
 | Model | Paper | Reported Acc. | Our Implementation Acc. | Notes |
 |:-----:|:-----:|:-------------:|:-----------------------:|:-----:|
-| LSTM + MaxPooling        | Zhang et al. (2015) | 58.17 | 
-| LSTM + Attention         | -                   | -     | 
-| BERT-base + Attention    | Sun et al. (2019)   | 69.94 | 
-| RoBERTa-base + Attention | -                   | -     | 
+| LSTM + MaxPooling        | Zhang et al. (2015)  | 58.17 | 65.97 | num_layers=2 |
+| LSTM + Attention         | -                    | -     | 68.61 | num_layers=2 |
+| BERT-base + Attention    | Sun et al. (2019)    | 69.94 | 
+| RoBERTa-base + Attention | -                    | -     | 
 
 #### Yelp 2013 (with User and Product IDs)
 | Model | Paper | Reported Acc. | Our Implementation Acc. | Notes |
 |:-----:|:-----:|:-------------:|:-----------------------:|:-----:|
-| LSTM + MaxPooling        | Chen et al. (2016) | 62.7 | 64.96 | num_layers=2 |
-| LSTM + Attention         | Chen et al. (2016) | 63.1 | 64.84 | num_layers=2 |
-| BERT-base + Attention    | -                  | -    | 68.76 |
-| RoBERTa-base + Attention | -                  | -    | 70.80 |
+| LSTM + MaxPooling        | Chen et al. (2016)   | 62.7  | 64.96 | num_layers=2 |
+| LSTM + Attention         | Chen et al. (2016)   | 63.1  | 64.84 | num_layers=2 |
+| BERT-base + Attention    | -                    | -     | 68.76 |
+| RoBERTa-base + Attention | -                    | -     | 70.80 |
 
 
 ### Named Entity Recognition (English)
@@ -173,6 +173,7 @@ Configurations of our implementation:
 * Ma, X., and Hovy, E. (2016). End-to-end Sequence Labeling via Bi-directional LSTM-CNNs-CRF. *ACL 2016*.
 * Chiu, J. P., and Nichols, E. (2016). Named Entity Recognition with Bidirectional LSTM-CNNs. *TACL*, 4:357-370.
 * Chen, H., Sun, M., Tu, C., Lin, Y., and Liu, Z. (2016). Neural sentiment classification with user and product attention. *EMNLP 2016*.
+* McCann, B., Bradbury, J., Xiong, C., and Socher, R. (2017). Learned in translation: Contextualized word vectors. *NIPS 2017*.
 * Peters, M., Neumann, M., Iyyer, M., Gardner, M., Clark, C., Lee, K., and Zettlemoyer, L. (2018). Deep Contextualized Word Representations. *NAACL-HLT 2018*.
 * Akbik, A., Blythe, D., and Vollgraf, R. (2018). Contextual String Embeddings for Sequence Labeling. *COLING 2018*.
 * Akbik, A., Bergmann, T., and Vollgraf, R. (2019). Pooled Contextualized Embeddings for Named Entity Recognition. *NAACL-HLT 2019*.

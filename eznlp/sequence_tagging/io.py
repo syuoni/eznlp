@@ -4,6 +4,7 @@ import numpy
 import pandas
 
 from ..token import TokenSequence
+from ..utils import segment_text_with_hierarchical_seps, segment_text_uniformly
 from .transition import ChunksTagsTranslator
 
 
@@ -89,15 +90,21 @@ class ConllIO(object):
 class BratIO(object):
     """
     An IO interface of brat-format files. 
+    
+    Note: Only support character-based format for Chinese text. 
     """
-    def __init__(self, attr_names=None, pre_inserted_spaces=True, tokenize_callback=None, **kwargs):
+    def __init__(self, attr_names=None, pre_inserted_spaces=True, tokenize_callback=None, max_len=500, **kwargs):
         self.attr_names = [] if attr_names is None else attr_names
         self.pre_inserted_spaces = pre_inserted_spaces
         self.tokenize_callback = tokenize_callback
+        self.max_len = max_len
         self.kwargs = kwargs
         self.line_sep = "\r\n"
+        self.sentence_seps = ["。"]
+        self.phrase_seps = ["；", "，", ";", ","]
         self.attr_sep = "<a>"
         self.inserted_mark = "😀"
+        
         
     def _parse_chunk_ann(self, ann):
         chunk_id, chunk_type_pos, chunk_text = ann.rstrip(self.line_sep).split("\t")
@@ -120,6 +127,17 @@ class BratIO(object):
         return f"{attr_id}\t{attr_name} {chunk_id}"
     
     
+    def _segment_text(self, text: str):
+        for start, end in segment_text_with_hierarchical_seps(text, 
+                                                              hie_seps=[[self.line_sep], self.sentence_seps, self.phrase_seps], 
+                                                              length=self.max_len):
+            if end - start <= self.max_len:
+                yield (start, end)
+            else:
+                for sub_start, sub_end in segment_text_uniformly(text[start:end], max_span_size=self.max_len):
+                    yield (start+sub_start, start+sub_end)
+                    
+                    
     def read(self, file_path, encoding=None):
         with open(file_path, 'r', encoding=encoding) as f:
             text = f.read()
@@ -156,16 +174,9 @@ class BratIO(object):
             df['type'] = df['type'].str.cat(df[attr_name], sep=self.attr_sep)
         
         data = []
-        line_start = 0
-        for line_cut in re.finditer(self.line_sep, text):
-            line_end = line_cut.start()
-            
-            if line_end > line_start:
-                data.append(self._build_entry(text, df, line_start, line_end))
-            line_start = line_cut.end()
-            
-        if len(text) > line_start:
-            data.append(self._build_entry(text, df, line_start))
+        for start, end in self._segment_text(text):
+            if text[start:end].strip():
+                data.append(self._build_entry(text, df, start, end))
         return data
     
     

@@ -62,8 +62,8 @@ if __name__ == '__main__':
     # elmo = allennlp.modules.Elmo(options_file, weight_file, 1)
     # batch_elmo_ids = allennlp.modules.elmo.batch_to_ids(batch_tokenized_raw_text)
     
-    bert = transformers.BertModel.from_pretrained("assets/transformers/bert-base-uncased")
-    tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-uncased")
+    # bert = transformers.BertModel.from_pretrained("assets/transformers/bert-base-uncased")
+    # tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-uncased")
     
     # glove = GloVe("assets/vectors/glove.6B.100d.txt", encoding='utf-8')
     # senna = Senna("assets/vectors/Senna")
