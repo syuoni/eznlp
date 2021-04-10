@@ -20,8 +20,9 @@ class TabularIO(object):
         self.verbose = verbose
         self.kwargs = kwargs
         
-    def read(self, file_path, encoding=None, sep=None):
-        df = pandas.read_csv(file_path, header=None, dtype=str, encoding=encoding, sep=sep, engine='python')
+    def read(self, file_path, encoding=None, sep=',', header=None):
+        engine = 'python' if (len(sep) > 1 and sep != '\s+') else 'c'
+        df = pandas.read_csv(file_path, encoding=encoding, sep=sep, header=header, dtype=str, na_filter=False, engine=engine)
         
         data = []
         for _, line in tqdm.tqdm(df.iterrows(), total=df.shape[0], disable=not self.verbose, ncols=100, desc="Loading tabular data"):
@@ -33,11 +34,12 @@ class TabularIO(object):
             data.append({'tokens': tokens, 'label': label})
             
         return data
-    
-    
+
+
+
 class FolderIO(object):
     """
-    An IO interface of text files in category-folders
+    An IO interface of text files in category-specific folders
     """
     def __init__(self, categories: List[str], mapping=None, tokenize_callback=None, verbose=True, **kwargs):
         self.categories = categories

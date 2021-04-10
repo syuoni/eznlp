@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import pytest
+import jieba
 
 from eznlp.text_classification.io import TabularIO, FolderIO
 
@@ -22,7 +23,7 @@ class TestTabularIO(object):
         assert len(test_data) == 25_000
     
     
-    @pytest.mark.slow
+    @pytest.mark.skip(reason="too slow and memory-consuming")
     def test_yelp_full(self, spacy_nlp_en):
         tabular_io = TabularIO(text_col_id=1, label_col_id=0, mapping={"\\n": "\n", '\\"': '"'}, tokenize_callback=spacy_nlp_en, case_mode='lower')
         train_data = tabular_io.read("data/yelp_review_full/train.csv", sep=",")
@@ -32,7 +33,7 @@ class TestTabularIO(object):
         assert len(test_data) == 50_000
         
         
-    @pytest.mark.slow
+    @pytest.mark.skip(reason="too slow and memory-consuming")
     def test_yelp_polarity(self, spacy_nlp_en):
         tabular_io = TabularIO(text_col_id=1, label_col_id=0, mapping={"\\n": "\n", '\\"': '"'}, tokenize_callback=spacy_nlp_en, case_mode='lower')
         train_data = tabular_io.read("data/yelp_review_polarity/train.csv", sep=",")
@@ -79,5 +80,26 @@ class TestTabularIO(object):
         assert len(dev_data) == 22_745
         assert len(test_data) == 25_399
         assert len(train_data) + len(dev_data) + len(test_data) == 231_163
+        
+        
+    @pytest.mark.slow
+    def test_Ifeng(self):
+        tabular_io = TabularIO(text_col_id=2, label_col_id=0, tokenize_callback=jieba.cut, case_mode='lower')
+        train_data = tabular_io.read("data/Ifeng/train.csv", encoding='utf-8', sep=',')
+        test_data  = tabular_io.read("data/Ifeng/test.csv", encoding='utf-8', sep=',')
+        
+        assert len(train_data) == 800_000
+        assert len(test_data) == 50_000
+        
+        
+    def test_ChnSentiCorp(self):
+        tabular_io = TabularIO(text_col_id=1, label_col_id=0, tokenize_callback=jieba.cut, case_mode='lower')
+        train_data = tabular_io.read("data/ChnSentiCorp/train.tsv", encoding='utf-8', sep='\t', header=0)
+        dev_data   = tabular_io.read("data/ChnSentiCorp/dev.tsv", encoding='utf-8', sep='\t', header=0)
+        test_data  = tabular_io.read("data/ChnSentiCorp/test.tsv", encoding='utf-8', sep='\t', header=0)
+        
+        assert len(train_data) == 9_146
+        assert len(dev_data) == 1_200
+        assert len(test_data) == 1_200
         
         

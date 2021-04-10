@@ -238,7 +238,7 @@ def _tokenized2nested(tokenized_raw_text: List[str], tokenizer: transformers.Pre
             sub_tokens = [tokenizer.unk_token]
         elif len(sub_tokens) > max_len:
             # The tokenizer may return a very long list if the input is a url
-            sub_tokens = sub_tokens[:5]
+            sub_tokens = sub_tokens[:max_len]
         nested_sub_tokens.append(sub_tokens)
         
     return nested_sub_tokens
@@ -271,9 +271,8 @@ def truncate_for_bert_like(data: list, tokenizer: transformers.PreTrainedTokeniz
         sub_tok_seq_lens = [len(tok) for tok in nested_sub_tokens]
         
         if sum(sub_tok_seq_lens) > max_len:
-            cum_lens = numpy.cumsum(sub_tok_seq_lens).tolist()
-            
             # head_end/tail_begin will be 0 if head_len/tail_len == 0
+            cum_lens = numpy.cumsum(sub_tok_seq_lens).tolist()
             find_head, head_end = find_ascending(cum_lens, head_len)
             if find_head:
                 head_end += 1

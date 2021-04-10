@@ -114,8 +114,12 @@ def build_config(args: argparse.Namespace):
     decoder_config = SequenceTaggingDecoderConfig(arch=args.dec_arch, scheme=args.scheme, in_drop_rates=drop_rates)
     
     if args.command in ('from_scratch', 'fs'):
-        giga_uni = Vectors.load("assets/vectors/gigaword_chn.all.a2b.uni.ite50.vec", encoding='utf-8')
-        ohots_config = ConfigDict({'text': OneHotConfig(field='text', vectors=giga_uni, emb_dim=50, freeze=args.emb_freeze)})
+        if args.emb_dim == 50:
+            giga_uni = Vectors.load("assets/vectors/gigaword_chn.all.a2b.uni.ite50.vec", encoding='utf-8')
+        else:
+            giga_uni = None
+        ohots_config = ConfigDict({'text': OneHotConfig(field='text', vectors=giga_uni, emb_dim=args.emb_dim, freeze=args.emb_freeze)})
+        
         if args.use_bigram:
             giga_bi = Vectors.load("assets/vectors/gigaword_chn.all.a2b.bi.ite50.vec", encoding='utf-8')
             ohots_config['bigram'] = OneHotConfig(field='bigram', vectors=giga_bi, emb_dim=50, freeze=args.emb_freeze)

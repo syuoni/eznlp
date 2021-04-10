@@ -23,8 +23,8 @@ Configurations of our implementation:
 #### IMDb
 | Model | Paper | Reported Acc. | Our Implementation Acc. | Notes |
 |:-----:|:-----:|:-------------:|:-----------------------:|:-----:|
-| LSTM + MaxPooling        | -                    | -     | 
-| LSTM + Attention         | McCann et al. (2017) | 91.1  | 
+| LSTM + MaxPooling        | -                    | -     | 91.58 | num_layers=1 |
+| LSTM + Attention         | McCann et al. (2017) | 91.1  | 92.09 | num_layers=1 |
 | BERT-base + Attention    | Sun et al. (2019)    | 94.60 | 
 | RoBERTa-base + Attention | -                    | -     | 
 
