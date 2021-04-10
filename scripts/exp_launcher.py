@@ -122,7 +122,7 @@ if __name__ == '__main__':
                        ["", "--use_interm2"], 
                        ["--bert_arch BERT_base", "--bert_arch RoBERTa_base"]]
         
-    elif args.task == 'text_classification_en':
+    elif args.task.startswith('text_classification'):
         if args.command in ('fs', 'from_scratch'):
             options = [["--num_epochs 50"], 
                        ["--optimizer SGD --lr 0.05", 
@@ -153,8 +153,8 @@ if __name__ == '__main__':
                        ["--bert_drop_rate 0.2"], 
                        ["", "--use_interm2"], 
                        ["--bert_arch BERT_base", "--bert_arch RoBERTa_base"]]
-            
-            
+    
+    
     if args.num_workers > 0:
         options.insert(0, ["--no_log_terminal"])
         

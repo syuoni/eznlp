@@ -2,6 +2,7 @@
 import argparse
 import logging
 import spacy
+import jieba
 import sklearn.model_selection
 
 from eznlp.token import LexiconTokenizer
@@ -59,20 +60,30 @@ def load_data(args: argparse.Namespace):
         train_data = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.train.ss", encoding='utf-8', sep="\t\t")
         dev_data   = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.dev.ss", encoding='utf-8', sep="\t\t")
         test_data  = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.test.ss", encoding='utf-8', sep="\t\t")
-        
     elif args.dataset == 'imdb':
         folder_io = FolderIO(categories=["pos", "neg"], mapping={"<br />": "\n"}, tokenize_callback=spacy_nlp_en, verbose=args.log_terminal, 
                              case_mode='lower', number_mode='None')
         train_data = folder_io.read("data/imdb/train", encoding='utf-8')
         test_data  = folder_io.read("data/imdb/test", encoding='utf-8')
         train_data, dev_data = sklearn.model_selection.train_test_split(train_data, test_size=0.2, random_state=args.seed)
-        
     elif args.dataset == 'yelp_full':
         tabular_io = TabularIO(text_col_id=1, label_col_id=0, mapping={"\\n": "\n", '\\"': '"'}, tokenize_callback=spacy_nlp_en, verbose=args.log_terminal, 
                                case_mode='Lower', number_mode='None')
         train_data = tabular_io.read("data/yelp_review_full/train.csv", sep=",")
         test_data  = tabular_io.read("data/yelp_review_full/test.csv", sep=",")
         train_data, dev_data = sklearn.model_selection.train_test_split(train_data, test_size=0.1, random_state=args.seed)
+        
+    elif args.dataset == 'ChnSentiCorp':
+        tabular_io = TabularIO(text_col_id=1, label_col_id=0, tokenize_callback=jieba.cut, case_mode='lower')
+        train_data = tabular_io.read("data/ChnSentiCorp/train.tsv", encoding='utf-8', sep='\t', header=0)
+        dev_data   = tabular_io.read("data/ChnSentiCorp/dev.tsv", encoding='utf-8', sep='\t', header=0)
+        test_data  = tabular_io.read("data/ChnSentiCorp/test.tsv", encoding='utf-8', sep='\t', header=0)
+    elif args.dataset == 'THUCNews_10':
+        tabular_io = TabularIO(text_col_id=1, label_col_id=0, tokenize_callback=jieba.cut, case_mode='lower')
+        train_data = tabular_io.read("data/THUCNews-10/cnews.train.txt", encoding='utf-8', sep='\t')
+        dev_data   = tabular_io.read("data/THUCNews-10/cnews.val.txt", encoding='utf-8', sep='\t')
+        test_data  = tabular_io.read("data/THUCNews-10/cnews.test.txt", encoding='utf-8', sep='\t')
+        
     else:
         raise Exception("Dataset does NOT exist", args.dataset)
         
@@ -84,6 +95,12 @@ def load_data(args: argparse.Namespace):
                 data_entry['tokens'].build_softwords(tokenizer.tokenize)
                 data_entry['tokens'].build_softlexicons(tokenizer.tokenize)
                 
+    if args.dataset in ('ChnSentiCorp', 'THUCNews_10'):
+        for data in [train_data, dev_data, test_data]:
+            for data_entry in data:
+                if len(data_entry['tokens']) > 1200:
+                    data_entry['tokens'] = data_entry['tokens'][:300] + data_entry['tokens'][-900:]
+                    
     return train_data, dev_data, test_data
 
 
