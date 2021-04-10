@@ -103,3 +103,14 @@ class TestTabularIO(object):
         assert len(test_data) == 1_200
         
         
+    @pytest.mark.slow
+    def test_THUCNews_10(self):
+        tabular_io = TabularIO(text_col_id=1, label_col_id=0, tokenize_callback=jieba.cut, case_mode='lower')
+        train_data = tabular_io.read("data/THUCNews-10/cnews.train.txt", encoding='utf-8', sep='\t')
+        dev_data   = tabular_io.read("data/THUCNews-10/cnews.val.txt", encoding='utf-8', sep='\t')
+        test_data  = tabular_io.read("data/THUCNews-10/cnews.test.txt", encoding='utf-8', sep='\t')
+        
+        assert len(train_data) == 50_000
+        assert len(dev_data) == 5_000
+        assert len(test_data) == 10_000
+        
