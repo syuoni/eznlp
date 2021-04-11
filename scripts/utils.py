@@ -74,12 +74,14 @@ def load_data(args: argparse.Namespace):
         train_data, dev_data = sklearn.model_selection.train_test_split(train_data, test_size=0.1, random_state=args.seed)
         
     elif args.dataset == 'ChnSentiCorp':
-        tabular_io = TabularIO(text_col_id=1, label_col_id=0, tokenize_callback=jieba.cut, case_mode='lower')
+        tabular_io = TabularIO(text_col_id=1, label_col_id=0, tokenize_callback=jieba.cut, verbose=args.log_terminal, 
+                               case_mode='Lower', number_mode='None')
         train_data = tabular_io.read("data/ChnSentiCorp/train.tsv", encoding='utf-8', sep='\t', header=0)
         dev_data   = tabular_io.read("data/ChnSentiCorp/dev.tsv", encoding='utf-8', sep='\t', header=0)
         test_data  = tabular_io.read("data/ChnSentiCorp/test.tsv", encoding='utf-8', sep='\t', header=0)
     elif args.dataset == 'THUCNews_10':
-        tabular_io = TabularIO(text_col_id=1, label_col_id=0, tokenize_callback=jieba.cut, case_mode='lower')
+        tabular_io = TabularIO(text_col_id=1, label_col_id=0, tokenize_callback=jieba.cut, verbose=args.log_terminal, 
+                               case_mode='Lower', number_mode='None')
         train_data = tabular_io.read("data/THUCNews-10/cnews.train.txt", encoding='utf-8', sep='\t')
         dev_data   = tabular_io.read("data/THUCNews-10/cnews.val.txt", encoding='utf-8', sep='\t')
         test_data  = tabular_io.read("data/THUCNews-10/cnews.test.txt", encoding='utf-8', sep='\t')

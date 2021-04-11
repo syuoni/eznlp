@@ -11,11 +11,11 @@ This repository consists of:
 ### Text Classification 
 | Dataset      | Language | Best Acc. | Model Specification |
 |:------------:|:--------:|:---------:|:-------------------:|
-| IMDb         | English  |
+| IMDb         | English  | 95.78     | RoBERTa-base + Attention |
 | Yelp Full    | English  |
 | Yelp 2013    | English  | 70.80     | RoBERTa-base + Attention |
-| ChnSentiCorp | Chinese  | 
-| THUCNews-10  | Chinese  |
+| ChnSentiCorp | Chinese  | 95.83     | BERT-base + Attention    |
+| THUCNews-10  | Chinese  | 
 
 See [Text Classification](docs/text_classification.md) for more details. 
 
