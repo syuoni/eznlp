@@ -14,7 +14,13 @@ def reinit_embedding_(embedding: torch.nn.Embedding):
     if embedding.padding_idx is not None:
         torch.nn.init.zeros_(embedding.weight.data[embedding.padding_idx])
         
-        
+    logger.info(
+        "Embeddings initialized with randomized vectors \n"
+        f"Vector average absolute value: {uniform_range/2:.4f}"
+    )
+
+
+
 def reinit_embedding_by_pretrained_(embedding: torch.nn.Embedding, 
                                     itos: List[str], 
                                     vectors, 
@@ -47,7 +53,7 @@ def reinit_embedding_by_pretrained_(embedding: torch.nn.Embedding,
         oov_vec_abs = uniform_range / 2
         
     logger.info(
-        "Embedding initialization \n"
+        "Embeddings initialized with pretrained vectors \n"
         f"OOV tokens: {len(oov)} ({len(oov)/len(itos)*100:.2f}%) \n"
         f"Pretrained      vector average absolute value: {ave_vec_abs:.4f} \n"
         f"OOV initialized vector average absolute value: {oov_vec_abs:.4f}"

@@ -40,6 +40,7 @@ Configurations of our implementation:
 ## Text Classification (Chinese)
 Configurations of our implementation:
 * Word-based (tokenized by `jieba`)
+* Word embeddings are initialized by random
 * `From-scratch` models
     * Optimizer: Adadelta (lr=1.0)
     * Batch size: 64
@@ -63,8 +64,8 @@ Configurations of our implementation:
 ### THUCNews-10
 | Model | Paper | Reported Acc. | Our Implementation Acc. | Notes |
 |:-----:|:-----:|:-------------:|:-----------------------:|:-----:|
-| LSTM + MaxPooling        | -                 |       | 
-| LSTM + Attention         | -                 |       | 
+| LSTM + MaxPooling        | -                 |       | 97.66 | num_layers=2 |
+| LSTM + Attention         | -                 |       | 97.24 | num_layers=2 |
 | BERT-base + Attention    | Cui et al. (2019) | 97.7  | 
 | RoBERTa-base + Attention | Cui et al. (2019) | 97.8  | 
 

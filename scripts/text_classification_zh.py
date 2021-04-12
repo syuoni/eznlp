@@ -110,10 +110,12 @@ def build_config(args: argparse.Namespace):
     
     if args.command in ('from_scratch', 'fs'):
         if args.emb_dim == 50:
-            ctb50 = Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
+            vectors = Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
+        elif args.emb_dim == 200:
+            vectors = Vectors.load("assets/vectors/tencent/Tencent_AILab_ChineseEmbedding.txt", encoding='utf-8', skiprows=0)
         else:
-            ctb50 = None
-        ohots_config = ConfigDict({'text': OneHotConfig(field='text', min_freq=5, vectors=ctb50, emb_dim=args.emb_dim, freeze=args.emb_freeze)})
+            vectors = None
+        ohots_config = ConfigDict({'text': OneHotConfig(field='text', min_freq=5, vectors=vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze)})
         
         if args.use_interm1:
             interm1_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)

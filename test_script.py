@@ -69,8 +69,9 @@ if __name__ == '__main__':
     # senna = Senna("assets/vectors/Senna")
     
     # ctb50d = Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
-    # giga_uni = load_vectors_from_file("assets/vector_cache/gigaword_chn.all.a2b.uni.ite50.vec", encoding='utf-8')
-    # giga_bi  = load_vectors_from_file("assets/vector_cache/gigaword_chn.all.a2b.bi.ite50.vec", encoding='utf-8')
+    # giga_uni = Vectors.load("assets/vectors/gigaword_chn.all.a2b.uni.ite50.vec", encoding='utf-8')
+    # giga_bi  = Vectors.load("assets/vectors/gigaword_chn.all.a2b.bi.ite50.vec", encoding='utf-8')
+    # tencent = Vectors.load("assets/vectors/tencent/Tencent_AILab_ChineseEmbedding.txt", encoding='utf-8', skiprows=0, verbose=True)
     
     # conll_io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO2')
     # train_data = conll_io.read("data/conll2003/demo.eng.train")
