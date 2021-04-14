@@ -1,15 +1,20 @@
 # -*- coding: utf-8 -*-
 from typing import List
+import logging
 import re
+import tqdm
+import numpy
 import truecase
 import torch
 import transformers
 
+from ..utils import find_ascending
 from ..token import TokenSequence
 from ..nn.modules import SequenceGroupAggregating, ScalarMix
 from ..nn.functional import seq_lens2mask
 from ..config import Config
 
+logger = logging.getLogger(__name__)
 
 
 class BertLikeConfig(Config):
@@ -53,12 +58,8 @@ class BertLikeConfig(Config):
             A 1D tensor of sub-token indexes.
         """
         sub_tokens = self.tokenizer.tokenize(raw_text)
-        
-        # Recommended by Sun et al. (2019)
-        if len(sub_tokens) > (self.tokenizer.max_len - 2):
-            head_len = self.tokenizer.max_len // 4
-            tail_len = self.tokenizer.max_len - 2 - head_len
-            sub_tokens = sub_tokens[:head_len] + sub_tokens[-tail_len:]
+        # Sequence longer than maximum length should be pre-processed
+        assert len(sub_tokens) <= self.tokenizer.model_max_length - 2
         
         sub_tok_ids = [self.tokenizer.cls_token_id] + \
                        self.tokenizer.convert_tokens_to_ids(sub_tokens) + \
@@ -83,13 +84,12 @@ class BertLikeConfig(Config):
         ori_indexes: torch.LongTensor
             A 1D tensor indicating each sub-token's original index in `tokenized_raw_text`.
         """
-        nested_sub_tokens = [self.tokenizer.tokenize(word) for word in tokenized_raw_text]
-        # The tokenizer returns an empty list if the input is a space-like string
-        nested_sub_tokens = [word if len(word) > 0 else [self.tokenizer.unk_token] for word in nested_sub_tokens]
+        nested_sub_tokens = _tokenized2nested(tokenized_raw_text, self.tokenizer)
         sub_tokens = [sub_tok for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
         ori_indexes = [i for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
+        # Sequence longer than maximum length should be pre-processed
+        assert len(sub_tokens) <= self.tokenizer.model_max_length - 2
         
-        # TODO: Sentence longer than 512?
         sub_tok_ids = [self.tokenizer.cls_token_id] + \
                        self.tokenizer.convert_tokens_to_ids(sub_tokens) + \
                       [self.tokenizer.sep_token_id]
@@ -108,7 +108,7 @@ class BertLikeConfig(Config):
             return {'sub_tok_ids': sub_tok_ids, 
                     'ori_indexes': ori_indexes}
         else:
-            # TODO:?
+            # Use rejoined tokenized raw text here
             sub_tok_ids = self._token_ids_from_string(" ".join(tokenized_raw_text))
             return {'sub_tok_ids': sub_tok_ids}
             
@@ -116,7 +116,7 @@ class BertLikeConfig(Config):
     def batchify(self, batch_ex: List[dict]):
         batch_sub_tok_ids = [ex['sub_tok_ids'] for ex in batch_ex]
         sub_tok_seq_lens = torch.tensor([sub_tok_ids.size(0) for sub_tok_ids in batch_sub_tok_ids])
-        batch_sub_tok_mask = seq_lens2mask(sub_tok_seq_lens)
+        batch_sub_mask = seq_lens2mask(sub_tok_seq_lens)
         batch_sub_tok_ids = torch.nn.utils.rnn.pad_sequence(batch_sub_tok_ids, 
                                                             batch_first=True, 
                                                             padding_value=self.tokenizer.pad_token_id)
@@ -125,11 +125,11 @@ class BertLikeConfig(Config):
             batch_ori_indexes = [ex['ori_indexes'] for ex in batch_ex]
             batch_ori_indexes = torch.nn.utils.rnn.pad_sequence(batch_ori_indexes, batch_first=True, padding_value=-1)
             return {'sub_tok_ids': batch_sub_tok_ids, 
-                    'sub_tok_mask': batch_sub_tok_mask, 
+                    'sub_mask': batch_sub_mask, 
                     'ori_indexes': batch_ori_indexes}
         else:
             return {'sub_tok_ids': batch_sub_tok_ids, 
-                    'sub_tok_mask': batch_sub_tok_mask}
+                    'sub_mask': batch_sub_mask}
         
     def instantiate(self):
         return BertLikeEmbedder(self)
@@ -144,10 +144,6 @@ class BertLikeEmbedder(torch.nn.Module):
     the pretrained model have been properly set. 
     `torch.no_grad()` enforces the result of every computation in its context 
     to have `requires_grad=False`, even when the inputs have `requires_grad=True`.
-    
-    References
-    ----------
-    [1] C. Sun, et al. 2019. How to Fine-Tune BERT for Text Classification?
     """
     def __init__(self, config: BertLikeConfig):
         super().__init__()
@@ -171,13 +167,13 @@ class BertLikeEmbedder(torch.nn.Module):
         
     def forward(self, 
                 sub_tok_ids: torch.LongTensor, 
-                sub_tok_mask: torch.BoolTensor, 
+                sub_mask: torch.BoolTensor, 
                 ori_indexes: torch.LongTensor=None):
         # last_hidden: (batch, sub_tok_step+2, hid_dim)
         # pooler_output: (batch, hid_dim)
         # hidden: a tuple of (batch, sub_tok_step+2, hid_dim)
         bert_outs = self.bert_like(input_ids=sub_tok_ids, 
-                                   attention_mask=(~sub_tok_mask).type(torch.long), 
+                                   attention_mask=(~sub_mask).type(torch.long), 
                                    output_hidden_states=True)
         bert_hidden = bert_outs['hidden_states']
         
@@ -194,7 +190,7 @@ class BertLikeEmbedder(torch.nn.Module):
         
         # Remove the `[CLS]` and `[SEP]` positions. 
         bert_hidden = bert_hidden[:, 1:-1]
-        sub_tok_mask = sub_tok_mask[:, 2:]
+        sub_mask = sub_mask[:, 2:]
         
         if self.from_tokenized:
             # bert_hidden: (batch, tok_step, hid_dim)
@@ -231,5 +227,73 @@ def _truecase(tokenized_raw_text: List[str]):
                 new_tokenized[idx] = nw
                 
     return new_tokenized
+
+
+def _tokenized2nested(tokenized_raw_text: List[str], tokenizer: transformers.PreTrainedTokenizer, max_len: int=5):
+    nested_sub_tokens = []
+    for word in tokenized_raw_text:
+        sub_tokens = tokenizer.tokenize(word)
+        if len(sub_tokens) == 0:
+            # The tokenizer returns an empty list if the input is a space-like string
+            sub_tokens = [tokenizer.unk_token]
+        elif len(sub_tokens) > max_len:
+            # The tokenizer may return a very long list if the input is a url
+            sub_tokens = sub_tokens[:max_len]
+        nested_sub_tokens.append(sub_tokens)
+        
+    return nested_sub_tokens
+
+
+def truncate_for_bert_like(data: list, tokenizer: transformers.PreTrainedTokenizer, mode: str='head+tail', verbose=True):
+    """
+    Truncation methods:
+        1. head-only: keep the first 510 tokens;
+        2. tail-only: keep the last 510 tokens;
+        3. head+tail: empirically select the first 128 and the last 382 tokens.
     
-    
+    References
+    ----------
+    [1] Sun et al. 2019. How to fine-tune BERT for text classification? CCL 2019. 
+    """
+    max_len = tokenizer.model_max_length - 2
+    if mode.lower() == 'head-only':
+        head_len, tail_len = max_len, 0
+    elif mode.lower() == 'tail-only':
+        head_len, tail_len = 0, max_len
+    else:
+        head_len = tokenizer.model_max_length // 4
+        tail_len = max_len - head_len
+        
+    n_truncated = 0
+    for data_entry in tqdm.tqdm(data, disable=not verbose, ncols=100, desc="Truncating data"):
+        tokens = data_entry['tokens']
+        nested_sub_tokens = _tokenized2nested(tokens.raw_text, tokenizer)
+        sub_tok_seq_lens = [len(tok) for tok in nested_sub_tokens]
+        
+        if sum(sub_tok_seq_lens) > max_len:
+            # head_end/tail_begin will be 0 if head_len/tail_len == 0
+            cum_lens = numpy.cumsum(sub_tok_seq_lens).tolist()
+            find_head, head_end = find_ascending(cum_lens, head_len)
+            if find_head:
+                head_end += 1
+                
+            rev_cum_lens = numpy.cumsum(sub_tok_seq_lens[::-1]).tolist()
+            find_tail, tail_begin = find_ascending(rev_cum_lens, tail_len)
+            if find_tail:
+                tail_begin += 1
+                
+            if tail_len == 0:
+                assert head_end > 0
+                data_entry['tokens'] = tokens[:head_end]
+            elif head_len == 0:
+                assert tail_begin > 0
+                data_entry['tokens'] = tokens[-tail_begin:]
+            else:
+                assert head_end > 0 and tail_begin > 0
+                data_entry['tokens'] = tokens[:head_end] + tokens[-tail_begin:]
+                
+            n_truncated += 1
+            
+    logger.info(f"Truncated sequences: {n_truncated} ({n_truncated/len(data)*100:.2f}%)")
+    return data
+

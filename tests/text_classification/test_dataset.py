@@ -1,31 +1,28 @@
 # -*- coding: utf-8 -*-
 import pytest
+import pandas
 
-import pandas as pd
-from eznlp.pretrained import BertLikeConfig
-from eznlp.text_classification import TextClassifierConfig, TextClassificationDataset
+from eznlp.pretrained.bert_like import truncate_for_bert_like, _tokenized2nested
 from eznlp.text_classification.io import TabularIO
 
 
 class TestTextClassificationDataset(object):
     @pytest.mark.slow
-    def test_pre_truncation(self, bert_with_tokenizer):
+    @pytest.mark.parametrize("mode", ["head+tail", "head-only", "tail-only"])
+    def test_truncation(self, mode, bert_with_tokenizer):
         bert, tokenizer = bert_with_tokenizer
-        config = TextClassifierConfig(ohots=None, 
-                                      encoder=None, 
-                                      bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert))
+        max_len = tokenizer.model_max_length - 2
         
-        tabular_io = TabularIO(text_col_id=3, label_col_id=2)
-        dev_data = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.dev.ss", encoding='utf-8', sep="\t\t", sentence_sep="<sssss>")
-        dev_data = [data_entry for data_entry in dev_data if len(data_entry['tokens']) >= 500]
-        assert max(len(data_entry['tokens']) for data_entry in dev_data) > 510
+        tabular_io = TabularIO(text_col_id=3, label_col_id=2, mapping={"<sssss>": "\n"}, case_mode='lower')
+        data = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.test.ss", encoding='utf-8', sep="\t\t")
+        data = [data_entry for data_entry in data if len(data_entry['tokens']) >= max_len-10]
+        assert max(len(data_entry['tokens']) for data_entry in data) > max_len
         
-        dev_set = TextClassificationDataset(dev_data, config)
-        dev_set._truncate_tokens()
-        sub_lens = [sum(len(tokenizer.tokenize(word)) for word in data_entry['tokens'].raw_text) for data_entry in dev_set.data]
-        sub_lens = pd.Series(sub_lens)
+        data = truncate_for_bert_like(data, tokenizer, mode)
+        sub_lens = [sum(len(word) for word in _tokenized2nested(data_entry['tokens'].raw_text, tokenizer)) for data_entry in data]
+        sub_lens = pandas.Series(sub_lens)
         
-        assert (sub_lens <= 510).all()
-        assert (sub_lens == 510).sum() >= (len(sub_lens) / 2)
+        assert (sub_lens <= max_len).all()
+        assert (sub_lens == max_len).sum() >= (len(sub_lens) / 2)
         
         

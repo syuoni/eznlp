@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 from typing import List
 import torch
-import transformers
 
 from ..data.wrapper import Batch
+from ..nn.functional import mask2seq_lens
 from ..model.model import ModelConfig, Model
 from .decoder import TextClassificationDecoderConfig
 
@@ -15,18 +15,20 @@ class TextClassifierConfig(ModelConfig):
         
     @property
     def valid(self):
+        if self.bert_like is not None and not self.bert_like.from_tokenized:
+            if self.full_emb_dim != 0 or self.full_hid_dim != self.bert_like.out_dim:
+                return False
         return super().valid and (self.decoder is not None) and self.decoder.valid
         
     @property
     def name(self):
-        extra_name = self.decoder.attention_scoring if self.decoder.use_attention else self.decoder.pooling_mode
-        return "-".join([super().name, extra_name])
-    
+        return "-".join([super().name, self.decoder.agg_mode])
+        
     def build_vocabs_and_dims(self, *partitions):
         super().build_vocabs_and_dims(*partitions)
         
-        if self.intermediate is not None:
-            self.decoder.in_dim = self.intermediate.out_dim
+        if self.intermediate2 is not None:
+            self.decoder.in_dim = self.intermediate2.out_dim
         else:
             self.decoder.in_dim = self.full_hid_dim
             
@@ -44,6 +46,11 @@ class TextClassifierConfig(ModelConfig):
         batch = super().batchify(batch_examples)
         if 'label_id' in batch_examples[0]:
             batch['label_ids'] = self.decoder.batchify([ex['label_id'] for ex in batch_examples])
+            
+        if self.bert_like is not None and not self.bert_like.from_tokenized:
+            batch['mask'] = batch['bert_like']['sub_mask'][:, 2:]
+            batch['seq_lens'] = mask2seq_lens(batch['mask'])
+            
         return batch
     
     
@@ -76,21 +83,3 @@ class TextClassifier(Model):
         return self.decoder.decode(batch, full_hidden)
     
     
-    
-        
-class BERTTextClassifier(Model):
-    def __init__(self, config: TextClassifierConfig, bert_like: transformers.PreTrainedModel=None):
-        super().__init__(config, bert_like=bert_like)
-        
-    def get_full_hidden(self, batch: Batch):
-        full_hidden, (seq_lens, mask) = self.bert_like_embedder(batch)
-        # Replace seq_lens / mask
-        batch.seq_lens = seq_lens
-        batch.tok_mask = mask
-        
-        if not hasattr(self, 'intermediate'):
-            return full_hidden
-        else:
-            return self.intermediate(batch, full_hidden)
-        
-        

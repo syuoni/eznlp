@@ -3,7 +3,7 @@ import pytest
 import pickle
 
 from eznlp.token import Full2Half
-from eznlp.token import Token, TokenSequence
+from eznlp.token import Token, TokenSequence, LexiconTokenizer
 
 
 def test_full2half():
@@ -195,6 +195,36 @@ class TestTokenSequence(object):
         assert tokens.trigram == ["this is a", "is a <-real1>", "a <-real1> demo", "<-real1> demo .", "demo . <pad>", ". <pad> <pad>"]
         
         
+    @pytest.mark.parametrize("text, softlexicon", 
+                             [("李明住在中山西路。",
+                               [[["李明"], ["<none>"], ["<none>"], ["李"]], 
+                                [["<none>"], ["<none>"], ["李明"], ["明"]], 
+                                [["<none>"], ["<none>"], ["<none>"], ["住"]], 
+                                [["<none>"], ["<none>"], ["<none>"], ["在"]], 
+                                [["中山", "中山西路"], ["<none>"], ["<none>"], ["中"]], 
+                                [["山西", "山西路"], ["中山西路"], ["中山"], ["山"]], 
+                                [["西路"], ["中山西路", "山西路"], ["山西"], ["西"]], 
+                                [["<none>"], ["<none>"], ["中山西路", "山西路", "西路"], ["路"]], 
+                                [["<none>"], ["<none>"], ["<none>"], ["。"]]]), 
+                              ("我爱北京天安门！", 
+                               [[["<none>"], ["<none>"], ["<none>"], ["我"]], 
+                                [["<none>"], ["<none>"], ["<none>"], ["爱"]], 
+                                [["北京"], ["<none>"], ["<none>"], ["北"]], 
+                                [["<none>"], ["<none>"], ["北京"], ["京"]], 
+                                [["天安", "天安门"], ["<none>"], ["<none>"], ["天"]], 
+                                [["安门"], ["天安门"], ["天安"], ["安"]], 
+                                [["<none>"], ["<none>"], ["天安门", "安门"], ["门"]], 
+                                [["<none>"], ["<none>"], ["<none>"], ["<none>"]]])])
+    def test_softlexicon(self, text, softlexicon, ctb50):
+        tokenizer = LexiconTokenizer(ctb50.itos)
+        tokens = TokenSequence.from_tokenized_text(list(text), token_sep="")
+        tokens.build_softlexicons(tokenizer.tokenize)
+        
+        softlexicon_built = [[set(inner_seq) for inner_seq in tok_field] for tok_field in tokens.softlexicon]
+        softlexicon_gold  = [[set(inner_seq) for inner_seq in tok_field] for tok_field in softlexicon]
+        assert softlexicon_built == softlexicon_gold
+        
+        
     def test_serialization(self):
         token_list = [Token(tok, case_mode='Lower', number_mode='Marks') for tok in "This is a -3.14 demo .".split()]
         tokens = TokenSequence(token_list)
@@ -208,5 +238,20 @@ class TestTokenSequence(object):
         assert tokens_loaded.raw_text == tokens.raw_text
         assert tokens_loaded.token_sep == tokens.token_sep
         assert tokens_loaded.pad_token == tokens.pad_token
+        
+        
+        
+class TestLexiconTokenizer(object):
+    @pytest.mark.parametrize("lexicon, text", 
+                             [(["李明", "中山", "中山西路", "山西", "山西路", "西路"], "李明住在中山西路。"), 
+                              (["北京", "天安门", "北京天安门"], "我爱北京天安门！")])
+    def test_tokenize(self, lexicon, text):
+        tokenizer = LexiconTokenizer(lexicon, return_singleton=False)
+        tokenized = list(tokenizer.tokenize(text))
+        
+        for w, start, end in tokenized:
+            assert text[start:end] == w
+            
+        assert set(lexicon) == set([w for w, *_ in tokenized])
         
         

@@ -7,7 +7,7 @@ import random
 import pdb
 import logging
 import pprint
-import numpy as np
+import numpy
 import torch
 import allennlp.modules
 import transformers
@@ -15,7 +15,7 @@ import flair
 
 from eznlp import auto_device
 from eznlp.config import ConfigDict
-from eznlp.model import CharConfig, OneHotConfig, MultiHotConfig, EncoderConfig
+from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig, CharConfig
 from eznlp.sequence_tagging import SequenceTaggingDecoderConfig, SequenceTaggerConfig
 from eznlp.sequence_tagging import SequenceTaggingDataset
 from eznlp.sequence_tagging import SequenceTaggingTrainer
@@ -52,7 +52,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
                              help="gradient clip (negative values are set to `None`)")
     
     group_train.add_argument('--optimizer', type=str, default='AdamW', 
-                             help="optimizer", choices=['AdamW', 'SGD', 'Adadelta'])
+                             help="optimizer", choices=['AdamW', 'SGD', 'Adadelta', 'Adamax'])
     group_train.add_argument('--lr', type=float, default=0.001, 
                              help="learning rate")
     group_train.add_argument('--finetune_lr', type=float, default=2e-5, 
@@ -79,10 +79,10 @@ def parse_arguments(parser: argparse.ArgumentParser):
                            help="embedding dim")
     parser_fs.add_argument('--emb_freeze', default=False, action='store_true', 
                            help="whether to freeze embedding weights")
-    parser_fs.add_argument('--char_arch', type=str, default='CNN', 
+    parser_fs.add_argument('--char_arch', type=str, default='LSTM', 
                            help="character-level encoder architecture")
-    parser_fs.add_argument('--use_encoder', default=False, action='store_true', 
-                           help="whether to use additional encoder layer")
+    parser_fs.add_argument('--use_interm1', default=False, action='store_true', 
+                           help="whether to use intermediate1")
     parser_fs.add_argument('--use_elmo', default=False, action='store_true', 
                            help="whether to use ELMo")
     parser_fs.add_argument('--use_flair', default=False, action='store_true', 
@@ -94,12 +94,12 @@ def parse_arguments(parser: argparse.ArgumentParser):
                            help="bert-like architecture")
     parser_ft.add_argument('--bert_drop_rate', type=float, default=0.2, 
                            help="dropout rate for BERT")
-    parser_ft.add_argument('--use_interm', default=False, action='store_true', 
-                           help="whether to use additional LSTM layer over BERT")
+    parser_ft.add_argument('--use_interm2', default=False, action='store_true', 
+                           help="whether to use intermediate2")
     
     args = parser.parse_args()
     random.seed(args.seed)
-    np.random.seed(args.seed)
+    numpy.random.seed(args.seed)
     torch.manual_seed(args.seed)
     torch.backends.cudnn.deterministic = True
     
@@ -118,16 +118,19 @@ def build_config(args: argparse.Namespace):
     if args.command in ('from_scratch', 'fs'):
         glove = GloVe("assets/vectors/glove.6B.100d.txt")
         ohots_config = ConfigDict({'text': OneHotConfig(field='text', vectors=glove, emb_dim=100, freeze=args.emb_freeze)})
+        char_config = CharConfig(emb_dim=16, 
+                                 encoder=EncoderConfig(arch=args.char_arch, 
+                                                       hid_dim=128, 
+                                                       num_layers=1, 
+                                                       in_drop_rates=(args.drop_rate, 0.0, 0.0)))
+        nested_ohots_config = ConfigDict({'char': char_config})
         
-        char_config = CharConfig(arch=args.char_arch, emb_dim=16, out_dim=128, drop_rate=args.drop_rate)
-        
-        if args.use_encoder:
-            encoder_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
+        if args.use_interm1:
+            interm1_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
         else:
-            encoder_config = EncoderConfig(arch='Identity')
+            interm1_config = None
             
-        interm_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
-        
+        interm2_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
         
         if args.use_elmo:
             elmo = allennlp.modules.Elmo(options_file="assets/allennlp/elmo_2x4096_512_2048cnn_2xhighway_options.json", 
@@ -141,7 +144,7 @@ def build_config(args: argparse.Namespace):
             flair_fw_lm = flair.models.LanguageModel.load_language_model("assets/flair/news-forward-0.4.1.pt")
             flair_bw_lm = flair.models.LanguageModel.load_language_model("assets/flair/news-backward-0.4.1.pt")
             flair_fw_config, flair_bw_config = FlairConfig(flair_lm=flair_fw_lm), FlairConfig(flair_lm=flair_bw_lm)
-            interm_config.in_proj = True
+            interm2_config.in_proj = True
         else:
             flair_fw_config, flair_bw_config = None, None
             
@@ -149,13 +152,13 @@ def build_config(args: argparse.Namespace):
         
     elif args.command in ('finetune', 'ft'):
         ohots_config = None
-        char_config = None
-        encoder_config = None
+        nested_ohots_config = None
+        interm1_config = None
         
-        if args.use_interm:
-            interm_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
+        if args.use_interm2:
+            interm2_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
         else:
-            interm_config = None
+            interm2_config = None
         
         elmo_config = None
         flair_fw_config, flair_bw_config = None, None
@@ -189,13 +192,13 @@ def build_config(args: argparse.Namespace):
         raise Exception("No sub-command specified")
         
     return SequenceTaggerConfig(ohots=ohots_config, 
-                                char=char_config,
-                                encoder=encoder_config, 
+                                nested_ohots=nested_ohots_config, 
+                                intermediate1=interm1_config, 
                                 elmo=elmo_config, 
                                 flair_fw=flair_fw_config, 
                                 flair_bw=flair_bw_config, 
                                 bert_like=bert_like_config, 
-                                intermediate=interm_config, 
+                                intermediate2=interm2_config, 
                                 decoder=decoder_config)
 
 

@@ -9,18 +9,22 @@ import pandas as pd
 import spacy
 import jieba
 import torch
+import torchtext
 
 import allennlp.modules
 import transformers
 import flair
 
 from eznlp import auto_device
+from eznlp.utils import find_ascending
 from eznlp.config import ConfigList, ConfigDict
-from eznlp.token import Token, TokenSequence
+from eznlp.token import Token, TokenSequence, LexiconTokenizer
 from eznlp.data import Batch
-from eznlp.model import CharConfig, OneHotConfig, MultiHotConfig, EncoderConfig
+from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig
+from eznlp.model import NestedOneHotConfig, CharConfig, SoftLexiconConfig
 from eznlp.pretrained import Vectors, GloVe, Senna
 from eznlp.pretrained import ELMoConfig, BertLikeConfig, FlairConfig
+from eznlp.pretrained.bert_like import truncate_for_bert_like
 from eznlp.training.utils import collect_params, check_param_groups
 
 
@@ -30,30 +34,19 @@ from eznlp.sequence_tagging import SequenceTaggingTrainer
 from eznlp.sequence_tagging import ChunksTagsTranslator
 from eznlp.sequence_tagging import precision_recall_f1_report
 from eznlp.sequence_tagging.io import ConllIO, BratIO
-from eznlp.sequence_tagging.transition import find_ascending
 
 from eznlp.language_modeling import MaskedLMConfig
 from eznlp.language_modeling import MaskedLMDataset, FolderLikeMaskedLMDataset, MaskedLMTrainer
 
-from eznlp.text_classification.io import TabularIO
+from eznlp.text_classification.io import TabularIO, FolderIO
 from eznlp.text_classification import TextClassificationDecoderConfig, TextClassifierConfig
 from eznlp.text_classification import TextClassificationDataset
 from eznlp.text_classification import TextClassificationTrainer
 
 
-
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     device = auto_device()
-        
-    # import jieba
-    # tokens = TokenSequence.from_tokenized_text(list("李明住在中山西路。"))
-    # print(list(jieba.cut_for_search("".join(tokens.raw_text))))
-    
-    # for tok in jieba.tokenize("".join(tokens.raw_text), mode='search'):
-    #     print(tok)
-        
-    # tokens.build_softwords(jieba.tokenize)
     
     # batch_tokenized_raw_text = [["I", "like", "it", "."], 
     #                             ["Do", "you", "love", "me", "?"], 
@@ -69,7 +62,6 @@ if __name__ == '__main__':
     # elmo = allennlp.modules.Elmo(options_file, weight_file, 1)
     # batch_elmo_ids = allennlp.modules.elmo.batch_to_ids(batch_tokenized_raw_text)
     
-    
     # bert = transformers.BertModel.from_pretrained("assets/transformers/bert-base-uncased")
     # tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-uncased")
     
@@ -77,9 +69,9 @@ if __name__ == '__main__':
     # senna = Senna("assets/vectors/Senna")
     
     # ctb50d = Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
-    # giga_uni = load_vectors_from_file("assets/vector_cache/gigaword_chn.all.a2b.uni.ite50.vec", encoding='utf-8')
-    # giga_bi  = load_vectors_from_file("assets/vector_cache/gigaword_chn.all.a2b.bi.ite50.vec", encoding='utf-8')
-    
+    # giga_uni = Vectors.load("assets/vectors/gigaword_chn.all.a2b.uni.ite50.vec", encoding='utf-8')
+    # giga_bi  = Vectors.load("assets/vectors/gigaword_chn.all.a2b.bi.ite50.vec", encoding='utf-8')
+    # tencent = Vectors.load("assets/vectors/tencent/Tencent_AILab_ChineseEmbedding.txt", encoding='utf-8', skiprows=0, verbose=True)
     
     # conll_io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO2')
     # train_data = conll_io.read("data/conll2003/demo.eng.train")
@@ -87,7 +79,7 @@ if __name__ == '__main__':
     # test_data  = conll_io.read("data/conll2003/demo.eng.testb")
     
     # config = SequenceTaggerConfig(ohots=ConfigDict({'text': OneHotConfig(field='text', vectors=glove)}), 
-    #                               char=CharConfig(),
+    #                               nested_ohots=ConfigDict({'char': CharConfig()}), 
     #                               elmo=ELMoConfig(elmo=elmo), 
     #                               bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert), 
     #                               flair_fw=FlairConfig(flair_lm=flair_fw_lm), 
@@ -126,8 +118,13 @@ if __name__ == '__main__':
     # tabular_io = TabularIO(text_col_id=3, label_col_id=2)
     # train_data = tabular_io.read("data/Tang2015/demo.yelp-2013-seg-20-20.train.ss", encoding='utf-8', sep="\t\t", sentence_sep="<sssss>")
     
+    # spacy_nlp_en = spacy.load("en_core_web_sm", disable=['tagger', 'parser', 'ner'])
+    # tabular_io = TabularIO(text_col_id=1, label_col_id=0, mapping={"\\n": "\n", '\\"': '"'}, tokenize_callback=spacy_nlp_en, case_mode='lower')
+    # train_data = tabular_io.read("data/yelp_review_full/train.csv", sep=",")
+    # test_data  = tabular_io.read("data/yelp_review_full/test.csv", sep=",")
+    
     # config = TextClassifierConfig(ohots=None, 
-    #                               encoder=None, 
+    #                               intermediate2=None,
     #                               bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert))
     
     # train_set = TextClassificationDataset(train_data, config)

@@ -56,7 +56,7 @@ class Dataset(torch.utils.data.Dataset):
         batch = {}
         batch['tokenized_text'] = [ex['tokenized_text'] for ex in batch_examples]
         batch['seq_lens'] = torch.tensor([len(tokenized_text) for tokenized_text in batch['tokenized_text']])
-        batch['tok_mask'] = seq_lens2mask(batch['seq_lens'])
+        batch['mask'] = seq_lens2mask(batch['seq_lens'])
         
         batch.update(self.config.batchify(batch_examples))
         return Batch(**batch)

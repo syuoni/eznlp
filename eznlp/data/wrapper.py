@@ -1,78 +1,79 @@
 # -*- coding: utf-8 -*-
 import torch
 
+def _create_is_like(criterion):
+    def _is_like(x):
+        if criterion(x):
+            return True
+        elif isinstance(x, list):
+            return all(criterion(xi) or _is_like(xi) for xi in x)
+        elif isinstance(x, dict):
+            return all(criterion(xi) or _is_like(xi) for xi in x.values())
+        else:
+            return False
+    return _is_like
 
-def _is_text_like(text_like):
-    if isinstance(text_like, str):
-        return True
-    elif isinstance(text_like, list):
-        return all(isinstance(x, str) or _is_text_like(x) for x in text_like)
-    else:
-        return False
+
+def _create_apply(criterion, func):
+    def _apply(x):
+        if criterion(x):
+            return func(x)
+        elif isinstance(x, list):
+            return [_apply(xi) for xi in x]
+        elif isinstance(x, dict):
+            return {k: _apply(xi) for k, xi in x.items()}
+        else:
+            return x
+    return _apply
     
-    
+
+_is_string_like = _create_is_like(lambda x: isinstance(x, str))
+_is_tensor_like = _create_is_like(lambda x: isinstance(x, (torch.Tensor, TensorWrapper)))
+
+
+
 class TensorWrapper(object):
     def __init__(self, **kwargs):
         self.add_attributes(**kwargs)
         
     def add_attributes(self, **kwargs):
         for name, possible_attr in kwargs.items():
-            # Do not register attributes with values of None
             if possible_attr is None:
+                # Do not register attributes with value of None
                 continue
-            elif isinstance(possible_attr, (torch.Tensor, TensorWrapper)):
-                pass
-            # Exceptions for text-like attributes (as inputs to pretrained models)
-            elif _is_text_like(possible_attr):
-                pass
-            elif isinstance(possible_attr, list):
-                assert all(isinstance(sub_attr, (torch.Tensor, TensorWrapper)) for sub_attr in possible_attr)
-            elif isinstance(possible_attr, dict):
-                assert all(isinstance(sub_attr, (torch.Tensor, TensorWrapper)) for sub_attr in possible_attr.values())
+            elif _is_tensor_like(possible_attr) or _is_string_like(possible_attr):
+                setattr(self, name, possible_attr)
             else:
-                raise TypeError(f"Invalid input to `TensorWrapper`: {possible_attr}")    
-            setattr(self, name, possible_attr)
-            
-            
-    @property
-    def device(self):
-        for attr_name, attr in self.__dict__.items():
-            if isinstance(attr, (torch.Tensor, TensorWrapper)):
-                if attr.device is not None:
-                    return attr.device
-            elif isinstance(attr, list) and len(attr) > 0:
-                attr0 = attr[0]
-                if isinstance(attr0, (torch.Tensor, TensorWrapper)):
-                    return attr0.device
-            elif isinstance(attr, dict) and len(attr) > 0:
-                attr0 = next(iter(attr.values()))
-                if isinstance(attr0, (torch.Tensor, TensorWrapper)):
-                    return attr0.device
-        else:
-            return None
-        
-        
+                raise TypeError(f"Invalid input to `TensorWrapper`: {possible_attr}")
+                
+                
     def _apply_to_tensors(self, func):
-        """
+        """Apply `func` to all tensors registered in this `TensorWrapper`. 
+        
+        Parameters
+        ----------
+        func: callable
+            a function appliable to `torch.Tensor`
+        
+        Notes
+        -----
+        `_adaptive_func` is a version appliable to both `torch.Tensor` and `TensorWrapper`. 
+        `_apply` is a version *recursively* appliable to list/dict of `torch.Tensor` and `TensorWrapper`. 
+        
         This function must return `self`.
         """
-        for attr_name, attr in self.__dict__.items():
-            if isinstance(attr, torch.Tensor):
-                setattr(self, attr_name, func(attr))
-            elif isinstance(attr, TensorWrapper):
-                setattr(self, attr_name, attr._apply_to_tensors(func))
-            elif isinstance(attr, list) and len(attr) > 0:
-                attr0 = attr[0]
-                if isinstance(attr0, torch.Tensor):
-                    setattr(self, attr_name, [func(x) for x in attr])
-                elif isinstance(attr0, TensorWrapper):
-                    setattr(self, attr_name, [x._apply_to_tensors(func) for x in attr])
-            elif isinstance(attr, dict) and len(attr) > 0:
-                attr0 = next(iter(attr.values()))
-                if isinstance(attr0, torch.Tensor):
-                    setattr(self, attr_name, {k: func(v) for k, v in attr.items()})
-                elif isinstance(attr0, TensorWrapper):
-                    setattr(self, attr_name, {k: v._apply_to_tensors(func) for k, v in attr.items()})
+        def _adaptive_func(x):
+            if isinstance(x, torch.Tensor):
+                return func(x)
+            else:
+                return x._apply_to_tensors(func)
+            
+        _apply = _create_apply(lambda x: isinstance(x, (torch.Tensor, TensorWrapper)), _adaptive_func)
+        
+        for name, attr in self.__dict__.items():
+            if _is_tensor_like(attr):
+                setattr(self, name, _apply(attr))
+                
         return self
         
     def pin_memory(self):
@@ -80,6 +81,9 @@ class TensorWrapper(object):
         
     def to(self, *args, **kwargs):
         return self._apply_to_tensors(lambda x: x.to(*args, **kwargs))
+        
+    def cuda(self, *args, **kwargs):
+        return self._apply_to_tensors(lambda x: x.cuda(*args, **kwargs))
     
     
     
@@ -93,7 +97,7 @@ class Batch(TensorWrapper):
     @property
     def size(self):
         return self.seq_lens.size(0)
-    
+        
     @property
     def step(self):
         return self.seq_lens.max().item()

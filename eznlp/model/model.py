@@ -7,6 +7,7 @@ from ..data.wrapper import Batch
 from ..config import Config, ConfigDict
 from .embedder import OneHotConfig
 from .encoder import EncoderConfig
+from .nested_embedder import SoftLexiconConfig
 
 
 class ModelConfig(Config):
@@ -14,33 +15,33 @@ class ModelConfig(Config):
     
     model
       ├─decoder(*)
-      └─intermediate
-          ├─encoder
+      └─intermediate2
+          ├─intermediate1
           │   ├─ohots
           │   ├─mhots
-          │   └─char
+          │   └─nested_ohots
           ├─elmo
           ├─bert_like
           ├─flair_fw
           └─flair_bw
     """
     
-    _embedder_names = ['ohots', 'mhots', 'char']
-    _encoder_names = ['encoder', 'intermediate']
+    _embedder_names = ['ohots', 'mhots', 'nested_ohots']
+    _encoder_names = ['intermediate1', 'intermediate2']
     _pretrained_names = ['elmo', 'bert_like', 'flair_fw', 'flair_bw']
     _all_names = _embedder_names + _encoder_names + _pretrained_names
     
     def __init__(self, **kwargs):
         self.ohots = kwargs.pop('ohots', ConfigDict({'text': OneHotConfig(field='text')}))
         self.mhots = kwargs.pop('mhots', None)
-        self.char = kwargs.pop('char', None)
-        self.encoder = kwargs.pop('encoder', EncoderConfig(arch='LSTM'))
+        self.nested_ohots = kwargs.pop('nested_ohots', None)
+        self.intermediate1 = kwargs.pop('intermediate1', None)
         
         self.elmo = kwargs.pop('elmo', None)
         self.bert_like = kwargs.pop('bert_like', None)
         self.flair_fw = kwargs.pop('flair_fw', None)
         self.flair_bw = kwargs.pop('flair_bw', None)
-        self.intermediate = kwargs.pop('intermediate', None)
+        self.intermediate2 = kwargs.pop('intermediate2', EncoderConfig(arch='LSTM'))
         super().__init__(**kwargs)
         
         
@@ -51,18 +52,16 @@ class ModelConfig(Config):
     @property
     def name(self):
         elements = []
-        if self.char is not None:
-            elements.append("Char" + self.char.arch)
-            
-        if self.encoder is not None:
-            elements.append(self.encoder.arch)
+        
+        if self.intermediate1 is not None:
+            elements.append(self.intermediate1.arch)
             
         for name in self._pretrained_names:
             if getattr(self, name) is not None:
                 elements.append(getattr(self, name).arch)
                 
-        if self.intermediate is not None:
-            elements.append(self.intermediate.arch)
+        if self.intermediate2 is not None:
+            elements.append(self.intermediate2.arch)
             
         return "-".join(elements)
         
@@ -76,9 +75,11 @@ class ModelConfig(Config):
         
     @property
     def full_hid_dim(self):
-        full_hid_dim = sum(getattr(self, name).out_dim for name in self._pretrained_names if getattr(self, name) is not None)
-        if self.encoder is not None:
-            full_hid_dim += self.encoder.out_dim
+        if self.intermediate1 is not None:
+            full_hid_dim = self.intermediate1.out_dim
+        else:
+            full_hid_dim = self.full_emb_dim
+        full_hid_dim += sum(getattr(self, name).out_dim for name in self._pretrained_names if getattr(self, name) is not None)
         return full_hid_dim
         
     def build_vocabs_and_dims(self, *partitions):
@@ -90,14 +91,18 @@ class ModelConfig(Config):
             for c in self.mhots.values():
                 c.build_dim(partitions[0][0]['tokens'])
                 
-        if self.char is not None:
-            self.char.build_vocab(*partitions)
+        if self.nested_ohots is not None:
+            for c in self.nested_ohots.values():
+                c.build_vocab(*partitions)
+                if isinstance(c, SoftLexiconConfig):
+                    # Skip the last split (assumed to be test set)
+                    c.build_freqs(*partitions[:-1])
+                    
+        if self.intermediate1 is not None:
+            self.intermediate1.in_dim = self.full_emb_dim
             
-        if self.encoder is not None:
-            self.encoder.in_dim = self.full_emb_dim
-            
-        if self.intermediate is not None:
-            self.intermediate.in_dim = self.full_hid_dim
+        if self.intermediate2 is not None:
+            self.intermediate2.in_dim = self.full_hid_dim
             
             
     def exemplify(self, tokens: TokenSequence):
@@ -109,9 +114,9 @@ class ModelConfig(Config):
         if self.mhots is not None:
             example['mhots'] = {f: c.exemplify(tokens) for f, c in self.mhots.items()}
             
-        if self.char is not None:
-            example['char'] = self.char.exemplify(tokens)
-        
+        if self.nested_ohots is not None:
+            example['nested_ohots'] = {f: c.exemplify(tokens) for f, c in self.nested_ohots.items()}
+            
         for name in self._pretrained_names:
             if getattr(self, name) is not None:
                 example[name] = getattr(self, name).exemplify(tokens)
@@ -128,8 +133,8 @@ class ModelConfig(Config):
         if self.mhots is not None:
             batch['mhots'] = {f: c.batchify([ex['mhots'][f] for ex in batch_examples]) for f, c in self.mhots.items()}
         
-        if self.char is not None:
-            batch['char'] = self.char.batchify([ex['char'] for ex in batch_examples])
+        if self.nested_ohots is not None:
+            batch['nested_ohots'] = {f: c.batchify([ex['nested_ohots'][f] for ex in batch_examples]) for f, c in self.nested_ohots.items()}
         
         for name in self._pretrained_names:
             if getattr(self, name) is not None:
@@ -157,10 +162,10 @@ class Model(torch.nn.Module):
         if hasattr(self, 'mhots'):
             mhots_embedded = [self.mhots[f](batch.mhots[f]) for f in self.mhots]
             embedded.extend(mhots_embedded)
-                    
-        if hasattr(self, 'char'):
-            char_embedded = self.char(**batch.char, seq_lens=batch.seq_lens)
-            embedded.append(char_embedded)
+            
+        if hasattr(self, 'nested_ohots'):
+            nested_ohots_embedded = [self.nested_ohots[f](**batch.nested_ohots[f], seq_lens=batch.seq_lens) for f in self.nested_ohots]
+            embedded.extend(nested_ohots_embedded)
             
         return torch.cat(embedded, dim=-1)
     
@@ -168,18 +173,21 @@ class Model(torch.nn.Module):
     def get_full_hidden(self, batch: Batch):
         full_hidden = []
         
-        if hasattr(self, 'encoder'):
+        if any([hasattr(self, name) for name in ModelConfig._embedder_names]):
             embedded = self.get_full_embedded(batch)
-            full_hidden.append(self.encoder(batch, embedded))
-            
+            if hasattr(self, 'intermediate1'):
+                full_hidden.append(self.intermediate1(embedded, batch.mask))
+            else:
+                full_hidden.append(embedded)
+                
         for name in ModelConfig._pretrained_names:
             if hasattr(self, name):
                 full_hidden.append(getattr(self, name)(**getattr(batch, name)))
                 
         full_hidden = torch.cat(full_hidden, dim=-1)
         
-        if hasattr(self, 'intermediate'):
-            return self.intermediate(batch, full_hidden)
+        if hasattr(self, 'intermediate2'):
+            return self.intermediate2(full_hidden, batch.mask)
         else:
             return full_hidden
         

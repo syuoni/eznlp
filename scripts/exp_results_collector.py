@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
-import os
 import glob
 import re
 import argparse
 import logging
 import datetime
 import zipfile
-import pandas as pd
+import pandas
 
 
 dict_re = re.compile("\{[^\{\}]+\}")
+acc_re = re.compile("(?<=Accuracy: )\d+\.\d+(?=%)")
 micro_f1_re = re.compile("(?<=Micro F1-score: )\d+\.\d+(?=%)")
 
 
@@ -39,15 +39,24 @@ if __name__ == '__main__':
             try:
                 exp_res = dict_re.search(log_text).group()
                 exp_res = eval(exp_res)
-                dev_f1, test_f1 = micro_f1_re.findall(log_text)
-                exp_res['dev_f1'] = float(dev_f1)
-                exp_res['test_f1'] = float(test_f1)
+                
+                if "Accuracy" in log_text:
+                    dev_acc, test_acc = acc_re.findall(log_text)
+                    exp_res['dev_acc'] = float(dev_acc)
+                    exp_res['test_acc'] = float(test_acc)
+                elif "F1-score" in log_text:
+                    dev_f1, test_f1 = micro_f1_re.findall(log_text)
+                    exp_res['dev_f1'] = float(dev_f1)
+                    exp_res['test_f1'] = float(test_f1)
+                else:
+                    raise RuntimeError("Results not found")
+                
             except:
                 logger.warning(f"Failed to parse {fn}")
             else:
                 exp_results.append(exp_res)
                 
-        df = pd.DataFrame(exp_results)
+        df = pandas.DataFrame(exp_results)
         df.to_excel(f"cache/{args.dataset}-collected-{timestamp}.xlsx", index=False)
         
     elif args.format == 'zip':

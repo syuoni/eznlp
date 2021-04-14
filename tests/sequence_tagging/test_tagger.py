@@ -2,9 +2,10 @@
 import pytest
 import torch
 
-from eznlp.token import Token
+from eznlp.token import Token, LexiconTokenizer
 from eznlp.config import ConfigDict
 from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig
+from eznlp.model import NestedOneHotConfig, CharConfig, SoftLexiconConfig
 from eznlp.pretrained import ELMoConfig, BertLikeConfig, FlairConfig
 from eznlp.sequence_tagging import SequenceTaggingDecoderConfig, SequenceTaggerConfig
 from eznlp.sequence_tagging import SequenceTaggingDataset
@@ -50,18 +51,42 @@ class TestTagger(object):
         self.model = self.config.instantiate().to(self.device)
         
         
-    @pytest.mark.parametrize("enc_arch", ['CNN', 'LSTM', 'GRU', 'Transformer'])
+    @pytest.mark.parametrize("enc_arch", ['Conv', 'Gehring', 'LSTM', 'GRU', 'Transformer'])
     @pytest.mark.parametrize("shortcut", [False, True])
     @pytest.mark.parametrize("dec_arch", ['softmax', 'CRF'])
     def test_tagger(self, enc_arch, shortcut, dec_arch, conll2003_demo, device):
-        self.config = SequenceTaggerConfig(encoder=EncoderConfig(arch=enc_arch, shortcut=shortcut), 
+        self.config = SequenceTaggerConfig(intermediate2=EncoderConfig(arch=enc_arch, shortcut=shortcut), 
                                            decoder=SequenceTaggingDecoderConfig(arch=dec_arch))
         self._setup_case(conll2003_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
         
+    @pytest.mark.parametrize("arch", ['Conv', 'LSTM'])
+    def test_tagger_with_char(self, arch, conll2003_demo, device):
+        char_config = CharConfig(encoder=EncoderConfig(arch=arch, 
+                                                       hid_dim=128, 
+                                                       num_layers=1, 
+                                                       in_drop_rates=(0.5, 0.0, 0.0)))
+        self.config = SequenceTaggerConfig(nested_ohots=ConfigDict({'char': char_config}))
+        self._setup_case(conll2003_demo, device)
+        self._assert_batch_consistency()
+        self._assert_trainable()
+        
+        
+    def test_tagger_with_softlexicon(self, ctb50, ResumeNER_demo, device):
+        tokenizer = LexiconTokenizer(ctb50.itos)
+        for data_entry in ResumeNER_demo:
+            data_entry['tokens'].build_softlexicons(tokenizer.tokenize)
+        
+        self.config = SequenceTaggerConfig(nested_ohots=ConfigDict({'softlexicon': SoftLexiconConfig(vectors=ctb50)}))
+        self._setup_case(ResumeNER_demo, device)
+        self._assert_batch_consistency()
+        self._assert_trainable()
+        
+        
     def test_tagger_with_intermediate(self, conll2003_demo, device):
-        self.config = SequenceTaggerConfig(intermediate=EncoderConfig())
+        self.config = SequenceTaggerConfig(intermediate1=EncoderConfig(), 
+                                           intermediate2=EncoderConfig())
         self._setup_case(conll2003_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
@@ -91,7 +116,6 @@ class TestTagger(object):
     @pytest.mark.parametrize("freeze", [False, True])
     def test_tagger_with_elmo(self, freeze, elmo, conll2003_demo, device):
         self.config = SequenceTaggerConfig(ohots=None, 
-                                           encoder=None, 
                                            elmo=ELMoConfig(elmo=elmo))
         self._setup_case(conll2003_demo, device)
         self._assert_batch_consistency()
@@ -101,7 +125,6 @@ class TestTagger(object):
     def test_tagger_with_bert_like(self, freeze, bert_like_with_tokenizer, conll2003_demo, device):
         bert_like, tokenizer = bert_like_with_tokenizer
         self.config = SequenceTaggerConfig(ohots=None, 
-                                           encoder=None, 
                                            bert_like=BertLikeConfig(bert_like=bert_like, tokenizer=tokenizer, freeze=freeze))
         self._setup_case(conll2003_demo, device)
         self._assert_batch_consistency()
@@ -110,7 +133,6 @@ class TestTagger(object):
     @pytest.mark.parametrize("freeze", [False, True])
     def test_tagger_with_flair(self, freeze, flair_fw_lm, flair_bw_lm, conll2003_demo, device):
         self.config = SequenceTaggerConfig(ohots=None, 
-                                           encoder=None, 
                                            flair_fw=FlairConfig(flair_lm=flair_fw_lm, freeze=freeze),  
                                            flair_bw=FlairConfig(flair_lm=flair_bw_lm, freeze=freeze))
         self._setup_case(conll2003_demo, device)

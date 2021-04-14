@@ -142,7 +142,7 @@ class SequenceTaggingCRFDecoder(SequenceTaggingDecoder):
         batch_tag_ids = torch.nn.utils.rnn.pad_sequence([tags_obj.tag_ids for tags_obj in batch.tags_objs], 
                                                         batch_first=True, 
                                                         padding_value=self.crf.pad_idx)
-        losses = self.crf(logits, batch_tag_ids, mask=batch.tok_mask)
+        losses = self.crf(logits, batch_tag_ids, mask=batch.mask)
         return losses
     
     
@@ -151,7 +151,7 @@ class SequenceTaggingCRFDecoder(SequenceTaggingDecoder):
         logits = self.hid2logit(full_hidden)
         
         # List of List of predicted-tag-ids
-        batch_tag_ids = self.crf.decode(logits, mask=batch.tok_mask)
+        batch_tag_ids = self.crf.decode(logits, mask=batch.mask)
         return [[self.idx2tag[i] for i in tag_ids] for tag_ids in batch_tag_ids]
     
     

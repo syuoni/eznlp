@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import pytest
-import numpy as np
+import numpy
 
 from eznlp.sequence_tagging import ChunksTagsTranslator
 from eznlp.sequence_tagging import precision_recall_f1_report
@@ -11,7 +11,7 @@ class TestMetric(object):
     def _assert_scores_equal(self, ave_scores, expected_ave_scores):
         for key in ave_scores:
             for score_key in ['precision', 'recall', 'f1']:
-                assert np.abs(ave_scores[key][score_key] - expected_ave_scores[key][score_key]) < 1e-6
+                assert numpy.abs(ave_scores[key][score_key] - expected_ave_scores[key][score_key]) < 1e-6
     
     
     @pytest.mark.parametrize("tags_gold_data, tags_pred_data, expected_ave_scores", 

@@ -92,16 +92,16 @@ class SequencePooling(torch.nn.Module):
     x: torch.FloatTensor (batch, step, hid_dim)
     mask: torch.BoolTensor (batch, step)
     mode: str
-        'mean', 'max', 'min'
+        'mean', 'max', 'min', 'wtd_mean'
     """
     def __init__(self, mode: str='mean'):
         super().__init__()
-        if mode.lower() not in ('mean', 'max', 'min'):
+        if mode.lower() not in ('mean', 'max', 'min', 'wtd_mean'):
             raise ValueError(f"Invalid pooling mode {mode}")
         self.mode = mode
         
-    def forward(self, x: torch.FloatTensor, mask: torch.BoolTensor):
-        return sequence_pooling(x, mask, mode=self.mode)
+    def forward(self, x: torch.FloatTensor, mask: torch.BoolTensor, weight: torch.FloatTensor=None):
+        return sequence_pooling(x, mask, weight=weight, mode=self.mode)
     
     def extra_repr(self):
         return f"mode={self.mode}"

@@ -7,6 +7,7 @@ import torch
 from ..data.wrapper import Batch
 from ..data.dataset import Dataset
 from .model import MaskedLMConfig
+from ..pretrained.bert_like import _tokenized2nested
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,7 @@ class MaskedLMDataset(Dataset):
     def __getitem__(self, i):
         data_entry = self.data[i]
         
-        nested_sub_tokens = [self.config.tokenizer.tokenize(word) for word in data_entry['tokens'].raw_text]
+        nested_sub_tokens = _tokenized2nested(data_entry['tokens'].raw_text, self.config.tokenizer)
         sub_tokens = [sub_tok for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
         return self.config.exemplify(sub_tokens)
         

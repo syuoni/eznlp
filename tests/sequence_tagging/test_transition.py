@@ -1,22 +1,8 @@
 # -*- coding: utf-8 -*-
 import pytest
-import spacy
 
 from eznlp.token import TokenSequence
 from eznlp.sequence_tagging import ChunksTagsTranslator
-from eznlp.sequence_tagging.transition import find_ascending
-
-
-@pytest.mark.parametrize("v", [-500, -3, 0, 2, 2.5, 9, 1234.56])
-def test_find_ascending(v):
-    N = 10
-    sequence = list(range(N))
-    find, idx = find_ascending(sequence, v)
-    sequence.insert(idx, v)
-    
-    assert find == (v in list(range(N)))
-    assert len(sequence) == N + 1
-    assert all(sequence[i] <= sequence[i+1] for i in range(N))
 
 
 @pytest.fixture
@@ -47,10 +33,9 @@ class TestChunksTagsTranslator(object):
             assert chunk_type == '<pseudo-type>'
             
             
-    def test_tags2text_chunks(self):
-        nlp = spacy.load("en_core_web_sm")
+    def test_tags2text_chunks(self, spacy_nlp_en):
         raw_text = "This is a -3.14 demo. Those are an APPLE and some glass bottles."
-        tokens = TokenSequence.from_raw_text(raw_text, nlp)
+        tokens = TokenSequence.from_raw_text(raw_text, spacy_nlp_en)
         
         entities = [{'entity': 'demo', 'type': 'EntA', 'start': 16, 'end': 20},
                     {'entity': 'APPLE', 'type': 'EntA', 'start': 35, 'end': 40},

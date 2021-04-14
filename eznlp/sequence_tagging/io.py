@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 import re
-import numpy as np
-import pandas as pd
+import numpy
+import pandas
 
 from ..token import TokenSequence
+from ..utils import segment_text_with_hierarchical_seps, segment_text_uniformly
 from .transition import ChunksTagsTranslator
 
 
@@ -89,15 +90,21 @@ class ConllIO(object):
 class BratIO(object):
     """
     An IO interface of brat-format files. 
+    
+    Note: Only support character-based format for Chinese text. 
     """
-    def __init__(self, attr_names=None, pre_inserted_spaces=True, tokenize_callback=None, **kwargs):
+    def __init__(self, attr_names=None, pre_inserted_spaces=True, tokenize_callback=None, max_len=500, **kwargs):
         self.attr_names = [] if attr_names is None else attr_names
         self.pre_inserted_spaces = pre_inserted_spaces
         self.tokenize_callback = tokenize_callback
+        self.max_len = max_len
         self.kwargs = kwargs
         self.line_sep = "\r\n"
+        self.sentence_seps = ["。"]
+        self.phrase_seps = ["；", "，", ";", ","]
         self.attr_sep = "<a>"
         self.inserted_mark = "😀"
+        
         
     def _parse_chunk_ann(self, ann):
         chunk_id, chunk_type_pos, chunk_text = ann.rstrip(self.line_sep).split("\t")
@@ -120,6 +127,17 @@ class BratIO(object):
         return f"{attr_id}\t{attr_name} {chunk_id}"
     
     
+    def _segment_text(self, text: str):
+        for start, end in segment_text_with_hierarchical_seps(text, 
+                                                              hie_seps=[[self.line_sep], self.sentence_seps, self.phrase_seps], 
+                                                              length=self.max_len):
+            if end - start <= self.max_len:
+                yield (start, end)
+            else:
+                for sub_start, sub_end in segment_text_uniformly(text[start:end], max_span_size=self.max_len):
+                    yield (start+sub_start, start+sub_end)
+                    
+                    
     def read(self, file_path, encoding=None):
         with open(file_path, 'r', encoding=encoding) as f:
             text = f.read()
@@ -142,7 +160,7 @@ class BratIO(object):
             self._check_text_chunks(text, text_chunks)
         
         # Build dataframe
-        df = pd.DataFrame(text_chunks, index=['text', 'type', 'start_in_text', 'end_in_text']).T
+        df = pandas.DataFrame(text_chunks, index=['text', 'type', 'start_in_text', 'end_in_text']).T
         for attr_name in self.attr_names:
             df[attr_name] = 'F'
             
@@ -156,20 +174,13 @@ class BratIO(object):
             df['type'] = df['type'].str.cat(df[attr_name], sep=self.attr_sep)
         
         data = []
-        line_start = 0
-        for line_cut in re.finditer(self.line_sep, text):
-            line_end = line_cut.start()
-            
-            if line_end > line_start:
-                data.append(self._build_entry(text, df, line_start, line_end))
-            line_start = line_cut.end()
-            
-        if len(text) > line_start:
-            data.append(self._build_entry(text, df, line_start))
+        for start, end in self._segment_text(text):
+            if text[start:end].strip():
+                data.append(self._build_entry(text, df, start, end))
         return data
     
     
-    def _build_entry(self, text: str, df: pd.DataFrame, line_start=None, line_end=None):
+    def _build_entry(self, text: str, df: pandas.DataFrame, line_start=None, line_end=None):
         line_start = 0 if line_start is None else line_start
         line_end = len(text) if line_end is None else line_end
         
@@ -194,7 +205,7 @@ class BratIO(object):
         text = re.sub(" {2,}", lambda x: " " + self.inserted_mark*(len(x.group())-1), text)
         
         is_inserted = [int(c == self.inserted_mark) for c in text]
-        num_inserted = np.cumsum(is_inserted).tolist()
+        num_inserted = numpy.cumsum(is_inserted).tolist()
         # The positions of exact pre-inserted spaces should be mapped to positions NEXT to them
         num_inserted = [n - i for n, i in zip(num_inserted, is_inserted)]
         num_inserted.append(num_inserted[-1])
@@ -305,7 +316,7 @@ class BratIO(object):
         text = self.line_sep.join([self._tokenize_and_rejoin(line) for line in text.split(self.line_sep)])
         
         is_inserted = [int(c == self.inserted_mark) for c in text]
-        num_inserted = np.cumsum(is_inserted).tolist()
+        num_inserted = numpy.cumsum(is_inserted).tolist()
         num_inserted = [n for n, i in zip(num_inserted, is_inserted) if i == 0]
         assert len(num_inserted) == ori_num_chars
         num_inserted.append(num_inserted[-1])

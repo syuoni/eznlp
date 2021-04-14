@@ -11,12 +11,7 @@ from ..model.decoder import DecoderConfig, Decoder
 
 class TextClassificationDecoderConfig(DecoderConfig):
     def __init__(self, **kwargs):
-        self.use_attention = kwargs.pop('use_attention', True)
-        if self.use_attention:
-            self.attention_scoring = kwargs.pop('attention_scoring', 'Multiplicative')
-        else:
-            self.pooling_mode = kwargs.pop('pooling_mode', 'Mean')
-            
+        self.agg_mode = kwargs.pop('agg_mode', 'multiplicative_attention')
         self.idx2label = kwargs.pop('idx2label', None)
         super().__init__(**kwargs)
         
@@ -62,11 +57,11 @@ class TextClassificationDecoderConfig(DecoderConfig):
 class TextClassificationDecoder(Decoder):
     def __init__(self, config: TextClassificationDecoderConfig):
         super().__init__(config)
-        if config.use_attention:
-            self.pooling = SequenceAttention(config.in_dim, scoring=config.attention_scoring)
-        else:
-            self.pooling = SequencePooling(mode=config.pooling_mode)
-            
+        if config.agg_mode.lower().endswith('_pooling'):
+            self.aggregating = SequencePooling(mode=config.agg_mode.replace('_pooling', ''))
+        elif config.agg_mode.lower().endswith('_attention'):
+            self.aggregating = SequenceAttention(config.in_dim, scoring=config.agg_mode.replace('_attention', ''))
+        
         self.idx2label = config.idx2label
         self.label2idx = config.label2idx
         self.criterion = torch.nn.CrossEntropyLoss(reduction='none')
@@ -74,7 +69,7 @@ class TextClassificationDecoder(Decoder):
         
     def forward(self, batch: Batch, full_hidden: torch.Tensor):
         # pooled_hidden: (batch, hid_dim)
-        pooled_hidden = self.pooling(self.dropout(full_hidden), mask=batch.tok_mask)
+        pooled_hidden = self.aggregating(self.dropout(full_hidden), mask=batch.mask)
         
         # logits: (batch, tag_dim)
         logits = self.hid2logit(pooled_hidden)
@@ -84,7 +79,7 @@ class TextClassificationDecoder(Decoder):
     
     def decode(self, batch: Batch, full_hidden: torch.Tensor):
         # pooled_hidden: (batch, hid_dim)
-        pooled_hidden = self.pooling(full_hidden, mask=batch.tok_mask)
+        pooled_hidden = self.aggregating(full_hidden, mask=batch.mask)
         
         # logits: (batch, tag_dim)
         logits = self.hid2logit(pooled_hidden)

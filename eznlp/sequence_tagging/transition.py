@@ -2,55 +2,10 @@
 import os
 import re
 from collections import Counter
-import pandas as pd
+import pandas
 
 from ..token import TokenSequence
-
-
-def find_ascending(sequence: list, value, start=None, end=None):
-    """
-    Binary search `value` in `sequence` which is assumed to be ascending. 
-    
-    Parameters
-    ----------
-    sequence : list of values
-        A sequence of ascending values. 
-    value : int, float, etc. 
-        A value to search. 
-    start : int, optional
-        DESCRIPTION. The default is None.
-    end : int, optional
-        DESCRIPTION. The default is None.
-        
-    Returns: Tuple
-    -------
-    find: bool
-        Whether `value` exists in `sequence`. 
-    idx: int
-        The index of `value` in `sequence`. 
-        
-    If `find` being True, `sequence[idx] == value`. 
-    If `find` being False, `sequence[idx-1] < value < sequence[idx]`. 
-    If calling `sequence.insert(idx, value)`, then `sequence` will remain ascending. 
-    """
-    start = 0 if start is None else start
-    end = len(sequence) if end is None else end
-    if start >= end:
-        return None, None
-    elif start + 1 == end:
-        if sequence[start] == value:
-            return True, start
-        elif sequence[start] < value:
-            return False, start + 1
-        else:
-            return False, start
-    
-    mid = (start + end) // 2
-    if sequence[mid] <= value:
-        return find_ascending(sequence, value, start=mid, end=end)
-    else:
-        return find_ascending(sequence, value, start=start, end=mid)
-
+from ..utils import find_ascending
 
 
 class ChunksTagsTranslator(object):
@@ -81,8 +36,8 @@ class ChunksTagsTranslator(object):
         
         dirname = os.path.dirname(__file__)
         sheet_name = 'BIOES' if scheme in ('BMES', 'BILOU') else scheme
-        trans = pd.read_excel(f"{dirname}/transition.xlsx", sheet_name=sheet_name, 
-                              usecols=['from_tag', 'to_tag', 'legal', 'end_of_chunk', 'start_of_chunk'])
+        trans = pandas.read_excel(f"{dirname}/transition.xlsx", sheet_name=sheet_name, 
+                                  usecols=['from_tag', 'to_tag', 'legal', 'end_of_chunk', 'start_of_chunk'])
         
         if scheme in ('BMES', 'BILOU'):
             # Mapping from BIOES to BMES/BILOU
@@ -125,7 +80,15 @@ class ChunksTagsTranslator(object):
         chunks = sorted(chunks, key=lambda ck: ck[2]-ck[1], reverse=True)
         
         for chunk_type, chunk_start, chunk_end in chunks:
-            # Make sure the target slice has NOT been labeled
+            # Make sure the target slice is contained in the sequence
+            # E.g., the sequence is truncated from a longer one
+            # This causes unretrievable chunks
+            if chunk_start < 0 or chunk_end > seq_len:
+                continue
+            
+            # Make sure the target slice has not been labeled
+            # E.g., nested entities
+            # This causes unretrievable chunks
             if not all(tags[k] == 'O' for k in range(chunk_start, chunk_end)):
                 continue
             

@@ -70,7 +70,7 @@ if __name__ == '__main__':
                        ["fs"], 
                        ["", "--use_elmo"], 
                        ["", "--use_flair"], 
-                       ["--char_arch LSTM", "--char_arch CNN"]]
+                       ["--char_arch LSTM", "--char_arch Conv"]]
         else:
             options = [["--num_epochs 50"], 
                        ["--optimizer AdamW --lr 1e-3 --finetune_lr 1e-5", 
@@ -82,7 +82,7 @@ if __name__ == '__main__':
                        # ["", "--use_locked_drop"], 
                        ["ft"], 
                        ["--bert_drop_rate 0.2"], 
-                       ["", "--use_interm"], 
+                       ["", "--use_interm2"], 
                        ["--bert_arch BERT_base", 
                         "--bert_arch RoBERTa_base", 
                         "--bert_arch BERT_large", 
@@ -91,21 +91,70 @@ if __name__ == '__main__':
     elif args.task == 'sequence_tagging_zh':
         if args.command in ('fs', 'from_scratch'):
             options = [["--num_epochs 100"], 
+                       ["--optimizer SGD --lr 0.05", 
+                        "--optimizer SGD --lr 0.1", 
+                        "--optimizer SGD --lr 0.2", 
+                        "--optimizer SGD --lr 0.5", 
+                        "--optimizer AdamW --lr 5e-4", 
+                        "--optimizer AdamW --lr 1e-3", 
+                        "--optimizer AdamW --lr 2e-3", 
+                        "--optimizer Adamax --lr 1e-3",
+                        "--optimizer Adamax --lr 2e-3",
+                        "--optimizer Adamax --lr 5e-3"], 
+                       ["--batch_size 8", "--batch_size 16", "--batch_size 32"], 
+                       ["--num_layers 1", "--num_layers 2"], 
                        ["fs"], 
-                       ["", "--use_bigram"], 
-                       ["", "--use_softword"]]
+                       # ["", "--use_softword"], 
+                       ["", "--use_bigram", "--use_softlexicon"]]
         else:
             options = [["--num_epochs 50"], 
-                       ["--optimizer AdamW --lr 1e-3 --finetune_lr 1e-5"], 
-                       ["--batch_size 32"], 
+                       ["--optimizer AdamW --lr 5e-4 --finetune_lr 1e-5", 
+                        "--optimizer AdamW --lr 1e-3 --finetune_lr 1e-5", 
+                        "--optimizer AdamW --lr 2e-3 --finetune_lr 1e-5", 
+                        "--optimizer AdamW --lr 5e-4 --finetune_lr 2e-5", 
+                        "--optimizer AdamW --lr 1e-3 --finetune_lr 2e-5", 
+                        "--optimizer AdamW --lr 2e-3 --finetune_lr 2e-5"], 
+                       ["--batch_size 64", "--batch_size 32", "--batch_size 16"], 
                        ["--scheduler LinearDecayWithWarmup"], 
-                       ["--dec_arch SoftMax", "--dec_arch CRF"],
+                       ["--dec_arch CRF"],
                        ["ft"], 
                        ["--bert_drop_rate 0.2"], 
-                       ["--bert_arch BERT_base", 
-                        "--bert_arch RoBERTa_base"]]
+                       ["", "--use_interm2"], 
+                       ["--bert_arch BERT_base", "--bert_arch RoBERTa_base"]]
         
-        
+    elif args.task.startswith('text_classification'):
+        if args.command in ('fs', 'from_scratch'):
+            options = [["--num_epochs 50"], 
+                       ["--optimizer SGD --lr 0.05", 
+                        "--optimizer SGD --lr 0.1", 
+                        "--optimizer SGD --lr 0.2", 
+                        "--optimizer SGD --lr 0.5", 
+                        "--optimizer AdamW --lr 5e-4",
+                        "--optimizer AdamW --lr 1e-3",
+                        "--optimizer AdamW --lr 2e-3", 
+                        "--optimizer Adadelta --lr 0.5",
+                        "--optimizer Adadelta --lr 1.0",
+                        "--optimizer Adadelta --lr 2.0"], 
+                       ["--batch_size 64"], 
+                       ["--num_layers 1", "--num_layers 2"], 
+                       ["--agg_mode max_pooling", "--agg_mode multiplicative_attention"], 
+                       ["fs"]]
+        else:
+            options = [["--num_epochs 10"], 
+                       ["--optimizer AdamW --lr 5e-4 --finetune_lr 1e-5", 
+                        "--optimizer AdamW --lr 1e-3 --finetune_lr 1e-5", 
+                        "--optimizer AdamW --lr 2e-3 --finetune_lr 1e-5", 
+                        "--optimizer AdamW --lr 5e-4 --finetune_lr 2e-5", 
+                        "--optimizer AdamW --lr 1e-3 --finetune_lr 2e-5", 
+                        "--optimizer AdamW --lr 2e-3 --finetune_lr 2e-5"], 
+                       ["--batch_size 32"], 
+                       ["--scheduler LinearDecayWithWarmup"], 
+                       ["ft"], 
+                       ["--bert_drop_rate 0.2"], 
+                       ["", "--use_interm2"], 
+                       ["--bert_arch BERT_base", "--bert_arch RoBERTa_base"]]
+    
+    
     if args.num_workers > 0:
         options.insert(0, ["--no_log_terminal"])
         

@@ -14,6 +14,8 @@ class SequenceTaggerConfig(ModelConfig):
     
     @property
     def valid(self):
+        if self.bert_like is not None and not self.bert_like.from_tokenized:
+            return False
         return super().valid and (self.decoder is not None) and self.decoder.valid
         
     @property
@@ -23,8 +25,8 @@ class SequenceTaggerConfig(ModelConfig):
     def build_vocabs_and_dims(self, *partitions):
         super().build_vocabs_and_dims(*partitions)
         
-        if self.intermediate is not None:
-            self.decoder.in_dim = self.intermediate.out_dim
+        if self.intermediate2 is not None:
+            self.decoder.in_dim = self.intermediate2.out_dim
         else:
             self.decoder.in_dim = self.full_hid_dim
             

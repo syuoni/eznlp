@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from typing import List
+from typing import List, Iterable
 from collections import OrderedDict
 from functools import cached_property
 import string
@@ -7,7 +7,7 @@ import re
 import hanziconv
 import spacy
 import jieba
-import numpy as np
+import numpy
 
 
 zh_punctuation = "！？｡。＂＃＄％＆＇（）＊＋，－——／：；＜＝＞＠［＼］＾＿｀｛｜｝～｟｠｢｣､、〃《》「」『』【】〔〕〖〗〘〙〚〛〜〝〞〟〰〾〿–—‘’‛“”„‟…‧﹏"
@@ -130,7 +130,7 @@ def _text_to_num_mark(text: str, return_nan_mark: bool=True):
         if abs(possible_value) < 1:
             digits = 0
         else:
-            digits = min(MAX_DIGITS, int(np.log10(abs(possible_value))) + 1)
+            digits = min(MAX_DIGITS, int(numpy.log10(abs(possible_value))) + 1)
             
         if is_percent:
             num_type = 'percent'
@@ -253,7 +253,7 @@ class Token(object):
         
     @property
     def en_shape_features(self):
-        return np.array([criterion(self.raw_text) for criterion in en_shape2criterion.values()])
+        return numpy.array([criterion(self.raw_text) for criterion in en_shape2criterion.values()])
         
     @property
     def zh_shape_features(self):
@@ -268,10 +268,11 @@ class TokenSequence(object):
     _softword_idx2tag = ['B', 'M', 'E', 'S']
     _softword_tag2idx = {t: i for i, t in enumerate(_softword_idx2tag)}
     
-    def __init__(self, token_list: List[Token], token_sep=" ", pad_token="<pad>"):
+    def __init__(self, token_list: List[Token], token_sep=" ", pad_token="<pad>", softword_none_token="<none>"):
         self.token_list = token_list
         self.token_sep = token_sep
         self.pad_token = pad_token
+        self.softword_none_token = softword_none_token
         
     def __getattr__(self, name):
         # NOTE: `__attr__` method is only invoked if the attribute wasn't found the usual ways, so 
@@ -292,7 +293,8 @@ class TokenSequence(object):
     def __getstate__(self):
         return {'token_list': self.token_list, 
                 'token_sep': self.token_sep, 
-                'pad_token': self.pad_token}
+                'pad_token': self.pad_token, 
+                'softword_none_token': self.softword_none_token}
         
     def __setstate__(self, state: dict):
         self.__dict__.update(state)
@@ -302,32 +304,42 @@ class TokenSequence(object):
         if isinstance(i, int):
             return self.token_list[i]
         elif isinstance(i, slice):
-            return TokenSequence(self.token_list[i], token_sep=self.token_sep, pad_token=self.pad_token)
+            return TokenSequence(self.token_list[i], 
+                                 token_sep=self.token_sep, 
+                                 pad_token=self.pad_token, 
+                                 softword_none_token=self.softword_none_token)
         else:
             raise TypeError(f"Invalid subscript type of {i}")
             
     def __add__(self, other):
-        return TokenSequence(self.token_list + other.token_list, token_sep=self.token_sep, pad_token=self.pad_token)
+        return TokenSequence(self.token_list + other.token_list, 
+                             token_sep=self.token_sep, 
+                             pad_token=self.pad_token, 
+                             softword_none_token=self.softword_none_token)
     
     
     def build_pseudo_boundaries(self, sep_width: int=None):
         if sep_width is None:
             sep_width = len(self.token_sep)
         
-        token_lens = np.array([len(tok) for tok in self.token_list])
-        self.end = np.cumsum(token_lens + sep_width) - sep_width
+        token_lens = numpy.array([len(tok) for tok in self.token_list])
+        self.end = numpy.cumsum(token_lens + sep_width) - sep_width
         self.start = self.end - token_lens
         
         
-    def build_softwords(self, tokenize_callback, **kwargs):
-        self.softword = [np.zeros(len(self._softword_idx2tag), dtype=bool) for tok in self.token_list]
+    def _assert_for_softwords(self, tokenize_callback):
+        assert self.token_sep == ""
+        assert hasattr(tokenize_callback, '__self__')
+        assert isinstance(tokenize_callback.__self__, (jieba.Tokenizer, LexiconTokenizer))
+        assert tokenize_callback.__name__.startswith('tokenize')
         
-        if hasattr(tokenize_callback, '__self__') and isinstance(tokenize_callback.__self__, jieba.Tokenizer) and tokenize_callback.__name__.startswith('tokenize'):
-            pass
-        else:
-            raise ValueError(f"Invalid `tokenize_callback`: {tokenize_callback}")
-            
-        for word_text, word_start, word_end in tokenize_callback("".join(self.raw_text), **kwargs):
+        
+    def build_softwords(self, tokenize_callback, **kwargs):
+        self._assert_for_softwords(tokenize_callback)
+        
+        self.softword = [numpy.zeros(len(self._softword_idx2tag), dtype=bool) for tok in self.token_list]
+        
+        for word_text, word_start, word_end in tokenize_callback(self.token_sep.join(self.raw_text), **kwargs):
             if word_end - word_start == 1:
                 self.softword[word_start][self._softword_tag2idx['S']] = True
             else:
@@ -335,6 +347,27 @@ class TokenSequence(object):
                 self.softword[word_end-1][self._softword_tag2idx['E']] = True
                 for k in range(word_start+1, word_end-1):
                     self.softword[k][self._softword_tag2idx['M']] = True
+                    
+                    
+    def build_softlexicons(self, tokenize_callback, **kwargs):
+        self._assert_for_softwords(tokenize_callback)
+        
+        self.softlexicon = [[[] for t in self._softword_idx2tag] for tok in self.token_list]
+        
+        for word_text, word_start, word_end in tokenize_callback(self.token_sep.join(self.raw_text), **kwargs):
+            if word_end - word_start == 1:
+                self.softlexicon[word_start][self._softword_tag2idx['S']].append(word_text)
+            else:
+                self.softlexicon[word_start][self._softword_tag2idx['B']].append(word_text)
+                self.softlexicon[word_end-1][self._softword_tag2idx['E']].append(word_text)
+                for k in range(word_start+1, word_end-1):
+                    self.softlexicon[k][self._softword_tag2idx['M']].append(word_text)
+                    
+        # Add a special token to empty word sets
+        for word_sets in self.softlexicon:
+            for word_set in word_sets:
+                if len(word_set) == 0:
+                    word_set.append(self.softword_none_token)
                     
                     
     @cached_property
@@ -390,16 +423,16 @@ class TokenSequence(object):
     
     @classmethod
     def from_tokenized_text(cls, tokenized_text: list, additional_tags=None, additional_tok2tags=None, 
-                            token_sep=" ", pad_token="<pad>", **kwargs):
+                            token_sep=" ", pad_token="<pad>", softword_none_token="<none>", **kwargs):
         token_list = [Token(tok_text, **kwargs) for tok_text in tokenized_text]
-        tokens = cls(token_list, token_sep=token_sep, pad_token=pad_token)
+        tokens = cls(token_list, token_sep=token_sep, pad_token=pad_token, softword_none_token=softword_none_token)
         tokens.attach_additional_tags(additional_tags=additional_tags, additional_tok2tags=additional_tok2tags)
         return tokens
     
     
     @classmethod
     def from_raw_text(cls, raw_text: str, tokenize_callback=None, additional_tok2tags=None, 
-                      token_sep=" ", pad_token="<pad>", **kwargs):
+                      token_sep=" ", pad_token="<pad>", softword_none_token="<none>", **kwargs):
         if tokenize_callback is None:
             token_list = [Token(tok_text, **kwargs) for tok_text in raw_text.split()]
         elif isinstance(tokenize_callback, spacy.language.Language):
@@ -414,12 +447,27 @@ class TokenSequence(object):
         else:
             raise ValueError(f"Invalid `tokenize_callback`: {tokenize_callback}")
         
-        tokens = cls(token_list, token_sep=token_sep, pad_token=pad_token)
+        tokens = cls(token_list, token_sep=token_sep, pad_token=pad_token, softword_none_token=softword_none_token)
         tokens.attach_additional_tags(additional_tok2tags=additional_tok2tags)
         return tokens
     
     
     
+class LexiconTokenizer(object):
+    def __init__(self, lexicon: Iterable[str], max_len: int=10, return_singleton: bool=False):
+        self.lexicon = set(lexicon)
+        self.max_len = max_len
+        self.return_singleton = return_singleton
+        
+    def tokenize(self, text: str):
+        L = len(text)
+        for word_start in range(L):
+            for word_end in range(word_start+1, min(word_start+self.max_len, L)+1):
+                word_text = text[word_start:word_end]
+                if (self.return_singleton and word_end-word_start==1) or (word_text in self.lexicon):
+                    yield (word_text, word_start, word_end)
+                    
+                    
 def custom_spacy_tokenizer(nlp, custom_prefixes=None, custom_suffixes=None, custom_infixes=None):
     """
     References:
