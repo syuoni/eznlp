@@ -40,7 +40,7 @@ Configurations of our implementation:
 ## Text Classification (Chinese)
 Configurations of our implementation:
 * Word-based (tokenized by `jieba`)
-* Word embeddings are initialized by random
+* Word embeddings are initialized by random or with Tencent embeddings (Song et al., 2018)
 * `From-scratch` models
     * Optimizer: Adadelta (lr=1.0)
     * Batch size: 64
@@ -55,19 +55,23 @@ Configurations of our implementation:
 ### ChnSentiCorp
 | Model | Paper | Reported Acc. | Our Implementation Acc. | Notes |
 |:-----:|:-----:|:-------------:|:-----------------------:|:-----:|
-| Multi-Channel CNN        | Liu et al. (2018) | 92.08 |       |
-| LSTM + MaxPooling        | -                 |       | 92.25 | num_layers=2 |
-| LSTM + Attention         | -                 |       | 92.42 | num_layers=2 |
-| BERT-base + Attention    | Cui et al. (2019) | 95.3  | 95.83 |
-| RoBERTa-base + Attention | Cui et al. (2019) | 95.8  | 95.08 |
+| Multi-Channel CNN                      | Liu et al. (2018) | 92.08 |       |
+| LSTM + MaxPooling                      | -                 |       | 92.25 | num_layers=2 |
+| LSTM + Attention                       | -                 |       | 92.42 | num_layers=2 |
+| Tencent Embeddings + LSTM + MaxPooling | -                 |       | 93.50 | num_layers=2 |
+| Tencent Embeddings + LSTM + Attention  | -                 |       | 93.08 | num_layers=2 |
+| BERT-base + Attention                  | Cui et al. (2019) | 95.3  | 95.83 |
+| RoBERTa-base + Attention               | Cui et al. (2019) | 95.8  | 95.08 |
 
 ### THUCNews-10
 | Model | Paper | Reported Acc. | Our Implementation Acc. | Notes |
 |:-----:|:-----:|:-------------:|:-----------------------:|:-----:|
-| LSTM + MaxPooling        | -                 |       | 97.66 | num_layers=2 |
-| LSTM + Attention         | -                 |       | 97.24 | num_layers=2 |
-| BERT-base + Attention    | Cui et al. (2019) | 97.7  | 
-| RoBERTa-base + Attention | Cui et al. (2019) | 97.8  | 
+| LSTM + MaxPooling                      | -                 |       | 97.66 | num_layers=2 |
+| LSTM + Attention                       | -                 |       | 97.24 | num_layers=2 |
+| Tencent Embeddings + LSTM + MaxPooling | -                 |       | 98.79 | num_layers=2 |
+| Tencent Embeddings + LSTM + Attention  | -                 |       | 98.57 | num_layers=2 |
+| BERT-base + Attention                  | Cui et al. (2019) | 97.7  | 98.79 |
+| RoBERTa-base + Attention               | Cui et al. (2019) | 97.8  | 98.98 |
 
 
 ## References
@@ -75,6 +79,7 @@ Configurations of our implementation:
 * Chen, H., Sun, M., Tu, C., Lin, Y., and Liu, Z. (2016). Neural sentiment classification with user and product attention. *EMNLP 2016*.
 * McCann, B., Bradbury, J., Xiong, C., and Socher, R. (2017). Learned in translation: Contextualized word vectors. *NIPS 2017*. 
 * Liu, P., Zhang, J., Leung, C. W. K., He, C., and Griffiths, T. L. (2018). Exploiting effective representations for Chinese sentiment analysis using a multi-channel convolutional neural network. arXiv preprint arXiv:1808.02961. 
+* Song, Y., Shi, S., Li, J., and Zhang, H. (2018). Directional skip-gram: Explicitly distinguishing left and right context for word embeddings. *NAACL-HLT 2018*.
 * Devlin, J., Chang, M. W., Lee, K., and Toutanova, K. (2018). BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding. *NAACL-HLT 2019*.
 * Liu, Y., Ott, M., Goyal, N., Du, J., Joshi, M., Chen, D., ... and Stoyanov, V. (2019). RoBERTa: A Robustly Optimized BERT Pretraining Approach. arXiv preprint arXiv:1907.11692. 
 * Sun, C., Qiu, X., Xu, Y., and Huang, X. (2019). How to fine-tune BERT for text classification? *CCL 2019*.

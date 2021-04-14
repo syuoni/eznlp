@@ -15,7 +15,7 @@ This repository consists of:
 | Yelp Full    | English  |
 | Yelp 2013    | English  | 70.80     | RoBERTa-base + Attention |
 | ChnSentiCorp | Chinese  | 95.83     | BERT-base + Attention    |
-| THUCNews-10  | Chinese  | 
+| THUCNews-10  | Chinese  | 98.98     | RoBERTa-base + Attention |
 
 See [Text Classification](docs/text_classification.md) for more details. 
 
