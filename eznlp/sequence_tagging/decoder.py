@@ -71,11 +71,12 @@ class SequenceTaggingDecoderConfig(DecoderConfig):
             return SequenceTaggingSoftMaxDecoder(self)
         elif self.arch.lower() == 'crf':
             return SequenceTaggingCRFDecoder(self)
-        
-        
+
+
+
 class Tags(TensorWrapper):
     """
-    Packaging of tags and chunks. 
+    A wrapper of tags with chunks. 
     
     Parameters
     ----------
@@ -87,13 +88,9 @@ class Tags(TensorWrapper):
         self.chunks = data_entry['chunks']
         self.tags = config.translator.chunks2tags(data_entry['chunks'], len(data_entry['tokens']))
         self.tag_ids = torch.tensor([config.tag2idx[t] for t in self.tags], dtype=torch.long)
-        
-    def __repr__(self):
-        return f"{self.__class__.__name__}({self.tags})"
-    
-    
-        
-        
+
+
+
 class SequenceTaggingDecoder(Decoder):
     def __init__(self, config: SequenceTaggingDecoderConfig):
         super().__init__(config)
@@ -101,9 +98,9 @@ class SequenceTaggingDecoder(Decoder):
         self.translator = config.translator
         self.idx2tag = config.idx2tag
         self.tag2idx = config.tag2idx
-        
-        
-        
+
+
+
 class SequenceTaggingSoftMaxDecoder(SequenceTaggingDecoder):
     def __init__(self, config: SequenceTaggingDecoderConfig):
         super().__init__(config)
