@@ -152,17 +152,3 @@ if __name__ == '__main__':
     #     tokenizer.save_pretrained(f"assets/transformers/{model_name}")
     #     model.save_pretrained(f"assets/transformers/{model_name}")
     
-    json_io = JsonIO()
-    train_data = json_io.read("data/conll2004/conll04_train.json")
-    
-    config = SpanClassifierConfig()
-    config.build_vocabs_and_dims(train_data)
-    classifier = config.instantiate()
-    
-    train_set = SpanClassificationDataset(train_data, config, neg_sampling=True)
-    batch = train_set.collate([train_set[i] for i in range(0, 4)])
-    losses, hidden = classifier(batch, return_hidden=True)
-    
-    optimizer = torch.optim.AdamW(classifier.parameters())
-    trainer = SpanClassificationTrainer(classifier, optimizer=optimizer, device=device)
-    trainer.train_epoch([batch])

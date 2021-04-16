@@ -83,16 +83,14 @@ class Spans(TensorWrapper):
          'chunks': list}
     """
     def __init__(self, data_entry: dict, config: SpanClassificationDecoderConfig, with_labels=True, neg_sampling=True):
-        self.chunks = data_entry['chunks']
-        
-        num_tokens = len(data_entry['tokens'])
-        
         if with_labels:
+            self.chunks = data_entry['chunks']
             pos_spans = [(start, end) for label, start, end in data_entry['chunks']]
             pos_labels = [label for label, start, end in data_entry['chunks']]
         else:
             pos_spans, pos_labels = [], []
         
+        num_tokens = len(data_entry['tokens'])
         neg_spans = []
         for start in range(num_tokens):
             for end in range(start+1, min(start+1+config.max_span_size, num_tokens+1)):

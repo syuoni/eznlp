@@ -10,6 +10,7 @@ from eznlp import auto_device
 from eznlp.pretrained import Vectors, GloVe
 from eznlp.sequence_tagging.io import ConllIO
 from eznlp.text_classification.io import TabularIO
+from eznlp.span_classification.io import JsonIO
 
 
 def pytest_addoption(parser):
@@ -55,6 +56,15 @@ def yelp_full_demo(spacy_nlp_en):
                      mapping={"\\n": "\n", '\\"': '"'}, 
                      tokenize_callback=spacy_nlp_en, 
                      case_mode='lower').read("data/yelp_review_full/demo.train.csv", sep=",")
+
+@pytest.fixture
+def conll2004_demo():
+    return JsonIO(text_key='tokens', 
+                  chunk_key='entities', 
+                  chunk_type_key='type', 
+                  chunk_start_key='start', 
+                  chunk_end_key='end').read("data/conll2004/demo.conll04_train.json")
+
 
 @pytest.fixture
 def glove100():

@@ -63,7 +63,6 @@ class TextClassifierConfig(ModelConfig):
 class TextClassifier(Model):
     def __init__(self, config: TextClassifierConfig):
         super().__init__(config)
-        # self.decoder = config.decoder.instantiate()
         
     def forward(self, batch: Batch, return_hidden: bool=False):
         full_hidden = self.get_full_hidden(batch)

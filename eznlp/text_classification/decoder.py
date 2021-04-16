@@ -32,10 +32,6 @@ class TextClassificationDecoderConfig(DecoderConfig):
     def voc_dim(self):
         return len(self.label2idx)
         
-    # @property
-    # def pad_idx(self):
-    #     return self.label2idx['<pad>']
-        
     def build_vocab(self, *partitions):
         counter = Counter()
         for data in partitions:
