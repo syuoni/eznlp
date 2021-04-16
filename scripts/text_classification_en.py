@@ -113,8 +113,13 @@ def build_config(args: argparse.Namespace):
     decoder_config = TextClassificationDecoderConfig(agg_mode=args.agg_mode, in_drop_rates=drop_rates)
     
     if args.command in ('from_scratch', 'fs'):
-        glove = GloVe("assets/vectors/glove.6B.100d.txt")
-        ohots_config = ConfigDict({'text': OneHotConfig(field='text', min_freq=5, vectors=glove, emb_dim=100, freeze=args.emb_freeze)})
+        if args.emb_dim in (50, 100, 200):
+            glove = GloVe(f"assets/vectors/glove.6B.{args.emb_dim}d.txt")
+        elif args.emb_dim == 300:
+            glove = GloVe("assets/vectors/glove.840B.300d.txt")
+        else:
+            glove = None
+        ohots_config = ConfigDict({'text': OneHotConfig(field='text', min_freq=5, vectors=glove, emb_dim=args.emb_dim, freeze=args.emb_freeze)})
         
         if args.use_interm1:
             interm1_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)

@@ -154,7 +154,33 @@ if __name__ == '__main__':
                        ["", "--use_interm2"], 
                        ["--bert_arch BERT_base", "--bert_arch RoBERTa_base"]]
     
-    
+    elif args.task.startswith('span_classification'):
+        if args.command in ('fs', 'from_scratch'):
+            options = [["--num_epochs 100"], 
+                       ["--optimizer AdamW --lr 1e-3", 
+                        "--optimizer SGD --lr 0.1"], 
+                       ["--batch_size 64"], 
+                       ["--num_layers 1", "--num_layers 2"], 
+                       ["--num_neg_chunks 200", "--num_neg_chunks 100", "--num_neg_chunks 50"], 
+                       ["--max_span_size 10", "--max_span_size 5"], 
+                       ["--size_emb_dim 50", "--size_emb_dim 25", "--size_emb_dim 10"], 
+                       ["fs"]]
+        else:
+            options = [["--num_epochs 10"], 
+                       ["--optimizer AdamW --lr 5e-4 --finetune_lr 1e-5", 
+                        "--optimizer AdamW --lr 1e-3 --finetune_lr 1e-5", 
+                        "--optimizer AdamW --lr 2e-3 --finetune_lr 1e-5", 
+                        "--optimizer AdamW --lr 5e-4 --finetune_lr 2e-5", 
+                        "--optimizer AdamW --lr 1e-3 --finetune_lr 2e-5", 
+                        "--optimizer AdamW --lr 2e-3 --finetune_lr 2e-5"], 
+                       ["--batch_size 32"], 
+                       ["--scheduler LinearDecayWithWarmup"], 
+                       ["ft"], 
+                       ["--bert_drop_rate 0.2"], 
+                       ["", "--use_interm2"], 
+                       ["--bert_arch BERT_base", "--bert_arch RoBERTa_base"]]
+            
+            
     if args.num_workers > 0:
         options.insert(0, ["--no_log_terminal"])
         

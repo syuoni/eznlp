@@ -10,6 +10,7 @@ from eznlp.metrics import precision_recall_f1_report
 from eznlp.pretrained import Vectors
 from eznlp.sequence_tagging.io import ConllIO
 from eznlp.text_classification.io import TabularIO, FolderIO
+from eznlp.span_classification.io import JsonIO
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,13 @@ def load_data(args: argparse.Namespace):
         train_data = conll_io.read("data/conll2012/train.english.v4_gold_conll", encoding='utf-8')
         dev_data   = conll_io.read("data/conll2012/dev.english.v4_gold_conll", encoding='utf-8')
         test_data  = conll_io.read("data/conll2012/test.english.v4_gold_conll", encoding='utf-8')
+        
+    elif args.dataset == 'conll2004':
+        json_io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', case_mode='None', number_mode='Zeros')
+        train_data = json_io.read("data/conll2004/conll04_train.json")
+        dev_data   = json_io.read("data/conll2004/conll04_dev.json")
+        test_data  = json_io.read("data/conll2004/conll04_test.json")
+        
     elif args.dataset == 'ResumeNER':
         conll_io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BMES', token_sep="", pad_token="")
         train_data = conll_io.read("data/ResumeNER/train.char.bmes", encoding='utf-8')
