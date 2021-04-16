@@ -42,6 +42,5 @@ class TestSpanClassificationDataset(object):
         if neg_sampling:
             expected_num_spans = min(expected_num_spans, len(chunks) + num_neg_chunks)
             
-        print(expected_num_spans)
         assert len(spans_obj.spans) == expected_num_spans
         

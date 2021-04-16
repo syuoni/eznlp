@@ -19,6 +19,7 @@ from eznlp import auto_device
 from eznlp.utils import find_ascending
 from eznlp.config import ConfigList, ConfigDict
 from eznlp.token import Token, TokenSequence, LexiconTokenizer
+from eznlp.metrics import precision_recall_f1_report
 from eznlp.data import Batch
 from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig
 from eznlp.model import NestedOneHotConfig, CharConfig, SoftLexiconConfig
@@ -32,7 +33,6 @@ from eznlp.sequence_tagging import SequenceTaggingDecoderConfig, SequenceTaggerC
 from eznlp.sequence_tagging import SequenceTaggingDataset
 from eznlp.sequence_tagging import SequenceTaggingTrainer
 from eznlp.sequence_tagging import ChunksTagsTranslator
-from eznlp.sequence_tagging import precision_recall_f1_report
 from eznlp.sequence_tagging.io import ConllIO, BratIO
 
 from eznlp.span_classification import SpanClassificationDecoderConfig, SpanClassifierConfig

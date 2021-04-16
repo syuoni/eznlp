@@ -3,7 +3,7 @@ import torch
 
 from ..training.trainer import Trainer
 from .dataset import SpanClassificationDataset
-from ..sequence_tagging.metric import precision_recall_f1_report
+from ..metrics import precision_recall_f1_report
 
 
 class SpanClassificationTrainer(Trainer):

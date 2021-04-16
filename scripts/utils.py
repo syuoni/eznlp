@@ -6,8 +6,8 @@ import jieba
 import sklearn.model_selection
 
 from eznlp.token import LexiconTokenizer
+from eznlp.metrics import precision_recall_f1_report
 from eznlp.pretrained import Vectors
-from eznlp.sequence_tagging import precision_recall_f1_report
 from eznlp.sequence_tagging.io import ConllIO
 from eznlp.text_classification.io import TabularIO, FolderIO
 

@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 import torch
 
+from ..metrics import precision_recall_f1_report
 from ..training.trainer import Trainer
 from .dataset import SequenceTaggingDataset
-from .metric import precision_recall_f1_report
 
 
 class SequenceTaggingTrainer(Trainer):
