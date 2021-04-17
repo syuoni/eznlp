@@ -12,7 +12,7 @@ This repository consists of:
 | Dataset      | Language | Best Acc. | Model Specification |
 |:------------:|:--------:|:---------:|:-------------------:|
 | IMDb         | English  | 95.78     | RoBERTa-base + Attention |
-| Yelp Full    | English  |
+| Yelp Full    | English  | 71.55     | RoBERTa-base + Attention |
 | Yelp 2013    | English  | 70.80     | RoBERTa-base + Attention |
 | ChnSentiCorp | Chinese  | 95.83     | BERT-base + Attention    |
 | THUCNews-10  | Chinese  | 98.98     | RoBERTa-base + Attention |
