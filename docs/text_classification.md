@@ -26,7 +26,7 @@ Configurations of our implementation:
 | LSTM + MaxPooling        | Zhang et al. (2015)  | 58.17 | 65.97 | num_layers=2 |
 | LSTM + Attention         | -                    | -     | 68.61 | num_layers=2 |
 | BERT-base + Attention    | Sun et al. (2019)    | 69.94 | 70.27 |
-| RoBERTa-base + Attention | -                    | -     | 
+| RoBERTa-base + Attention | -                    | -     | 71.55 |
 
 ### Yelp 2013 (with User and Product IDs)
 | Model | Paper | Reported Acc. | Our Implementation Acc. | Notes |
