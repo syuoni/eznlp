@@ -8,9 +8,7 @@ import flair
 
 from eznlp import auto_device
 from eznlp.pretrained import Vectors, GloVe
-from eznlp.sequence_tagging.io import ConllIO
-from eznlp.text_classification.io import TabularIO
-from eznlp.span_classification.io import JsonIO
+from eznlp.io import TabularIO, ConllIO, JsonIO
 
 
 def pytest_addoption(parser):
@@ -44,18 +42,27 @@ def spacy_nlp_en():
 
 @pytest.fixture
 def conll2003_demo():
-    return ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1').read("data/conll2003/demo.eng.train")
+    return ConllIO(text_col_id=0, 
+                   tag_col_id=3, 
+                   scheme='BIO1').read("data/conll2003/demo.eng.train")
 
 @pytest.fixture
 def ResumeNER_demo():
-    return ConllIO(text_col_id=0, tag_col_id=1, scheme='BMES', token_sep="", pad_token="").read("data/ResumeNER/demo.train.char.bmes", encoding='utf-8')
+    return ConllIO(text_col_id=0, 
+                   tag_col_id=1, 
+                   scheme='BMES', 
+                   encoding='utf-8', 
+                   token_sep="", 
+                   pad_token="").read("data/ResumeNER/demo.train.char.bmes")
 
 @pytest.fixture
 def yelp_full_demo(spacy_nlp_en):
-    return TabularIO(text_col_id=1, label_col_id=0, 
+    return TabularIO(text_col_id=1, 
+                     label_col_id=0, 
+                     sep=",", 
                      mapping={"\\n": "\n", '\\"': '"'}, 
                      tokenize_callback=spacy_nlp_en, 
-                     case_mode='lower').read("data/yelp_review_full/demo.train.csv", sep=",")
+                     case_mode='lower').read("data/yelp_review_full/demo.train.csv")
 
 @pytest.fixture
 def conll2004_demo():

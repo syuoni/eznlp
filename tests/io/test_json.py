@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-from eznlp.span_classification.io import JsonIO
+from eznlp.io import JsonIO
 
 
-class TestTabularIO(object):
+class TestJsonIO(object):
     """
     References
     ----------

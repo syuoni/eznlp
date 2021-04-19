@@ -28,22 +28,20 @@ from eznlp.pretrained import ELMoConfig, BertLikeConfig, FlairConfig
 from eznlp.pretrained.bert_like import truncate_for_bert_like
 from eznlp.training.utils import collect_params, check_param_groups
 
+from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, BratIO, JsonIO
 
 from eznlp.sequence_tagging import SequenceTaggingDecoderConfig, SequenceTaggerConfig
 from eznlp.sequence_tagging import SequenceTaggingDataset
 from eznlp.sequence_tagging import SequenceTaggingTrainer
 from eznlp.sequence_tagging import ChunksTagsTranslator
-from eznlp.sequence_tagging.io import ConllIO, BratIO
 
 from eznlp.span_classification import SpanClassificationDecoderConfig, SpanClassifierConfig
 from eznlp.span_classification import SpanClassificationDataset
 from eznlp.span_classification import SpanClassificationTrainer
-from eznlp.span_classification.io import JsonIO
 
 from eznlp.language_modeling import MaskedLMConfig
 from eznlp.language_modeling import MaskedLMDataset, FolderLikeMaskedLMDataset, MaskedLMTrainer
 
-from eznlp.text_classification.io import TabularIO, FolderIO
 from eznlp.text_classification import TextClassificationDecoderConfig, TextClassifierConfig
 from eznlp.text_classification import TextClassificationDataset
 from eznlp.text_classification import TextClassificationTrainer
@@ -104,9 +102,9 @@ if __name__ == '__main__':
     # optimizer = torch.optim.AdamW(param_groups)
     
     
-    # brat_io = BratIO(attr_names=['Denied', 'Analyzed'], tokenize_callback=jieba.cut)
-    # brat_data = brat_io.read("assets/data/brat/demo.txt", encoding='utf-8')
-    # brat_io.write(brat_data, "assets/data/brat/demo-write.txt", encoding='utf-8')
+    # brat_io = BratIO(attr_names=['Denied', 'Analyzed'], tokenize_callback=jieba.cut, encoding='utf-8')
+    # brat_data = brat_io.read("assets/data/brat/demo.txt")
+    # brat_io.write(brat_data, "assets/data/brat/demo-write.txt")
     
     # brat_set = SequenceTaggingDataset(brat_data)
     # batch = brat_set.collate([brat_set[i] for i in range(0, 4)])
@@ -120,13 +118,13 @@ if __name__ == '__main__':
     # param_groups = [{'params': list(tagger.decoder.crf.parameters())}]
     
     
-    # tabular_io = TabularIO(text_col_id=3, label_col_id=2)
-    # train_data = tabular_io.read("data/Tang2015/demo.yelp-2013-seg-20-20.train.ss", encoding='utf-8', sep="\t\t", sentence_sep="<sssss>")
+    # tabular_io = TabularIO(text_col_id=3, label_col_id=2, sep="\t\t", mapping={"<sssss>": "\n"}, encoding='utf-8')
+    # train_data = tabular_io.read("data/Tang2015/demo.yelp-2013-seg-20-20.train.ss")
     
     # spacy_nlp_en = spacy.load("en_core_web_sm", disable=['tagger', 'parser', 'ner'])
-    # tabular_io = TabularIO(text_col_id=1, label_col_id=0, mapping={"\\n": "\n", '\\"': '"'}, tokenize_callback=spacy_nlp_en, case_mode='lower')
-    # train_data = tabular_io.read("data/yelp_review_full/train.csv", sep=",")
-    # test_data  = tabular_io.read("data/yelp_review_full/test.csv", sep=",")
+    # tabular_io = TabularIO(text_col_id=1, label_col_id=0, sep=",", mapping={"\\n": "\n", '\\"': '"'}, tokenize_callback=spacy_nlp_en, case_mode='lower')
+    # train_data = tabular_io.read("data/yelp_review_full/train.csv")
+    # test_data  = tabular_io.read("data/yelp_review_full/test.csv")
     
     # config = TextClassifierConfig(ohots=None, 
     #                               intermediate2=None,

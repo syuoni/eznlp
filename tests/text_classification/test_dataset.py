@@ -3,7 +3,7 @@ import pytest
 import pandas
 
 from eznlp.pretrained.bert_like import truncate_for_bert_like, _tokenized2nested
-from eznlp.text_classification.io import TabularIO
+from eznlp.io import TabularIO
 
 
 class TestTextClassificationDataset(object):
@@ -13,8 +13,8 @@ class TestTextClassificationDataset(object):
         bert, tokenizer = bert_with_tokenizer
         max_len = tokenizer.model_max_length - 2
         
-        tabular_io = TabularIO(text_col_id=3, label_col_id=2, mapping={"<sssss>": "\n"}, case_mode='lower')
-        data = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.test.ss", encoding='utf-8', sep="\t\t")
+        tabular_io = TabularIO(text_col_id=3, label_col_id=2, sep="\t\t", mapping={"<sssss>": "\n"}, encoding='utf-8', case_mode='lower')
+        data = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.test.ss")
         data = [data_entry for data_entry in data if len(data_entry['tokens']) >= max_len-10]
         assert max(len(data_entry['tokens']) for data_entry in data) > max_len
         

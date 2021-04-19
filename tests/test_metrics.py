@@ -4,7 +4,7 @@ import numpy
 
 from eznlp.metrics import precision_recall_f1_report
 from eznlp.sequence_tagging import ChunksTagsTranslator
-from eznlp.sequence_tagging.io import ConllIO
+from eznlp.io import ConllIO
 
 
 class TestMetric(object):

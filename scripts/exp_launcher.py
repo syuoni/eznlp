@@ -166,14 +166,14 @@ if __name__ == '__main__':
                        ["--size_emb_dim 50", "--size_emb_dim 25", "--size_emb_dim 10"], 
                        ["fs"]]
         else:
-            options = [["--num_epochs 10"], 
+            options = [["--num_epochs 50"], 
                        ["--optimizer AdamW --lr 5e-4 --finetune_lr 1e-5", 
                         "--optimizer AdamW --lr 1e-3 --finetune_lr 1e-5", 
                         "--optimizer AdamW --lr 2e-3 --finetune_lr 1e-5", 
                         "--optimizer AdamW --lr 5e-4 --finetune_lr 2e-5", 
                         "--optimizer AdamW --lr 1e-3 --finetune_lr 2e-5", 
                         "--optimizer AdamW --lr 2e-3 --finetune_lr 2e-5"], 
-                       ["--batch_size 32"], 
+                       ["--batch_size 48"], 
                        ["--scheduler LinearDecayWithWarmup"], 
                        ["ft"], 
                        ["--bert_drop_rate 0.2"], 
