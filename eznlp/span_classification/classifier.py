@@ -3,21 +3,19 @@ from typing import List
 import torch
 
 from ..data.wrapper import Batch
-from ..nn.functional import mask2seq_lens
 from ..model.model import ModelConfig, Model
-from .decoder import TextClassificationDecoderConfig
+from .decoder import SpanClassificationDecoderConfig
 
 
-class TextClassifierConfig(ModelConfig):
+class SpanClassifierConfig(ModelConfig):
     def __init__(self, **kwargs):
-        self.decoder: TextClassificationDecoderConfig = kwargs.pop('decoder', TextClassificationDecoderConfig())
+        self.decoder: SpanClassificationDecoderConfig = kwargs.pop('decoder', SpanClassificationDecoderConfig())
         super().__init__(**kwargs)
         
     @property
     def valid(self):
         if self.bert_like is not None and not self.bert_like.from_tokenized:
-            if self.full_emb_dim != 0 or self.full_hid_dim != self.bert_like.out_dim:
-                return False
+            return False
         return super().valid and (self.decoder is not None) and self.decoder.valid
         
     @property
@@ -28,40 +26,37 @@ class TextClassifierConfig(ModelConfig):
         super().build_vocabs_and_dims(*partitions)
         
         if self.intermediate2 is not None:
-            self.decoder.in_dim = self.intermediate2.out_dim
+            self.decoder.in_dim = self.intermediate2.out_dim + self.decoder.size_emb_dim
         else:
-            self.decoder.in_dim = self.full_hid_dim
+            self.decoder.in_dim = self.full_hid_dim + self.decoder.size_emb_dim
             
         self.decoder.build_vocab(*partitions)
         
     
-    def exemplify(self, data_entry: dict):
+    def exemplify(self, data_entry: dict, neg_sampling=True):
         example = super().exemplify(data_entry['tokens'])
-        if 'label' in data_entry:
-            example['label_id'] = self.decoder.exemplify(data_entry)
+        if 'chunks' in data_entry:
+            example['spans_obj'] = self.decoder.exemplify(data_entry, with_labels=True, neg_sampling=neg_sampling)
+        else:
+            example['spans_obj'] = self.decoder.exemplify(data_entry, with_labels=False, neg_sampling=neg_sampling)
         return example
         
     
     def batchify(self, batch_examples: List[dict]):
         batch = super().batchify(batch_examples)
-        if 'label_id' in batch_examples[0]:
-            batch['label_ids'] = self.decoder.batchify([ex['label_id'] for ex in batch_examples])
-            
-        if self.bert_like is not None and not self.bert_like.from_tokenized:
-            batch['mask'] = batch['bert_like']['sub_mask'][:, 2:]
-            batch['seq_lens'] = mask2seq_lens(batch['mask'])
-            
+        if 'spans_obj' in batch_examples[0]:
+            batch['spans_objs'] = self.decoder.batchify([ex['spans_obj'] for ex in batch_examples])
         return batch
     
     
     def instantiate(self):
         # Only check validity at the most outside level
         assert self.valid
-        return TextClassifier(self)
+        return SpanClassifier(self)
     
     
-class TextClassifier(Model):
-    def __init__(self, config: TextClassifierConfig):
+class SpanClassifier(Model):
+    def __init__(self, config: SpanClassifierConfig):
         super().__init__(config)
         
     def forward(self, batch: Batch, return_hidden: bool=False):

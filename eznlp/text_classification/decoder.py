@@ -16,7 +16,7 @@ class TextClassificationDecoderConfig(DecoderConfig):
         super().__init__(**kwargs)
         
     def __repr__(self):
-        repr_attr_dict = {key: getattr(self, key) for key in ['in_dim', 'in_drop_rates']}
+        repr_attr_dict = {key: getattr(self, key) for key in ['agg_mode', 'in_dim', 'in_drop_rates']}
         return self._repr_non_config_attrs(repr_attr_dict)
         
     @property
@@ -31,10 +31,6 @@ class TextClassificationDecoderConfig(DecoderConfig):
     @property
     def voc_dim(self):
         return len(self.label2idx)
-        
-    @property
-    def pad_idx(self):
-        return self.label2idx['<pad>']
         
     def build_vocab(self, *partitions):
         counter = Counter()

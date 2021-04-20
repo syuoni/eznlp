@@ -6,10 +6,9 @@ import jieba
 import sklearn.model_selection
 
 from eznlp.token import LexiconTokenizer
+from eznlp.metrics import precision_recall_f1_report
 from eznlp.pretrained import Vectors
-from eznlp.sequence_tagging import precision_recall_f1_report
-from eznlp.sequence_tagging.io import ConllIO
-from eznlp.text_classification.io import TabularIO, FolderIO
+from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO
 
 logger = logging.getLogger(__name__)
 
@@ -24,67 +23,75 @@ def load_data(args: argparse.Namespace):
         dev_data   = conll_io.read("data/conll2003/eng.testa")
         test_data  = conll_io.read("data/conll2003/eng.testb")
     elif args.dataset == 'conll2012':
-        conll_io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', line_sep_starts=["#begin", "#end", "pt/"], case_mode='None', number_mode='Zeros')
-        train_data = conll_io.read("data/conll2012/train.english.v4_gold_conll", encoding='utf-8')
-        dev_data   = conll_io.read("data/conll2012/dev.english.v4_gold_conll", encoding='utf-8')
-        test_data  = conll_io.read("data/conll2012/test.english.v4_gold_conll", encoding='utf-8')
+        conll_io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', line_sep_starts=["#begin", "#end", "pt/"], encoding='utf-8', case_mode='None', number_mode='Zeros')
+        train_data = conll_io.read("data/conll2012/train.english.v4_gold_conll")
+        dev_data   = conll_io.read("data/conll2012/dev.english.v4_gold_conll")
+        test_data  = conll_io.read("data/conll2012/test.english.v4_gold_conll")
+        
+    elif args.dataset == 'conll2004':
+        json_io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', case_mode='None', number_mode='Zeros')
+        train_data = json_io.read("data/conll2004/conll04_train.json")
+        dev_data   = json_io.read("data/conll2004/conll04_dev.json")
+        test_data  = json_io.read("data/conll2004/conll04_test.json")
+        
     elif args.dataset == 'ResumeNER':
-        conll_io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BMES', token_sep="", pad_token="")
-        train_data = conll_io.read("data/ResumeNER/train.char.bmes", encoding='utf-8')
-        dev_data   = conll_io.read("data/ResumeNER/dev.char.bmes", encoding='utf-8')
-        test_data  = conll_io.read("data/ResumeNER/test.char.bmes", encoding='utf-8')
+        conll_io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BMES', encoding='utf-8', token_sep="", pad_token="")
+        train_data = conll_io.read("data/ResumeNER/train.char.bmes")
+        dev_data   = conll_io.read("data/ResumeNER/dev.char.bmes")
+        test_data  = conll_io.read("data/ResumeNER/test.char.bmes")
     elif args.dataset == 'WeiboNER':
-        conll_io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BIO2', token_sep="", pad_token="", pre_text_normalizer=lambda x: x[0])
-        train_data = conll_io.read("data/WeiboNER/weiboNER_2nd_conll.train", encoding='utf-8')
-        dev_data   = conll_io.read("data/WeiboNER/weiboNER_2nd_conll.dev", encoding='utf-8')
-        test_data  = conll_io.read("data/WeiboNER/weiboNER_2nd_conll.test", encoding='utf-8')
+        conll_io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BIO2', encoding='utf-8', token_sep="", pad_token="", pre_text_normalizer=lambda x: x[0])
+        train_data = conll_io.read("data/WeiboNER/weiboNER_2nd_conll.train")
+        dev_data   = conll_io.read("data/WeiboNER/weiboNER_2nd_conll.dev")
+        test_data  = conll_io.read("data/WeiboNER/weiboNER_2nd_conll.test")
     elif args.dataset == 'SIGHAN2006':
         # https://github.com/v-mipeng/LexiconAugmentedNER/issues/3
-        conll_io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BIO2', token_sep="", pad_token="")
-        train_data = conll_io.read("data/SIGHAN2006/train.txt", encoding='utf-8')
-        dev_data   = conll_io.read("data/SIGHAN2006/test.txt", encoding='utf-8')
-        test_data  = conll_io.read("data/SIGHAN2006/test.txt", encoding='utf-8')
+        conll_io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BIO2', encoding='utf-8', token_sep="", pad_token="")
+        train_data = conll_io.read("data/SIGHAN2006/train.txt")
+        dev_data   = conll_io.read("data/SIGHAN2006/test.txt")
+        test_data  = conll_io.read("data/SIGHAN2006/test.txt")
         if args.command in ('finetune', 'ft'):
             for data in [train_data, dev_data, test_data]:
                 for data_entry in data:
                     data_entry['tokens'] = data_entry['tokens'][:510]
+                    
     elif args.dataset == 'conll2012_zh':
-        conll_io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', line_sep_starts=["#begin", "#end", "pt/"], token_sep="", pad_token="")
-        train_data = conll_io.read("data/conll2012/train.chinese.v4_gold_conll", encoding='utf-8')
-        dev_data   = conll_io.read("data/conll2012/dev.chinese.v4_gold_conll", encoding='utf-8')
-        test_data  = conll_io.read("data/conll2012/test.chinese.v4_gold_conll", encoding='utf-8')
+        conll_io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', line_sep_starts=["#begin", "#end", "pt/"], encoding='utf-8', token_sep="", pad_token="")
+        train_data = conll_io.read("data/conll2012/train.chinese.v4_gold_conll")
+        dev_data   = conll_io.read("data/conll2012/dev.chinese.v4_gold_conll")
+        test_data  = conll_io.read("data/conll2012/test.chinese.v4_gold_conll")
         
     elif args.dataset == 'yelp2013':
-        tabular_io = TabularIO(text_col_id=3, label_col_id=2, mapping={"<sssss>": "\n"}, verbose=args.log_terminal, 
+        tabular_io = TabularIO(text_col_id=3, label_col_id=2, sep="\t\t", mapping={"<sssss>": "\n"}, encoding='utf-8', verbose=args.log_terminal, 
                                case_mode='Lower', number_mode='None')
-        train_data = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.train.ss", encoding='utf-8', sep="\t\t")
-        dev_data   = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.dev.ss", encoding='utf-8', sep="\t\t")
-        test_data  = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.test.ss", encoding='utf-8', sep="\t\t")
+        train_data = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.train.ss")
+        dev_data   = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.dev.ss")
+        test_data  = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.test.ss")
     elif args.dataset == 'imdb':
-        folder_io = FolderIO(categories=["pos", "neg"], mapping={"<br />": "\n"}, tokenize_callback=spacy_nlp_en, verbose=args.log_terminal, 
+        folder_io = CategoryFolderIO(categories=["pos", "neg"], mapping={"<br />": "\n"}, tokenize_callback=spacy_nlp_en, encoding='utf-8', verbose=args.log_terminal, 
                              case_mode='lower', number_mode='None')
-        train_data = folder_io.read("data/imdb/train", encoding='utf-8')
-        test_data  = folder_io.read("data/imdb/test", encoding='utf-8')
+        train_data = folder_io.read("data/imdb/train")
+        test_data  = folder_io.read("data/imdb/test")
         train_data, dev_data = sklearn.model_selection.train_test_split(train_data, test_size=0.2, random_state=args.seed)
     elif args.dataset == 'yelp_full':
-        tabular_io = TabularIO(text_col_id=1, label_col_id=0, mapping={"\\n": "\n", '\\"': '"'}, tokenize_callback=spacy_nlp_en, verbose=args.log_terminal, 
+        tabular_io = TabularIO(text_col_id=1, label_col_id=0, sep=",", mapping={"\\n": "\n", '\\"': '"'}, tokenize_callback=spacy_nlp_en, verbose=args.log_terminal, 
                                case_mode='Lower', number_mode='None')
-        train_data = tabular_io.read("data/yelp_review_full/train.csv", sep=",")
-        test_data  = tabular_io.read("data/yelp_review_full/test.csv", sep=",")
+        train_data = tabular_io.read("data/yelp_review_full/train.csv")
+        test_data  = tabular_io.read("data/yelp_review_full/test.csv")
         train_data, dev_data = sklearn.model_selection.train_test_split(train_data, test_size=0.1, random_state=args.seed)
         
     elif args.dataset == 'ChnSentiCorp':
-        tabular_io = TabularIO(text_col_id=1, label_col_id=0, tokenize_callback=jieba.cut, verbose=args.log_terminal, 
+        tabular_io = TabularIO(text_col_id=1, label_col_id=0, sep='\t', header=0, tokenize_callback=jieba.cut, encoding='utf-8', verbose=args.log_terminal, 
                                case_mode='Lower', number_mode='None')
-        train_data = tabular_io.read("data/ChnSentiCorp/train.tsv", encoding='utf-8', sep='\t', header=0)
-        dev_data   = tabular_io.read("data/ChnSentiCorp/dev.tsv", encoding='utf-8', sep='\t', header=0)
-        test_data  = tabular_io.read("data/ChnSentiCorp/test.tsv", encoding='utf-8', sep='\t', header=0)
+        train_data = tabular_io.read("data/ChnSentiCorp/train.tsv")
+        dev_data   = tabular_io.read("data/ChnSentiCorp/dev.tsv")
+        test_data  = tabular_io.read("data/ChnSentiCorp/test.tsv")
     elif args.dataset == 'THUCNews_10':
-        tabular_io = TabularIO(text_col_id=1, label_col_id=0, tokenize_callback=jieba.cut, verbose=args.log_terminal, 
+        tabular_io = TabularIO(text_col_id=1, label_col_id=0, sep='\t', tokenize_callback=jieba.cut, encoding='utf-8', verbose=args.log_terminal, 
                                case_mode='Lower', number_mode='None')
-        train_data = tabular_io.read("data/THUCNews-10/cnews.train.txt", encoding='utf-8', sep='\t')
-        dev_data   = tabular_io.read("data/THUCNews-10/cnews.val.txt", encoding='utf-8', sep='\t')
-        test_data  = tabular_io.read("data/THUCNews-10/cnews.test.txt", encoding='utf-8', sep='\t')
+        train_data = tabular_io.read("data/THUCNews-10/cnews.train.txt")
+        dev_data   = tabular_io.read("data/THUCNews-10/cnews.val.txt")
+        test_data  = tabular_io.read("data/THUCNews-10/cnews.test.txt")
         
     else:
         raise Exception("Dataset does NOT exist", args.dataset)
