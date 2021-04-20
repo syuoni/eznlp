@@ -2,22 +2,24 @@
 from typing import List
 
 from ..data.dataset import Dataset
-from .classifier import SpanClassifierConfig
+from .classifier import RelationClassifierConfig
 
 
-class SpanClassificationDataset(Dataset):
-    def __init__(self, data: List[dict], config: SpanClassifierConfig=None, neg_sampling=True):
+class RelationClassificationDataset(Dataset):
+    def __init__(self, data: List[dict], config: RelationClassifierConfig=None, neg_sampling=True):
         """
         Parameters
         ----------
         data : list of dict
-            [{'tokens': TokenSequence, 'chunks': list}, ...]
+            [{'tokens': TokenSequence, 'chunks': list, 'relations': list}, ...]
             
-            `chunks` should be [(chunk_type, chunk_start, chunk_end), ...].
-            `chunks` is an optional key, which does not exist if the data are unlabeled. 
+            `relations` should be [(relation_type, 
+                                    (head_type, head_start, head_end), 
+                                    (tail_type, tail_start, tail_end)), ...].
+            `relations` is an optional key, which does not exist if the data are unlabeled. 
         """
         if config is None:
-            config = SpanClassifierConfig()
+            config = RelationClassifierConfig()
         super().__init__(data, config)
         self.neg_sampling = neg_sampling
         
@@ -27,6 +29,8 @@ class SpanClassificationDataset(Dataset):
         
         n_chunks = sum(len(data_entry['chunks']) for data_entry in self.data)
         summary.append(f"The dataset has {n_chunks:,} chunks")
+        n_relations = sum(len(data_entry['relations']) for data_entry in self.data)
+        summary.append(f"The dataset has {n_relations:,} relations")
         n_labels = len(self.config.decoder.label2idx)
         summary.append(f"The dataset has {n_labels:,} labels")
         return "\n".join(summary)

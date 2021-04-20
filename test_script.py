@@ -39,6 +39,10 @@ from eznlp.span_classification import SpanClassificationDecoderConfig, SpanClass
 from eznlp.span_classification import SpanClassificationDataset
 from eznlp.span_classification import SpanClassificationTrainer
 
+from eznlp.relation_classification import RelationClassificationDecoderConfig, RelationClassifierConfig
+from eznlp.relation_classification import RelationClassificationDataset
+from eznlp.relation_classification import RelationClassificationTrainer
+
 from eznlp.language_modeling import MaskedLMConfig
 from eznlp.language_modeling import MaskedLMDataset, FolderLikeMaskedLMDataset, MaskedLMTrainer
 
@@ -149,4 +153,21 @@ if __name__ == '__main__':
     #     model = transformers.AutoModelForPreTraining.from_pretrained(model_name)
     #     tokenizer.save_pretrained(f"assets/transformers/{model_name}")
     #     model.save_pretrained(f"assets/transformers/{model_name}")
+    
+    json_io = JsonIO(text_key='tokens', 
+                     chunk_key='entities', 
+                     chunk_type_key='type', 
+                     chunk_start_key='start', 
+                     chunk_end_key='end', 
+                     relation_key='relations', 
+                     relation_type_key='type', 
+                     relation_head_key='head', 
+                     relation_tail_key='tail')
+    train_data = json_io.read("data/conll2004/conll04_train.json")
+    
+    config = RelationClassifierConfig()
+    train_set = RelationClassificationDataset(train_data, config)
+    train_set.build_vocabs_and_dims()
+    
+    classifier = config.instantiate()
     

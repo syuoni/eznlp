@@ -6,8 +6,8 @@ Configurations of our implementation:
     * Batch size: 64
     * Number of epochs: 100
 * `Fine-tuining` models
-    * Optimizer: AdamW (lr=1e-3/2e-3, ft_lr=1e-5)
-    * Batch size: 32
+    * Optimizer: AdamW (lr=1e-3/2e-3, ft_lr=1e-4)
+    * Batch size: 48
     * Number of epochs: 50
     * Scheduler: Learning rate warmup at the first 20% steps followed by linear decay
     * BERT/RoBERTa models are loaded with dropout rate of 0.2
@@ -16,10 +16,10 @@ Configurations of our implementation:
 | Model | Paper | Reported F1 | Our Imp. F1 (Pipline) | Our Imp. F1 (Joint) | Notes |
 |:-----:|:-----:|:-----------:|:---------------------:|:-------------------:|:---:|
 | SpERT (with CharLSTM + LSTM)| -                     | -             | 86.92 / |  | num_layers=2 |
-| SpERT (with BERT-base)    | Eberts and Ulges (2019) | 88.94 / 71.47 |  |  | 
-| SpERT (with BERT-base + LSTM) | -                   | -             |  |  | 
-| SpERT (with RoBERTa-base)        | -                | -             |  |  | 
-| SpERT (with RoBERTa-base + LSTM) | -                | -             |  |  | 
+| SpERT (with BERT-base)    | Eberts and Ulges (2019) | 88.94 / 71.47 | 89.50 / |  | 
+| SpERT (with BERT-base + LSTM) | -                   | -             | 90.21 / |  | 
+| SpERT (with RoBERTa-base)        | -                | -             | 89.91 / |  | 
+| SpERT (with RoBERTa-base + LSTM) | -                | -             | 90.30 / |  | 
 
 
 ### SciERC

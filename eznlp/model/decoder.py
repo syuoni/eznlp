@@ -17,6 +17,10 @@ class DecoderConfig(Config):
         raise NotImplementedError("Not Implemented `__repr__`")
         
     @property
+    def full_in_dim(self):
+        return self.in_dim
+        
+    @property
     def voc_dim(self):
         raise NotImplementedError("Not Implemented `voc_dim`")
         
@@ -32,7 +36,7 @@ class Decoder(torch.nn.Module):
         `Decoder` forward from hidden states to outputs. 
         """
         super().__init__()
-        self.hid2logit = torch.nn.Linear(config.in_dim, config.voc_dim)
+        self.hid2logit = torch.nn.Linear(config.full_in_dim, config.voc_dim)
         self.dropout = CombinedDropout(*config.in_drop_rates)
         reinit_layer_(self.hid2logit, 'sigmoid')
         

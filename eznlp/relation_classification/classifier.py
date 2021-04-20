@@ -4,12 +4,12 @@ import torch
 
 from ..data.wrapper import Batch
 from ..model.model import ModelConfig, Model
-from .decoder import SpanClassificationDecoderConfig
+from .decoder import RelationClassificationDecoderConfig
 
 
-class SpanClassifierConfig(ModelConfig):
+class RelationClassifierConfig(ModelConfig):
     def __init__(self, **kwargs):
-        self.decoder: SpanClassificationDecoderConfig = kwargs.pop('decoder', SpanClassificationDecoderConfig())
+        self.decoder: RelationClassificationDecoderConfig = kwargs.pop('decoder', RelationClassificationDecoderConfig())
         super().__init__(**kwargs)
         
     @property
@@ -35,28 +35,28 @@ class SpanClassifierConfig(ModelConfig):
     
     def exemplify(self, data_entry: dict, neg_sampling=True):
         example = super().exemplify(data_entry['tokens'])
-        if 'chunks' in data_entry:
-            example['spans_obj'] = self.decoder.exemplify(data_entry, with_labels=True, neg_sampling=neg_sampling)
+        if 'relations' in data_entry:
+            example['span_pairs_obj'] = self.decoder.exemplify(data_entry, with_labels=True, neg_sampling=neg_sampling)
         else:
-            example['spans_obj'] = self.decoder.exemplify(data_entry, with_labels=False, neg_sampling=neg_sampling)
+            example['span_pairs_obj'] = self.decoder.exemplify(data_entry, with_labels=False, neg_sampling=neg_sampling)
         return example
         
     
     def batchify(self, batch_examples: List[dict]):
         batch = super().batchify(batch_examples)
-        if 'spans_obj' in batch_examples[0]:
-            batch['spans_objs'] = self.decoder.batchify([ex['spans_obj'] for ex in batch_examples])
+        if 'span_pairs_obj' in batch_examples[0]:
+            batch['span_pairs_objs'] = self.decoder.batchify([ex['span_pairs_obj'] for ex in batch_examples])
         return batch
     
     
     def instantiate(self):
         # Only check validity at the most outside level
         assert self.valid
-        return SpanClassifier(self)
+        return RelationClassifier(self)
     
     
-class SpanClassifier(Model):
-    def __init__(self, config: SpanClassifierConfig):
+class RelationClassifier(Model):
+    def __init__(self, config: RelationClassifierConfig):
         super().__init__(config)
         
     def forward(self, batch: Batch, return_hidden: bool=False):

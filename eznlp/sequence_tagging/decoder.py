@@ -76,7 +76,7 @@ class SequenceTaggingDecoderConfig(DecoderConfig):
 
 class Tags(TensorWrapper):
     """
-    A wrapper of tags with chunks. 
+    A wrapper of tags with original chunks. 
     
     Parameters
     ----------

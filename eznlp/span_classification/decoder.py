@@ -28,7 +28,6 @@ class SpanClassificationDecoderConfig(DecoderConfig):
         repr_attr_dict = {key: getattr(self, key) for key in ['agg_mode', 'in_dim', 'in_drop_rates']}
         return self._repr_non_config_attrs(repr_attr_dict)
         
-        
     @property
     def idx2label(self):
         return self._idx2label
@@ -37,6 +36,10 @@ class SpanClassificationDecoderConfig(DecoderConfig):
     def idx2label(self, idx2label: List[str]):
         self._idx2label = idx2label
         self.label2idx = {l: i for i, l in enumerate(idx2label)} if idx2label is not None else None
+        
+    @property
+    def full_in_dim(self):
+        return self.in_dim + self.size_emb_dim
         
     @property
     def voc_dim(self):
@@ -74,7 +77,7 @@ class SpanClassificationDecoderConfig(DecoderConfig):
 
 class Spans(TensorWrapper):
     """
-    A wrapper of spans with chunks. 
+    A wrapper of spans with original chunks. 
     
     Parameters
     ----------
@@ -130,9 +133,9 @@ class SpanClassificationDecoder(Decoder):
         for k in range(batch.size):
             # span_hidden: (num_spans, hid_dim)
             span_hidden = torch.stack([full_hidden[k, start:end].max(dim=0).values for start, end in batch.spans_objs[k].spans])
-            # size_emb: (num_spans, emb_dim)
-            size_emb = self.size_embedding(batch.spans_objs[k].span_size_ids)
-            span_logits = self.hid2logit(self.dropout(torch.cat([span_hidden, size_emb], dim=-1)))
+            # size_embedded: (num_spans, emb_dim)
+            size_embedded = self.size_embedding(batch.spans_objs[k].span_size_ids)
+            span_logits = self.hid2logit(self.dropout(torch.cat([span_hidden, size_embedded], dim=-1)))
             batch_span_logits.append(span_logits)
             
         return batch_span_logits
@@ -150,10 +153,9 @@ class SpanClassificationDecoder(Decoder):
         
         batch_chunks = []
         for k in range(batch.size):
-            spans = batch.spans_objs[k].spans
             labels = [self.idx2label[i] for i in batch_span_logits[k].argmax(dim=-1).cpu().tolist()]
             
-            chunks = [(label, start, end) for label, (start, end) in zip(labels, spans) if label != self.none_label]
+            chunks = [(label, start, end) for label, (start, end) in zip(labels, batch.spans_objs[k].spans) if label != self.none_label]
             batch_chunks.append(chunks)
             
         return batch_chunks
