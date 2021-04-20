@@ -157,8 +157,7 @@ class RelationClassificationDecoder(Decoder):
         self.ck_label_embedding = torch.nn.Embedding(config.ck_voc_dim, config.ck_label_emb_dim)
         reinit_embedding_(self.ck_label_embedding)
         # Trainable context vector for overlapping chunks
-        self.zero_context = torch.nn.Embedding(1, config.in_dim)
-        reinit_embedding_(self.zero_context)
+        self.zero_context = torch.nn.Parameter(torch.zeros(config.in_dim))
         
         
     def get_span_pair_logits(self, batch: Batch, full_hidden: torch.Tensor):
@@ -169,15 +168,15 @@ class RelationClassificationDecoder(Decoder):
             
             head_hidden, tail_hidden, contexts = [], [], []
             for h_start, h_end, t_start, t_end in batch.span_pairs_objs[k].sp_pairs:
-                head_hidden.append(full_hidden[h_start:h_end].max(dim=0).values)
-                tail_hidden.append(full_hidden[t_start:t_end].max(dim=0).values)
+                head_hidden.append(full_hidden[k, h_start:h_end].max(dim=0).values)
+                tail_hidden.append(full_hidden[k, t_start:t_end].max(dim=0).values)
                 
                 if h_end < t_start:
-                    context = full_hidden[h_end:t_start].max(dim=0).values
+                    context = full_hidden[k, h_end:t_start].max(dim=0).values
                 elif t_end < h_start:
-                    context = full_hidden[t_end:h_start].max(dim=0).values
+                    context = full_hidden[k, t_end:h_start].max(dim=0).values
                 else:
-                    context = self.zero_context[0]
+                    context = self.zero_context
                 contexts.append(context)
             
             # head_hiddem/tail_hidden/contexts: (num_pairs, hid_dim)
@@ -211,7 +210,7 @@ class RelationClassificationDecoder(Decoder):
             
             relations = [(rel_label, (hckl, h_start, h_end), (tckl, t_start, t_end)) \
                              for rel_label, (h_start, h_end, t_start, t_end), (hckl, tckl) \
-                             in zip(rel_labels, batch.span_pairs_objs[k].span_pairs, batch.span_pairs_objs[k].ck_labels) \
+                             in zip(rel_labels, batch.span_pairs_objs[k].sp_pairs, batch.span_pairs_objs[k].ck_labels) \
                              if rel_label != self.rel_none_label]
             batch_relations.append(relations)
             
