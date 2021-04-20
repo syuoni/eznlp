@@ -6,7 +6,7 @@ from .tagger import SequenceTaggerConfig
 
 
 class SequenceTaggingDataset(Dataset):
-    def __init__(self, data: List[dict], config: SequenceTaggerConfig=None):
+    def __init__(self, data: List[dict], config: SequenceTaggerConfig=None, training: bool=True):
         """
         Parameters
         ----------
@@ -18,7 +18,7 @@ class SequenceTaggingDataset(Dataset):
         """
         if config is None:
             config = SequenceTaggerConfig()
-        super().__init__(data, config)
+        super().__init__(data, config, training=training)
         
     @property
     def summary(self):

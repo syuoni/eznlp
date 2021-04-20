@@ -35,10 +35,10 @@ class TextClassifierConfig(ModelConfig):
         self.decoder.build_vocab(*partitions)
         
     
-    def exemplify(self, data_entry: dict):
+    def exemplify(self, data_entry: dict, training: bool=True):
         example = super().exemplify(data_entry['tokens'])
         if 'label' in data_entry:
-            example['label_id'] = self.decoder.exemplify(data_entry)
+            example['label_id'] = self.decoder.exemplify(data_entry, training=training)
         return example
         
     

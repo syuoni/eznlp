@@ -84,8 +84,8 @@ class RelationClassificationDecoderConfig(DecoderConfig):
         self.idx2ck_label = [self.ck_none_label] + list(ck_counter.keys())
         self.idx2rel_label = [self.rel_none_label] + list(rel_counter.keys())
         
-    def exemplify(self, data_entry: dict, with_labels=True, neg_sampling=True):
-        return SpanPairs(data_entry, self, with_labels=with_labels, neg_sampling=neg_sampling)
+    def exemplify(self, data_entry: dict, training: bool=True):
+        return SpanPairs(data_entry, self, training=training)
         
     def batchify(self, batch_span_pairs_objs: list):
         return batch_span_pairs_objs
@@ -106,8 +106,8 @@ class SpanPairs(TensorWrapper):
          'chunks': list, 
          'relations': list}
     """
-    def __init__(self, data_entry: dict, config: RelationClassificationDecoderConfig, with_labels=True, neg_sampling=True):
-        if with_labels:
+    def __init__(self, data_entry: dict, config: RelationClassificationDecoderConfig, training: bool=True):
+        if 'relations' in data_entry:
             self.relations = data_entry['relations']
             pos_sp_pairs = [(head[1], head[2], tail[1], tail[2]) for label, head, tail in data_entry['relations']]
             pos_ck_labels = [(head[0], tail[0]) for label, head, tail in data_entry['relations']]
@@ -122,7 +122,7 @@ class SpanPairs(TensorWrapper):
                     neg_sp_pairs.append((head[1], head[2], tail[1], tail[2]))
                     neg_ck_labels.append((head[0], tail[0]))
                     
-        if neg_sampling and len(neg_sp_pairs) > config.num_neg_relations:
+        if training and len(neg_sp_pairs) > config.num_neg_relations:
             sampling_indexes = random.sample(range(len(neg_sp_pairs)), config.num_neg_relations)
             neg_sp_pairs = [neg_sp_pairs[i] for i in sampling_indexes]
             neg_ck_labels = [neg_ck_labels[i] for i in sampling_indexes]
@@ -137,7 +137,7 @@ class SpanPairs(TensorWrapper):
         self.ck_labels = pos_ck_labels + neg_ck_labels
         self.ck_label_ids = torch.tensor([[config.ck_label2idx[hckl], config.ck_label2idx[tckl]] for hckl, tckl in self.ck_labels])
         
-        if with_labels:
+        if 'relations' in data_entry:
             rel_labels = pos_rel_labels + [config.rel_none_label] * len(neg_sp_pairs)
             self.rel_label_ids = torch.tensor([config.rel_label2idx[label] for label in rel_labels])
 

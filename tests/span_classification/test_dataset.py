@@ -7,11 +7,11 @@ from eznlp.span_classification import SpanClassificationDataset
 
 
 class TestSpanClassificationDataset(object):
-    @pytest.mark.parametrize("num_neg_chunks, max_span_size, neg_sampling", [(10, 5, True), 
-                                                                             (10, 5, False), 
-                                                                             (100, 20, True), 
-                                                                             (100, 20, False)])
-    def test_spans(self, num_neg_chunks, max_span_size, neg_sampling):
+    @pytest.mark.parametrize("num_neg_chunks, max_span_size, training", [(10, 5, True), 
+                                                                         (10, 5, False), 
+                                                                         (100, 20, True), 
+                                                                         (100, 20, False)])
+    def test_spans(self, num_neg_chunks, max_span_size, training):
         tokenized_raw_text = ["This", "is", "a", "-3.14", "demo", ".", 
                               "Those", "are", "an", "APPLE", "and", "some", "glass", "bottles", "."]
         tokens = TokenSequence.from_tokenized_text(tokenized_raw_text)
@@ -24,7 +24,7 @@ class TestSpanClassificationDataset(object):
         
         config = SpanClassifierConfig(decoder=SpanClassificationDecoderConfig(num_neg_chunks=num_neg_chunks, 
                                                                               max_span_size=max_span_size))
-        dataset = SpanClassificationDataset(data, config, neg_sampling=neg_sampling)
+        dataset = SpanClassificationDataset(data, config, training=training)
         dataset.build_vocabs_and_dims()
         
         spans_obj = dataset[0]['spans_obj']
@@ -39,7 +39,7 @@ class TestSpanClassificationDataset(object):
             expected_num_spans = (num_tokens-max_span_size)*max_span_size + (max_span_size+1)*max_span_size/2
         else:
             expected_num_spans = (num_tokens+1)*num_tokens / 2
-        if neg_sampling:
+        if training:
             expected_num_spans = min(expected_num_spans, len(chunks) + num_neg_chunks)
             
         assert len(spans_obj.spans) == expected_num_spans

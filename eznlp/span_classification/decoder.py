@@ -64,8 +64,8 @@ class SpanClassificationDecoderConfig(DecoderConfig):
             logger.warning(f"OOV positive spans: {num_oov_spans} ({num_oov_spans/num_spans*100:.2f}%)")
             
         
-    def exemplify(self, data_entry: dict, with_labels=True, neg_sampling=True):
-        return Spans(data_entry, self, with_labels=with_labels, neg_sampling=neg_sampling)
+    def exemplify(self, data_entry: dict, training: bool=True):
+        return Spans(data_entry, self, training=training)
         
     def batchify(self, batch_spans_objs: list):
         return batch_spans_objs
@@ -85,8 +85,8 @@ class Spans(TensorWrapper):
         {'tokens': TokenSequence, 
          'chunks': list}
     """
-    def __init__(self, data_entry: dict, config: SpanClassificationDecoderConfig, with_labels=True, neg_sampling=True):
-        if with_labels:
+    def __init__(self, data_entry: dict, config: SpanClassificationDecoderConfig, training: bool=True):
+        if 'chunks' in data_entry:
             self.chunks = data_entry['chunks']
             pos_spans = [(start, end) for label, start, end in data_entry['chunks']]
             pos_labels = [label for label, start, end in data_entry['chunks']]
@@ -100,7 +100,7 @@ class Spans(TensorWrapper):
                 if (start, end) not in pos_spans:
                     neg_spans.append((start, end))
                     
-        if neg_sampling and len(neg_spans) > config.num_neg_chunks:
+        if training and len(neg_spans) > config.num_neg_chunks:
             neg_spans = random.sample(neg_spans, config.num_neg_chunks)
         
         self.spans = pos_spans + neg_spans
@@ -108,7 +108,7 @@ class Spans(TensorWrapper):
         self.span_size_ids = torch.tensor([end-start-1 for start, end in self.spans])
         self.span_size_ids.masked_fill_(self.span_size_ids>=config.max_span_size, config.max_span_size-1)
         
-        if with_labels:
+        if 'chunks' in data_entry:
             labels = pos_labels + [config.none_label] * len(neg_spans)
             self.label_ids = torch.tensor([config.label2idx[label] for label in labels])
 

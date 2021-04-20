@@ -8,7 +8,7 @@ from .wrapper import Batch
 
 
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self, data: List[dict], config: Config):
+    def __init__(self, data: List[dict], config: Config, training: bool=True):
         """
         Parameters
         ----------
@@ -18,6 +18,7 @@ class Dataset(torch.utils.data.Dataset):
         super().__init__()
         self.data = data
         self.config = config
+        self.training = training
         
     def __len__(self):
         return len(self.data)
@@ -48,7 +49,7 @@ class Dataset(torch.utils.data.Dataset):
         data_entry = self.data[i]
         example = {'tokenized_text': data_entry['tokens'].text}
         
-        example.update(self.config.exemplify(data_entry))
+        example.update(self.config.exemplify(data_entry, training=self.training))
         return example
     
     

@@ -31,21 +31,17 @@ class SpanClassifierConfig(ModelConfig):
             self.decoder.in_dim = self.full_hid_dim
             
         self.decoder.build_vocab(*partitions)
-        
     
-    def exemplify(self, data_entry: dict, neg_sampling=True):
+    
+    def exemplify(self, data_entry: dict, training: bool=True):
         example = super().exemplify(data_entry['tokens'])
-        if 'chunks' in data_entry:
-            example['spans_obj'] = self.decoder.exemplify(data_entry, with_labels=True, neg_sampling=neg_sampling)
-        else:
-            example['spans_obj'] = self.decoder.exemplify(data_entry, with_labels=False, neg_sampling=neg_sampling)
+        example['spans_obj'] = self.decoder.exemplify(data_entry, training=training)
         return example
-        
+    
     
     def batchify(self, batch_examples: List[dict]):
         batch = super().batchify(batch_examples)
-        if 'spans_obj' in batch_examples[0]:
-            batch['spans_objs'] = self.decoder.batchify([ex['spans_obj'] for ex in batch_examples])
+        batch['spans_objs'] = self.decoder.batchify([ex['spans_obj'] for ex in batch_examples])
         return batch
     
     

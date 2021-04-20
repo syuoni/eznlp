@@ -198,10 +198,10 @@ if __name__ == '__main__':
         dev_data   = truncate_for_bert_like(dev_data,   config.bert_like.tokenizer, verbose=args.log_terminal)
         test_data  = truncate_for_bert_like(test_data,  config.bert_like.tokenizer, verbose=args.log_terminal)
         
-    train_set = TextClassificationDataset(train_data, config)
+    train_set = TextClassificationDataset(train_data, config, training=True)
     train_set.build_vocabs_and_dims(dev_data, test_data)
-    dev_set   = TextClassificationDataset(dev_data,  train_set.config)
-    test_set  = TextClassificationDataset(test_data, train_set.config)
+    dev_set   = TextClassificationDataset(dev_data,  train_set.config, training=False)
+    test_set  = TextClassificationDataset(test_data, train_set.config, training=False)
     
     logger.info(train_set.summary)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)

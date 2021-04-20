@@ -60,7 +60,7 @@ class SequenceTaggingDecoderConfig(DecoderConfig):
         self.idx2tag = ['<pad>'] + list(counter.keys())
         
         
-    def exemplify(self, data_entry: dict):
+    def exemplify(self, data_entry: dict, training: bool=True):
         return Tags(data_entry, self)
         
     def batchify(self, batch_tags_objs: list):

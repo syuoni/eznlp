@@ -39,7 +39,7 @@ class TextClassificationDecoderConfig(DecoderConfig):
         self.idx2label = list(counter.keys())
         
         
-    def exemplify(self, data_entry: dict):
+    def exemplify(self, data_entry: dict, training: bool=True):
         return torch.tensor(self.label2idx[data_entry['label']])
         
     def batchify(self, batch_label_ids: list):

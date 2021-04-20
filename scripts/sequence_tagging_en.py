@@ -239,10 +239,10 @@ if __name__ == '__main__':
     train_data, dev_data, test_data = load_data(args)
     config = build_config(args)
     
-    train_set = SequenceTaggingDataset(train_data, config)
+    train_set = SequenceTaggingDataset(train_data, config, training=True)
     train_set.build_vocabs_and_dims(dev_data, test_data)
-    dev_set   = SequenceTaggingDataset(dev_data,  train_set.config)
-    test_set  = SequenceTaggingDataset(test_data, train_set.config)
+    dev_set   = SequenceTaggingDataset(dev_data,  train_set.config, training=False)
+    test_set  = SequenceTaggingDataset(test_data, train_set.config, training=False)
     
     logger.info(train_set.summary)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  num_workers=4, collate_fn=train_set.collate)

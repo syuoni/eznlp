@@ -17,8 +17,8 @@ class MaskedLMDataset(Dataset):
     """
     Dataset for Masked Language Modeling. 
     """
-    def __init__(self, data: List[dict], config: MaskedLMConfig):
-        super().__init__(data, config)
+    def __init__(self, data: List[dict], config: MaskedLMConfig, training: bool=True):
+        super().__init__(data, config, training=training)
         
     def __getitem__(self, i):
         data_entry = self.data[i]

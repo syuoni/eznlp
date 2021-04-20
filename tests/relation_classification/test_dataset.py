@@ -7,9 +7,9 @@ from eznlp.relation_classification import RelationClassificationDataset
 
 
 class TestRelationClassificationDataset(object):
-    @pytest.mark.parametrize("num_neg_relations, neg_sampling", [(1, True), 
-                                                                 (1, False)])
-    def test_spans(self, num_neg_relations, neg_sampling):
+    @pytest.mark.parametrize("num_neg_relations, training", [(1, True), 
+                                                             (1, False)])
+    def test_spans(self, num_neg_relations, training):
         tokenized_raw_text = ["This", "is", "a", "-3.14", "demo", ".", 
                               "Those", "are", "an", "APPLE", "and", "some", "glass", "bottles", "."]
         tokens = TokenSequence.from_tokenized_text(tokenized_raw_text)
@@ -27,7 +27,7 @@ class TestRelationClassificationDataset(object):
         data = [{'tokens': tokens, 'chunks': chunks, 'relations': relations}]
         
         config = RelationClassifierConfig(decoder=RelationClassificationDecoderConfig(num_neg_relations=num_neg_relations))
-        dataset = RelationClassificationDataset(data, config, neg_sampling=neg_sampling)
+        dataset = RelationClassificationDataset(data, config, training=training)
         dataset.build_vocabs_and_dims()
         
         span_pairs_obj = dataset[0]['span_pairs_obj']
@@ -39,7 +39,7 @@ class TestRelationClassificationDataset(object):
         
         num_chunks = len(chunks)
         expected_num_sp_pairs = num_chunks * (num_chunks-1)
-        if neg_sampling:
+        if training:
             expected_num_sp_pairs = min(expected_num_sp_pairs, len(relations) + num_neg_relations)
             
         assert len(span_pairs_obj.sp_pairs) == expected_num_sp_pairs

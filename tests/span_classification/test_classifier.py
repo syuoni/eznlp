@@ -43,7 +43,7 @@ class TestClassifier(object):
     def _setup_case(self, data, device):
         self.device = device
         
-        self.dataset = SpanClassificationDataset(data, self.config, neg_sampling=False)
+        self.dataset = SpanClassificationDataset(data, self.config, training=False)
         self.dataset.build_vocabs_and_dims()
         self.model = self.config.instantiate().to(self.device)
         

@@ -70,7 +70,11 @@ def conll2004_demo():
                   chunk_key='entities', 
                   chunk_type_key='type', 
                   chunk_start_key='start', 
-                  chunk_end_key='end').read("data/conll2004/demo.conll04_train.json")
+                  chunk_end_key='end', 
+                  relation_key='relations', 
+                  relation_type_key='type', 
+                  relation_head_key='head', 
+                  relation_tail_key='tail').read("data/conll2004/demo.conll04_train.json")
 
 
 @pytest.fixture

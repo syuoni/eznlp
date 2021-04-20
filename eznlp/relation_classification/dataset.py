@@ -6,7 +6,7 @@ from .classifier import RelationClassifierConfig
 
 
 class RelationClassificationDataset(Dataset):
-    def __init__(self, data: List[dict], config: RelationClassifierConfig=None, neg_sampling=True):
+    def __init__(self, data: List[dict], config: RelationClassifierConfig=None, training: bool=True):
         """
         Parameters
         ----------
@@ -20,8 +20,7 @@ class RelationClassificationDataset(Dataset):
         """
         if config is None:
             config = RelationClassifierConfig()
-        super().__init__(data, config)
-        self.neg_sampling = neg_sampling
+        super().__init__(data, config, training=training)
         
     @property
     def summary(self):
@@ -34,11 +33,4 @@ class RelationClassificationDataset(Dataset):
         n_labels = len(self.config.decoder.label2idx)
         summary.append(f"The dataset has {n_labels:,} labels")
         return "\n".join(summary)
-    
-    def __getitem__(self, i):
-        data_entry = self.data[i]
-        example = {'tokenized_text': data_entry['tokens'].text}
-        
-        example.update(self.config.exemplify(data_entry, neg_sampling=self.neg_sampling))
-        return example
-        
+

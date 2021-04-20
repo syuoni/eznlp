@@ -6,7 +6,7 @@ from .classifier import TextClassifierConfig
 
 
 class TextClassificationDataset(Dataset):
-    def __init__(self, data: List[dict], config: TextClassifierConfig=None):
+    def __init__(self, data: List[dict], config: TextClassifierConfig=None, training: bool=True):
         """
         Parameters
         ----------
@@ -17,7 +17,7 @@ class TextClassificationDataset(Dataset):
         """
         if config is None:
             config = TextClassifierConfig()
-        super().__init__(data, config)
+        super().__init__(data, config, training=training)
         
     @property
     def summary(self):
