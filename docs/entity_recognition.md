@@ -2,9 +2,13 @@
 Configurations of our implementation:
 * Tagging scheme: BIOES
 * Word embeddings are initialized with GloVe
-* `From-scratch` models
+* `From-scratch` models of `sequence tagging`
     * Optimizer: SGD (lr=0.1)
     * Batch size: 32
+    * Number of epochs: 100
+* `From-scratch` models of `span classification`
+    * Optimizer: Adadelta (lr=1.0)
+    * Batch size: 64
     * Number of epochs: 100
 * `Fine-tuining` models
     * Optimizer: AdamW (lr=1e-3/2e-3, ft_lr=1e-5)
@@ -20,6 +24,7 @@ Configurations of our implementation:
 | Model | Paper | Reported F1 | Our Implementation F1 | Notes |
 |:-----:|:-----:|:-----------:|:---------------------:|:-----:|
 | CharLSTM + LSTM + CRF       | Lample et al. (2016)  | 90.94         | 91.28 | num_layers=1 |
+| SpERT (with CharLSTM + LSTM)| -                     | -             | 91.22 | num_layers=2 |
 | CharCNN + LSTM + CRF        | Ma and Hovy (2016)    | 91.21         | 90.70 | num_layers=1 |
 | ELMo + Char + LSTM + CRF    | Peters et al. (2018)  | 92.22 (0.10)  | 92.60 | num_layers=1 |
 | Flair + Char + LSTM + CRF   | Akbik et al. (2018)   | 93.09♦ (0.12) | 92.60 | num_layers=1 |
@@ -27,12 +32,16 @@ Configurations of our implementation:
 | BERT-base + Softmax         | Devlin et al. (2018)  | 92.4          | 92.02 | 
 | BERT-base + CRF             | -                     | -             | 92.38 | 
 | BERT-base + LSTM + CRF      | -                     | -             | 92.40 | 
+| SpERT (with BERT-base)    | Eberts and Ulges (2019) | -             | 92.18 | 
+| SpERT (with BERT-base + LSTM) | -                   | -             | 92.50 | 
 | BERT-large + Softmax        | Devlin et al. (2018)  | 92.8          | 92.34 | 
 | BERT-large + CRF            | -                     | -             | 92.64 | 
 | BERT-large + LSTM + CRF     | -                     | -             | 92.80 | 
 | RoBERTa-base + Softmax      | Liu et al. (2019)     | -             | 92.39 | 
 | RoBERTa-base + CRF          | -                     | -             | 92.59 | 
 | RoBERTa-base + LSTM + CRF   | -                     | -             | 92.71 | 
+| SpERT (with RoBERTa-base)        | -                | -             | 92.37 | 
+| SpERT (with RoBERTa-base + LSTM) | -                | -             | 92.66 | 
 | RoBERTa-large + Softmax     | Liu et al. (2019)     | -             | 92.81 | 
 | RoBERTa-large + CRF         | -                     | -             | 93.20 | 
 | RoBERTa-large + LSTM + CRF  | -                     | -             | 93.26 | 
@@ -120,6 +129,7 @@ Configurations of our implementation:
 * Zhang, Y., and Yang, J. (2018). Chinese NER Using Lattice LSTM. *ACL 2018*.
 * Devlin, J., Chang, M. W., Lee, K., and Toutanova, K. (2018). BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding. *NAACL-HLT 2019*.
 * Liu, Y., Ott, M., Goyal, N., Du, J., Joshi, M., Chen, D., ... and Stoyanov, V. (2019). RoBERTa: A Robustly Optimized BERT Pretraining Approach. arXiv preprint arXiv:1907.11692. 
+* Eberts, M., and Ulges, A. (2019). Span-based joint entity and relation extraction with Transformer pre-training. *ECAI 2020*.
 * Cui, Y., Che, W., Liu, T., Qin, B., Yang, Z., Wang, S., and Hu, G. (2019). Pre-training with whole word masking for Chinese BERT. *EMNLP 2020*. 
 * Li, X., Yan, H., Qiu, X., and Huang, X. J. (2020). FLAT: Chinese NER using flat-lattice transformer. *ACL 2020*.
 * Ma, R., Peng, M., Zhang, Q., Wei, Z., and Huang, X. J. (2020). Simplify the Usage of Lexicon in Chinese NER. *ACL 2020*.
