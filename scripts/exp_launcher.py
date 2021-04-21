@@ -180,8 +180,35 @@ if __name__ == '__main__':
                        ["--bert_drop_rate 0.2"], 
                        ["", "--use_interm2"], 
                        ["--bert_arch BERT_base", "--bert_arch RoBERTa_base"]]
-            
-            
+    
+    elif args.task.startswith('relation_classification'):
+        if args.command in ('fs', 'from_scratch'):
+            options = [["--load_for_pipeline --load_path cache/conll2004_ner/20210421-075646-442088"], 
+                       ["--num_epochs 100"], 
+                       ["--optimizer Adadelta --lr 1.0", 
+                        "--optimizer AdamW --lr 1e-3", 
+                        "--optimizer SGD --lr 0.1"], 
+                       ["--batch_size 64"], 
+                       ["--num_layers 1", "--num_layers 2"], 
+                       ["--num_neg_relations 200", "--num_neg_relations 100"], 
+                       ["--ck_size_emb_dim 25", "--ck_size_emb_dim 10"], 
+                       ["--ck_label_emb_dim 25", "--ck_label_emb_dim 10"], 
+                       ["fs"]]
+        else:
+            options = [["--load_for_pipeline --load_path cache/conll2004_ner/20210421-085304-107725"], 
+                       ["--num_epochs 50"], 
+                       ["--optimizer AdamW --lr 1e-3 --finetune_lr 5e-5", 
+                        "--optimizer AdamW --lr 1e-3 --finetune_lr 1e-4", 
+                        "--optimizer AdamW --lr 2e-3 --finetune_lr 5e-5", 
+                        "--optimizer AdamW --lr 2e-3 --finetune_lr 1e-4"], 
+                       ["--batch_size 48"], 
+                       ["--scheduler LinearDecayWithWarmup"], 
+                       ["ft"], 
+                       ["--bert_drop_rate 0.2"], 
+                       ["", "--use_interm2"], 
+                       ["--bert_arch BERT_base", "--bert_arch RoBERTa_base"]]
+    
+    
     if args.num_workers > 0:
         options.insert(0, ["--no_log_terminal"])
         

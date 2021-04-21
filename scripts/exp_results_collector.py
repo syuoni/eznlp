@@ -39,6 +39,7 @@ if __name__ == '__main__':
             try:
                 exp_res = dict_re.search(log_text).group()
                 exp_res = eval(exp_res)
+                exp_res['logging_timestamp'] = fn.split('/')[2]
                 
                 if "Accuracy" in log_text:
                     dev_acc, test_acc = acc_re.findall(log_text)

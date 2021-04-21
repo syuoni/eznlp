@@ -213,7 +213,7 @@ if __name__ == '__main__':
     count_params(classifier)
     
     logger.info(header_format("Training", sep='-'))
-    trainer = build_trainer(TextClassificationTrainer, classifier, device, args)
+    trainer = build_trainer(TextClassificationTrainer, classifier, device, len(train_loader), args)
     if args.pdb: 
         pdb.set_trace()
         

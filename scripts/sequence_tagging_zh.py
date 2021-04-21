@@ -229,7 +229,7 @@ if __name__ == '__main__':
     count_params(tagger)
     
     logger.info(header_format("Training", sep='-'))
-    trainer = build_trainer(SequenceTaggingTrainer, tagger, device, args)
+    trainer = build_trainer(SequenceTaggingTrainer, tagger, device, len(train_loader), args)
     if args.pdb: 
         pdb.set_trace()
         

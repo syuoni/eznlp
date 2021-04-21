@@ -21,7 +21,7 @@ from eznlp.sequence_tagging import SequenceTaggingDataset
 from eznlp.sequence_tagging import SequenceTaggingTrainer
 from eznlp.pretrained import GloVe, ELMoConfig, BertLikeConfig, FlairConfig
 from eznlp.training.utils import count_params
-from eznlp.training.evaluation import evaluate_entity_recognition
+from eznlp.training.evaluation import evaluate_entity_recognition, union_set_chunks
 
 from utils import load_data, build_trainer, header_format
 
@@ -38,6 +38,8 @@ def parse_arguments(parser: argparse.ArgumentParser):
                             help="dataset name")
     group_data.add_argument('--scheme', type=str, default='BIOES', 
                             help="sequence tagging scheme", choices=['BIOES', 'BIO2'])
+    group_data.add_argument('--save_for_pipeline', default=False, action='store_true', 
+                            help="whether to save predicted chunks for pipeline")
     
     group_train = parser.add_argument_group('training hyper-parameters')
     group_train.add_argument('--seed', type=int, default=515, 
@@ -254,7 +256,7 @@ if __name__ == '__main__':
     count_params(tagger)
     
     logger.info(header_format("Training", sep='-'))
-    trainer = build_trainer(SequenceTaggingTrainer, tagger, device, args)
+    trainer = build_trainer(SequenceTaggingTrainer, tagger, device, len(train_loader), args)
     if args.pdb: 
         pdb.set_trace()
         
@@ -271,6 +273,26 @@ if __name__ == '__main__':
     evaluate_entity_recognition(trainer, dev_set)
     logger.info("Evaluating on test-set")
     evaluate_entity_recognition(trainer, test_set)
+    
+    
+    # Replace gold chunks with predicted chunks for pipeline
+    if args.save_for_pipeline:
+        train_set_chunks_pred = trainer.predict_chunks(train_set)
+        train_set_chunks_gold = [ex['chunks'] for ex in train_data]
+        train_set_chunks_union = union_set_chunks(train_set_chunks_gold, train_set_chunks_pred)
+        for ex, chunks_union in zip(train_data, train_set_chunks_union):
+            ex['chunks'] = chunks_union
+        
+        dev_set_chunks_pred = trainer.predict_chunks(dev_set)
+        for ex, chunks_pred in zip(dev_data, dev_set_chunks_pred):
+            ex['chunks'] = chunks_pred
+        
+        test_set_chunks_pred = trainer.predict_chunks(test_set)
+        for ex, chunks_pred in zip(test_data, test_set_chunks_pred):
+            ex['chunks'] = chunks_pred
+            
+        torch.save((train_data, dev_data, test_data), f"{save_path}/predicted-chunks.data")
+    
     
     logger.info(" ".join(sys.argv))
     logger.info(pprint.pformat(args.__dict__))

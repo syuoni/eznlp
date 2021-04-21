@@ -36,6 +36,10 @@ def parse_arguments(parser: argparse.ArgumentParser):
     group_data = parser.add_argument_group('dataset')
     group_data.add_argument('--dataset', type=str, default='conll2004', 
                             help="dataset name")
+    group_data.add_argument('--load_for_pipeline', default=False, action='store_true', 
+                            help="whether to load predicted chunks for pipeline")
+    group_data.add_argument('--load_path', type=str, default="", 
+                            help="path to load predicted chunks for pipeline")
     
     group_train = parser.add_argument_group('training hyper-parameters')
     group_train.add_argument('--seed', type=int, default=515, 
@@ -247,7 +251,12 @@ if __name__ == '__main__':
     if device.type.startswith('cuda'):
         torch.cuda.set_device(device)
         
-    train_data, dev_data, test_data = load_data(args)
+    if args.load_for_pipeline:
+        logger.info(f"Loading data from {args.load_path} for pipeline...")
+        train_data, dev_data, test_data = torch.load(f"{args.load_path}/predicted-chunks.data")
+    else:
+        logger.info(f"Loading original data {args.dataset}...")
+        train_data, dev_data, test_data = load_data(args)
     config = build_config(args)
     
     train_set = RelationClassificationDataset(train_data, config, training=True)
@@ -265,7 +274,7 @@ if __name__ == '__main__':
     count_params(classifier)
     
     logger.info(header_format("Training", sep='-'))
-    trainer = build_trainer(RelationClassificationTrainer, classifier, device, args)
+    trainer = build_trainer(RelationClassificationTrainer, classifier, device, len(train_loader), args)
     if args.pdb: 
         pdb.set_trace()
         

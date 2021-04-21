@@ -125,7 +125,7 @@ def header_format(content: str, sep='=', width=100):
 
 
 
-def build_trainer(trainer_cls, model, device, args: argparse.Namespace):
+def build_trainer(trainer_cls, model, device, num_train_batches: int, args: argparse.Namespace):
     param_groups = [{'params': model.pretrained_parameters(), 'lr': args.finetune_lr}]
     param_groups.append({'params': collect_params(model, param_groups), 'lr': args.lr})
     assert check_param_groups(model, param_groups)
@@ -140,8 +140,8 @@ def build_trainer(trainer_cls, model, device, args: argparse.Namespace):
         schedule_by_step = True
         # lr_lambda = LRLambda.constant_lr()
         num_warmup_epochs = max(2, args.num_epochs // 5)
-        lr_lambda = LRLambda.linear_decay_lr_with_warmup(num_warmup_steps=len(train_loader)*num_warmup_epochs, 
-                                                         num_total_steps=len(train_loader)*args.num_epochs)
+        lr_lambda = LRLambda.linear_decay_lr_with_warmup(num_warmup_steps=num_train_batches*num_warmup_epochs, 
+                                                         num_total_steps=num_train_batches*args.num_epochs)
         scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
     
     return trainer_cls(model, optimizer=optimizer, scheduler=scheduler, schedule_by_step=schedule_by_step,
