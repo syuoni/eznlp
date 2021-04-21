@@ -22,8 +22,9 @@ from eznlp.span_classification import SpanClassificationTrainer
 from eznlp.pretrained import GloVe, ELMoConfig, BertLikeConfig, FlairConfig
 from eznlp.training.utils import LRLambda
 from eznlp.training.utils import count_params, collect_params, check_param_groups
+from eznlp.training.evaluation import evaluate_entity_recognition
 
-from utils import load_data, evaluate_entity_recognition, header_format
+from utils import load_data, header_format
 
 
 def parse_arguments(parser: argparse.ArgumentParser):

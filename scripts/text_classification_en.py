@@ -23,8 +23,9 @@ from eznlp.pretrained import GloVe, ELMoConfig, BertLikeConfig, FlairConfig
 from eznlp.pretrained.bert_like import truncate_for_bert_like
 from eznlp.training.utils import LRLambda
 from eznlp.training.utils import count_params, collect_params, check_param_groups
+from eznlp.training.evaluation import evaluate_text_classification
 
-from utils import load_data, evaluate_text_classification, header_format
+from utils import load_data, header_format
 
 
 def parse_arguments(parser: argparse.ArgumentParser):
