@@ -264,7 +264,7 @@ def truncate_for_bert_like(data: list, tokenizer: transformers.PreTrainedTokeniz
         head_len = tokenizer.model_max_length // 4
         tail_len = max_len - head_len
         
-    n_truncated = 0
+    num_truncated = 0
     for data_entry in tqdm.tqdm(data, disable=not verbose, ncols=100, desc="Truncating data"):
         tokens = data_entry['tokens']
         nested_sub_tokens = _tokenized2nested(tokens.raw_text, tokenizer)
@@ -292,8 +292,8 @@ def truncate_for_bert_like(data: list, tokenizer: transformers.PreTrainedTokeniz
                 assert head_end > 0 and tail_begin > 0
                 data_entry['tokens'] = tokens[:head_end] + tokens[-tail_begin:]
                 
-            n_truncated += 1
+            num_truncated += 1
             
-    logger.info(f"Truncated sequences: {n_truncated} ({n_truncated/len(data)*100:.2f}%)")
+    logger.info(f"Truncated sequences: {num_truncated} ({num_truncated/len(data)*100:.2f}%)")
     return data
 

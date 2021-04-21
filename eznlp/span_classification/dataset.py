@@ -24,9 +24,8 @@ class SpanClassificationDataset(Dataset):
     def summary(self):
         summary = [super().summary]
         
-        n_chunks = sum(len(data_entry['chunks']) for data_entry in self.data)
-        summary.append(f"The dataset has {n_chunks:,} chunks")
-        n_labels = len(self.config.decoder.label2idx)
-        summary.append(f"The dataset has {n_labels:,} labels")
+        num_chunks = sum(len(data_entry['chunks']) for data_entry in self.data)
+        summary.append(f"The dataset has {num_chunks:,} chunks")
+        num_labels = len(self.config.decoder.label2idx)
+        summary.append(f"The dataset has {num_labels:,} chunk-types")
         return "\n".join(summary)
-

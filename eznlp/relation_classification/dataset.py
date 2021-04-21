@@ -26,11 +26,14 @@ class RelationClassificationDataset(Dataset):
     def summary(self):
         summary = [super().summary]
         
-        n_chunks = sum(len(data_entry['chunks']) for data_entry in self.data)
-        summary.append(f"The dataset has {n_chunks:,} chunks")
-        n_relations = sum(len(data_entry['relations']) for data_entry in self.data)
-        summary.append(f"The dataset has {n_relations:,} relations")
-        n_labels = len(self.config.decoder.label2idx)
-        summary.append(f"The dataset has {n_labels:,} labels")
+        num_chunks = sum(len(data_entry['chunks']) for data_entry in self.data)
+        summary.append(f"The dataset has {num_chunks:,} chunks")
+        num_ck_labels = len(self.config.decoder.ck_label2idx)
+        summary.append(f"The dataset has {num_ck_labels:,} chunk-types")
+        
+        num_relations = sum(len(data_entry['relations']) for data_entry in self.data)
+        summary.append(f"The dataset has {num_relations:,} relations")
+        num_rel_labels = len(self.config.decoder.rel_label2idx)
+        summary.append(f"The dataset has {num_rel_labels:,} relation-types")
         return "\n".join(summary)
 

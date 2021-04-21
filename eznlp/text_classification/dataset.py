@@ -23,7 +23,7 @@ class TextClassificationDataset(Dataset):
     def summary(self):
         summary = [super().summary]
         
-        n_labels = len(self.config.decoder.label2idx)
-        summary.append(f"The dataset has {n_labels:,} labels")
+        num_labels = len(self.config.decoder.label2idx)
+        summary.append(f"The dataset has {num_labels:,} categories")
         return "\n".join(summary)
     

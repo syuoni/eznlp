@@ -26,18 +26,18 @@ class Dataset(torch.utils.data.Dataset):
     @property
     def summary(self):
         summary = []
-        n_seqs = len(self.data)
-        summary.append(f"The dataset consists {n_seqs:,} sequences")
+        num_seqs = len(self.data)
+        summary.append(f"The dataset consists {num_seqs:,} sequences")
         
         if 'raw_idx' in self.data[0]:
-            n_raws = len({data_entry['raw_idx'] for data_entry in self.data})
-            summary.append(f"\tbuilt from {n_raws:,} raw entries")
+            num_raws = len({data_entry['raw_idx'] for data_entry in self.data})
+            summary.append(f"\tbuilt from {num_raws:,} raw entries")
             
         seq_lens = [len(data_entry['tokens']) for data_entry in self.data]
         ave_len = sum(seq_lens) / len(seq_lens)
         max_len = max(seq_lens)
         summary.append(f"The average sequence length is {ave_len:,.1f}")
-        summary.append(f"The max sequence length is {max_len:,}")
+        summary.append(f"The maximum sequence length is {max_len:,}")
         return "\n".join(summary)
         
     

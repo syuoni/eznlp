@@ -83,11 +83,11 @@ class FolderLikeMaskedLMDataset(torch.utils.data.IterableDataset):
                 continue
             
             sub_tokens_from_text = self.config.tokenizer.tokenize(text)
-            n_examples = len(sub_tokens_from_text) // cut_len
+            num_examples = len(sub_tokens_from_text) // cut_len
             if len(sub_tokens_from_text) % cut_len >= (cut_len / 10):
-                n_examples += 1
+                num_examples += 1
             
-            for k in range(n_examples):
+            for k in range(num_examples):
                 sub_tokens = sub_tokens_from_text[(cut_len*k):(cut_len*(k+1))]
                 yield self.config.exemplify(sub_tokens)
                 
