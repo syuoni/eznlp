@@ -156,8 +156,10 @@ if __name__ == '__main__':
     
     elif args.task.startswith('span_classification'):
         if args.command in ('fs', 'from_scratch'):
-            options = [["--num_epochs 100"], 
-                       ["--optimizer AdamW --lr 1e-3", 
+            options = [["--save_for_pipeline"], 
+                       ["--num_epochs 100"], 
+                       ["--optimizer Adadelta --lr 1.0", 
+                        "--optimizer AdamW --lr 1e-3", 
                         "--optimizer SGD --lr 0.1"], 
                        ["--batch_size 64"], 
                        ["--num_layers 1", "--num_layers 2"], 
@@ -166,13 +168,12 @@ if __name__ == '__main__':
                        ["--size_emb_dim 50", "--size_emb_dim 25", "--size_emb_dim 10"], 
                        ["fs"]]
         else:
-            options = [["--num_epochs 50"], 
-                       ["--optimizer AdamW --lr 5e-4 --finetune_lr 1e-5", 
-                        "--optimizer AdamW --lr 1e-3 --finetune_lr 1e-5", 
-                        "--optimizer AdamW --lr 2e-3 --finetune_lr 1e-5", 
-                        "--optimizer AdamW --lr 5e-4 --finetune_lr 2e-5", 
-                        "--optimizer AdamW --lr 1e-3 --finetune_lr 2e-5", 
-                        "--optimizer AdamW --lr 2e-3 --finetune_lr 2e-5"], 
+            options = [["--save_for_pipeline"], 
+                       ["--num_epochs 50"], 
+                       ["--optimizer AdamW --lr 1e-3 --finetune_lr 5e-5", 
+                        "--optimizer AdamW --lr 1e-3 --finetune_lr 1e-4", 
+                        "--optimizer AdamW --lr 2e-3 --finetune_lr 5e-5", 
+                        "--optimizer AdamW --lr 2e-3 --finetune_lr 1e-4"], 
                        ["--batch_size 48"], 
                        ["--scheduler LinearDecayWithWarmup"], 
                        ["ft"], 

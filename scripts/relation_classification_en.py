@@ -20,11 +20,10 @@ from eznlp.relation_classification import RelationClassificationDecoderConfig, R
 from eznlp.relation_classification import RelationClassificationDataset
 from eznlp.relation_classification import RelationClassificationTrainer
 from eznlp.pretrained import GloVe, ELMoConfig, BertLikeConfig, FlairConfig
-from eznlp.training.utils import LRLambda
-from eznlp.training.utils import count_params, collect_params, check_param_groups
+from eznlp.training.utils import count_params
 from eznlp.training.evaluation import evaluate_relation_extraction
 
-from utils import load_data, header_format
+from utils import load_data, build_trainer, header_format
 
 
 def parse_arguments(parser: argparse.ArgumentParser):
@@ -266,27 +265,7 @@ if __name__ == '__main__':
     count_params(classifier)
     
     logger.info(header_format("Training", sep='-'))
-    param_groups = [{'params': classifier.pretrained_parameters(), 'lr': args.finetune_lr}]
-    param_groups.append({'params': collect_params(classifier, param_groups), 'lr': args.lr})
-    assert check_param_groups(classifier, param_groups)
-    optimizer = getattr(torch.optim, args.optimizer)(param_groups)
-    
-    schedule_by_step = False
-    if args.scheduler == 'None':
-        scheduler = None
-    elif args.scheduler == 'ReduceLROnPlateau':
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=5)
-    else:
-        schedule_by_step = True
-        # lr_lambda = LRLambda.constant_lr()
-        num_warmup_epochs = max(2, args.num_epochs // 5)
-        lr_lambda = LRLambda.linear_decay_lr_with_warmup(num_warmup_steps=len(train_loader)*num_warmup_epochs, 
-                                                         num_total_steps=len(train_loader)*args.num_epochs)
-        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
-        
-        
-    trainer = RelationClassificationTrainer(classifier, optimizer=optimizer, scheduler=scheduler, schedule_by_step=schedule_by_step,
-                                            device=device, grad_clip=args.grad_clip, use_amp=args.use_amp)
+    trainer = build_trainer(RelationClassificationTrainer, classifier, device, args)
     if args.pdb: 
         pdb.set_trace()
         

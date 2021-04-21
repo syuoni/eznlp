@@ -26,6 +26,6 @@ class SequenceTaggingDataset(Dataset):
         
         num_chunks = sum(len(data_entry['chunks']) for data_entry in self.data)
         summary.append(f"The dataset has {num_chunks:,} chunks")
-        num_labels = len(self.config.decoder.label2idx)
-        summary.append(f"The dataset has {num_labels:,} chunk-types")
+        num_tags = len(self.config.decoder.tag2idx)
+        summary.append(f"The dataset has {num_tags:,} tag-types")
         return "\n".join(summary)

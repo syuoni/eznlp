@@ -4,11 +4,14 @@ import logging
 import spacy
 import jieba
 import sklearn.model_selection
+import torch
 
 from eznlp.token import LexiconTokenizer
 from eznlp.metrics import precision_recall_f1_report
 from eznlp.pretrained import Vectors
 from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO
+from eznlp.training.utils import LRLambda
+from eznlp.training.utils import count_params, collect_params, check_param_groups
 
 logger = logging.getLogger(__name__)
 
@@ -114,10 +117,32 @@ def load_data(args: argparse.Namespace):
 
 
 
-
 def header_format(content: str, sep='=', width=100):
     side_width = max(width - len(content) - 2, 10)
     left_width = side_width // 2
     right_width = side_width - left_width
     return f"{sep*left_width} {content} {sep*right_width}"
+
+
+
+def build_trainer(trainer_cls, model, device, args: argparse.Namespace):
+    param_groups = [{'params': model.pretrained_parameters(), 'lr': args.finetune_lr}]
+    param_groups.append({'params': collect_params(model, param_groups), 'lr': args.lr})
+    assert check_param_groups(model, param_groups)
+    optimizer = getattr(torch.optim, args.optimizer)(param_groups)
     
+    schedule_by_step = False
+    if args.scheduler == 'None':
+        scheduler = None
+    elif args.scheduler == 'ReduceLROnPlateau':
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=5)
+    else:
+        schedule_by_step = True
+        # lr_lambda = LRLambda.constant_lr()
+        num_warmup_epochs = max(2, args.num_epochs // 5)
+        lr_lambda = LRLambda.linear_decay_lr_with_warmup(num_warmup_steps=len(train_loader)*num_warmup_epochs, 
+                                                         num_total_steps=len(train_loader)*args.num_epochs)
+        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
+    
+    return trainer_cls(model, optimizer=optimizer, scheduler=scheduler, schedule_by_step=schedule_by_step,
+                       device=device, grad_clip=args.grad_clip, use_amp=args.use_amp)
