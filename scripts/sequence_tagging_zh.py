@@ -21,7 +21,7 @@ from eznlp.pretrained import Vectors, BertLikeConfig
 from eznlp.training.utils import LRLambda
 from eznlp.training.utils import count_params, collect_params, check_param_groups
 
-from utils import load_data, evaluate_sequence_tagging, header_format
+from utils import load_data, evaluate_entity_recognition, header_format
 
 
 def parse_arguments(parser: argparse.ArgumentParser):
@@ -263,9 +263,9 @@ if __name__ == '__main__':
     trainer = SequenceTaggingTrainer(tagger, device=device)
     
     logger.info("Evaluating on dev-set")
-    evaluate_sequence_tagging(trainer, dev_set)
+    evaluate_entity_recognition(trainer, dev_set)
     logger.info("Evaluating on test-set")
-    evaluate_sequence_tagging(trainer, test_set)
+    evaluate_entity_recognition(trainer, test_set)
     
     logger.info(" ".join(sys.argv))
     logger.info(pprint.pformat(args.__dict__))

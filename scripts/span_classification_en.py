@@ -23,7 +23,7 @@ from eznlp.pretrained import GloVe, ELMoConfig, BertLikeConfig, FlairConfig
 from eznlp.training.utils import LRLambda
 from eznlp.training.utils import count_params, collect_params, check_param_groups
 
-from utils import load_data, evaluate_sequence_tagging, header_format
+from utils import load_data, evaluate_entity_recognition, header_format
 
 
 def parse_arguments(parser: argparse.ArgumentParser):
@@ -34,7 +34,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
                              help="whether log to terminal")
     
     group_data = parser.add_argument_group('dataset')
-    group_data.add_argument('--dataset', type=str, default='conll2003', 
+    group_data.add_argument('--dataset', type=str, default='conll2004', 
                             help="dataset name")
     
     group_train = parser.add_argument_group('training hyper-parameters')
@@ -296,9 +296,9 @@ if __name__ == '__main__':
     trainer = SpanClassificationTrainer(classifier, device=device)
     
     logger.info("Evaluating on dev-set")
-    evaluate_sequence_tagging(trainer, dev_set)
+    evaluate_entity_recognition(trainer, dev_set)
     logger.info("Evaluating on test-set")
-    evaluate_sequence_tagging(trainer, test_set)
+    evaluate_entity_recognition(trainer, test_set)
     
     logger.info(" ".join(sys.argv))
     logger.info(pprint.pformat(args.__dict__))

@@ -16,14 +16,14 @@ import flair
 from eznlp import auto_device
 from eznlp.config import ConfigDict
 from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig, CharConfig
-from eznlp.sequence_tagging import SequenceTaggingDecoderConfig, SequenceTaggerConfig
-from eznlp.sequence_tagging import SequenceTaggingDataset
-from eznlp.sequence_tagging import SequenceTaggingTrainer
+from eznlp.relation_classification import RelationClassificationDecoderConfig, RelationClassifierConfig
+from eznlp.relation_classification import RelationClassificationDataset
+from eznlp.relation_classification import RelationClassificationTrainer
 from eznlp.pretrained import GloVe, ELMoConfig, BertLikeConfig, FlairConfig
 from eznlp.training.utils import LRLambda
 from eznlp.training.utils import count_params, collect_params, check_param_groups
 
-from utils import load_data, evaluate_entity_recognition, header_format
+from utils import load_data, evaluate_relation_extraction, header_format
 
 
 def parse_arguments(parser: argparse.ArgumentParser):
@@ -34,10 +34,8 @@ def parse_arguments(parser: argparse.ArgumentParser):
                              help="whether log to terminal")
     
     group_data = parser.add_argument_group('dataset')
-    group_data.add_argument('--dataset', type=str, default='conll2003', 
+    group_data.add_argument('--dataset', type=str, default='conll2004', 
                             help="dataset name")
-    group_data.add_argument('--scheme', type=str, default='BIOES', 
-                            help="sequence tagging scheme", choices=['BIOES', 'BIO2'])
     
     group_train = parser.add_argument_group('training hyper-parameters')
     group_train.add_argument('--seed', type=int, default=515, 
@@ -46,7 +44,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
                              help="whether to use amp")
     group_train.add_argument('--num_epochs', type=int, default=100, 
                              help="number of epochs")
-    group_train.add_argument('--batch_size', type=int, default=10, 
+    group_train.add_argument('--batch_size', type=int, default=64, 
                              help="batch size")
     group_train.add_argument('--grad_clip', type=float, default=5.0, 
                              help="gradient clip (negative values are set to `None`)")
@@ -69,8 +67,16 @@ def parse_arguments(parser: argparse.ArgumentParser):
                              help="dropout rate")
     group_model.add_argument('--use_locked_drop', default=False, action='store_true', 
                              help="whether to use locked dropout")
-    group_model.add_argument('--dec_arch', type=str, default='CRF', 
-                             help="decoder architecture")
+    group_model.add_argument('--agg_mode', type=str, default='max_pooling', 
+                             help="aggregating mode")
+    group_model.add_argument('--num_neg_relations', type=int, default=100, 
+                             help="number of sampling negative relations")
+    group_model.add_argument('--max_span_size', type=int, default=10, 
+                             help="maximum span size")
+    group_model.add_argument('--ck_size_emb_dim', type=int, default=25, 
+                             help="chunk span size embedding dim")
+    group_model.add_argument('--ck_label_emb_dim', type=int, default=25, 
+                             help="chunk label embedding dim")
     
     subparsers = parser.add_subparsers(dest='command', help="sub-commands")
     parser_fs = subparsers.add_parser('from_scratch', aliases=['fs'], 
@@ -113,7 +119,12 @@ def build_config(args: argparse.Namespace):
     else:
         drop_rates = (args.drop_rate, 0.0, 0.0)
         
-    decoder_config = SequenceTaggingDecoderConfig(arch=args.dec_arch, scheme=args.scheme, in_drop_rates=drop_rates)
+    decoder_config = RelationClassificationDecoderConfig(agg_mode=args.agg_mode, 
+                                                         num_neg_relations=args.num_neg_relations, 
+                                                         max_span_size=args.max_span_size, 
+                                                         ck_size_emb_dim=args.ck_size_emb_dim, 
+                                                         ck_label_emb_dim=args.ck_label_emb_dim, 
+                                                         in_drop_rates=drop_rates)
     
     if args.command in ('from_scratch', 'fs'):
         if args.emb_dim in (50, 100, 200):
@@ -196,15 +207,15 @@ def build_config(args: argparse.Namespace):
     else:
         raise Exception("No sub-command specified")
         
-    return SequenceTaggerConfig(ohots=ohots_config, 
-                                nested_ohots=nested_ohots_config, 
-                                intermediate1=interm1_config, 
-                                elmo=elmo_config, 
-                                flair_fw=flair_fw_config, 
-                                flair_bw=flair_bw_config, 
-                                bert_like=bert_like_config, 
-                                intermediate2=interm2_config, 
-                                decoder=decoder_config)
+    return RelationClassifierConfig(ohots=ohots_config, 
+                                    nested_ohots=nested_ohots_config, 
+                                    intermediate1=interm1_config, 
+                                    elmo=elmo_config, 
+                                    flair_fw=flair_fw_config, 
+                                    flair_bw=flair_bw_config, 
+                                    bert_like=bert_like_config, 
+                                    intermediate2=interm2_config, 
+                                    decoder=decoder_config)
 
 
 if __name__ == '__main__':
@@ -239,24 +250,24 @@ if __name__ == '__main__':
     train_data, dev_data, test_data = load_data(args)
     config = build_config(args)
     
-    train_set = SequenceTaggingDataset(train_data, config, training=True)
+    train_set = RelationClassificationDataset(train_data, config, training=True)
     train_set.build_vocabs_and_dims(dev_data, test_data)
-    dev_set   = SequenceTaggingDataset(dev_data,  train_set.config, training=False)
-    test_set  = SequenceTaggingDataset(test_data, train_set.config, training=False)
+    dev_set   = RelationClassificationDataset(dev_data,  train_set.config, training=False)
+    test_set  = RelationClassificationDataset(test_data, train_set.config, training=False)
     
     logger.info(train_set.summary)
-    train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  num_workers=4, collate_fn=train_set.collate)
-    dev_loader   = torch.utils.data.DataLoader(dev_set,   batch_size=args.batch_size, shuffle=False, num_workers=4, collate_fn=dev_set.collate)
+    train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
+    dev_loader   = torch.utils.data.DataLoader(dev_set,   batch_size=args.batch_size, shuffle=False, collate_fn=dev_set.collate)
     
     
     logger.info(header_format("Building", sep='-'))
-    tagger = config.instantiate().to(device)
-    count_params(tagger)
+    classifier = config.instantiate().to(device)
+    count_params(classifier)
     
     logger.info(header_format("Training", sep='-'))
-    param_groups = [{'params': tagger.pretrained_parameters(), 'lr': args.finetune_lr}]
-    param_groups.append({'params': collect_params(tagger, param_groups), 'lr': args.lr})
-    assert check_param_groups(tagger, param_groups)
+    param_groups = [{'params': classifier.pretrained_parameters(), 'lr': args.finetune_lr}]
+    param_groups.append({'params': collect_params(classifier, param_groups), 'lr': args.lr})
+    assert check_param_groups(classifier, param_groups)
     optimizer = getattr(torch.optim, args.optimizer)(param_groups)
     
     schedule_by_step = False
@@ -273,24 +284,24 @@ if __name__ == '__main__':
         scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
         
         
-    trainer = SequenceTaggingTrainer(tagger, optimizer=optimizer, scheduler=scheduler, schedule_by_step=schedule_by_step,
-                                     device=device, grad_clip=args.grad_clip, use_amp=args.use_amp)
+    trainer = RelationClassificationTrainer(classifier, optimizer=optimizer, scheduler=scheduler, schedule_by_step=schedule_by_step,
+                                            device=device, grad_clip=args.grad_clip, use_amp=args.use_amp)
     if args.pdb: 
         pdb.set_trace()
         
     def save_callback(model):
-        torch.save(model, f"{save_path}/{args.scheme}-{config.name}.pth")
+        torch.save(model, f"{save_path}/{config.name}.pth")
     trainer.train_steps(train_loader=train_loader, dev_loader=dev_loader, num_epochs=args.num_epochs, 
                         save_callback=save_callback, save_by_loss=False)
     
     logger.info(header_format("Evaluating", sep='-'))
-    tagger = torch.load(f"{save_path}/{args.scheme}-{config.name}.pth", map_location=device)
-    trainer = SequenceTaggingTrainer(tagger, device=device)
+    classifier = torch.load(f"{save_path}/{config.name}.pth", map_location=device)
+    trainer = RelationClassificationTrainer(classifier, device=device)
     
     logger.info("Evaluating on dev-set")
-    evaluate_entity_recognition(trainer, dev_set)
+    evaluate_relation_extraction(trainer, dev_set)
     logger.info("Evaluating on test-set")
-    evaluate_entity_recognition(trainer, test_set)
+    evaluate_relation_extraction(trainer, test_set)
     
     logger.info(" ".join(sys.argv))
     logger.info(pprint.pformat(args.__dict__))

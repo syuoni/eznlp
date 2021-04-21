@@ -114,7 +114,15 @@ def load_data(args: argparse.Namespace):
 
 
 
-def evaluate_sequence_tagging(trainer, dataset):
+def evaluate_text_classification(trainier, dataset):
+    set_labels_pred = trainier.predict_labels(dataset)
+    set_labels_gold = [ex['label'] for ex in dataset.data]
+    
+    acc = trainier.evaluate(set_labels_gold, set_labels_pred)
+    logger.info(f"Accuracy: {acc*100:2.3f}%")
+
+
+def evaluate_entity_recognition(trainer, dataset):
     set_chunks_pred = trainer.predict_chunks(dataset)
     set_chunks_gold = [ex['chunks'] for ex in dataset.data]
     
@@ -124,14 +132,16 @@ def evaluate_sequence_tagging(trainer, dataset):
     logger.info(f"Macro F1-score: {macro_f1*100:2.3f}%")
 
 
-def evaluate_text_classification(trainier, dataset):
-    set_labels_pred = trainier.predict_labels(dataset)
-    set_labels_gold = [ex['label'] for ex in dataset.data]
+def evaluate_relation_extraction(trainer, dataset):
+    set_relations_pred = trainer.predict_relations(dataset)
+    set_relations_gold = [ex['relations'] for ex in dataset.data]
     
-    acc = trainier.evaluate(set_labels_gold, set_labels_pred)
-    logger.info(f"Accuracy: {acc*100:2.3f}%")
-    
+    scores, ave_scores = precision_recall_f1_report(set_relations_gold, set_relations_pred)
+    micro_f1, macro_f1 = ave_scores['micro']['f1'], ave_scores['macro']['f1']
+    logger.info(f"Micro F1-score: {micro_f1*100:2.3f}%")
+    logger.info(f"Macro F1-score: {macro_f1*100:2.3f}%")
 
+    
 def header_format(content: str, sep='=', width=100):
     side_width = max(width - len(content) - 2, 10)
     left_width = side_width // 2
