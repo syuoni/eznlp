@@ -44,4 +44,5 @@ class TestRelationClassificationDataset(object):
         if training:
             assert (span_pairs_obj.rel_label_ids[:len(relations)] != config.decoder.rel_none_idx).all().item()
             assert (span_pairs_obj.rel_label_ids[len(relations):] == config.decoder.rel_none_idx).all().item()
-        
+        else:
+            assert not hasattr(span_pairs_obj, 'label_ids')

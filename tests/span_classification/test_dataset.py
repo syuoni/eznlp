@@ -44,4 +44,5 @@ class TestSpanClassificationDataset(object):
         if training:
             assert (spans_obj.label_ids[:len(chunks)] != config.decoder.none_idx).all().item()
             assert (spans_obj.label_ids[len(chunks):] == config.decoder.none_idx).all().item()
-        
+        else:
+            assert not hasattr(spans_obj, 'label_ids')
