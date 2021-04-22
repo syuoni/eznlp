@@ -37,6 +37,10 @@ class BertLikeConfig(Config):
         super().__init__(**kwargs)
         
         
+    @property
+    def name(self):
+        return self.arch
+    
     def __getstate__(self):
         state = self.__dict__.copy()
         state['bert_like'] = None

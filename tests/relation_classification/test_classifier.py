@@ -46,6 +46,7 @@ class TestClassifier(object):
         self.dataset = RelationClassificationDataset(data, self.config, training=False)
         self.dataset.build_vocabs_and_dims()
         self.model = self.config.instantiate().to(self.device)
+        assert isinstance(self.config.name, str) and len(self.config.name) > 0
         
         
     @pytest.mark.parametrize("enc_arch", ['Conv', 'LSTM'])

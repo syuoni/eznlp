@@ -15,6 +15,10 @@ class TextClassificationDecoderConfig(DecoderConfig):
         self.idx2label = kwargs.pop('idx2label', None)
         super().__init__(**kwargs)
         
+    @property
+    def name(self):
+        return self.agg_mode
+        
     def __repr__(self):
         repr_attr_dict = {key: getattr(self, key) for key in ['agg_mode', 'in_dim', 'in_drop_rates']}
         return self._repr_non_config_attrs(repr_attr_dict)

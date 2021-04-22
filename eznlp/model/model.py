@@ -29,7 +29,7 @@ class ModelConfig(Config):
     _embedder_names = ['ohots', 'mhots', 'nested_ohots']
     _encoder_names = ['intermediate1', 'intermediate2']
     _pretrained_names = ['elmo', 'bert_like', 'flair_fw', 'flair_bw']
-    _all_names = _embedder_names + _encoder_names + _pretrained_names
+    _all_names = _embedder_names + ['intermediate1'] + _pretrained_names + ['intermediate2']
     
     def __init__(self, **kwargs):
         self.ohots = kwargs.pop('ohots', ConfigDict({'text': OneHotConfig(field='text')}))
@@ -51,21 +51,8 @@ class ModelConfig(Config):
         
     @property
     def name(self):
-        elements = []
+        return self._name_sep.join(getattr(self, name).name for name in self._all_names if getattr(self, name) is not None)
         
-        if self.intermediate1 is not None:
-            elements.append(self.intermediate1.arch)
-            
-        for name in self._pretrained_names:
-            if getattr(self, name) is not None:
-                elements.append(getattr(self, name).arch)
-                
-        if self.intermediate2 is not None:
-            elements.append(self.intermediate2.arch)
-            
-        return "-".join(elements)
-        
-    
     def __repr__(self):
         return self._repr_config_attrs(self.__dict__)
     

@@ -22,7 +22,7 @@ class TextClassifierConfig(ModelConfig):
         
     @property
     def name(self):
-        return "-".join([super().name, self.decoder.agg_mode])
+        return self._name_sep.join([super().name, self.decoder.name])
         
     def build_vocabs_and_dims(self, *partitions):
         super().build_vocabs_and_dims(*partitions)

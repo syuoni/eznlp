@@ -47,6 +47,10 @@ class EncoderConfig(Config):
         
         
     @property
+    def name(self):
+        return self.arch
+        
+    @property
     def out_dim(self):
         if self.arch.lower() == 'identity':
             out_dim = self.in_dim

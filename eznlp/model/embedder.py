@@ -37,6 +37,10 @@ class OneHotConfig(Config):
         return all(attr is not None for name, attr in self.__dict__.items() if name != 'vectors')
         
     @property
+    def name(self):
+        return self.field
+        
+    @property
     def out_dim(self):
         return self.emb_dim
         
@@ -109,6 +113,10 @@ class MultiHotConfig(Config):
         self.use_emb = kwargs.pop('use_emb', True)
         self.emb_dim = kwargs.pop('emb_dim', 50)
         super().__init__(**kwargs)
+    
+    @property
+    def name(self):
+        return self.field
     
     @property
     def out_dim(self):

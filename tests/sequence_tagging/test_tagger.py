@@ -49,6 +49,7 @@ class TestTagger(object):
         self.dataset = SequenceTaggingDataset(data, self.config)
         self.dataset.build_vocabs_and_dims()
         self.model = self.config.instantiate().to(self.device)
+        assert isinstance(self.config.name, str) and len(self.config.name) > 0
         
         
     @pytest.mark.parametrize("enc_arch", ['Conv', 'Gehring', 'LSTM', 'GRU', 'Transformer'])

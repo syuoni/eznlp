@@ -21,6 +21,10 @@ class SequenceTaggingDecoderConfig(DecoderConfig):
         self.idx2tag = kwargs.pop('idx2tag', None)
         super().__init__(**kwargs)
         
+    @property
+    def name(self):
+        return f"{self.arch}({self.scheme})"
+        
     def __repr__(self):
         repr_attr_dict = {key: getattr(self, key) for key in ['arch', 'in_dim', 'scheme', 'in_drop_rates']}
         return self._repr_non_config_attrs(repr_attr_dict)

@@ -20,7 +20,7 @@ class SequenceTaggerConfig(ModelConfig):
         
     @property
     def name(self):
-        return "-".join([super().name, self.decoder.arch])
+        return self._name_sep.join([super().name, self.decoder.arch])
         
     def build_vocabs_and_dims(self, *partitions):
         super().build_vocabs_and_dims(*partitions)
