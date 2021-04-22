@@ -3,7 +3,7 @@ from typing import List
 from collections import Counter
 import torch
 
-from ..data.wrapper import TensorWrapper, Batch
+from ..data.wrapper import Batch, TargetWrapper
 from ..nn.utils import unpad_seqs
 from ..model.decoder import DecoderConfig, Decoder
 from .transition import ChunksTagsTranslator
@@ -65,7 +65,7 @@ class SequenceTaggingDecoderConfig(DecoderConfig):
         
         
     def exemplify(self, data_entry: dict, training: bool=True):
-        return Tags(data_entry, self)
+        return Tags(data_entry, self, training=training)
         
     def batchify(self, batch_tags_objs: list):
         return batch_tags_objs
@@ -78,7 +78,7 @@ class SequenceTaggingDecoderConfig(DecoderConfig):
 
 
 
-class Tags(TensorWrapper):
+class Tags(TargetWrapper):
     """
     A wrapper of tags with original chunks. 
     
@@ -88,10 +88,13 @@ class Tags(TensorWrapper):
         {'tokens': TokenSequence, 
          'chunks': list}
     """
-    def __init__(self, data_entry: dict, config: SequenceTaggingDecoderConfig):
-        self.chunks = data_entry['chunks']
-        self.tags = config.translator.chunks2tags(data_entry['chunks'], len(data_entry['tokens']))
-        self.tag_ids = torch.tensor([config.tag2idx[t] for t in self.tags], dtype=torch.long)
+    def __init__(self, data_entry: dict, config: SequenceTaggingDecoderConfig, training: bool=True):
+        super().__init__(training)
+        
+        self.chunks = data_entry.get('chunks', None)
+        if training:
+            self.tags = config.translator.chunks2tags(data_entry['chunks'], len(data_entry['tokens']))
+            self.tag_ids = torch.tensor([config.tag2idx[t] for t in self.tags], dtype=torch.long)
 
 
 

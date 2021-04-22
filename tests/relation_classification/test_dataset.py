@@ -34,13 +34,14 @@ class TestRelationClassificationDataset(object):
         assert span_pairs_obj.relations == relations
         assert set((rel[1][1], rel[1][2], rel[2][1], rel[2][2]) for rel in relations).issubset(set(span_pairs_obj.sp_pairs))
         assert (span_pairs_obj.sp_pair_size_ids+1).tolist() == [[he-hs, te-ts] for hs, he, ts, te in span_pairs_obj.sp_pairs]
-        assert (span_pairs_obj.rel_label_ids[:len(relations)] != config.decoder.rel_none_idx).all().item()
-        assert (span_pairs_obj.rel_label_ids[len(relations):] == config.decoder.rel_none_idx).all().item()
         
         num_chunks = len(chunks)
         expected_num_sp_pairs = num_chunks * (num_chunks-1)
         if training:
             expected_num_sp_pairs = min(expected_num_sp_pairs, len(relations) + num_neg_relations)
-            
         assert len(span_pairs_obj.sp_pairs) == expected_num_sp_pairs
+        
+        if training:
+            assert (span_pairs_obj.rel_label_ids[:len(relations)] != config.decoder.rel_none_idx).all().item()
+            assert (span_pairs_obj.rel_label_ids[len(relations):] == config.decoder.rel_none_idx).all().item()
         

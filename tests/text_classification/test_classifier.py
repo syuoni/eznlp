@@ -13,8 +13,9 @@ class TestClassifier(object):
     def _assert_batch_consistency(self):
         self.model.eval()
         
-        batch012 = self.dataset.collate([self.dataset[i] for i in range(0, 3)]).to(self.device)
-        batch123 = self.dataset.collate([self.dataset[i] for i in range(1, 4)]).to(self.device)
+        batch = [self.dataset[i] for i in range(4)]
+        batch012 = self.dataset.collate(batch[:3]).to(self.device)
+        batch123 = self.dataset.collate(batch[1:]).to(self.device)
         losses012, hidden012 = self.model(batch012, return_hidden=True)
         losses123, hidden123 = self.model(batch123, return_hidden=True)
         

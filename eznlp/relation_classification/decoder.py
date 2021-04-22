@@ -5,7 +5,7 @@ import random
 import logging
 import torch
 
-from ..data.wrapper import TensorWrapper, Batch
+from ..data.wrapper import TargetWrapper, Batch
 from ..nn.init import reinit_embedding_
 from ..model.decoder import DecoderConfig, Decoder
 
@@ -99,7 +99,7 @@ class RelationClassificationDecoderConfig(DecoderConfig):
 
 
 
-class SpanPairs(TensorWrapper):
+class SpanPairs(TargetWrapper):
     """
     A wrapper of span-pairs with original relations. 
     
@@ -111,8 +111,10 @@ class SpanPairs(TensorWrapper):
          'relations': list}
     """
     def __init__(self, data_entry: dict, config: RelationClassificationDecoderConfig, training: bool=True):
-        if 'relations' in data_entry:
-            self.relations = data_entry['relations']
+        super().__init__(training)
+        
+        self.relations = data_entry.get('relations', None)
+        if training:
             pos_sp_pairs = [(head[1], head[2], tail[1], tail[2]) for label, head, tail in data_entry['relations']]
             pos_ck_labels = [(head[0], tail[0]) for label, head, tail in data_entry['relations']]
             pos_rel_labels = [label for label, head, tail in data_entry['relations']]
@@ -141,7 +143,7 @@ class SpanPairs(TensorWrapper):
         self.ck_labels = pos_ck_labels + neg_ck_labels
         self.ck_label_ids = torch.tensor([[config.ck_label2idx[hckl], config.ck_label2idx[tckl]] for hckl, tckl in self.ck_labels])
         
-        if 'relations' in data_entry:
+        if training:
             rel_labels = pos_rel_labels + [config.rel_none_label] * len(neg_sp_pairs)
             self.rel_label_ids = torch.tensor([config.rel_label2idx[label] for label in rel_labels])
 

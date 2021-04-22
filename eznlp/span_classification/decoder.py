@@ -5,7 +5,7 @@ import random
 import logging
 import torch
 
-from ..data.wrapper import TensorWrapper, Batch
+from ..data.wrapper import TargetWrapper, Batch
 from ..nn.init import reinit_embedding_
 from ..model.decoder import DecoderConfig, Decoder
 
@@ -80,7 +80,7 @@ class SpanClassificationDecoderConfig(DecoderConfig):
 
 
 
-class Spans(TensorWrapper):
+class Spans(TargetWrapper):
     """
     A wrapper of spans with original chunks. 
     
@@ -91,8 +91,10 @@ class Spans(TensorWrapper):
          'chunks': list}
     """
     def __init__(self, data_entry: dict, config: SpanClassificationDecoderConfig, training: bool=True):
-        if 'chunks' in data_entry:
-            self.chunks = data_entry['chunks']
+        super().__init__(training)
+        
+        self.chunks = data_entry.get('chunks', None)
+        if training:
             pos_spans = [(start, end) for label, start, end in data_entry['chunks']]
             pos_labels = [label for label, start, end in data_entry['chunks']]
         else:
@@ -113,7 +115,7 @@ class Spans(TensorWrapper):
         self.span_size_ids = torch.tensor([end-start-1 for start, end in self.spans])
         self.span_size_ids.masked_fill_(self.span_size_ids>=config.max_span_size, config.max_span_size-1)
         
-        if 'chunks' in data_entry:
+        if training:
             labels = pos_labels + [config.none_label] * len(neg_spans)
             self.label_ids = torch.tensor([config.label2idx[label] for label in labels])
 

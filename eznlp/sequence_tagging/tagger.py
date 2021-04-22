@@ -35,15 +35,13 @@ class SequenceTaggerConfig(ModelConfig):
         
     def exemplify(self, data_entry: dict, training: bool=True):
         example = super().exemplify(data_entry['tokens'])
-        if 'chunks' in data_entry:
-            example['tags_obj'] = self.decoder.exemplify(data_entry, training=training)
+        example['tags_obj'] = self.decoder.exemplify(data_entry, training=training)
         return example
         
     
     def batchify(self, batch_examples: List[dict]):
         batch = super().batchify(batch_examples)
-        if 'tags_obj' in batch_examples[0]:
-            batch['tags_objs'] = self.decoder.batchify([ex['tags_obj'] for ex in batch_examples])
+        batch['tags_objs'] = self.decoder.batchify([ex['tags_obj'] for ex in batch_examples])
         return batch
         
         

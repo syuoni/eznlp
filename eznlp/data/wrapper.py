@@ -84,9 +84,9 @@ class TensorWrapper(object):
         
     def cuda(self, *args, **kwargs):
         return self._apply_to_tensors(lambda x: x.cuda(*args, **kwargs))
-    
-    
-    
+
+
+
 class Batch(TensorWrapper):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -101,4 +101,19 @@ class Batch(TensorWrapper):
     @property
     def step(self):
         return self.seq_lens.max().item()
-        
+
+
+class TargetWrapper(TensorWrapper):
+    """
+    A wrapper of the modeling target. 
+    
+    Notes
+    -----
+    `training` is a flag adapting the contents of the current object. 
+    If `training` is True, the object should prepare tensors for training, and also store the ground truth for evaluation. 
+    If `training` is False, the object should only store the ground truth for evaluation. 
+    """
+    def __init__(self, training: bool=True):
+        # Do NOT check the attributes (being tensors or not) for a target object
+        self.training = training
+

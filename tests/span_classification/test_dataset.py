@@ -31,8 +31,6 @@ class TestSpanClassificationDataset(object):
         assert spans_obj.chunks == chunks
         assert set((ck[1], ck[2]) for ck in chunks).issubset(set(spans_obj.spans))
         assert (spans_obj.span_size_ids+1).tolist() == [e-s for s, e in spans_obj.spans]
-        assert (spans_obj.label_ids[:len(chunks)] != config.decoder.none_idx).all().item()
-        assert (spans_obj.label_ids[len(chunks):] == config.decoder.none_idx).all().item()
         
         num_tokens = len(tokens)
         if num_tokens > max_span_size:
@@ -41,6 +39,9 @@ class TestSpanClassificationDataset(object):
             expected_num_spans = (num_tokens+1)*num_tokens / 2
         if training:
             expected_num_spans = min(expected_num_spans, len(chunks) + num_neg_chunks)
-            
         assert len(spans_obj.spans) == expected_num_spans
+        
+        if training:
+            assert (spans_obj.label_ids[:len(chunks)] != config.decoder.none_idx).all().item()
+            assert (spans_obj.label_ids[len(chunks):] == config.decoder.none_idx).all().item()
         
