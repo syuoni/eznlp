@@ -5,6 +5,7 @@ import logging
 import torch
 
 from ..data.wrapper import Batch
+from ..data.dataset import Dataset
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +83,10 @@ class Trainer(object):
         full dataset, although it also compatibly evaluates over a batch. 
         """
         raise NotImplementedError("Not Implemented `evaluate`")
+        
+        
+    def predict(self, dataset: Dataset, batch_size: int=32):
+        raise NotImplementedError("Not Implemented `predict`")
         
         
     def train_epoch(self, dataloader: torch.utils.data.DataLoader):

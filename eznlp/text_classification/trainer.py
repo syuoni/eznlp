@@ -24,7 +24,7 @@ class TextClassificationTrainer(Trainer):
         return sum(yp == yg for yp, yg in zip(y_gold, y_pred)) / len(y_gold)
         
     
-    def predict_labels(self, dataset: TextClassificationDataset, batch_size=32):
+    def predict(self, dataset: TextClassificationDataset, batch_size=32):
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, collate_fn=dataset.collate)
         
         self.model.eval()

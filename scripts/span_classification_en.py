@@ -285,17 +285,17 @@ if __name__ == '__main__':
     
     # Replace gold chunks with predicted chunks for pipeline
     if args.save_for_pipeline:
-        train_set_chunks_pred = trainer.predict_chunks(train_set)
+        train_set_chunks_pred = trainer.predict(train_set)
         train_set_chunks_gold = [ex['chunks'] for ex in train_data]
         train_set_chunks_union = union_set_chunks(train_set_chunks_gold, train_set_chunks_pred)
         for ex, chunks_union in zip(train_data, train_set_chunks_union):
             ex['chunks'] = chunks_union
         
-        dev_set_chunks_pred = trainer.predict_chunks(dev_set)
+        dev_set_chunks_pred = trainer.predict(dev_set)
         for ex, chunks_pred in zip(dev_data, dev_set_chunks_pred):
             ex['chunks'] = chunks_pred
         
-        test_set_chunks_pred = trainer.predict_chunks(test_set)
+        test_set_chunks_pred = trainer.predict(test_set)
         for ex, chunks_pred in zip(test_data, test_set_chunks_pred):
             ex['chunks'] = chunks_pred
             

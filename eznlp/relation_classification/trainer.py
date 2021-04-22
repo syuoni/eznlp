@@ -24,7 +24,7 @@ class RelationClassificationTrainer(Trainer):
         scores, ave_scores = precision_recall_f1_report(y_gold, y_pred)
         return ave_scores['micro']['f1']
     
-    def predict_relations(self, dataset: RelationClassificationDataset, batch_size=32):
+    def predict(self, dataset: RelationClassificationDataset, batch_size=32):
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, collate_fn=dataset.collate)
         
         self.model.eval()

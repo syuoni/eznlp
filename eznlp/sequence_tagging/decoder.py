@@ -102,7 +102,13 @@ class SequenceTaggingDecoder(Decoder):
         self.translator = config.translator
         self.idx2tag = config.idx2tag
         self.tag2idx = config.tag2idx
-
+    
+    def decode_tags(self, batch: Batch, full_hidden: torch.Tensor):
+        raise NotImplementedError("Not Implemented `decode_tags`")
+        
+    def decode(self, batch: Batch, full_hidden: torch.Tensor):
+        batch_tags = self.decode_tags(batch, full_hidden)
+        return [self.translator.tags2chunks(tags) for tags in batch_tags]
 
 
 class SequenceTaggingSoftMaxDecoder(SequenceTaggingDecoder):
@@ -118,23 +124,20 @@ class SequenceTaggingSoftMaxDecoder(SequenceTaggingDecoder):
         # `torch.stack`: Concatenates sequence of tensors along a new dimension. 
         losses = torch.stack(losses, dim=0)
         return losses
-    
-    
-    def decode(self, batch: Batch, full_hidden: torch.Tensor):
+        
+    def decode_tags(self, batch: Batch, full_hidden: torch.Tensor):
         # logits: (batch, step, tag_dim)
         logits = self.hid2logit(full_hidden)
         
         best_paths = logits.argmax(dim=-1)
         batch_tag_ids = unpad_seqs(best_paths, batch.seq_lens)
         return [[self.idx2tag[i] for i in tag_ids] for tag_ids in batch_tag_ids]
-    
-    
-    
+
+
 class SequenceTaggingCRFDecoder(SequenceTaggingDecoder):
     def __init__(self, config: SequenceTaggingDecoderConfig):
         super().__init__(config)
         self.crf = CRF(tag_dim=config.voc_dim, pad_idx=config.pad_idx, batch_first=True)
-        
         
     def forward(self, batch: Batch, full_hidden: torch.Tensor):
         # logits: (batch, step, tag_dim)
@@ -145,9 +148,8 @@ class SequenceTaggingCRFDecoder(SequenceTaggingDecoder):
                                                         padding_value=self.crf.pad_idx)
         losses = self.crf(logits, batch_tag_ids, mask=batch.mask)
         return losses
-    
-    
-    def decode(self, batch: Batch, full_hidden: torch.Tensor):
+        
+    def decode_tags(self, batch: Batch, full_hidden: torch.Tensor):
         # logits: (batch, step, tag_dim)
         logits = self.hid2logit(full_hidden)
         
