@@ -2,5 +2,5 @@
 from .dataset import RelationClassificationDataset
 from .decoder import RelationClassificationDecoderConfig
 from .classifier import RelationClassifierConfig
-from .joint import JointClassifierConfig
 from .trainer import RelationClassificationTrainer
+from .joint import JointClassifierConfig, JointTrainer

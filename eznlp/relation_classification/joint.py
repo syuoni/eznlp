@@ -73,9 +73,9 @@ class JointClassifier(Model):
         
         # Return `hidden` for the `decode` method, to avoid duplicated computation. 
         if return_hidden:
-            return (ck_losses, rel_losses), full_hidden
+            return ck_losses + rel_losses, full_hidden
         else:
-            return (ck_losses, rel_losses)
+            return ck_losses + rel_losses
         
         
     def decode(self, batch: Batch, full_hidden: torch.Tensor=None):
@@ -90,5 +90,48 @@ class JointClassifier(Model):
         batch_relations_pred = self.rel_decoder.decode(batch, full_hidden)
         
         return (batch_chunks_pred, batch_relations_pred)
+    
+    
+
+from ..training.trainer import Trainer
+from ..metrics import precision_recall_f1_report
+
+class JointTrainer(Trainer):
+    def __init__(self, model: torch.nn.Module, **kwargs):
+        super().__init__(model, num_metrics=2, **kwargs)
+        
+        
+    def forward_batch(self, batch):
+        losses, hidden = self.model(batch, return_hidden=True)
+        loss = losses.mean()
+        
+        batch_chunks_pred, batch_relations_pred = self.model.decode(batch, hidden)
+        batch_chunks_gold = [spans_obj.chunks for spans_obj in batch.spans_objs]
+        batch_relations_gold = [span_pairs_obj.relations for span_pairs_obj in batch.span_pairs_objs]
+        return loss, (batch_chunks_gold, batch_chunks_pred), (batch_relations_gold, batch_relations_pred)
+        
+    
+    def evaluate(self, *set_y: List[List[list]]):
+        (ck_y_gold, ck_y_pred), (rel_y_gold, rel_y_pred) = set_y 
+        ck_scores, ck_ave_scores = precision_recall_f1_report(ck_y_gold, ck_y_pred)
+        rel_scores, rel_ave_scores = precision_recall_f1_report(rel_y_gold, rel_y_pred)
+        return (ck_ave_scores['micro']['f1'], rel_ave_scores['micro']['f1'])
+    
+    
+    def predict(self, dataset, batch_size=32):
+        dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, collate_fn=dataset.collate)
+        
+        self.model.eval()
+        set_chunks, set_relations = [], []
+        with torch.no_grad():
+            for batch in dataloader:
+                batch.to(self.device)
+                batch_chunks, batch_relations = self.model.decode(batch)
+                set_chunks.extend(batch_chunks)
+                set_relations.extend(batch_relations)
+        return set_chunks, set_relations
+    
+    
+    
     
     

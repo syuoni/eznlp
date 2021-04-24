@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from typing import List
 import torch
 
 from ..training.trainer import Trainer
@@ -16,12 +17,13 @@ class TextClassificationTrainer(Trainer):
         
         batch_labels_pred = self.model.decode(batch, hidden)
         batch_labels_gold = [self.model.decoder.idx2label[label_id] for label_id in batch.label_ids.cpu().tolist()]
-        return loss, batch_labels_gold, batch_labels_pred
+        return loss, (batch_labels_gold, batch_labels_pred)
         
     
-    def evaluate(self, y_gold: list, y_pred: list):
+    def evaluate(self, *set_y: List[List[list]]):
+        (y_gold, y_pred), = set_y
         # Use accuracy
-        return sum(yp == yg for yp, yg in zip(y_gold, y_pred)) / len(y_gold)
+        return (sum(yp == yg for yp, yg in zip(y_gold, y_pred)) / len(y_gold), )
         
     
     def predict(self, dataset: TextClassificationDataset, batch_size=32):

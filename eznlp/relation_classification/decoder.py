@@ -136,7 +136,10 @@ class SpanPairs(TargetWrapper):
         (2) If `chunks_pred` is valid, `chunks_gold` is known for training but not for evaluation (e.g., joint modeling).
             In this case, this method should typically be invoked inside `Model.forward` or `Model.decode`. 
         """
-        assert not self.is_built
+        # assert not self.is_built
+        if self.is_built:
+            return self
+        
         self.is_built = True
         
         if chunks_pred is None:
