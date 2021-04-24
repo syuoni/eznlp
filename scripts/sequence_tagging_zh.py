@@ -12,12 +12,12 @@ import torch
 import transformers
 
 from eznlp import auto_device
+from eznlp.vectors import Vectors
 from eznlp.config import ConfigDict
-from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig, SoftLexiconConfig
+from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig, SoftLexiconConfig, BertLikeConfig
 from eznlp.sequence_tagging import SequenceTaggingDecoderConfig, SequenceTaggerConfig
 from eznlp.sequence_tagging import SequenceTaggingDataset
 from eznlp.sequence_tagging import SequenceTaggingTrainer
-from eznlp.pretrained import Vectors, BertLikeConfig
 from eznlp.training.utils import count_params
 from eznlp.training.evaluation import evaluate_entity_recognition
 

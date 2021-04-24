@@ -7,7 +7,7 @@ import transformers
 import flair
 
 from eznlp import auto_device
-from eznlp.pretrained import Vectors, GloVe
+from eznlp.vectors import Vectors, GloVe
 from eznlp.io import TabularIO, ConllIO, JsonIO
 
 

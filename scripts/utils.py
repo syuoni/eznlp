@@ -8,7 +8,7 @@ import torch
 
 from eznlp.token import LexiconTokenizer
 from eznlp.metrics import precision_recall_f1_report
-from eznlp.pretrained import Vectors
+from eznlp.vectors import Vectors
 from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO
 from eznlp.training.utils import LRLambda
 from eznlp.training.utils import count_params, collect_params, check_param_groups

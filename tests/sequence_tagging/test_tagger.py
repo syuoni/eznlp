@@ -7,7 +7,7 @@ from eznlp.data import Dataset
 from eznlp.config import ConfigDict
 from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig
 from eznlp.model import NestedOneHotConfig, CharConfig, SoftLexiconConfig
-from eznlp.pretrained import ELMoConfig, BertLikeConfig, FlairConfig
+from eznlp.model import ELMoConfig, BertLikeConfig, FlairConfig
 from eznlp.sequence_tagging import SequenceTaggingDecoderConfig, SequenceTaggerConfig
 from eznlp.sequence_tagging import SequenceTaggingTrainer
 

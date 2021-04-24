@@ -14,13 +14,14 @@ import transformers
 import flair
 
 from eznlp import auto_device
+from eznlp.vectors import GloVe
 from eznlp.config import ConfigDict
 from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig, CharConfig
+from eznlp.model import ELMoConfig, BertLikeConfig, FlairConfig
+from eznlp.model.bert_like import truncate_for_bert_like
 from eznlp.text_classification import TextClassificationDecoderConfig, TextClassifierConfig
 from eznlp.text_classification import TextClassificationDataset
 from eznlp.text_classification import TextClassificationTrainer
-from eznlp.pretrained import GloVe, ELMoConfig, BertLikeConfig, FlairConfig
-from eznlp.pretrained.bert_like import truncate_for_bert_like
 from eznlp.training.utils import count_params
 from eznlp.training.evaluation import evaluate_text_classification
 

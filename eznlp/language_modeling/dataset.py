@@ -7,7 +7,7 @@ import torch
 from ..data.wrapper import Batch
 from ..data.dataset import Dataset
 from .model import MaskedLMConfig
-from ..pretrained.bert_like import _tokenized2nested
+from ..model.bert_like import _tokenized2nested
 
 logger = logging.getLogger(__name__)
 

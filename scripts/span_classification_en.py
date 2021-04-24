@@ -14,12 +14,13 @@ import transformers
 import flair
 
 from eznlp import auto_device
+from eznlp.vectors import GloVe
 from eznlp.config import ConfigDict
 from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig, CharConfig
+from eznlp.model import ELMoConfig, BertLikeConfig, FlairConfig
 from eznlp.span_classification import SpanClassificationDecoderConfig, SpanClassifierConfig
 from eznlp.span_classification import SpanClassificationDataset
 from eznlp.span_classification import SpanClassificationTrainer
-from eznlp.pretrained import GloVe, ELMoConfig, BertLikeConfig, FlairConfig
 from eznlp.training.utils import count_params
 from eznlp.training.evaluation import evaluate_entity_recognition, union_set_chunks
 

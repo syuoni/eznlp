@@ -21,11 +21,11 @@ from eznlp.config import ConfigList, ConfigDict
 from eznlp.token import Token, TokenSequence, LexiconTokenizer
 from eznlp.metrics import precision_recall_f1_report
 from eznlp.data import Batch, Dataset
+from eznlp.vectors import Vectors, GloVe, Senna
 from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig
 from eznlp.model import NestedOneHotConfig, CharConfig, SoftLexiconConfig
-from eznlp.pretrained import Vectors, GloVe, Senna
-from eznlp.pretrained import ELMoConfig, BertLikeConfig, FlairConfig
-from eznlp.pretrained.bert_like import truncate_for_bert_like
+from eznlp.model import ELMoConfig, BertLikeConfig, FlairConfig
+from eznlp.model.bert_like import truncate_for_bert_like
 from eznlp.training.utils import collect_params, check_param_groups
 
 from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, BratIO, JsonIO

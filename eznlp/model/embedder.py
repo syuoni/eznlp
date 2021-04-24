@@ -8,7 +8,7 @@ import torchtext
 from ..token import TokenSequence
 from ..nn.init import reinit_embedding_, reinit_embedding_by_pretrained_, reinit_layer_
 from ..config import Config
-from ..pretrained.vectors import Vectors
+from ..vectors import Vectors
 
 logger = logging.getLogger(__name__)
 
