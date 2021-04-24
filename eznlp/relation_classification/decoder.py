@@ -8,6 +8,7 @@ import torch
 from ..data.wrapper import TargetWrapper, Batch
 from ..nn.init import reinit_embedding_
 from ..model.decoder import DecoderConfig, Decoder
+from ..training.evaluation import union_chunks
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +90,7 @@ class RelationClassificationDecoderConfig(DecoderConfig):
         self.idx2rel_label = [self.rel_none_label] + list(rel_counter.keys())
         
     def exemplify(self, data_entry: dict, training: bool=True):
+        # return {'span_pairs_obj': SpanPairs(data_entry, self, training=training)}
         return SpanPairs(data_entry, self, training=training)
         
     def batchify(self, batch_span_pairs_objs: list):
@@ -113,23 +115,53 @@ class SpanPairs(TargetWrapper):
     def __init__(self, data_entry: dict, config: RelationClassificationDecoderConfig, training: bool=True):
         super().__init__(training)
         
+        self.chunks_gold = data_entry.get('chunks', None)
         self.relations = data_entry.get('relations', None)
-        if training:
-            pos_sp_pairs = [(head[1], head[2], tail[1], tail[2]) for label, head, tail in data_entry['relations']]
-            pos_ck_labels = [(head[0], tail[0]) for label, head, tail in data_entry['relations']]
-            pos_rel_labels = [label for label, head, tail in data_entry['relations']]
+        
+        self.num_neg_relations = config.num_neg_relations
+        self.max_span_size = config.max_span_size
+        self.ck_none_label = config.ck_none_label
+        self.ck_label2idx = config.ck_label2idx
+        self.rel_none_label = config.rel_none_label
+        self.rel_label2idx = config.rel_label2idx
+        self.is_built = False
+        
+        
+    def build(self, chunks_pred: List[tuple]=None):
+        """Generate negative samples and build up tensors. 
+        
+        This method is assumed to be invoked only once. 
+        (1) If `chunks_pred` is `None`, `chunks_gold` is assumed to be known for both training and evaluation (e.g., pipeline modeling).
+            In this case, this method should typically be invoked inside `Dataset.exemplify`. 
+        (2) If `chunks_pred` is valid, `chunks_gold` is known for training but not for evaluation (e.g., joint modeling).
+            In this case, this method should typically be invoked inside `Model.forward` or `Model.decode`. 
+        """
+        assert not self.is_built
+        self.is_built = True
+        
+        if chunks_pred is None:
+            chunks = self.chunks_gold
+        elif self.training:
+            chunks = union_chunks(self.chunks_gold, chunks_pred)
+        else:
+            chunks = chunks_pred
+        
+        if self.training:
+            pos_sp_pairs = [(head[1], head[2], tail[1], tail[2]) for label, head, tail in self.relations]
+            pos_ck_labels = [(head[0], tail[0]) for label, head, tail in self.relations]
+            pos_rel_labels = [label for label, head, tail in self.relations]
         else:
             pos_sp_pairs, pos_ck_labels, pos_rel_labels = [], [], []
         
         neg_sp_pairs, neg_ck_labels = [], []
-        for head in data_entry['chunks']:
-            for tail in data_entry['chunks']:
+        for head in chunks:
+            for tail in chunks:
                 if head != tail and (head[1], head[2], tail[1], tail[2]) not in pos_sp_pairs:
                     neg_sp_pairs.append((head[1], head[2], tail[1], tail[2]))
                     neg_ck_labels.append((head[0], tail[0]))
                     
-        if training and len(neg_sp_pairs) > config.num_neg_relations:
-            sampling_indexes = random.sample(range(len(neg_sp_pairs)), config.num_neg_relations)
+        if self.training and len(neg_sp_pairs) > self.num_neg_relations:
+            sampling_indexes = random.sample(range(len(neg_sp_pairs)), self.num_neg_relations)
             neg_sp_pairs = [neg_sp_pairs[i] for i in sampling_indexes]
             neg_ck_labels = [neg_ck_labels[i] for i in sampling_indexes]
             
@@ -137,15 +169,18 @@ class SpanPairs(TargetWrapper):
         # sp_pair_size_ids: (num_pairs, 2)
         # Note: size_id = size - 1
         self.sp_pair_size_ids = torch.tensor([[h_end-h_start-1, t_end-t_start-1] for h_start, h_end, t_start, t_end in self.sp_pairs])
-        self.sp_pair_size_ids.masked_fill_(self.sp_pair_size_ids>=config.max_span_size, config.max_span_size-1)
+        self.sp_pair_size_ids.masked_fill_(self.sp_pair_size_ids>=self.max_span_size, self.max_span_size-1)
         
         # ck_label_ids: (num_pairs, 2)
         self.ck_labels = pos_ck_labels + neg_ck_labels
-        self.ck_label_ids = torch.tensor([[config.ck_label2idx[hckl], config.ck_label2idx[tckl]] for hckl, tckl in self.ck_labels])
+        self.ck_label_ids = torch.tensor([[self.ck_label2idx[hckl], self.ck_label2idx[tckl]] for hckl, tckl in self.ck_labels])
         
-        if training:
-            rel_labels = pos_rel_labels + [config.rel_none_label] * len(neg_sp_pairs)
-            self.rel_label_ids = torch.tensor([config.rel_label2idx[label] for label in rel_labels])
+        if self.training:
+            rel_labels = pos_rel_labels + [self.rel_none_label] * len(neg_sp_pairs)
+            self.rel_label_ids = torch.tensor([self.rel_label2idx[label] for label in rel_labels])
+            
+        # For usage like ```span_pairs_obj = SpanPairs(data_entry, config).build()```
+        return self
 
 
 

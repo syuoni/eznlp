@@ -38,12 +38,10 @@ class SpanClassifierConfig(ModelConfig):
         example['spans_obj'] = self.decoder.exemplify(data_entry, training=training)
         return example
     
-    
     def batchify(self, batch_examples: List[dict]):
         batch = super().batchify(batch_examples)
         batch['spans_objs'] = self.decoder.batchify([ex['spans_obj'] for ex in batch_examples])
         return batch
-    
     
     def instantiate(self):
         # Only check validity at the most outside level

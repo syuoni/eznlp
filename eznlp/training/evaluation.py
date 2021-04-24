@@ -38,12 +38,11 @@ def evaluate_relation_extraction(trainer: Trainer, dataset: Dataset):
     logger.info(f"Macro F1-score: {macro_f1*100:2.3f}%")
 
 
-def union_set_chunks(set_chunks_gold: List[tuple], set_chunks_pred: List[tuple]):
-    set_chunks_union = []
-    for chunks_gold, chunks_pred in zip(set_chunks_gold, set_chunks_pred):
-        existing_spans = {(start, end) for ck_type, start, end in chunks_gold}
-        chunks_union = chunks_gold + [(ck_type, start, end) for ck_type, start, end in chunks_pred if (start, end) not in existing_spans]
-        set_chunks_union.append(chunks_union)
-    return set_chunks_union
 
+def union_chunks(chunks_gold: List[tuple], chunks_pred: List[tuple]):
+    existing_spans = {(start, end) for ck_type, start, end in chunks_gold}
+    return chunks_gold + [(ck_type, start, end) for ck_type, start, end in chunks_pred if (start, end) not in existing_spans]
+
+def union_set_chunks(set_chunks_gold: List[tuple], set_chunks_pred: List[tuple]):
+    return [union_chunks(chunks_gold, chunks_pred) for chunks_gold, chunks_pred in zip(set_chunks_gold, set_chunks_pred)]
 

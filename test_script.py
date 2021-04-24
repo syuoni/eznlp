@@ -42,6 +42,7 @@ from eznlp.span_classification import SpanClassificationTrainer
 from eznlp.relation_classification import RelationClassificationDecoderConfig, RelationClassifierConfig
 from eznlp.relation_classification import RelationClassificationDataset
 from eznlp.relation_classification import RelationClassificationTrainer
+from eznlp.relation_classification import JointClassifierConfig
 
 from eznlp.language_modeling import MaskedLMConfig
 from eznlp.language_modeling import MaskedLMDataset, FolderLikeMaskedLMDataset, MaskedLMTrainer
@@ -165,9 +166,13 @@ if __name__ == '__main__':
                      relation_tail_key='tail')
     train_data = json_io.read("data/conll2004/conll04_train.json")
     
-    config = RelationClassifierConfig()
+    config = JointClassifierConfig()
     train_set = RelationClassificationDataset(train_data, config)
     train_set.build_vocabs_and_dims()
     
     classifier = config.instantiate()
+    
+    batch = train_set.collate([train_set[i] for i in range(4)])
+    classifier(batch)
+    classifier.decode(batch)
     
