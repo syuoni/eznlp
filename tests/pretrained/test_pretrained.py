@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
 import pytest
 import os
+import pandas
 import torch
 import flair
 
 from eznlp.token import TokenSequence
 from eznlp.pretrained import ELMoConfig, BertLikeConfig, FlairConfig
+from eznlp.pretrained.bert_like import truncate_for_bert_like, _tokenized2nested
 from eznlp.training.utils import count_params
-
+from eznlp.io import TabularIO
 
 
 class TestFlairEmbedder(object):
@@ -115,5 +117,25 @@ class TestBertLikeEmbedder(object):
         config_path = "cache/bert_embedder.config"
         torch.save(config, config_path)
         assert os.path.getsize(config_path) < 1024 * 1024  # 1MB
+
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("mode", ["head+tail", "head-only", "tail-only"])
+def test_truncate_for_bert_like(self, mode, bert_with_tokenizer):
+    bert, tokenizer = bert_with_tokenizer
+    max_len = tokenizer.model_max_length - 2
+    
+    tabular_io = TabularIO(text_col_id=3, label_col_id=2, sep="\t\t", mapping={"<sssss>": "\n"}, encoding='utf-8', case_mode='lower')
+    data = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.test.ss")
+    data = [data_entry for data_entry in data if len(data_entry['tokens']) >= max_len-10]
+    assert max(len(data_entry['tokens']) for data_entry in data) > max_len
+    
+    data = truncate_for_bert_like(data, tokenizer, mode)
+    sub_lens = [sum(len(word) for word in _tokenized2nested(data_entry['tokens'].raw_text, tokenizer)) for data_entry in data]
+    sub_lens = pandas.Series(sub_lens)
+    
+    assert (sub_lens <= max_len).all()
+    assert (sub_lens == max_len).sum() >= (len(sub_lens) / 2)
         
         

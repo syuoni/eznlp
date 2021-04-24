@@ -2,8 +2,8 @@
 import pytest
 
 from eznlp.token import TokenSequence
+from eznlp.data import Dataset
 from eznlp.span_classification import SpanClassificationDecoderConfig, SpanClassifierConfig
-from eznlp.span_classification import SpanClassificationDataset
 
 
 class TestSpanClassificationDataset(object):
@@ -24,7 +24,7 @@ class TestSpanClassificationDataset(object):
         
         config = SpanClassifierConfig(decoder=SpanClassificationDecoderConfig(num_neg_chunks=num_neg_chunks, 
                                                                               max_span_size=max_span_size))
-        dataset = SpanClassificationDataset(data, config, training=training)
+        dataset = Dataset(data, config, training=training)
         dataset.build_vocabs_and_dims()
         
         spans_obj = dataset[0]['spans_obj']

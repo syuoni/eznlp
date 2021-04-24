@@ -12,8 +12,14 @@ class Dataset(torch.utils.data.Dataset):
         """
         Parameters
         ----------
-        data : list of dict
-            [{'tokens': TokenSequence, ...}, ...]
+        data : List[dict]
+            Each entry (as a dict) follows the format of:
+                {'tokens': TokenSequence, 'label': str, 'chunks': List[tuple], 'relations': List[tuple], ...}
+            where (1) `label` is a str (or int).  
+                  (2) each `chunk` follows the format of (chunk_type, chunk_start, chunk_end). 
+                  (3) each `relation` follows the format of (relation_type, head_chunk, tail_chunk), 
+                      i.e., (relation_type, (head_type, head_start, head_end), (tail_type, tail_start, tail_end)). 
+            
         """
         super().__init__()
         self.data = data
@@ -38,6 +44,21 @@ class Dataset(torch.utils.data.Dataset):
         max_len = max(seq_lens)
         summary.append(f"The average sequence length is {ave_len:,.1f}")
         summary.append(f"The maximum sequence length is {max_len:,}")
+        
+        if 'label' in self.data[0]:
+            num_label_types = len({data_entry['label'] for data_entry in self.data})
+            summary.append(f"The dataset has {num_label_types:,} categories")
+            
+        if 'chunks' in self.data[0]:
+            num_chunks = sum(len(data_entry['chunks']) for data_entry in self.data)
+            num_chunk_types = len({ck[0] for data_entry in self.data for ck in data_entry['chunks']})
+            summary.append(f"The dataset has {num_chunks:,} chunks of {num_chunk_types:,} types")
+            
+        if 'relations' in self.data[0]:
+            num_relations = sum(len(data_entry['relations']) for data_entry in self.data)
+            num_relation_types = len({rel[0] for data_entry in self.data for rel in data_entry['relations']})
+            summary.append(f"The dataset has {num_relations:,} relations of {num_relation_types:,} types")
+        
         return "\n".join(summary)
         
     

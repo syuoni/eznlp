@@ -3,7 +3,7 @@ from typing import List
 import torch
 
 from ..training.trainer import Trainer
-from .dataset import SpanClassificationDataset
+from ..data.dataset import Dataset
 from ..metrics import precision_recall_f1_report
 
 
@@ -28,7 +28,7 @@ class SpanClassificationTrainer(Trainer):
         return (ave_scores['micro']['f1'], )
     
     
-    def predict(self, dataset: SpanClassificationDataset, batch_size=32):
+    def predict(self, dataset: Dataset, batch_size=32):
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, collate_fn=dataset.collate)
         
         self.model.eval()

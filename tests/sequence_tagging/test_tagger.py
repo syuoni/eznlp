@@ -3,12 +3,12 @@ import pytest
 import torch
 
 from eznlp.token import Token, LexiconTokenizer
+from eznlp.data import Dataset
 from eznlp.config import ConfigDict
 from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig
 from eznlp.model import NestedOneHotConfig, CharConfig, SoftLexiconConfig
 from eznlp.pretrained import ELMoConfig, BertLikeConfig, FlairConfig
 from eznlp.sequence_tagging import SequenceTaggingDecoderConfig, SequenceTaggerConfig
-from eznlp.sequence_tagging import SequenceTaggingDataset
 from eznlp.sequence_tagging import SequenceTaggingTrainer
 
 
@@ -47,7 +47,7 @@ class TestTagger(object):
     def _setup_case(self, data, device):
         self.device = device
         
-        self.dataset = SequenceTaggingDataset(data, self.config)
+        self.dataset = Dataset(data, self.config)
         self.dataset.build_vocabs_and_dims()
         self.model = self.config.instantiate().to(self.device)
         assert isinstance(self.config.name, str) and len(self.config.name) > 0

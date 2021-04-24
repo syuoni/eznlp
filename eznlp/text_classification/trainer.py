@@ -2,8 +2,8 @@
 from typing import List
 import torch
 
+from ..data.dataset import Dataset
 from ..training.trainer import Trainer
-from .dataset import TextClassificationDataset
 
 
 class TextClassificationTrainer(Trainer):
@@ -26,7 +26,7 @@ class TextClassificationTrainer(Trainer):
         return (sum(yp == yg for yp, yg in zip(y_gold, y_pred)) / len(y_gold), )
         
     
-    def predict(self, dataset: TextClassificationDataset, batch_size=32):
+    def predict(self, dataset: Dataset, batch_size=32):
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, collate_fn=dataset.collate)
         
         self.model.eval()

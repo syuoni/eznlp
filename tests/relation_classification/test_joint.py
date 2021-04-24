@@ -2,9 +2,9 @@
 import pytest
 import torch
 
+from eznlp.data import Dataset
 from eznlp.model import EncoderConfig
 from eznlp.pretrained import BertLikeConfig
-from eznlp.data import Dataset
 from eznlp.span_classification import SpanClassificationDecoderConfig
 from eznlp.relation_classification import RelationClassificationDecoderConfig
 from eznlp.relation_classification import JointClassifierConfig, JointTrainer

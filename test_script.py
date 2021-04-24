@@ -20,7 +20,7 @@ from eznlp.utils import find_ascending
 from eznlp.config import ConfigList, ConfigDict
 from eznlp.token import Token, TokenSequence, LexiconTokenizer
 from eznlp.metrics import precision_recall_f1_report
-from eznlp.data import Batch
+from eznlp.data import Batch, Dataset
 from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig
 from eznlp.model import NestedOneHotConfig, CharConfig, SoftLexiconConfig
 from eznlp.pretrained import Vectors, GloVe, Senna
@@ -31,16 +31,13 @@ from eznlp.training.utils import collect_params, check_param_groups
 from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, BratIO, JsonIO
 
 from eznlp.sequence_tagging import SequenceTaggingDecoderConfig, SequenceTaggerConfig
-from eznlp.sequence_tagging import SequenceTaggingDataset
 from eznlp.sequence_tagging import SequenceTaggingTrainer
 from eznlp.sequence_tagging import ChunksTagsTranslator
 
 from eznlp.span_classification import SpanClassificationDecoderConfig, SpanClassifierConfig
-from eznlp.span_classification import SpanClassificationDataset
 from eznlp.span_classification import SpanClassificationTrainer
 
 from eznlp.relation_classification import RelationClassificationDecoderConfig, RelationClassifierConfig
-from eznlp.relation_classification import RelationClassificationDataset
 from eznlp.relation_classification import RelationClassificationTrainer
 from eznlp.relation_classification import JointClassifierConfig
 
@@ -48,7 +45,6 @@ from eznlp.language_modeling import MaskedLMConfig
 from eznlp.language_modeling import MaskedLMDataset, FolderLikeMaskedLMDataset, MaskedLMTrainer
 
 from eznlp.text_classification import TextClassificationDecoderConfig, TextClassifierConfig
-from eznlp.text_classification import TextClassificationDataset
 from eznlp.text_classification import TextClassificationTrainer
 
 
@@ -93,7 +89,7 @@ if __name__ == '__main__':
     #                               flair_fw=FlairConfig(flair_lm=flair_fw_lm), 
     #                               flair_bw=FlairConfig(flair_lm=flair_bw_lm))
     
-    # train_set = SequenceTaggingDataset(train_data, config)
+    # train_set = Dataset(train_data, config)
     # train_set.build_vocabs_and_dims(dev_data, test_data)
     # tagger = config.instantiate()
     
@@ -111,7 +107,7 @@ if __name__ == '__main__':
     # brat_data = brat_io.read("assets/data/brat/demo.txt")
     # brat_io.write(brat_data, "assets/data/brat/demo-write.txt")
     
-    # brat_set = SequenceTaggingDataset(brat_data)
+    # brat_set = Dataset(brat_data)
     # batch = brat_set.collate([brat_set[i] for i in range(0, 4)])
     
     # tagger = brat_set.config.instantiate()
@@ -135,7 +131,7 @@ if __name__ == '__main__':
     #                               intermediate2=None,
     #                               bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert))
     
-    # train_set = TextClassificationDataset(train_data, config)
+    # train_set = Dataset(train_data, config)
     # train_set.build_vocabs_and_dims()
     
     # classifier = config.instantiate()
@@ -167,7 +163,7 @@ if __name__ == '__main__':
     train_data = json_io.read("data/conll2004/conll04_train.json")
     
     config = JointClassifierConfig()
-    train_set = RelationClassificationDataset(train_data, config)
+    train_set = Dataset(train_data, config)
     train_set.build_vocabs_and_dims()
     
     classifier = config.instantiate()

@@ -2,8 +2,8 @@
 import pytest
 
 from eznlp.token import TokenSequence
+from eznlp.data import Dataset
 from eznlp.relation_classification import RelationClassificationDecoderConfig, RelationClassifierConfig
-from eznlp.relation_classification import RelationClassificationDataset
 
 
 class TestRelationClassificationDataset(object):
@@ -27,7 +27,7 @@ class TestRelationClassificationDataset(object):
         data = [{'tokens': tokens, 'chunks': chunks, 'relations': relations}]
         
         config = RelationClassifierConfig(decoder=RelationClassificationDecoderConfig(num_neg_relations=num_neg_relations))
-        dataset = RelationClassificationDataset(data, config, training=training)
+        dataset = Dataset(data, config, training=training)
         dataset.build_vocabs_and_dims()
         
         span_pairs_obj = dataset[0]['span_pairs_obj']

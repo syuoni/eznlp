@@ -2,10 +2,10 @@
 import pytest
 import torch
 
+from eznlp.data import Dataset
 from eznlp.model import EncoderConfig
 from eznlp.pretrained import BertLikeConfig
 from eznlp.relation_classification import RelationClassificationDecoderConfig, RelationClassifierConfig
-from eznlp.relation_classification import RelationClassificationDataset
 from eznlp.relation_classification import RelationClassificationTrainer
 
 
@@ -44,7 +44,7 @@ class TestClassifier(object):
     def _setup_case(self, data, device):
         self.device = device
         
-        self.dataset = RelationClassificationDataset(data, self.config)
+        self.dataset = Dataset(data, self.config)
         self.dataset.build_vocabs_and_dims()
         self.model = self.config.instantiate().to(self.device)
         assert isinstance(self.config.name, str) and len(self.config.name) > 0

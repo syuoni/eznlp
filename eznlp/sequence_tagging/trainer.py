@@ -4,7 +4,7 @@ import torch
 
 from ..metrics import precision_recall_f1_report
 from ..training.trainer import Trainer
-from .dataset import SequenceTaggingDataset
+from ..data.dataset import Dataset
 
 
 class SequenceTaggingTrainer(Trainer):
@@ -28,7 +28,7 @@ class SequenceTaggingTrainer(Trainer):
         return (ave_scores['micro']['f1'], )
     
     
-    def predict(self, dataset: SequenceTaggingDataset, batch_size=32):
+    def predict(self, dataset: Dataset, batch_size=32):
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, collate_fn=dataset.collate)
         
         self.model.eval()
