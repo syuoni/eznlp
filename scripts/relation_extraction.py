@@ -14,17 +14,18 @@ import transformers
 import flair
 
 from eznlp import auto_device
-from eznlp.vectors import GloVe
+from eznlp.vectors import Vectors, GloVe
+from eznlp.dataset import Dataset
 from eznlp.config import ConfigDict
-from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig, CharConfig
+from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig, CharConfig, SoftLexiconConfig
 from eznlp.model import ELMoConfig, BertLikeConfig, FlairConfig
-from eznlp.relation_classification import RelationClassificationDecoderConfig, RelationClassifierConfig
-from eznlp.relation_classification import RelationClassificationDataset
-from eznlp.relation_classification import RelationClassificationTrainer
+from eznlp.model import RelationClassificationDecoderConfig
+from eznlp.model import ModelConfig
+from eznlp.training import Trainer
 from eznlp.training.utils import count_params
 from eznlp.training.evaluation import evaluate_relation_extraction
 
-from utils import load_data, build_trainer, header_format
+from utils import load_data, dataset2language, load_pretrained, build_trainer, header_format
 
 
 def parse_arguments(parser: argparse.ArgumentParser):
@@ -98,6 +99,12 @@ def parse_arguments(parser: argparse.ArgumentParser):
                            help="whether to use ELMo")
     parser_fs.add_argument('--use_flair', default=False, action='store_true', 
                            help="whether to use Flair")
+    parser_fs.add_argument('--use_bigram', default=False, action='store_true', 
+                           help="whether to use bigram")
+    parser_fs.add_argument('--use_softword', default=False, action='store_true', 
+                           help="whether to use softword")
+    parser_fs.add_argument('--use_softlexicon', default=False, action='store_true', 
+                           help="whether to use softlexicon")
     
     parser_ft = subparsers.add_parser('finetune', aliases=['ft'], 
                                       help="train by finetuning pretrained models")
@@ -123,28 +130,40 @@ def build_config(args: argparse.Namespace):
         drop_rates = (0.0, 0.05, args.drop_rate)
     else:
         drop_rates = (args.drop_rate, 0.0, 0.0)
-        
-    decoder_config = RelationClassificationDecoderConfig(agg_mode=args.agg_mode, 
-                                                         num_neg_relations=args.num_neg_relations, 
-                                                         max_span_size=args.max_span_size, 
-                                                         ck_size_emb_dim=args.ck_size_emb_dim, 
-                                                         ck_label_emb_dim=args.ck_label_emb_dim, 
-                                                         in_drop_rates=drop_rates)
+    
     
     if args.command in ('from_scratch', 'fs'):
-        if args.emb_dim in (50, 100, 200):
-            glove = GloVe(f"assets/vectors/glove.6B.{args.emb_dim}d.txt")
-        elif args.emb_dim == 300:
-            glove = GloVe("assets/vectors/glove.840B.300d.txt")
+        if args.language.lower() == 'english' and args.emb_dim in (50, 100, 200):
+            vectors = GloVe(f"assets/vectors/glove.6B.{args.emb_dim}d.txt")
+        elif args.language.lower() == 'english' and args.emb_dim == 300:
+            vectors = GloVe("assets/vectors/glove.840B.300d.txt")
+        elif args.language.lower() == 'chinese' and args.emb_dim == 50:
+            vectors = Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
+        elif args.language.lower() == 'chinese' and args.emb_dim == 200:
+            vectors = Vectors.load("assets/vectors/tencent/Tencent_AILab_ChineseEmbedding.txt", encoding='utf-8', skiprows=0)
         else:
-            glove = None
-        ohots_config = ConfigDict({'text': OneHotConfig(field='text', vectors=glove, emb_dim=args.emb_dim, freeze=args.emb_freeze)})
-        char_config = CharConfig(emb_dim=16, 
-                                 encoder=EncoderConfig(arch=args.char_arch, 
-                                                       hid_dim=128, 
-                                                       num_layers=1, 
-                                                       in_drop_rates=(args.drop_rate, 0.0, 0.0)))
-        nested_ohots_config = ConfigDict({'char': char_config})
+            vectors = None
+        ohots_config = ConfigDict({'text': OneHotConfig(field='text', vectors=vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze)})
+        
+        if args.language.lower() == 'chinese' and args.use_bigram:
+            giga_bi = Vectors.load("assets/vectors/gigaword_chn.all.a2b.bi.ite50.vec", encoding='utf-8')
+            ohots_config['bigram'] = OneHotConfig(field='bigram', vectors=giga_bi, emb_dim=50, freeze=args.emb_freeze)
+        
+        if args.language.lower() == 'chinese' and args.use_softword:
+            mhots_config = ConfigDict({'softword': MultiHotConfig(field='softword', use_emb=False)})
+        else:
+            mhots_config = None
+            
+        if args.language.lower() == 'english':
+            char_config = CharConfig(emb_dim=16, 
+                                     encoder=EncoderConfig(arch=args.char_arch, hid_dim=128, num_layers=1, 
+                                                           in_drop_rates=(args.drop_rate, 0.0, 0.0)))
+            nested_ohots_config = ConfigDict({'char': char_config})
+        elif args.language.lower() == 'chinese' and args.use_softlexicon:
+            ctb50 = Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
+            nested_ohots_config = ConfigDict({'softlexicon': SoftLexiconConfig(vectors=ctb50, emb_dim=50, freeze=args.emb_freeze)})
+        else:
+            nested_ohots_config = None
         
         if args.use_interm1:
             interm1_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
@@ -153,17 +172,13 @@ def build_config(args: argparse.Namespace):
             
         interm2_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
         
-        if args.use_elmo:
-            elmo = allennlp.modules.Elmo(options_file="assets/allennlp/elmo_2x4096_512_2048cnn_2xhighway_options.json", 
-                                         weight_file="assets/allennlp/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5", 
-                                         num_output_representations=1)
-            elmo_config = ELMoConfig(elmo=elmo)
+        if args.language.lower() == 'english' and args.use_elmo:
+            elmo_config = ELMoConfig(elmo=load_pretrained('elmo'))
         else:
             elmo_config = None
             
-        if args.use_flair:
-            flair_fw_lm = flair.models.LanguageModel.load_language_model("assets/flair/news-forward-0.4.1.pt")
-            flair_bw_lm = flair.models.LanguageModel.load_language_model("assets/flair/news-backward-0.4.1.pt")
+        if args.language.lower() == 'english' and args.use_flair:
+            flair_fw_lm, flair_bw_lm = load_pretrained('flair')
             flair_fw_config, flair_bw_config = FlairConfig(flair_lm=flair_fw_lm), FlairConfig(flair_lm=flair_bw_lm)
             interm2_config.in_proj = True
         else:
@@ -173,6 +188,7 @@ def build_config(args: argparse.Namespace):
         
     elif args.command in ('finetune', 'ft'):
         ohots_config = None
+        mhots_config = None
         nested_ohots_config = None
         interm1_config = None
         
@@ -184,43 +200,31 @@ def build_config(args: argparse.Namespace):
         elmo_config = None
         flair_fw_config, flair_bw_config = None, None
         
-        if args.bert_arch.startswith('BERT'):
-            # Cased tokenizer for NER task
-            if args.bert_arch.endswith('base'):
-                PATH = "assets/transformers/bert-base-cased"
-            elif args.bert_arch.endswith('large'):
-                PATH = "assets/transformers/bert-large-cased"
-            
-            tokenizer = transformers.BertTokenizer.from_pretrained(PATH)
-            bert = transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, 
-                                                          attention_probs_dropout_prob=args.bert_drop_rate)
-            bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert, arch=args.bert_arch, 
-                                              freeze=False, use_truecase=True)
-            
-        elif args.bert_arch.startswith('RoBERTa'):
-            if args.bert_arch.endswith('base'):
-                PATH = "assets/transformers/roberta-base"
-            elif args.bert_arch.endswith('large'):
-                PATH = "assets/transformers/roberta-large"
-            
-            tokenizer = transformers.RobertaTokenizer.from_pretrained(PATH, add_prefix_space=True)
-            roberta = transformers.RobertaModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, 
-                                                                attention_probs_dropout_prob=args.bert_drop_rate)
-            bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=roberta, arch=args.bert_arch, 
-                                              freeze=False, use_truecase=False)
-            
+        # Cased tokenizer for NER task
+        bert_like, tokenizer = load_pretrained(args.bert_arch, args, cased=True)
+        bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert_like, arch=args.bert_arch, 
+                                          freeze=False, use_truecase=args.bert_arch.startswith('BERT'))
     else:
         raise Exception("No sub-command specified")
         
-    return RelationClassifierConfig(ohots=ohots_config, 
-                                    nested_ohots=nested_ohots_config, 
-                                    intermediate1=interm1_config, 
-                                    elmo=elmo_config, 
-                                    flair_fw=flair_fw_config, 
-                                    flair_bw=flair_bw_config, 
-                                    bert_like=bert_like_config, 
-                                    intermediate2=interm2_config, 
-                                    decoder=decoder_config)
+    decoder_config = RelationClassificationDecoderConfig(agg_mode=args.agg_mode, 
+                                                         num_neg_relations=args.num_neg_relations, 
+                                                         max_span_size=args.max_span_size, 
+                                                         ck_size_emb_dim=args.ck_size_emb_dim, 
+                                                         ck_label_emb_dim=args.ck_label_emb_dim, 
+                                                         in_drop_rates=drop_rates)
+    
+    return ModelConfig(ohots=ohots_config, 
+                       mhots=mhots_config, 
+                       nested_ohots=nested_ohots_config, 
+                       intermediate1=interm1_config, 
+                       elmo=elmo_config, 
+                       flair_fw=flair_fw_config, 
+                       flair_bw=flair_bw_config, 
+                       bert_like=bert_like_config, 
+                       intermediate2=interm2_config, 
+                       decoder=decoder_config)
+
 
 
 if __name__ == '__main__':
@@ -229,7 +233,7 @@ if __name__ == '__main__':
     
     # Use micro-seconds to ensure different timestamps while adopting multiprocessing
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-    save_path =  f"cache/{args.dataset}/{timestamp}"
+    save_path =  f"cache/{args.dataset}-RE/{timestamp}"
     if not os.path.exists(save_path):
         os.makedirs(save_path)
         
@@ -258,12 +262,13 @@ if __name__ == '__main__':
     else:
         logger.info(f"Loading original data {args.dataset}...")
         train_data, dev_data, test_data = load_data(args)
+    args.language = dataset2language[args.dataset]
     config = build_config(args)
     
-    train_set = RelationClassificationDataset(train_data, config, training=True)
+    train_set = Dataset(train_data, config, training=True)
     train_set.build_vocabs_and_dims(dev_data, test_data)
-    dev_set   = RelationClassificationDataset(dev_data,  train_set.config, training=False)
-    test_set  = RelationClassificationDataset(test_data, train_set.config, training=False)
+    dev_set   = Dataset(dev_data,  train_set.config, training=False)
+    test_set  = Dataset(test_data, train_set.config, training=False)
     
     logger.info(train_set.summary)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
@@ -275,10 +280,11 @@ if __name__ == '__main__':
     count_params(model)
     
     logger.info(header_format("Training", sep='-'))
-    trainer = build_trainer(RelationClassificationTrainer, model, device, len(train_loader), args)
+    trainer = build_trainer(model, device, len(train_loader), args)
     if args.pdb: 
         pdb.set_trace()
         
+    torch.save(config, f"{save_path}/{config.name}.config")
     def save_callback(model):
         torch.save(model, f"{save_path}/{config.name}.pth")
     trainer.train_steps(train_loader=train_loader, dev_loader=dev_loader, num_epochs=args.num_epochs, 
@@ -286,7 +292,7 @@ if __name__ == '__main__':
     
     logger.info(header_format("Evaluating", sep='-'))
     model = torch.load(f"{save_path}/{config.name}.pth", map_location=device)
-    trainer = RelationClassificationTrainer(model, device=device)
+    trainer = Trainer(model, device=device)
     
     logger.info("Evaluating on dev-set")
     evaluate_relation_extraction(trainer, dev_set)
@@ -296,5 +302,4 @@ if __name__ == '__main__':
     logger.info(" ".join(sys.argv))
     logger.info(pprint.pformat(args.__dict__))
     logger.info(header_format("Ending", sep='='))
-    
     

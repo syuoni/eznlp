@@ -180,7 +180,7 @@ if __name__ == '__main__':
     
     # Use micro-seconds to ensure different timestamps while adopting multiprocessing
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-    save_path =  f"cache/{args.dataset}/{timestamp}"
+    save_path =  f"cache/{args.dataset}-TC/{timestamp}"
     if not os.path.exists(save_path):
         os.makedirs(save_path)
         

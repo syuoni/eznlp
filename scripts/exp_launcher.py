@@ -8,6 +8,26 @@ import logging
 
 from utils import dataset2language
 
+"""
+python scripts/entity_recognition.py --dataset conll2003 --batch_size 10 --optimizer SGD --lr 0.1 --dec_arch CRF --num_layers 1 fs --char_arch LSTM
+python scripts/entity_recognition.py --dataset conll2003 --batch_size 64 --optimizer Adadelta --lr 1.0 --dec_arch SpanC --num_layers 2 fs --char_arch LSTM
+python scripts/entity_recognition.py --dataset conll2003 --batch_size 48 --optimizer AdamW --lr 1e-3 --finetune_lr 1e-5 --scheduler LinearDecayWithWarmup --num_epochs 50 --dec_arch CRF ft --bert_arch BERT_base
+python scripts/entity_recognition.py --dataset conll2003 --batch_size 48 --optimizer AdamW --lr 1e-3 --finetune_lr 1e-5 --scheduler LinearDecayWithWarmup --num_epochs 50 --dec_arch SpanC ft --bert_arch BERT_base
+
+python scripts/entity_recognition.py --dataset WeiboNER --batch_size 32 --optimizer Adamax --lr 5e-3 --dec_arch CRF --num_layers 2 fs --use_softlexicon
+python scripts/entity_recognition.py --dataset WeiboNER --batch_size 48 --optimizer AdamW --lr 1e-3 --finetune_lr 1e-5 --scheduler LinearDecayWithWarmup --num_epochs 50 --dec_arch CRF ft --bert_arch BERT_base
+
+python scripts/text_classification.py --dataset imdb --batch_size 64 --optimizer Adadelta --lr 0.5 --num_layers 1 fs
+python scripts/text_classification.py --dataset imdb --batch_size 32 --optimizer AdamW --lr 1e-3 --finetune_lr 1e-5 --scheduler LinearDecayWithWarmup --num_epochs 10 ft --bert_arch BERT_base
+
+python scripts/text_classification.py --dataset ChnSentiCorp --batch_size 64 --optimizer Adadelta --lr 0.5 --num_layers 1 fs
+python scripts/text_classification.py --dataset ChnSentiCorp --batch_size 32 --optimizer AdamW --lr 1e-3 --finetune_lr 1e-5 --scheduler LinearDecayWithWarmup --num_epochs 10 ft --bert_arch BERT_base
+
+python scripts/relation_extraction.py --dataset conll2004 --batch_size 64 --optimizer Adadelta --lr 1.0 --num_layers 2 fs --char_arch LSTM
+python scripts/relation_extraction.py --dataset conll2004 --batch_size 48 --optimizer AdamW --lr 1e-3 --finetune_lr 1e-4 --scheduler LinearDecayWithWarmup --num_epochs 50 ft --bert_arch BERT_base
+"""
+
+
 
 def call_command(command: str):
     logger.warning(f"Starting: {command}")
@@ -77,26 +97,29 @@ if __name__ == '__main__':
         if args.command in ('fs', 'from_scratch'):
             options = [["--num_epochs 100"], 
                        ["--optimizer SGD --lr 0.1 --batch_size 32"], 
-                       # ["--optimizer Adadelta --lr 1.0 --batch_size 64"], 
                        ["--num_layers 1", "--num_layers 2"], 
                        # ["--grad_clip -1", "--grad_clip 5"], 
                        # ["", "--use_locked_drop"], 
-                       ["--num_neg_chunks 200", "--num_neg_chunks 100", "--num_neg_chunks 50"], 
-                       ["--max_span_size 10", "--max_span_size 5"], 
-                       ["--size_emb_dim 50", "--size_emb_dim 25", "--size_emb_dim 10"], 
                        ["fs"], 
                        ["", "--use_elmo"], 
                        ["", "--use_flair"], 
                        ["--char_arch LSTM", "--char_arch Conv"]]
+            # options = [["--num_epochs 100"], 
+            #            ["--optimizer Adadelta --lr 1.0 --batch_size 64"], 
+            #            ["--num_layers 1", "--num_layers 2"], 
+            #            ["--num_neg_chunks 200", "--num_neg_chunks 100", "--num_neg_chunks 50"], 
+            #            ["--max_span_size 10", "--max_span_size 5"], 
+            #            ["--size_emb_dim 50", "--size_emb_dim 25", "--size_emb_dim 10"], 
+            #            ["--dec_arch SpanC"],
+            #            ["fs"], 
+            #            ["", "--use_elmo"], 
+            #            ["", "--use_flair"], 
+            #            ["--char_arch LSTM", "--char_arch Conv"]]
         else:
             options = [["--num_epochs 50"], 
                        ["--optimizer AdamW --lr 1e-3 --finetune_lr 1e-5", 
                         "--optimizer AdamW --lr 5e-4 --finetune_lr 1e-5", 
                         "--optimizer AdamW --lr 2e-3 --finetune_lr 1e-5"], 
-                       # ["--optimizer AdamW --lr 1e-3 --finetune_lr 5e-5", 
-                       #  "--optimizer AdamW --lr 1e-3 --finetune_lr 1e-4", 
-                       #  "--optimizer AdamW --lr 2e-3 --finetune_lr 5e-5", 
-                       #  "--optimizer AdamW --lr 2e-3 --finetune_lr 1e-4"], 
                        ["--batch_size 48"], 
                        ["--scheduler LinearDecayWithWarmup"], 
                        ["--dec_arch SoftMax", "--dec_arch CRF"],
@@ -108,6 +131,18 @@ if __name__ == '__main__':
                         "--bert_arch RoBERTa_base", 
                         "--bert_arch BERT_large", 
                         "--bert_arch RoBERTa_large"]]
+            # options = [["--num_epochs 50"], 
+            #            ["--optimizer AdamW --lr 1e-3 --finetune_lr 5e-5", 
+            #             "--optimizer AdamW --lr 1e-3 --finetune_lr 1e-4", 
+            #             "--optimizer AdamW --lr 2e-3 --finetune_lr 5e-5", 
+            #             "--optimizer AdamW --lr 2e-3 --finetune_lr 1e-4"], 
+            #            ["--batch_size 48"], 
+            #            ["--scheduler LinearDecayWithWarmup"], 
+            #            ["--dec_arch SpanC"],
+            #            ["ft"], 
+            #            ["--bert_drop_rate 0.2"], 
+            #            ["", "--use_interm2"], 
+            #            ["--bert_arch BERT_base", "--bert_arch RoBERTa_base"]]
     
     elif args.task == 'entity_recognition' and args.language.lower() == 'chinese':
         if args.command in ('fs', 'from_scratch'):
@@ -143,10 +178,9 @@ if __name__ == '__main__':
                        ["", "--use_interm2"], 
                        ["--bert_arch BERT_base", "--bert_arch RoBERTa_base"]]
     
-    elif args.task == 'relation_classification':
+    elif args.task == 'relation_extraction':
         if args.command in ('fs', 'from_scratch'):
-            options = [["--load_for_pipeline --load_path cache/conll2004_ner/20210421-075646-442088"], 
-                       ["--num_epochs 100"], 
+            options = [["--num_epochs 100"], 
                        ["--optimizer Adadelta --lr 1.0", 
                         "--optimizer AdamW --lr 1e-3", 
                         "--optimizer SGD --lr 0.1"], 
@@ -157,8 +191,7 @@ if __name__ == '__main__':
                        ["--ck_label_emb_dim 25", "--ck_label_emb_dim 10"], 
                        ["fs"]]
         else:
-            options = [["--load_for_pipeline --load_path cache/conll2004_ner/20210421-085304-107725"], 
-                       ["--num_epochs 50"], 
+            options = [["--num_epochs 50"], 
                        ["--optimizer AdamW --lr 1e-3 --finetune_lr 5e-5", 
                         "--optimizer AdamW --lr 1e-3 --finetune_lr 1e-4", 
                         "--optimizer AdamW --lr 2e-3 --finetune_lr 5e-5", 
