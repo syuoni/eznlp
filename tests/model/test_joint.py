@@ -2,13 +2,13 @@
 import pytest
 import torch
 
-from eznlp.data import Dataset
-from eznlp.model import EncoderConfig, BertLikeConfig
-from eznlp.text_classification import TextClassificationDecoderConfig, TextClassifierConfig
-from eznlp.text_classification import TextClassificationTrainer
+from eznlp.dataset import Dataset
+from eznlp.model import EncoderConfig, BertLikeConfig, JointDecoderConfig, ModelConfig
+from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderConfig, RelationClassificationDecoderConfig
+from eznlp.training import Trainer
 
 
-class TestClassifier(object):
+class TestModel(object):
     def _assert_batch_consistency(self):
         self.model.eval()
         
@@ -25,14 +25,15 @@ class TestClassifier(object):
         delta_losses = losses012[1:] - losses123[:-1]
         assert delta_losses.abs().max().item() < 2e-4
         
-        pred012 = self.model.decode(batch012)
-        pred123 = self.model.decode(batch123)
-        assert pred012[1:] == pred123[:-1]
+        chunks_pred012, relations_pred012 = self.model.decode(batch012)
+        chunks_pred123, relations_pred123 = self.model.decode(batch123)
+        assert chunks_pred012[1:] == chunks_pred123[:-1]
+        assert relations_pred012[1:] == relations_pred123[:-1]
         
         
     def _assert_trainable(self):
         optimizer = torch.optim.AdamW(self.model.parameters())
-        trainer = TextClassificationTrainer(self.model, optimizer=optimizer, device=self.device)
+        trainer = Trainer(self.model, optimizer=optimizer, device=self.device)
         dataloader = torch.utils.data.DataLoader(self.dataset, 
                                                  batch_size=4, 
                                                  shuffle=True, 
@@ -50,23 +51,28 @@ class TestClassifier(object):
         
         
     @pytest.mark.parametrize("enc_arch", ['Conv', 'LSTM'])
-    @pytest.mark.parametrize("agg_mode", ['min_pooling', 'max_pooling', 'mean_pooling', 
-                                          'dot_attention', 'multiplicative_attention', 'additive_attention'])
-    def test_classifier(self, enc_arch, agg_mode, yelp_full_demo, device):
-        self.config = TextClassifierConfig(intermediate2=EncoderConfig(arch=enc_arch), 
-                                           decoder=TextClassificationDecoderConfig(agg_mode=agg_mode))
-        self._setup_case(yelp_full_demo, device)
+    @pytest.mark.parametrize("ck_dec_arch", ['sequence_tagging', 'span_classification'])
+    @pytest.mark.parametrize("agg_mode", ['max_pooling'])
+    def test_classifier(self, enc_arch, ck_dec_arch, agg_mode, conll2004_demo, device):
+        if ck_dec_arch.lower() == 'sequence_tagging':
+            ck_decoder_config = SequenceTaggingDecoderConfig()
+        else:
+            ck_decoder_config = SpanClassificationDecoderConfig(agg_mode=agg_mode)
+        self.config = ModelConfig(intermediate2=EncoderConfig(arch=enc_arch), 
+                                  decoder=JointDecoderConfig(ck_decoder=ck_decoder_config, 
+                                                             rel_decoder=RelationClassificationDecoderConfig(agg_mode=agg_mode)))
+        self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
         
         
-    @pytest.mark.parametrize("from_tokenized", [True, False])
-    def test_classifier_with_bert_like(self, from_tokenized, yelp_full_demo, bert_with_tokenizer, device):
+    def test_classifier_with_bert_like(self, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
-        self.config = TextClassifierConfig(ohots=None, 
-                                           bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, from_tokenized=from_tokenized), 
-                                           intermediate2=None)
-        self._setup_case(yelp_full_demo, device)
+        self.config = ModelConfig('joint', 
+                                  ohots=None, 
+                                  bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert), 
+                                  intermediate2=None)
+        self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
         

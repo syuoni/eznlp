@@ -5,15 +5,19 @@ import random
 import logging
 import torch
 
-from ..data.wrapper import TargetWrapper, Batch
-from ..nn.init import reinit_embedding_
-from ..model.decoder import DecoderConfig, Decoder
+from ...wrapper import TargetWrapper, Batch
+from ...nn.init import reinit_embedding_, reinit_layer_
+from ...nn.modules import CombinedDropout
+from ...metrics import precision_recall_f1_report
+from .base import DecoderConfig, Decoder
 
 logger = logging.getLogger(__name__)
 
 
 class SpanClassificationDecoderConfig(DecoderConfig):
     def __init__(self, **kwargs):
+        self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
+        
         self.agg_mode = kwargs.pop('agg_mode', 'max_pooling')
         self.num_neg_chunks = kwargs.pop('num_neg_chunks', 100)
         self.max_span_size = kwargs.pop('max_span_size', 10)
@@ -70,10 +74,10 @@ class SpanClassificationDecoderConfig(DecoderConfig):
             
         
     def exemplify(self, data_entry: dict, training: bool=True):
-        return Spans(data_entry, self, training=training)
+        return {'spans_obj': Spans(data_entry, self, training=training)}
         
-    def batchify(self, batch_spans_objs: list):
-        return batch_spans_objs
+    def batchify(self, batch_examples: List[dict]):
+        return {'spans_objs': [ex['spans_obj'] for ex in batch_examples]}
         
     def instantiate(self):
         return SpanClassificationDecoder(self)
@@ -88,7 +92,7 @@ class Spans(TargetWrapper):
     ----------
     data_entry: dict
         {'tokens': TokenSequence, 
-         'chunks': list}
+         'chunks': List[tuple]}
     """
     def __init__(self, data_entry: dict, config: SpanClassificationDecoderConfig, training: bool=True):
         super().__init__(training)
@@ -124,6 +128,9 @@ class Spans(TargetWrapper):
 class SpanClassificationDecoder(Decoder):
     def __init__(self, config: SpanClassificationDecoderConfig):
         super().__init__(config)
+        self.dropout = CombinedDropout(*config.in_drop_rates)
+        self.hid2logit = torch.nn.Linear(config.full_in_dim, config.voc_dim)
+        reinit_layer_(self.hid2logit, 'sigmoid')
         
         self.none_label = config.none_label
         self.idx2label = config.idx2label
@@ -161,10 +168,21 @@ class SpanClassificationDecoder(Decoder):
         batch_chunks = []
         for k in range(batch.size):
             labels = [self.idx2label[i] for i in batch_span_logits[k].argmax(dim=-1).cpu().tolist()]
-            
             chunks = [(label, start, end) for label, (start, end) in zip(labels, batch.spans_objs[k].spans) if label != self.none_label]
             batch_chunks.append(chunks)
-            
         return batch_chunks
-    
-    
+        
+        
+    def retrieve(self, batch: Batch):
+        return [spans_obj.chunks for spans_obj in batch.spans_objs]
+        
+        
+    def evaluate(self, y_gold: List[tuple], y_pred: List[tuple]):
+        """Micro-F1 for entity recognition. 
+        
+        References
+        ----------
+        https://www.clips.uantwerpen.be/conll2000/chunking/output.html
+        """
+        scores, ave_scores = precision_recall_f1_report(y_gold, y_pred)
+        return ave_scores['micro']['f1']

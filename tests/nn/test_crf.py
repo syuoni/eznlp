@@ -2,7 +2,7 @@
 import torch
 import torchcrf
 
-from eznlp.sequence_tagging.crf import CRF
+from eznlp.nn.crf import CRF
 
 
 def test_crf():

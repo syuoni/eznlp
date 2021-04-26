@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from typing import List
 import logging
 
 from ..metrics import precision_recall_f1_report
@@ -36,13 +35,4 @@ def evaluate_relation_extraction(trainer: Trainer, dataset: Dataset):
     micro_f1, macro_f1 = ave_scores['micro']['f1'], ave_scores['macro']['f1']
     logger.info(f"Micro F1-score: {micro_f1*100:2.3f}%")
     logger.info(f"Macro F1-score: {macro_f1*100:2.3f}%")
-
-
-
-def union_chunks(chunks_gold: List[tuple], chunks_pred: List[tuple]):
-    existing_spans = {(start, end) for ck_type, start, end in chunks_gold}
-    return chunks_gold + [(ck_type, start, end) for ck_type, start, end in chunks_pred if (start, end) not in existing_spans]
-
-def union_set_chunks(set_chunks_gold: List[tuple], set_chunks_pred: List[tuple]):
-    return [union_chunks(chunks_gold, chunks_pred) for chunks_gold, chunks_pred in zip(set_chunks_gold, set_chunks_pred)]
 

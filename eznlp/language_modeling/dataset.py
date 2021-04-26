@@ -4,8 +4,8 @@ import random
 import logging
 import torch
 
-from ..data.wrapper import Batch
-from ..data.dataset import Dataset
+from ..wrapper import Batch
+from ..dataset import Dataset
 from .model import MaskedLMConfig
 from ..model.bert_like import _tokenized2nested
 

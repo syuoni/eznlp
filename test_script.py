@@ -20,7 +20,8 @@ from eznlp.utils import find_ascending
 from eznlp.config import ConfigList, ConfigDict
 from eznlp.token import Token, TokenSequence, LexiconTokenizer
 from eznlp.metrics import precision_recall_f1_report
-from eznlp.data import Batch, Dataset
+from eznlp.wrapper import Batch
+from eznlp.dataset import Dataset
 from eznlp.vectors import Vectors, GloVe, Senna
 from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig
 from eznlp.model import NestedOneHotConfig, CharConfig, SoftLexiconConfig

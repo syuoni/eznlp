@@ -3,16 +3,21 @@ from typing import List
 from collections import Counter
 import torch
 
-from ..data.wrapper import Batch, TargetWrapper
-from ..nn.utils import unpad_seqs
-from ..model.decoder import DecoderConfig, Decoder
+from ...wrapper import Batch, TargetWrapper
+from ...nn.utils import unpad_seqs
+from ...nn.crf import CRF
+from ...nn.modules import CombinedDropout
+from ...nn.init import reinit_layer_
+from ...metrics import precision_recall_f1_report
+from .base import DecoderConfig, Decoder
 from .transition import ChunksTagsTranslator
-from .crf import CRF
 
 
 
 class SequenceTaggingDecoderConfig(DecoderConfig):
     def __init__(self, **kwargs):
+        self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
+        
         self.arch = kwargs.pop('arch', 'CRF')
         if self.arch.lower() not in ('softmax', 'crf'):
             raise ValueError(f"Invalid decoder architecture {self.arch}")
@@ -20,6 +25,7 @@ class SequenceTaggingDecoderConfig(DecoderConfig):
         self.scheme = kwargs.pop('scheme', 'BIOES')
         self.idx2tag = kwargs.pop('idx2tag', None)
         super().__init__(**kwargs)
+        
         
     @property
     def name(self):
@@ -65,10 +71,10 @@ class SequenceTaggingDecoderConfig(DecoderConfig):
         
         
     def exemplify(self, data_entry: dict, training: bool=True):
-        return Tags(data_entry, self, training=training)
+        return {'tags_obj': Tags(data_entry, self, training=training)}
         
-    def batchify(self, batch_tags_objs: list):
-        return batch_tags_objs
+    def batchify(self, batch_examples: List[dict]):
+        return {'tags_objs': [ex['tags_obj'] for ex in batch_examples]}
         
     def instantiate(self):
         if self.arch.lower() == 'softmax':
@@ -86,7 +92,7 @@ class Tags(TargetWrapper):
     ----------
     data_entry: dict
         {'tokens': TokenSequence, 
-         'chunks': list}
+         'chunks': List[tuple]}
     """
     def __init__(self, data_entry: dict, config: SequenceTaggingDecoderConfig, training: bool=True):
         super().__init__(training)
@@ -101,6 +107,10 @@ class Tags(TargetWrapper):
 class SequenceTaggingDecoder(Decoder):
     def __init__(self, config: SequenceTaggingDecoderConfig):
         super().__init__(config)
+        self.dropout = CombinedDropout(*config.in_drop_rates)
+        self.hid2logit = torch.nn.Linear(config.full_in_dim, config.voc_dim)
+        reinit_layer_(self.hid2logit, 'sigmoid')
+        
         self.scheme = config.scheme
         self.translator = config.translator
         self.idx2tag = config.idx2tag
@@ -112,6 +122,21 @@ class SequenceTaggingDecoder(Decoder):
     def decode(self, batch: Batch, full_hidden: torch.Tensor):
         batch_tags = self.decode_tags(batch, full_hidden)
         return [self.translator.tags2chunks(tags) for tags in batch_tags]
+    
+    def retrieve(self, batch: Batch):
+        return [tags_obj.chunks for tags_obj in batch.tags_objs]
+        
+        
+    def evaluate(self, y_gold: List[tuple], y_pred: List[tuple]):
+        """Micro-F1 for entity recognition. 
+        
+        References
+        ----------
+        https://www.clips.uantwerpen.be/conll2000/chunking/output.html
+        """
+        scores, ave_scores = precision_recall_f1_report(y_gold, y_pred)
+        return ave_scores['micro']['f1']
+
 
 
 class SequenceTaggingSoftMaxDecoder(SequenceTaggingDecoder):
@@ -135,6 +160,7 @@ class SequenceTaggingSoftMaxDecoder(SequenceTaggingDecoder):
         best_paths = logits.argmax(dim=-1)
         batch_tag_ids = unpad_seqs(best_paths, batch.seq_lens)
         return [[self.idx2tag[i] for i in tag_ids] for tag_ids in batch_tag_ids]
+
 
 
 class SequenceTaggingCRFDecoder(SequenceTaggingDecoder):

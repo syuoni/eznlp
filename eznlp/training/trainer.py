@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-from typing import List
 import time
 import numpy
 import logging
 import torch
 
-from ..data.wrapper import Batch
-from ..data.dataset import Dataset
+from ..wrapper import Batch
+from ..dataset import Dataset
+from ..model.model import Model
 
 logger = logging.getLogger(__name__)
 
@@ -18,8 +18,7 @@ class Trainer(object):
     [1] https://pytorch.org/tutorials/recipes/recipes/amp_recipe.html
     """
     def __init__(self, 
-                 model: torch.nn.Module, 
-                 num_metrics: int=1, 
+                 model: Model, 
                  optimizer: torch.optim.Optimizer=None, 
                  scheduler: torch.optim.lr_scheduler._LRScheduler=None, 
                  schedule_by_step: bool=False, 
@@ -27,7 +26,10 @@ class Trainer(object):
                  grad_clip: float=None, 
                  use_amp: bool=False):
         self.model = model
-        self.num_metrics = num_metrics
+        if hasattr(self.model, 'decoder'):
+            self.num_metrics = self.model.decoder.num_metrics
+        else:
+            self.num_metrics = 0
         
         self.optimizer = optimizer
         if schedule_by_step:
@@ -45,13 +47,20 @@ class Trainer(object):
     def forward_batch(self, batch: Batch):
         """
         Forward to the loss (scalar). 
-        Optionally return the gold and predicted labels of the batch for evaluation. 
+        Optionally return the predicted labels of the batch for evaluation. 
         
         Returns
         -------
-        A Tuple of (loss, ) or (loss, (y_gold_1, y_pred_1), (y_gold_2, y_pred_2), ...)
+        A scalar Tensor of loss, or
+        A Tuple of (loss, y_pred_1, y_pred_2, ...)
         """
-        raise NotImplementedError("Not Implemented `forward_batch`")
+        losses, hidden = self.model(batch, return_hidden=True)
+        loss = losses.mean()
+        
+        if self.num_metrics == 0:
+            return loss
+        else:
+            return loss, *self.model.decoder._unsqueezed_decode(batch, hidden)
         
         
     def backward_batch(self, loss: torch.Tensor):
@@ -79,25 +88,22 @@ class Trainer(object):
             self.scheduler.step()
             
             
-    def evaluate(self, *set_y: List[List[list]]):
-        """
-        Calculate the metric (i.e., accuracy or F1) evaluating the predicted results against the gold results. 
-        This method should typically evaluate over a full dataset, although it also compatibly evaluates over a batch. 
-        
-        Parameters
-        ----------
-        set_y: List[List[list]]
-            In shape of `num_metrics` * 2 * `num_examples`, like [[y_gold_1, y_pred_1], [y_gold_2, y_pred_2], ...]
-            
-        Returns
-        -------
-        metric: Tuple[float]
-        """
-        raise NotImplementedError("Not Implemented `evaluate`")
-        
-        
     def predict(self, dataset: Dataset, batch_size: int=32):
-        raise NotImplementedError("Not Implemented `predict`")
+        dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, collate_fn=dataset.collate)
+        
+        self.model.eval()
+        set_y_pred = [[] for k in range(self.num_metrics)]
+        with torch.no_grad():
+            for batch in dataloader:
+                batch.to(self.device)
+                loss, *batch_y_pred = self.forward_batch(batch)
+                for k in range(self.num_metrics):
+                    set_y_pred[k].extend(batch_y_pred[k])
+                    
+        if self.num_metrics == 1:
+            return set_y_pred[0]
+        else:
+            return set_y_pred
         
         
     def train_epoch(self, dataloader: torch.utils.data.DataLoader):
@@ -109,45 +115,61 @@ class Trainer(object):
         self.model.train()
         
         epoch_losses = []
-        epoch_y = [[[], []] for k in range(self.num_metrics)]
+        epoch_y_gold = [[] for k in range(self.num_metrics)]
+        epoch_y_pred = [[] for k in range(self.num_metrics)]
         for batch in dataloader:
             batch = batch.to(self.device)
             with torch.cuda.amp.autocast(enabled=self.use_amp):
-                loss, *possible_batch_y = self.forward_batch(batch)
-            self.backward_batch(loss)
+                loss_with_possible_y_pred = self.forward_batch(batch)
             
-            epoch_losses.append(loss.item())
-            if possible_batch_y:
+            if self.num_metrics == 0:
+                loss = loss_with_possible_y_pred
+            else:
+                loss, *batch_y_pred = loss_with_possible_y_pred
+                batch_y_gold = self.model.decoder._unsqueezed_retrieve(batch)
+                
                 for k in range(self.num_metrics):
-                    epoch_y[k][0].extend(possible_batch_y[k][0])
-                    epoch_y[k][1].extend(possible_batch_y[k][1])
-        
-        if epoch_y:
-            return (numpy.mean(epoch_losses), *self.evaluate(*epoch_y))
+                    epoch_y_gold[k].extend(batch_y_gold[k])
+                    epoch_y_pred[k].extend(batch_y_pred[k])
+                    
+            self.backward_batch(loss)
+            epoch_losses.append(loss.item())
+            
+        if self.num_metrics == 0:
+            return numpy.mean(epoch_losses)
         else:
-            return (numpy.mean(epoch_losses), )
+            return numpy.mean(epoch_losses), *self.model.decoder._unsqueezed_evaluate(epoch_y_gold, epoch_y_pred)
+        
         
         
     def eval_epoch(self, dataloader: torch.utils.data.DataLoader):
         self.model.eval()
         
         epoch_losses = []
-        epoch_y = [[[], []] for k in range(self.num_metrics)]
+        epoch_y_gold = [[] for k in range(self.num_metrics)]
+        epoch_y_pred = [[] for k in range(self.num_metrics)]
         with torch.no_grad():
             for batch in dataloader:
                 batch = batch.to(self.device)
-                loss, *possible_batch_y = self.forward_batch(batch)
+                loss_with_possible_y_pred = self.forward_batch(batch)
                 
-                epoch_losses.append(loss.item())
-                if possible_batch_y:
+                if self.num_metrics == 0:
+                    loss = loss_with_possible_y_pred
+                else:
+                    loss, *batch_y_pred = loss_with_possible_y_pred
+                    batch_y_gold = self.model.decoder._unsqueezed_retrieve(batch)
+                    
                     for k in range(self.num_metrics):
-                        epoch_y[k][0].extend(possible_batch_y[k][0])
-                        epoch_y[k][1].extend(possible_batch_y[k][1])
-        
-        if epoch_y:
-            return (numpy.mean(epoch_losses), *self.evaluate(*epoch_y))
+                        epoch_y_gold[k].extend(batch_y_gold[k])
+                        epoch_y_pred[k].extend(batch_y_pred[k])
+                        
+                epoch_losses.append(loss.item())
+                
+        if self.num_metrics == 0:
+            return numpy.mean(epoch_losses)
         else:
-            return (numpy.mean(epoch_losses), )
+            return numpy.mean(epoch_losses), *self.model.decoder._unsqueezed_evaluate(epoch_y_gold, epoch_y_pred)
+    
     
     
     def train_steps(self, 
@@ -175,7 +197,8 @@ class Trainer(object):
         best_dev_metric = -numpy.inf
         
         train_losses = []
-        train_y = [[[], []] for k in range(self.num_metrics)]
+        train_y_gold = [[] for k in range(self.num_metrics)]
+        train_y_pred = [[] for k in range(self.num_metrics)]
         eidx, sidx = 0, 0
         done_training = False
         t0 = time.time()
@@ -184,14 +207,20 @@ class Trainer(object):
             for batch in train_loader:
                 batch = batch.to(self.device)
                 with torch.cuda.amp.autocast(enabled=self.use_amp):
-                    loss, *possible_batch_y = self.forward_batch(batch)
-                self.backward_batch(loss)
-                
-                train_losses.append(loss.item())
-                if possible_batch_y:
+                    loss_with_possible_y_pred = self.forward_batch(batch)
+                    
+                if self.num_metrics == 0:
+                    loss = loss_with_possible_y_pred
+                else:
+                    loss, *batch_y_pred = loss_with_possible_y_pred
+                    batch_y_gold = self.model.decoder._unsqueezed_retrieve(batch)
+                    
                     for k in range(self.num_metrics):
-                        train_y[k][0].extend(possible_batch_y[k][0])
-                        train_y[k][1].extend(possible_batch_y[k][1])
+                        train_y_gold.extend(batch_y_gold[k])
+                        train_y_pred.extend(batch_y_pred[k])
+                        
+                self.backward_batch(loss)
+                train_losses.append(loss.item())
                 
                 if (sidx+1) % disp_every_steps == 0:
                     elapsed_secs = int(time.time() - t0)
@@ -199,32 +228,36 @@ class Trainer(object):
                     disp_running_info(eidx=eidx, sidx=sidx, lrs=lrs, 
                                       elapsed_secs=elapsed_secs, 
                                       loss=numpy.mean(train_losses),
-                                      metric=self.evaluate(*train_y) if train_y else None,
+                                      metric=self.model.decoder._unsqueezed_evaluate(train_y_gold, train_y_pred) if self.num_metrics>0 else None,
                                       partition='train')
                     train_losses = []
-                    train_y = [[[], []] for k in range(self.num_metrics)]
+                    train_y_gold = [[] for k in range(self.num_metrics)]
+                    train_y_pred = [[] for k in range(self.num_metrics)]
                     t0 = time.time()
                 
                 if (sidx+1) % eval_every_steps == 0 and dev_loader is not None:
-                    dev_loss, *possible_dev_metric = self.eval_epoch(dev_loader)
-                    possible_dev_metric = possible_dev_metric if len(possible_dev_metric) > 0 else None
-                    
+                    loss_with_possible_metric = self.eval_epoch(dev_loader)
+                    if self.num_metrics == 0:
+                        dev_loss = loss_with_possible_metric
+                    else:
+                        dev_loss, *dev_metric = loss_with_possible_metric
+                        
                     elapsed_secs = int(time.time() - t0)
                     disp_running_info(elapsed_secs=elapsed_secs, 
                                       loss=dev_loss, 
-                                      metric=possible_dev_metric, 
+                                      metric=dev_metric if self.num_metrics>0 else None, 
                                       partition='dev')
                     
                     if dev_loss < best_dev_loss:
                         best_dev_loss = dev_loss
                         if (save_callback is not None) and save_by_loss:
                             save_callback(self.model)
-                        
-                    if (possible_dev_metric is not None) and numpy.mean(possible_dev_metric) > best_dev_metric:
-                        best_dev_metric = numpy.mean(possible_dev_metric)
+                            
+                    if self.num_metrics > 0 and numpy.mean(dev_metric) > best_dev_metric:
+                        best_dev_metric = numpy.mean(dev_metric)
                         if (save_callback is not None) and (not save_by_loss):
                             save_callback(self.model)
-                    
+                            
                     if self.scheduler is not None and not self.schedule_by_step:
                         if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
                             if save_by_loss:
@@ -232,7 +265,7 @@ class Trainer(object):
                                 self.scheduler.step(dev_loss)
                             else:
                                 assert self.scheduler.mode == 'max'
-                                self.scheduler.step(numpy.mean(possible_dev_metric))
+                                self.scheduler.step(numpy.mean(dev_metric))
                         else:
                             self.scheduler.step()
                             

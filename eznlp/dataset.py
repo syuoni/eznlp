@@ -2,13 +2,13 @@
 from typing import List
 import torch
 
-from ..nn.functional import seq_lens2mask
-from ..config import Config
+from .nn.functional import seq_lens2mask
 from .wrapper import Batch
+from .model.model import ModelConfig
 
 
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self, data: List[dict], config: Config, training: bool=True):
+    def __init__(self, data: List[dict], config: ModelConfig, training: bool=True):
         """
         Parameters
         ----------

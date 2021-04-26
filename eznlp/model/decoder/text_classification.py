@@ -3,14 +3,16 @@ from typing import List
 from collections import Counter
 import torch
 
-from ..data.wrapper import Batch
-from ..nn.modules import SequencePooling, SequenceAttention
-from ..model.decoder import DecoderConfig, Decoder
-
+from ...wrapper import Batch
+from ...nn.init import reinit_layer_
+from ...nn.modules import SequencePooling, SequenceAttention, CombinedDropout
+from .base import DecoderConfig, Decoder
 
 
 class TextClassificationDecoderConfig(DecoderConfig):
     def __init__(self, **kwargs):
+        self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
+        
         self.agg_mode = kwargs.pop('agg_mode', 'multiplicative_attention')
         self.idx2label = kwargs.pop('idx2label', None)
         super().__init__(**kwargs)
@@ -44,19 +46,23 @@ class TextClassificationDecoderConfig(DecoderConfig):
         
         
     def exemplify(self, data_entry: dict, training: bool=True):
-        return torch.tensor(self.label2idx[data_entry['label']])
+        return {'label_id': torch.tensor(self.label2idx[data_entry['label']])}
         
-    def batchify(self, batch_label_ids: list):
-        return torch.stack(batch_label_ids)
+    def batchify(self, batch_examples: List[dict]):
+        return {'label_ids': torch.stack([ex['label_id'] for ex in batch_examples])}
         
     def instantiate(self):
         return TextClassificationDecoder(self)
-        
-    
-    
+
+
+
 class TextClassificationDecoder(Decoder):
     def __init__(self, config: TextClassificationDecoderConfig):
         super().__init__(config)
+        self.dropout = CombinedDropout(*config.in_drop_rates)
+        self.hid2logit = torch.nn.Linear(config.full_in_dim, config.voc_dim)
+        reinit_layer_(self.hid2logit, 'sigmoid')
+        
         if config.agg_mode.lower().endswith('_pooling'):
             self.aggregating = SequencePooling(mode=config.agg_mode.replace('_pooling', ''))
         elif config.agg_mode.lower().endswith('_attention'):
@@ -73,17 +79,24 @@ class TextClassificationDecoder(Decoder):
         
         # logits: (batch, tag_dim)
         logits = self.hid2logit(pooled_hidden)
-        
         return self.criterion(logits, batch.label_ids)
-    
-    
+        
+        
     def decode(self, batch: Batch, full_hidden: torch.Tensor):
         # pooled_hidden: (batch, hid_dim)
         pooled_hidden = self.aggregating(full_hidden, mask=batch.mask)
         
         # logits: (batch, tag_dim)
         logits = self.hid2logit(pooled_hidden)
-        
         return [self.idx2label[label_id] for label_id in logits.argmax(dim=-1).cpu().tolist()]
         
+        
+    def retrieve(self, batch: Batch):
+        return [self.idx2label[label_id] for label_id in batch.label_ids.cpu().tolist()]
+        
+        
+    def evaluate(self, y_gold: List[str], y_pred: List[str]):
+        """Accuracy for text classification. 
+        """
+        return sum(yp == yg for yp, yg in zip(y_gold, y_pred)) / len(y_gold)
         

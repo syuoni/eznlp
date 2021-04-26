@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from ..token import TokenSequence
 from .base import IO
-from ..sequence_tagging.transition import ChunksTagsTranslator
+from ..model.decoder.transition import ChunksTagsTranslator
 
 
 class ConllIO(IO):

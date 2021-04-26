@@ -5,7 +5,7 @@ from ..training.trainer import Trainer
 
 class MaskedLMTrainer(Trainer):
     def __init__(self, model: torch.nn.Module, **kwargs):
-        super().__init__(model, num_metrics=0, **kwargs)
+        super().__init__(model, **kwargs)
         
         
     def forward_batch(self, batch):
@@ -18,6 +18,6 @@ class MaskedLMTrainer(Trainer):
         if loss.dim() > 0:
             loss = loss.mean()
             
-        return (loss, )
+        return loss
     
     

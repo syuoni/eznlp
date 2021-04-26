@@ -33,7 +33,7 @@ setup(name='eznlp',
                         "numpy>=1.18.5",
                         "pandas>=1.0.5", 
                         "matplotlib>=3.2.2"],
-      package_data={'eznlp': ["sequence_tagging/transition.xlsx"]}, 
+      package_data={'eznlp': ["model/decoder/transition.xlsx"]}, 
       include_package_data=True, 
       python_requires ='>=3.8,<4')
 
