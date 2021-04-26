@@ -8,4 +8,4 @@ from .bert_like import BertLikeConfig
 from .flair import FlairConfig
 
 from .decoder import *
-from .model import ModelConfig, Model
+from .model import ModelConfig

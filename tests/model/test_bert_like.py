@@ -11,40 +11,40 @@ from eznlp.io import TabularIO
 
 
 
-class TestBertLikeEmbedder(object):
-    @pytest.mark.parametrize("mix_layers", ['trainable', 'top'])
-    @pytest.mark.parametrize("use_gamma", [True])
-    @pytest.mark.parametrize("freeze", [True])
-    def test_trainble_config(self, mix_layers, use_gamma, freeze, bert_like_with_tokenizer):
-        bert_like, tokenizer = bert_like_with_tokenizer
-        bert_like_config = BertLikeConfig(bert_like=bert_like, tokenizer=tokenizer, 
-                                          freeze=freeze, mix_layers=mix_layers, use_gamma=use_gamma)
-        bert_like_embedder = bert_like_config.instantiate()
-        
-        expected_num_trainable_params = 0
-        if not freeze:
-            expected_num_trainable_params += count_params(bert_like, return_trainable=False)
-        if mix_layers.lower() == 'trainable':
-            expected_num_trainable_params += 13
-        if use_gamma:
-            expected_num_trainable_params += 1
-        
-        assert count_params(bert_like_embedder) == expected_num_trainable_params
-        
-        
-    def test_serialization(self, bert_with_tokenizer):
-        bert, tokenizer = bert_with_tokenizer
-        config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert)
-        
-        config_path = "cache/bert_embedder.config"
-        torch.save(config, config_path)
-        assert os.path.getsize(config_path) < 1024 * 1024  # 1MB
+@pytest.mark.parametrize("mix_layers", ['trainable', 'top'])
+@pytest.mark.parametrize("use_gamma", [True])
+@pytest.mark.parametrize("freeze", [True])
+def test_trainble_config(mix_layers, use_gamma, freeze, bert_like_with_tokenizer):
+    bert_like, tokenizer = bert_like_with_tokenizer
+    bert_like_config = BertLikeConfig(bert_like=bert_like, tokenizer=tokenizer, 
+                                      freeze=freeze, mix_layers=mix_layers, use_gamma=use_gamma)
+    bert_like_embedder = bert_like_config.instantiate()
+    
+    expected_num_trainable_params = 0
+    if not freeze:
+        expected_num_trainable_params += count_params(bert_like, return_trainable=False)
+    if mix_layers.lower() == 'trainable':
+        expected_num_trainable_params += 13
+    if use_gamma:
+        expected_num_trainable_params += 1
+    
+    assert count_params(bert_like_embedder) == expected_num_trainable_params
+
+
+
+def test_serialization(bert_with_tokenizer):
+    bert, tokenizer = bert_with_tokenizer
+    config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert)
+    
+    config_path = "cache/bert_embedder.config"
+    torch.save(config, config_path)
+    assert os.path.getsize(config_path) < 1024 * 1024  # 1MB
 
 
 
 @pytest.mark.slow
 @pytest.mark.parametrize("mode", ["head+tail", "head-only", "tail-only"])
-def test_truncate_for_bert_like(self, mode, bert_with_tokenizer):
+def test_truncate_for_bert_like(mode, bert_with_tokenizer):
     bert, tokenizer = bert_with_tokenizer
     max_len = tokenizer.model_max_length - 2
     

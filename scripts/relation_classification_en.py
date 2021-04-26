@@ -271,11 +271,11 @@ if __name__ == '__main__':
     
     
     logger.info(header_format("Building", sep='-'))
-    classifier = config.instantiate().to(device)
-    count_params(classifier)
+    model = config.instantiate().to(device)
+    count_params(model)
     
     logger.info(header_format("Training", sep='-'))
-    trainer = build_trainer(RelationClassificationTrainer, classifier, device, len(train_loader), args)
+    trainer = build_trainer(RelationClassificationTrainer, model, device, len(train_loader), args)
     if args.pdb: 
         pdb.set_trace()
         
@@ -285,8 +285,8 @@ if __name__ == '__main__':
                         save_callback=save_callback, save_by_loss=False)
     
     logger.info(header_format("Evaluating", sep='-'))
-    classifier = torch.load(f"{save_path}/{config.name}.pth", map_location=device)
-    trainer = RelationClassificationTrainer(classifier, device=device)
+    model = torch.load(f"{save_path}/{config.name}.pth", map_location=device)
+    trainer = RelationClassificationTrainer(model, device=device)
     
     logger.info("Evaluating on dev-set")
     evaluate_relation_extraction(trainer, dev_set)

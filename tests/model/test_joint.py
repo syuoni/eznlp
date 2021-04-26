@@ -53,7 +53,7 @@ class TestModel(object):
     @pytest.mark.parametrize("enc_arch", ['Conv', 'LSTM'])
     @pytest.mark.parametrize("ck_dec_arch", ['sequence_tagging', 'span_classification'])
     @pytest.mark.parametrize("agg_mode", ['max_pooling'])
-    def test_classifier(self, enc_arch, ck_dec_arch, agg_mode, conll2004_demo, device):
+    def test_model(self, enc_arch, ck_dec_arch, agg_mode, conll2004_demo, device):
         if ck_dec_arch.lower() == 'sequence_tagging':
             ck_decoder_config = SequenceTaggingDecoderConfig()
         else:
@@ -66,7 +66,7 @@ class TestModel(object):
         self._assert_trainable()
         
         
-    def test_classifier_with_bert_like(self, conll2004_demo, bert_with_tokenizer, device):
+    def test_model_with_bert_like(self, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
         self.config = ModelConfig('joint', 
                                   ohots=None, 

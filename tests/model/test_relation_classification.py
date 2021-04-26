@@ -51,7 +51,7 @@ class TestModel(object):
         
     @pytest.mark.parametrize("enc_arch", ['Conv', 'LSTM'])
     @pytest.mark.parametrize("agg_mode", ['max_pooling'])
-    def test_classifier(self, enc_arch, agg_mode, conll2004_demo, device):
+    def test_model(self, enc_arch, agg_mode, conll2004_demo, device):
         self.config = ModelConfig(intermediate2=EncoderConfig(arch=enc_arch), 
                                   decoder=RelationClassificationDecoderConfig(agg_mode=agg_mode))
         self._setup_case(conll2004_demo, device)
@@ -59,7 +59,7 @@ class TestModel(object):
         self._assert_trainable()
         
         
-    def test_classifier_with_bert_like(self, conll2004_demo, bert_with_tokenizer, device):
+    def test_model_with_bert_like(self, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
         self.config = ModelConfig('relation_classification', 
                                   ohots=None, 
@@ -71,43 +71,43 @@ class TestModel(object):
 
 
 
-class TestDataset(object):
-    @pytest.mark.parametrize("num_neg_relations, training", [(1, True), 
-                                                             (1, False)])
-    def test_spans(self, num_neg_relations, training):
-        tokenized_raw_text = ["This", "is", "a", "-3.14", "demo", ".", 
-                              "Those", "are", "an", "APPLE", "and", "some", "glass", "bottles", "."]
-        tokens = TokenSequence.from_tokenized_text(tokenized_raw_text)
-        
-        entities = [{'type': 'EntA', 'start': 4, 'end': 5},
-                    {'type': 'EntA', 'start': 9, 'end': 10},
-                    {'type': 'EntB', 'start': 12, 'end': 14}]
-        chunks = [(ent['type'], ent['start'], ent['end']) for ent in entities]
-        
-        raw_relations = [{'type': 'RelA', 'head': 0, 'tail': 1}, 
-                         {'type': 'RelA', 'head': 0, 'tail': 2}, 
-                         {'type': 'RelB', 'head': 1, 'tail': 2}, 
-                         {'type': 'RelB', 'head': 2, 'tail': 1}]
-        relations = [(rel['type'], chunks[rel['head']], chunks[rel['tail']]) for rel in raw_relations]
-        data = [{'tokens': tokens, 'chunks': chunks, 'relations': relations}]
-        
-        config = ModelConfig(decoder=RelationClassificationDecoderConfig(num_neg_relations=num_neg_relations))
-        dataset = Dataset(data, config, training=training)
-        dataset.build_vocabs_and_dims()
-        
-        span_pairs_obj = dataset[0]['span_pairs_obj']
-        assert span_pairs_obj.relations == relations
-        assert set((rel[1][1], rel[1][2], rel[2][1], rel[2][2]) for rel in relations).issubset(set(span_pairs_obj.sp_pairs))
-        assert (span_pairs_obj.sp_pair_size_ids+1).tolist() == [[he-hs, te-ts] for hs, he, ts, te in span_pairs_obj.sp_pairs]
-        
-        num_chunks = len(chunks)
-        expected_num_sp_pairs = num_chunks * (num_chunks-1)
-        if training:
-            expected_num_sp_pairs = min(expected_num_sp_pairs, len(relations) + num_neg_relations)
-        assert len(span_pairs_obj.sp_pairs) == expected_num_sp_pairs
-        
-        if training:
-            assert (span_pairs_obj.rel_label_ids[:len(relations)] != config.decoder.rel_none_idx).all().item()
-            assert (span_pairs_obj.rel_label_ids[len(relations):] == config.decoder.rel_none_idx).all().item()
-        else:
-            assert not hasattr(span_pairs_obj, 'label_ids')
+
+@pytest.mark.parametrize("num_neg_relations, training", [(1, True), 
+                                                         (1, False)])
+def test_span_pairs_obj(num_neg_relations, training):
+    tokenized_raw_text = ["This", "is", "a", "-3.14", "demo", ".", 
+                          "Those", "are", "an", "APPLE", "and", "some", "glass", "bottles", "."]
+    tokens = TokenSequence.from_tokenized_text(tokenized_raw_text)
+    
+    entities = [{'type': 'EntA', 'start': 4, 'end': 5},
+                {'type': 'EntA', 'start': 9, 'end': 10},
+                {'type': 'EntB', 'start': 12, 'end': 14}]
+    chunks = [(ent['type'], ent['start'], ent['end']) for ent in entities]
+    
+    raw_relations = [{'type': 'RelA', 'head': 0, 'tail': 1}, 
+                     {'type': 'RelA', 'head': 0, 'tail': 2}, 
+                     {'type': 'RelB', 'head': 1, 'tail': 2}, 
+                     {'type': 'RelB', 'head': 2, 'tail': 1}]
+    relations = [(rel['type'], chunks[rel['head']], chunks[rel['tail']]) for rel in raw_relations]
+    data = [{'tokens': tokens, 'chunks': chunks, 'relations': relations}]
+    
+    config = ModelConfig(decoder=RelationClassificationDecoderConfig(num_neg_relations=num_neg_relations))
+    dataset = Dataset(data, config, training=training)
+    dataset.build_vocabs_and_dims()
+    
+    span_pairs_obj = dataset[0]['span_pairs_obj']
+    assert span_pairs_obj.relations == relations
+    assert set((rel[1][1], rel[1][2], rel[2][1], rel[2][2]) for rel in relations).issubset(set(span_pairs_obj.sp_pairs))
+    assert (span_pairs_obj.sp_pair_size_ids+1).tolist() == [[he-hs, te-ts] for hs, he, ts, te in span_pairs_obj.sp_pairs]
+    
+    num_chunks = len(chunks)
+    expected_num_sp_pairs = num_chunks * (num_chunks-1)
+    if training:
+        expected_num_sp_pairs = min(expected_num_sp_pairs, len(relations) + num_neg_relations)
+    assert len(span_pairs_obj.sp_pairs) == expected_num_sp_pairs
+    
+    if training:
+        assert (span_pairs_obj.rel_label_ids[:len(relations)] != config.decoder.rel_none_idx).all().item()
+        assert (span_pairs_obj.rel_label_ids[len(relations):] == config.decoder.rel_none_idx).all().item()
+    else:
+        assert not hasattr(span_pairs_obj, 'label_ids')

@@ -51,7 +51,7 @@ class TestModel(object):
     @pytest.mark.parametrize("enc_arch", ['Conv', 'LSTM'])
     @pytest.mark.parametrize("agg_mode", ['min_pooling', 'max_pooling', 'mean_pooling', 
                                           'dot_attention', 'multiplicative_attention', 'additive_attention'])
-    def test_classifier(self, enc_arch, agg_mode, yelp_full_demo, device):
+    def test_model(self, enc_arch, agg_mode, yelp_full_demo, device):
         self.config = ModelConfig(intermediate2=EncoderConfig(arch=enc_arch), 
                                   decoder=TextClassificationDecoderConfig(agg_mode=agg_mode))
         self._setup_case(yelp_full_demo, device)
@@ -60,7 +60,7 @@ class TestModel(object):
         
         
     @pytest.mark.parametrize("from_tokenized", [True, False])
-    def test_classifier_with_bert_like(self, from_tokenized, yelp_full_demo, bert_with_tokenizer, device):
+    def test_model_with_bert_like(self, from_tokenized, yelp_full_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
         self.config = ModelConfig('text_classification', 
                                   ohots=None, 

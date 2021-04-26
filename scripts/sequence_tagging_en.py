@@ -253,11 +253,11 @@ if __name__ == '__main__':
     
     
     logger.info(header_format("Building", sep='-'))
-    tagger = config.instantiate().to(device)
-    count_params(tagger)
+    model = config.instantiate().to(device)
+    count_params(model)
     
     logger.info(header_format("Training", sep='-'))
-    trainer = build_trainer(SequenceTaggingTrainer, tagger, device, len(train_loader), args)
+    trainer = build_trainer(SequenceTaggingTrainer, model, device, len(train_loader), args)
     if args.pdb: 
         pdb.set_trace()
         
@@ -267,8 +267,8 @@ if __name__ == '__main__':
                         save_callback=save_callback, save_by_loss=False)
     
     logger.info(header_format("Evaluating", sep='-'))
-    tagger = torch.load(f"{save_path}/{args.scheme}-{config.name}.pth", map_location=device)
-    trainer = SequenceTaggingTrainer(tagger, device=device)
+    model = torch.load(f"{save_path}/{args.scheme}-{config.name}.pth", map_location=device)
+    trainer = SequenceTaggingTrainer(model, device=device)
     
     logger.info("Evaluating on dev-set")
     evaluate_entity_recognition(trainer, dev_set)
