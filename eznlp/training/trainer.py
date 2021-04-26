@@ -96,7 +96,9 @@ class Trainer(object):
         with torch.no_grad():
             for batch in dataloader:
                 batch.to(self.device)
-                loss, *batch_y_pred = self.forward_batch(batch)
+                # `dataset` may not have ground-truths, so avoid computing loss here 
+                hidden = self.model.get_full_hidden(batch)
+                batch_y_pred = self.model.decoder._unsqueezed_decode(batch, hidden)
                 for k in range(self.num_metrics):
                     set_y_pred[k].extend(batch_y_pred[k])
                     
@@ -216,8 +218,8 @@ class Trainer(object):
                     batch_y_gold = self.model.decoder._unsqueezed_retrieve(batch)
                     
                     for k in range(self.num_metrics):
-                        train_y_gold.extend(batch_y_gold[k])
-                        train_y_pred.extend(batch_y_pred[k])
+                        train_y_gold[k].extend(batch_y_gold[k])
+                        train_y_pred[k].extend(batch_y_pred[k])
                         
                 self.backward_batch(loss)
                 train_losses.append(loss.item())

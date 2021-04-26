@@ -25,7 +25,6 @@ class Decoder(torch.nn.Module):
         super().__init__()
         self.num_metrics = config.num_metrics
         
-        
     def forward(self, batch: Batch, full_hidden: torch.Tensor):
         raise NotImplementedError("Not Implemented `forward`")
         
@@ -62,7 +61,11 @@ class Decoder(torch.nn.Module):
     def _unsqueezed_evaluate(self, y_gold: List[list], y_pred: List[list]):
         if self.num_metrics == 0:
             raise RuntimeError("`_unsqueezed` method does not applies if `num_metrics` is 0")
-        elif self.num_metrics == 1:
+        else:
+            assert len(y_gold) == self.num_metrics
+            assert len(y_pred) == self.num_metrics
+            
+        if self.num_metrics == 1:
             return (self.evaluate(y_gold[0], y_pred[0]), )
         else:
             return self.evaluate(y_gold, y_pred)
