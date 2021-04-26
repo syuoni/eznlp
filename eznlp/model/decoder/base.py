@@ -14,10 +14,6 @@ class DecoderConfig(Config):
     @property
     def num_metrics(self):
         return 1
-        
-    @property
-    def full_in_dim(self):
-        return self.in_dim
 
 
 

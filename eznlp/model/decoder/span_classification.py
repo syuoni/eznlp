@@ -47,10 +47,6 @@ class SpanClassificationDecoderConfig(DecoderConfig):
         self.label2idx = {l: i for i, l in enumerate(idx2label)} if idx2label is not None else None
         
     @property
-    def full_in_dim(self):
-        return self.in_dim + self.size_emb_dim
-        
-    @property
     def voc_dim(self):
         return len(self.label2idx)
         
@@ -129,7 +125,7 @@ class SpanClassificationDecoder(Decoder):
     def __init__(self, config: SpanClassificationDecoderConfig):
         super().__init__(config)
         self.dropout = CombinedDropout(*config.in_drop_rates)
-        self.hid2logit = torch.nn.Linear(config.full_in_dim, config.voc_dim)
+        self.hid2logit = torch.nn.Linear(config.in_dim+config.size_emb_dim, config.voc_dim)
         reinit_layer_(self.hid2logit, 'sigmoid')
         
         self.none_label = config.none_label

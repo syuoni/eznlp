@@ -59,10 +59,6 @@ class RelationClassificationDecoderConfig(DecoderConfig):
         self.rel_label2idx = {l: i for i, l in enumerate(idx2rel_label)} if idx2rel_label is not None else None
         
     @property
-    def full_in_dim(self):
-        return self.in_dim*3 + self.ck_size_emb_dim*2 + self.ck_label_emb_dim*2
-        
-    @property
     def ck_voc_dim(self):
         return len(self.ck_label2idx)
     
@@ -189,7 +185,7 @@ class RelationClassificationDecoder(Decoder):
     def __init__(self, config: RelationClassificationDecoderConfig):
         super().__init__(config)
         self.dropout = CombinedDropout(*config.in_drop_rates)
-        self.hid2logit = torch.nn.Linear(config.full_in_dim, config.rel_voc_dim)
+        self.hid2logit = torch.nn.Linear(config.in_dim*3+config.ck_size_emb_dim*2+config.ck_label_emb_dim*2, config.rel_voc_dim)
         reinit_layer_(self.hid2logit, 'sigmoid')
         
         self.num_neg_relations = config.num_neg_relations
@@ -258,9 +254,9 @@ class RelationClassificationDecoder(Decoder):
         for k in range(batch.size):
             rel_labels = [self.idx2rel_label[i] for i in batch_span_pair_logits[k].argmax(dim=-1).cpu().tolist()]
             
-            relations = [(rel_label, (hckl, h_start, h_end), (tckl, t_start, t_end)) \
-                             for rel_label, (h_start, h_end, t_start, t_end), (hckl, tckl) \
-                             in zip(rel_labels, batch.span_pairs_objs[k].sp_pairs, batch.span_pairs_objs[k].ck_labels) \
+            relations = [(rel_label, (hckl, h_start, h_end), (tckl, t_start, t_end)) 
+                             for rel_label, (h_start, h_end, t_start, t_end), (hckl, tckl) 
+                             in zip(rel_labels, batch.span_pairs_objs[k].sp_pairs, batch.span_pairs_objs[k].ck_labels) 
                              if rel_label != self.rel_none_label]
             batch_relations.append(relations)
             

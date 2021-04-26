@@ -135,8 +135,6 @@ if __name__ == '__main__':
     # trainer = Trainer(model, optimizer=optimizer, device=device)
     # trainer.train_epoch([batch])
     
-    
-    
     # json_io = JsonIO(text_key='tokens', 
     #                  chunk_key='entities', 
     #                  chunk_type_key='type', 
@@ -158,7 +156,6 @@ if __name__ == '__main__':
     # model(batch)
     # model.decode(batch)
     
-    
     # for model_name in ["hfl/chinese-bert-wwm-ext", 
     #                     "hfl/chinese-roberta-wwm-ext"]:
     #     logging.info(f"Start downloading {model_name}...")
@@ -166,3 +163,4 @@ if __name__ == '__main__':
     #     model = transformers.AutoModelForPreTraining.from_pretrained(model_name)
     #     tokenizer.save_pretrained(f"assets/transformers/{model_name}")
     #     model.save_pretrained(f"assets/transformers/{model_name}")
+    

@@ -65,9 +65,7 @@ class BertLikeConfig(Config):
         # Sequence longer than maximum length should be pre-processed
         assert len(sub_tokens) <= self.tokenizer.model_max_length - 2
         
-        sub_tok_ids = [self.tokenizer.cls_token_id] + \
-                       self.tokenizer.convert_tokens_to_ids(sub_tokens) + \
-                      [self.tokenizer.sep_token_id]
+        sub_tok_ids = [self.tokenizer.cls_token_id] + self.tokenizer.convert_tokens_to_ids(sub_tokens) + [self.tokenizer.sep_token_id]
         # (step+2, )
         return torch.tensor(sub_tok_ids)
         
@@ -94,10 +92,7 @@ class BertLikeConfig(Config):
         # Sequence longer than maximum length should be pre-processed
         assert len(sub_tokens) <= self.tokenizer.model_max_length - 2
         
-        sub_tok_ids = [self.tokenizer.cls_token_id] + \
-                       self.tokenizer.convert_tokens_to_ids(sub_tokens) + \
-                      [self.tokenizer.sep_token_id]
-        
+        sub_tok_ids = [self.tokenizer.cls_token_id] + self.tokenizer.convert_tokens_to_ids(sub_tokens) + [self.tokenizer.sep_token_id]
         # (step+2, ), (step, )
         return torch.tensor(sub_tok_ids), torch.tensor(ori_indexes)
         

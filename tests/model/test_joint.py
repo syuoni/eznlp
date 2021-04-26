@@ -75,4 +75,3 @@ class TestModel(object):
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
-        

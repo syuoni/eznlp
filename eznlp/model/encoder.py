@@ -284,8 +284,8 @@ class TransformerEncoder(Encoder):
         self.tf_layers = torch.nn.ModuleList([torch.nn.TransformerEncoderLayer(d_model=config.hid_dim, 
                                                                                nhead=config.nhead, 
                                                                                dim_feedforward=config.pf_dim, 
-                                                                               dropout=config.hid_drop_rate) \
-                                              for _ in range(config.num_layers)])
+                                                                               dropout=config.hid_drop_rate) 
+                                                  for k in range(config.num_layers)])
         for tf_layer in self.tf_layers:
             reinit_transformer_encoder_layer_(tf_layer)
             
@@ -300,6 +300,3 @@ class TransformerEncoder(Encoder):
         
         # hidden: (step, batch, hid_dim) -> (batch, step, hid_dim) 
         return hidden.permute(1, 0, 2)
-    
-    
-    

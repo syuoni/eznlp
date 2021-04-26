@@ -60,7 +60,7 @@ class TextClassificationDecoder(Decoder):
     def __init__(self, config: TextClassificationDecoderConfig):
         super().__init__(config)
         self.dropout = CombinedDropout(*config.in_drop_rates)
-        self.hid2logit = torch.nn.Linear(config.full_in_dim, config.voc_dim)
+        self.hid2logit = torch.nn.Linear(config.in_dim, config.voc_dim)
         reinit_layer_(self.hid2logit, 'sigmoid')
         
         if config.agg_mode.lower().endswith('_pooling'):
