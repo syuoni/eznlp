@@ -3,7 +3,7 @@ from typing import List
 from collections import Counter
 import torch
 
-from ...wrapper import Batch, TargetWrapper
+from ...wrapper import TensorWrapper, Batch
 from ...nn.utils import unpad_seqs
 from ...nn.crf import CRF
 from ...nn.modules import CombinedDropout
@@ -84,7 +84,7 @@ class SequenceTaggingDecoderConfig(DecoderConfig):
 
 
 
-class Tags(TargetWrapper):
+class Tags(TensorWrapper):
     """
     A wrapper of tags with original chunks. 
     
@@ -95,10 +95,9 @@ class Tags(TargetWrapper):
          'chunks': List[tuple]}
     """
     def __init__(self, data_entry: dict, config: SequenceTaggingDecoderConfig, training: bool=True):
-        super().__init__(training)
-        
+        self.training = training
         self.chunks = data_entry.get('chunks', None)
-        if training:
+        if self.chunks is not None:
             self.tags = config.translator.chunks2tags(data_entry['chunks'], len(data_entry['tokens']))
             self.tag_ids = torch.tensor([config.tag2idx[t] for t in self.tags], dtype=torch.long)
 

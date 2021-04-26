@@ -106,8 +106,5 @@ def test_span_pairs_obj(num_neg_relations, training):
         expected_num_sp_pairs = min(expected_num_sp_pairs, len(relations) + num_neg_relations)
     assert len(span_pairs_obj.sp_pairs) == expected_num_sp_pairs
     
-    if training:
-        assert (span_pairs_obj.rel_label_ids[:len(relations)] != config.decoder.rel_none_idx).all().item()
-        assert (span_pairs_obj.rel_label_ids[len(relations):] == config.decoder.rel_none_idx).all().item()
-    else:
-        assert not hasattr(span_pairs_obj, 'label_ids')
+    assert (span_pairs_obj.rel_label_ids[:len(relations)] != config.decoder.rel_none_idx).all().item()
+    assert (span_pairs_obj.rel_label_ids[len(relations):] == config.decoder.rel_none_idx).all().item()

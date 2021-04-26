@@ -106,8 +106,5 @@ def test_spans_obj(num_neg_chunks, max_span_size, training):
         expected_num_spans = min(expected_num_spans, len(chunks) + num_neg_chunks)
     assert len(spans_obj.spans) == expected_num_spans
     
-    if training:
-        assert (spans_obj.label_ids[:len(chunks)] != config.decoder.none_idx).all().item()
-        assert (spans_obj.label_ids[len(chunks):] == config.decoder.none_idx).all().item()
-    else:
-        assert not hasattr(spans_obj, 'label_ids')
+    assert (spans_obj.label_ids[:len(chunks)] != config.decoder.none_idx).all().item()
+    assert (spans_obj.label_ids[len(chunks):] == config.decoder.none_idx).all().item()

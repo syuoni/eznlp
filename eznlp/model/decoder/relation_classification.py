@@ -5,7 +5,7 @@ import random
 import logging
 import torch
 
-from ...wrapper import TargetWrapper, Batch
+from ...wrapper import TensorWrapper, Batch
 from ...nn.init import reinit_embedding_, reinit_layer_
 from ...nn.modules import CombinedDropout
 from ...metrics import precision_recall_f1_report
@@ -95,7 +95,7 @@ class RelationClassificationDecoderConfig(DecoderConfig):
 
 
 
-class SpanPairs(TargetWrapper):
+class SpanPairs(TensorWrapper):
     """
     A wrapper of span-pairs with original relations. 
     
@@ -114,8 +114,7 @@ class SpanPairs(TargetWrapper):
         In this case, `inject_chunks` and `build` should be successively invoked, and the negative samples are generated from injected chunks. 
     """
     def __init__(self, data_entry: dict, config: RelationClassificationDecoderConfig, training: bool=True, building: bool=True):
-        super().__init__(training)
-        
+        self.training = training
         self.chunks = data_entry['chunks'] if training or building else []
         self.relations = data_entry.get('relations', None)
         
@@ -146,7 +145,7 @@ class SpanPairs(TargetWrapper):
         assert not self.is_built
         self.is_built = True
         
-        if self.training:
+        if self.relations is not None:
             pos_sp_pairs = [(head[1], head[2], tail[1], tail[2]) for label, head, tail in self.relations]
             pos_ck_labels = [(head[0], tail[0]) for label, head, tail in self.relations]
             pos_rel_labels = [label for label, head, tail in self.relations]
@@ -175,7 +174,7 @@ class SpanPairs(TargetWrapper):
         self.ck_labels = pos_ck_labels + neg_ck_labels
         self.ck_label_ids = torch.tensor([[config.ck_label2idx[hckl], config.ck_label2idx[tckl]] for hckl, tckl in self.ck_labels])
         
-        if self.training:
+        if self.relations is not None:
             rel_labels = pos_rel_labels + [config.rel_none_label] * len(neg_sp_pairs)
             self.rel_label_ids = torch.tensor([config.rel_label2idx[label] for label in rel_labels])
 

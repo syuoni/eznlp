@@ -5,7 +5,7 @@ import random
 import logging
 import torch
 
-from ...wrapper import TargetWrapper, Batch
+from ...wrapper import TensorWrapper, Batch
 from ...nn.init import reinit_embedding_, reinit_layer_
 from ...nn.modules import CombinedDropout
 from ...metrics import precision_recall_f1_report
@@ -80,7 +80,7 @@ class SpanClassificationDecoderConfig(DecoderConfig):
 
 
 
-class Spans(TargetWrapper):
+class Spans(TensorWrapper):
     """
     A wrapper of spans with original chunks. 
     
@@ -91,10 +91,10 @@ class Spans(TargetWrapper):
          'chunks': List[tuple]}
     """
     def __init__(self, data_entry: dict, config: SpanClassificationDecoderConfig, training: bool=True):
-        super().__init__(training)
+        self.training = training
         
         self.chunks = data_entry.get('chunks', None)
-        if training:
+        if self.chunks is not None:
             pos_spans = [(start, end) for label, start, end in data_entry['chunks']]
             pos_labels = [label for label, start, end in data_entry['chunks']]
         else:
@@ -115,7 +115,7 @@ class Spans(TargetWrapper):
         self.span_size_ids = torch.tensor([end-start-1 for start, end in self.spans])
         self.span_size_ids.masked_fill_(self.span_size_ids>=config.max_span_size, config.max_span_size-1)
         
-        if training:
+        if self.chunks is not None:
             labels = pos_labels + [config.none_label] * len(neg_spans)
             self.label_ids = torch.tensor([config.label2idx[label] for label in labels])
 
