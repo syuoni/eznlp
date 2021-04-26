@@ -9,11 +9,11 @@ from .trainer import Trainer
 logger = logging.getLogger(__name__)
 
 
-def evaluate_text_classification(trainier: Trainer, dataset: Dataset):
-    set_labels_pred = trainier.predict(dataset)
+def evaluate_text_classification(trainer: Trainer, dataset: Dataset):
+    set_labels_pred = trainer.predict(dataset)
     set_labels_gold = [ex['label'] for ex in dataset.data]
     
-    acc = trainier.evaluate(set_labels_gold, set_labels_pred)
+    acc = trainer.model.decoder.evaluate(set_labels_gold, set_labels_pred)
     logger.info(f"Accuracy: {acc*100:2.3f}%")
 
 
