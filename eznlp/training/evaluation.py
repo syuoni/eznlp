@@ -2,7 +2,7 @@
 import logging
 
 from ..metrics import precision_recall_f1_report
-from ..data.dataset import Dataset
+from ..dataset import Dataset
 from .trainer import Trainer
 
 
