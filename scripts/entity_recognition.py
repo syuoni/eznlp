@@ -9,22 +9,20 @@ import logging
 import pprint
 import numpy
 import torch
-import allennlp.modules
-import transformers
-import flair
 
 from eznlp import auto_device
-from eznlp.vectors import GloVe
+from eznlp.vectors import Vectors, GloVe
+from eznlp.dataset import Dataset
 from eznlp.config import ConfigDict
-from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig, CharConfig
+from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig, CharConfig, SoftLexiconConfig
 from eznlp.model import ELMoConfig, BertLikeConfig, FlairConfig
-from eznlp.span_classification import SpanClassificationDecoderConfig, SpanClassifierConfig
-from eznlp.span_classification import SpanClassificationDataset
-from eznlp.span_classification import SpanClassificationTrainer
+from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderConfig
+from eznlp.model import ModelConfig
+from eznlp.training import Trainer
 from eznlp.training.utils import count_params
-from eznlp.training.evaluation import evaluate_entity_recognition, union_set_chunks
+from eznlp.training.evaluation import evaluate_entity_recognition
 
-from utils import load_data, build_trainer, header_format
+from utils import load_data, dataset2language, load_pretrained, build_trainer, header_format
 
 
 def parse_arguments(parser: argparse.ArgumentParser):
@@ -35,7 +33,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
                              help="whether log to terminal")
     
     group_data = parser.add_argument_group('dataset')
-    group_data.add_argument('--dataset', type=str, default='conll2004', 
+    group_data.add_argument('--dataset', type=str, default='conll2003', 
                             help="dataset name")
     group_data.add_argument('--save_for_pipeline', default=False, action='store_true', 
                             help="whether to save predicted chunks for pipeline")
@@ -70,6 +68,10 @@ def parse_arguments(parser: argparse.ArgumentParser):
                              help="dropout rate")
     group_model.add_argument('--use_locked_drop', default=False, action='store_true', 
                              help="whether to use locked dropout")
+    group_model.add_argument('--dec_arch', type=str, default='CRF', 
+                             help="decoder architecture")
+    group_model.add_argument('--scheme', type=str, default='BIOES', 
+                             help="sequence tagging scheme", choices=['BIOES', 'BIO2'])
     group_model.add_argument('--agg_mode', type=str, default='max_pooling', 
                              help="aggregating mode")
     group_model.add_argument('--num_neg_chunks', type=int, default=100, 
@@ -94,6 +96,12 @@ def parse_arguments(parser: argparse.ArgumentParser):
                            help="whether to use ELMo")
     parser_fs.add_argument('--use_flair', default=False, action='store_true', 
                            help="whether to use Flair")
+    parser_fs.add_argument('--use_bigram', default=False, action='store_true', 
+                           help="whether to use bigram")
+    parser_fs.add_argument('--use_softword', default=False, action='store_true', 
+                           help="whether to use softword")
+    parser_fs.add_argument('--use_softlexicon', default=False, action='store_true', 
+                           help="whether to use softlexicon")
     
     parser_ft = subparsers.add_parser('finetune', aliases=['ft'], 
                                       help="train by finetuning pretrained models")
@@ -112,34 +120,47 @@ def parse_arguments(parser: argparse.ArgumentParser):
     
     args.grad_clip = None if args.grad_clip < 0 else args.grad_clip
     return args
-    
+
 
 def build_config(args: argparse.Namespace):
     if args.use_locked_drop:
         drop_rates = (0.0, 0.05, args.drop_rate)
     else:
         drop_rates = (args.drop_rate, 0.0, 0.0)
-        
-    decoder_config = SpanClassificationDecoderConfig(agg_mode=args.agg_mode, 
-                                                     num_neg_chunks=args.num_neg_chunks, 
-                                                     max_span_size=args.max_span_size, 
-                                                     size_emb_dim=args.size_emb_dim, 
-                                                     in_drop_rates=drop_rates)
+    
     
     if args.command in ('from_scratch', 'fs'):
-        if args.emb_dim in (50, 100, 200):
-            glove = GloVe(f"assets/vectors/glove.6B.{args.emb_dim}d.txt")
-        elif args.emb_dim == 300:
-            glove = GloVe("assets/vectors/glove.840B.300d.txt")
+        if args.language.lower() == 'english' and args.emb_dim in (50, 100, 200):
+            vectors = GloVe(f"assets/vectors/glove.6B.{args.emb_dim}d.txt")
+        elif args.language.lower() == 'english' and args.emb_dim == 300:
+            vectors = GloVe("assets/vectors/glove.840B.300d.txt")
+        elif args.language.lower() == 'chinese' and args.emb_dim == 50:
+            vectors = Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
+        elif args.language.lower() == 'chinese' and args.emb_dim == 200:
+            vectors = Vectors.load("assets/vectors/tencent/Tencent_AILab_ChineseEmbedding.txt", encoding='utf-8', skiprows=0)
         else:
-            glove = None
-        ohots_config = ConfigDict({'text': OneHotConfig(field='text', vectors=glove, emb_dim=args.emb_dim, freeze=args.emb_freeze)})
-        char_config = CharConfig(emb_dim=16, 
-                                 encoder=EncoderConfig(arch=args.char_arch, 
-                                                       hid_dim=128, 
-                                                       num_layers=1, 
-                                                       in_drop_rates=(args.drop_rate, 0.0, 0.0)))
-        nested_ohots_config = ConfigDict({'char': char_config})
+            vectors = None
+        ohots_config = ConfigDict({'text': OneHotConfig(field='text', vectors=vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze)})
+        
+        if args.language.lower() == 'chinese' and args.use_bigram:
+            giga_bi = Vectors.load("assets/vectors/gigaword_chn.all.a2b.bi.ite50.vec", encoding='utf-8')
+            ohots_config['bigram'] = OneHotConfig(field='bigram', vectors=giga_bi, emb_dim=50, freeze=args.emb_freeze)
+        
+        if args.language.lower() == 'chinese' and args.use_softword:
+            mhots_config = ConfigDict({'softword': MultiHotConfig(field='softword', use_emb=False)})
+        else:
+            mhots_config = None
+            
+        if args.language.lower() == 'english':
+            char_config = CharConfig(emb_dim=16, 
+                                     encoder=EncoderConfig(arch=args.char_arch, hid_dim=128, num_layers=1, 
+                                                           in_drop_rates=(args.drop_rate, 0.0, 0.0)))
+            nested_ohots_config = ConfigDict({'char': char_config})
+        elif args.language.lower() == 'chinese' and args.use_softlexicon:
+            ctb50 = Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
+            nested_ohots_config = ConfigDict({'softlexicon': SoftLexiconConfig(vectors=ctb50, emb_dim=50, freeze=args.emb_freeze)})
+        else:
+            nested_ohots_config = None
         
         if args.use_interm1:
             interm1_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
@@ -148,17 +169,13 @@ def build_config(args: argparse.Namespace):
             
         interm2_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
         
-        if args.use_elmo:
-            elmo = allennlp.modules.Elmo(options_file="assets/allennlp/elmo_2x4096_512_2048cnn_2xhighway_options.json", 
-                                         weight_file="assets/allennlp/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5", 
-                                         num_output_representations=1)
-            elmo_config = ELMoConfig(elmo=elmo)
+        if args.language.lower() == 'english' and args.use_elmo:
+            elmo_config = ELMoConfig(elmo=load_pretrained('elmo'))
         else:
             elmo_config = None
             
-        if args.use_flair:
-            flair_fw_lm = flair.models.LanguageModel.load_language_model("assets/flair/news-forward-0.4.1.pt")
-            flair_bw_lm = flair.models.LanguageModel.load_language_model("assets/flair/news-backward-0.4.1.pt")
+        if args.language.lower() == 'english' and args.use_flair:
+            flair_fw_lm, flair_bw_lm = load_pretrained('flair')
             flair_fw_config, flair_bw_config = FlairConfig(flair_lm=flair_fw_lm), FlairConfig(flair_lm=flair_bw_lm)
             interm2_config.in_proj = True
         else:
@@ -168,6 +185,7 @@ def build_config(args: argparse.Namespace):
         
     elif args.command in ('finetune', 'ft'):
         ohots_config = None
+        mhots_config = None
         nested_ohots_config = None
         interm1_config = None
         
@@ -179,43 +197,34 @@ def build_config(args: argparse.Namespace):
         elmo_config = None
         flair_fw_config, flair_bw_config = None, None
         
-        if args.bert_arch.startswith('BERT'):
-            # Cased tokenizer for NER task
-            if args.bert_arch.endswith('base'):
-                PATH = "assets/transformers/bert-base-cased"
-            elif args.bert_arch.endswith('large'):
-                PATH = "assets/transformers/bert-large-cased"
-            
-            tokenizer = transformers.BertTokenizer.from_pretrained(PATH)
-            bert = transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, 
-                                                          attention_probs_dropout_prob=args.bert_drop_rate)
-            bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert, arch=args.bert_arch, 
-                                              freeze=False, use_truecase=True)
-            
-        elif args.bert_arch.startswith('RoBERTa'):
-            if args.bert_arch.endswith('base'):
-                PATH = "assets/transformers/roberta-base"
-            elif args.bert_arch.endswith('large'):
-                PATH = "assets/transformers/roberta-large"
-            
-            tokenizer = transformers.RobertaTokenizer.from_pretrained(PATH, add_prefix_space=True)
-            roberta = transformers.RobertaModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, 
-                                                                attention_probs_dropout_prob=args.bert_drop_rate)
-            bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=roberta, arch=args.bert_arch, 
-                                              freeze=False, use_truecase=False)
-            
+        # Cased tokenizer for NER task
+        bert_like, tokenizer = load_pretrained(args.bert_arch, args, cased=True)
+        bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert_like, arch=args.bert_arch, 
+                                          freeze=False, use_truecase=args.bert_arch.startswith('BERT'))
     else:
         raise Exception("No sub-command specified")
         
-    return SpanClassifierConfig(ohots=ohots_config, 
-                                nested_ohots=nested_ohots_config, 
-                                intermediate1=interm1_config, 
-                                elmo=elmo_config, 
-                                flair_fw=flair_fw_config, 
-                                flair_bw=flair_bw_config, 
-                                bert_like=bert_like_config, 
-                                intermediate2=interm2_config, 
-                                decoder=decoder_config)
+    if args.dec_arch.lower() in ('crf', 'softmax'):
+        decoder_config = SequenceTaggingDecoderConfig(arch=args.dec_arch, 
+                                                      scheme=args.scheme, 
+                                                      in_drop_rates=drop_rates)
+    else:
+        decoder_config = SpanClassificationDecoderConfig(agg_mode=args.agg_mode, 
+                                                         num_neg_chunks=args.num_neg_chunks, 
+                                                         max_span_size=args.max_span_size, 
+                                                         size_emb_dim=args.size_emb_dim, 
+                                                         in_drop_rates=drop_rates)
+    
+    return ModelConfig(ohots=ohots_config, 
+                       mhots=mhots_config, 
+                       nested_ohots=nested_ohots_config, 
+                       intermediate1=interm1_config, 
+                       elmo=elmo_config, 
+                       flair_fw=flair_fw_config, 
+                       flair_bw=flair_bw_config, 
+                       bert_like=bert_like_config, 
+                       intermediate2=interm2_config, 
+                       decoder=decoder_config)
 
 
 if __name__ == '__main__':
@@ -224,7 +233,7 @@ if __name__ == '__main__':
     
     # Use micro-seconds to ensure different timestamps while adopting multiprocessing
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-    save_path =  f"cache/{args.dataset}/{timestamp}"
+    save_path =  f"cache/{args.dataset}-ER/{timestamp}"
     if not os.path.exists(save_path):
         os.makedirs(save_path)
         
@@ -248,12 +257,13 @@ if __name__ == '__main__':
         torch.cuda.set_device(device)
         
     train_data, dev_data, test_data = load_data(args)
+    args.language = dataset2language[args.dataset]
     config = build_config(args)
     
-    train_set = SpanClassificationDataset(train_data, config, training=True)
+    train_set = Dataset(train_data, config, training=True)
     train_set.build_vocabs_and_dims(dev_data, test_data)
-    dev_set   = SpanClassificationDataset(dev_data,  train_set.config, training=False)
-    test_set  = SpanClassificationDataset(test_data, train_set.config, training=False)
+    dev_set   = Dataset(dev_data,  train_set.config, training=False)
+    test_set  = Dataset(test_data, train_set.config, training=False)
     
     logger.info(train_set.summary)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  num_workers=4, collate_fn=train_set.collate)
@@ -265,18 +275,21 @@ if __name__ == '__main__':
     count_params(model)
     
     logger.info(header_format("Training", sep='-'))
-    trainer = build_trainer(SpanClassificationTrainer, model, device, len(train_loader), args)
+    trainer = build_trainer(model, device, len(train_loader), args)
     if args.pdb: 
         pdb.set_trace()
         
+        
+    torch.save(config, f"{save_path}/{config.name}.config")
     def save_callback(model):
         torch.save(model, f"{save_path}/{config.name}.pth")
     trainer.train_steps(train_loader=train_loader, dev_loader=dev_loader, num_epochs=args.num_epochs, 
                         save_callback=save_callback, save_by_loss=False)
     
+    
     logger.info(header_format("Evaluating", sep='-'))
     model = torch.load(f"{save_path}/{config.name}.pth", map_location=device)
-    trainer = SpanClassificationTrainer(model, device=device)
+    trainer = Trainer(model, device=device)
     
     logger.info("Evaluating on dev-set")
     evaluate_entity_recognition(trainer, dev_set)
@@ -285,22 +298,22 @@ if __name__ == '__main__':
     
     
     # Replace gold chunks with predicted chunks for pipeline
-    if args.save_for_pipeline:
-        train_set_chunks_pred = trainer.predict(train_set)
-        train_set_chunks_gold = [ex['chunks'] for ex in train_data]
-        train_set_chunks_union = union_set_chunks(train_set_chunks_gold, train_set_chunks_pred)
-        for ex, chunks_union in zip(train_data, train_set_chunks_union):
-            ex['chunks'] = chunks_union
+    # if args.save_for_pipeline:
+    #     train_set_chunks_pred = trainer.predict(train_set)
+    #     train_set_chunks_gold = [ex['chunks'] for ex in train_data]
+    #     train_set_chunks_union = union_set_chunks(train_set_chunks_gold, train_set_chunks_pred)
+    #     for ex, chunks_union in zip(train_data, train_set_chunks_union):
+    #         ex['chunks'] = chunks_union
         
-        dev_set_chunks_pred = trainer.predict(dev_set)
-        for ex, chunks_pred in zip(dev_data, dev_set_chunks_pred):
-            ex['chunks'] = chunks_pred
+    #     dev_set_chunks_pred = trainer.predict(dev_set)
+    #     for ex, chunks_pred in zip(dev_data, dev_set_chunks_pred):
+    #         ex['chunks'] = chunks_pred
         
-        test_set_chunks_pred = trainer.predict(test_set)
-        for ex, chunks_pred in zip(test_data, test_set_chunks_pred):
-            ex['chunks'] = chunks_pred
+    #     test_set_chunks_pred = trainer.predict(test_set)
+    #     for ex, chunks_pred in zip(test_data, test_set_chunks_pred):
+    #         ex['chunks'] = chunks_pred
             
-        torch.save((train_data, dev_data, test_data), f"{save_path}/predicted-chunks.data")
+    #     torch.save((train_data, dev_data, test_data), f"{save_path}/predicted-chunks.data")
     
     
     logger.info(" ".join(sys.argv))

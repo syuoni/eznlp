@@ -9,23 +9,21 @@ import logging
 import pprint
 import numpy
 import torch
-import allennlp.modules
-import transformers
-import flair
 
 from eznlp import auto_device
-from eznlp.vectors import GloVe
+from eznlp.vectors import Vectors, GloVe
+from eznlp.dataset import Dataset
 from eznlp.config import ConfigDict
-from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig, CharConfig
+from eznlp.model import OneHotConfig, EncoderConfig
 from eznlp.model import ELMoConfig, BertLikeConfig, FlairConfig
+from eznlp.model import TextClassificationDecoderConfig
+from eznlp.model import ModelConfig
 from eznlp.model.bert_like import truncate_for_bert_like
-from eznlp.text_classification import TextClassificationDecoderConfig, TextClassifierConfig
-from eznlp.text_classification import TextClassificationDataset
-from eznlp.text_classification import TextClassificationTrainer
+from eznlp.training import Trainer
 from eznlp.training.utils import count_params
 from eznlp.training.evaluation import evaluate_text_classification
 
-from utils import load_data, build_trainer, header_format
+from utils import load_data, dataset2language, load_pretrained, build_trainer, header_format
 
 
 def parse_arguments(parser: argparse.ArgumentParser):
@@ -111,16 +109,19 @@ def build_config(args: argparse.Namespace):
     else:
         drop_rates = (args.drop_rate, 0.0, 0.0)
         
-    decoder_config = TextClassificationDecoderConfig(agg_mode=args.agg_mode, in_drop_rates=drop_rates)
-    
+        
     if args.command in ('from_scratch', 'fs'):
-        if args.emb_dim in (50, 100, 200):
-            glove = GloVe(f"assets/vectors/glove.6B.{args.emb_dim}d.txt")
-        elif args.emb_dim == 300:
-            glove = GloVe("assets/vectors/glove.840B.300d.txt")
+        if args.language.lower() == 'english' and args.emb_dim in (50, 100, 200):
+            vectors = GloVe(f"assets/vectors/glove.6B.{args.emb_dim}d.txt")
+        elif args.language.lower() == 'english' and args.emb_dim == 300:
+            vectors = GloVe("assets/vectors/glove.840B.300d.txt")
+        elif args.language.lower() == 'chinese' and args.emb_dim == 50:
+            vectors = Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
+        elif args.language.lower() == 'chinese' and args.emb_dim == 200:
+            vectors = Vectors.load("assets/vectors/tencent/Tencent_AILab_ChineseEmbedding.txt", encoding='utf-8', skiprows=0)
         else:
-            glove = None
-        ohots_config = ConfigDict({'text': OneHotConfig(field='text', min_freq=5, vectors=glove, emb_dim=args.emb_dim, freeze=args.emb_freeze)})
+            vectors = None
+        ohots_config = ConfigDict({'text': OneHotConfig(field='text', min_freq=5, vectors=vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze)})
         
         if args.use_interm1:
             interm1_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
@@ -129,17 +130,13 @@ def build_config(args: argparse.Namespace):
             
         interm2_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
         
-        if args.use_elmo:
-            elmo = allennlp.modules.Elmo(options_file="assets/allennlp/elmo_2x4096_512_2048cnn_2xhighway_options.json", 
-                                         weight_file="assets/allennlp/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5", 
-                                         num_output_representations=1)
-            elmo_config = ELMoConfig(elmo=elmo)
+        if args.language.lower() == 'english' and args.use_elmo:
+            elmo_config = ELMoConfig(elmo=load_pretrained('elmo'))
         else:
             elmo_config = None
             
-        if args.use_flair:
-            flair_fw_lm = flair.models.LanguageModel.load_language_model("assets/flair/news-forward-0.4.1.pt")
-            flair_bw_lm = flair.models.LanguageModel.load_language_model("assets/flair/news-backward-0.4.1.pt")
+        if args.language.lower() == 'english' and args.use_flair:
+            flair_fw_lm, flair_bw_lm = load_pretrained('flair')
             flair_fw_config, flair_bw_config = FlairConfig(flair_lm=flair_fw_lm), FlairConfig(flair_lm=flair_bw_lm)
             interm2_config.in_proj = True
         else:
@@ -159,41 +156,22 @@ def build_config(args: argparse.Namespace):
         elmo_config = None
         flair_fw_config, flair_bw_config = None, None
         
-        if args.bert_arch.startswith('BERT'):
-            if args.bert_arch.endswith('base'):
-                PATH = "assets/transformers/bert-base-uncased"
-            elif args.bert_arch.endswith('large'):
-                PATH = "assets/transformers/bert-large-uncased"
-            
-            tokenizer = transformers.BertTokenizer.from_pretrained(PATH)
-            bert = transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, 
-                                                          attention_probs_dropout_prob=args.bert_drop_rate)
-            bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert, arch=args.bert_arch, 
-                                              freeze=False, use_truecase=True)
-            
-        elif args.bert_arch.startswith('RoBERTa'):
-            if args.bert_arch.endswith('base'):
-                PATH = "assets/transformers/roberta-base"
-            elif args.bert_arch.endswith('large'):
-                PATH = "assets/transformers/roberta-large"
-            
-            tokenizer = transformers.RobertaTokenizer.from_pretrained(PATH, add_prefix_space=True)
-            roberta = transformers.RobertaModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, 
-                                                                attention_probs_dropout_prob=args.bert_drop_rate)
-            bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=roberta, arch=args.bert_arch, 
-                                              freeze=False, use_truecase=False)
-            
+        # Uncased tokenizer for text classification
+        bert_like, tokenizer = load_pretrained(args.bert_arch, args, cased=False)
+        bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert_like, arch=args.bert_arch, 
+                                          freeze=False, use_truecase=args.bert_arch.startswith('BERT'))
     else:
         raise Exception("No sub-command specified")
         
-    return TextClassifierConfig(ohots=ohots_config, 
-                                intermediate1=interm1_config, 
-                                elmo=elmo_config, 
-                                flair_fw=flair_fw_config, 
-                                flair_bw=flair_bw_config, 
-                                bert_like=bert_like_config, 
-                                intermediate2=interm2_config, 
-                                decoder=decoder_config)
+    decoder_config = TextClassificationDecoderConfig(agg_mode=args.agg_mode, in_drop_rates=drop_rates)
+    return ModelConfig(ohots=ohots_config, 
+                       intermediate1=interm1_config, 
+                       elmo=elmo_config, 
+                       flair_fw=flair_fw_config, 
+                       flair_bw=flair_bw_config, 
+                       bert_like=bert_like_config, 
+                       intermediate2=interm2_config, 
+                       decoder=decoder_config)
 
 
 if __name__ == '__main__':
@@ -227,6 +205,7 @@ if __name__ == '__main__':
         temp = torch.randn(100).to(device)
         
     train_data, dev_data, test_data = load_data(args)
+    args.language = dataset2language[args.dataset]
     # train_data, dev_data, test_data = train_data[:1000], dev_data[:1000], test_data[:1000]
     config = build_config(args)
     
@@ -235,10 +214,10 @@ if __name__ == '__main__':
         dev_data   = truncate_for_bert_like(dev_data,   config.bert_like.tokenizer, verbose=args.log_terminal)
         test_data  = truncate_for_bert_like(test_data,  config.bert_like.tokenizer, verbose=args.log_terminal)
         
-    train_set = TextClassificationDataset(train_data, config, training=True)
+    train_set = Dataset(train_data, config, training=True)
     train_set.build_vocabs_and_dims(dev_data, test_data)
-    dev_set   = TextClassificationDataset(dev_data,  train_set.config, training=False)
-    test_set  = TextClassificationDataset(test_data, train_set.config, training=False)
+    dev_set   = Dataset(dev_data,  train_set.config, training=False)
+    test_set  = Dataset(test_data, train_set.config, training=False)
     
     logger.info(train_set.summary)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
@@ -250,10 +229,11 @@ if __name__ == '__main__':
     count_params(model)
     
     logger.info(header_format("Training", sep='-'))
-    trainer = build_trainer(TextClassificationTrainer, model, device, len(train_loader), args)
+    trainer = build_trainer(model, device, len(train_loader), args)
     if args.pdb: 
         pdb.set_trace()
         
+    torch.save(config, f"{save_path}/{config.name}.config")
     def save_callback(model):
         torch.save(model, f"{save_path}/{config.name}.pth")
     trainer.train_steps(train_loader=train_loader, dev_loader=dev_loader, num_epochs=args.num_epochs, 
@@ -261,7 +241,7 @@ if __name__ == '__main__':
     
     logger.info(header_format("Evaluating", sep='-'))
     model = torch.load(f"{save_path}/{config.name}.pth", map_location=device)
-    trainer = TextClassificationTrainer(model, device=device)
+    trainer = Trainer(model, device=device)
     
     logger.info("Evaluating on dev-set")
     evaluate_text_classification(trainer, dev_set)

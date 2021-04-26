@@ -6,23 +6,7 @@ import subprocess
 import multiprocessing
 import logging
 
-"""
-python scripts/sequence_tagging_en.py fs
-python scripts/sequence_tagging_en.py --batch_size 64 fs
-python scripts/sequence_tagging_en.py --optimizer AdamW --lr 1e-3 fs
-python scripts/sequence_tagging_en.py --grad_clip -1 fs
-python scripts/sequence_tagging_en.py --scheduler ReduceLROnPlateau fs
-python scripts/sequence_tagging_en.py --scheduler LinearDecayWithWarmup fs
-python scripts/sequence_tagging_en.py --num_layers 1 fs
-python scripts/sequence_tagging_en.py --use_locked_drop fs
-
-python scripts/sequence_tagging_en.py --char_arch LSTM fs
-python scripts/sequence_tagging_en.py --use_elmo fs
-python scripts/sequence_tagging_en.py --use_flair fs
-
-python scripts/sequence_tagging_en.py --scheduler LinearDecayWithWarmup ft
-python scripts/sequence_tagging_en.py --scheduler LinearDecayWithWarmup ft --use_roberta
-"""
+from utils import dataset2language
 
 
 def call_command(command: str):
@@ -34,7 +18,7 @@ def call_command(command: str):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--task', type=str, default='sequence_tagging_en', 
+    parser.add_argument('--task', type=str, default='entity_recognition', 
                         help="task name")
     parser.add_argument('--dataset', type=str, default='conll2003', 
                         help="dataset name")
@@ -45,7 +29,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_workers', type=int ,default=0, 
                         help="number of processes to run")
     args = parser.parse_args()
-    
+    args.language = dataset2language[args.dataset]
     
     logging.basicConfig(level=logging.INFO, 
                         format="[%(asctime)s %(levelname)s] %(message)s", 
@@ -57,16 +41,49 @@ if __name__ == '__main__':
                f"--dataset {args.dataset}", 
                f"--seed {args.seed}"]
     
-    if args.task == 'sequence_tagging_en':
+    if args.task == 'text_classification':
+        if args.command in ('fs', 'from_scratch'):
+            options = [["--num_epochs 50"], 
+                       ["--optimizer SGD --lr 0.05", 
+                        "--optimizer SGD --lr 0.1", 
+                        "--optimizer SGD --lr 0.2", 
+                        "--optimizer SGD --lr 0.5", 
+                        "--optimizer AdamW --lr 5e-4",
+                        "--optimizer AdamW --lr 1e-3",
+                        "--optimizer AdamW --lr 2e-3", 
+                        "--optimizer Adadelta --lr 0.5",
+                        "--optimizer Adadelta --lr 1.0",
+                        "--optimizer Adadelta --lr 2.0"], 
+                       ["--batch_size 64"], 
+                       ["--num_layers 1", "--num_layers 2"], 
+                       ["--agg_mode max_pooling", "--agg_mode multiplicative_attention"], 
+                       ["fs"]]
+        else:
+            options = [["--num_epochs 10"], 
+                       ["--optimizer AdamW --lr 5e-4 --finetune_lr 1e-5", 
+                        "--optimizer AdamW --lr 1e-3 --finetune_lr 1e-5", 
+                        "--optimizer AdamW --lr 2e-3 --finetune_lr 1e-5", 
+                        "--optimizer AdamW --lr 5e-4 --finetune_lr 2e-5", 
+                        "--optimizer AdamW --lr 1e-3 --finetune_lr 2e-5", 
+                        "--optimizer AdamW --lr 2e-3 --finetune_lr 2e-5"], 
+                       ["--batch_size 32"], 
+                       ["--scheduler LinearDecayWithWarmup"], 
+                       ["ft"], 
+                       ["--bert_drop_rate 0.2"], 
+                       ["", "--use_interm2"], 
+                       ["--bert_arch BERT_base", "--bert_arch RoBERTa_base"]]
+    
+    elif args.task == 'entity_recognition' and args.language.lower() == 'english':
         if args.command in ('fs', 'from_scratch'):
             options = [["--num_epochs 100"], 
-                       ["--optimizer SGD --lr 0.1"], 
-                       ["--batch_size 8", 
-                        "--batch_size 16", 
-                        "--batch_size 32"], 
+                       ["--optimizer SGD --lr 0.1 --batch_size 32"], 
+                       # ["--optimizer Adadelta --lr 1.0 --batch_size 64"], 
                        ["--num_layers 1", "--num_layers 2"], 
                        # ["--grad_clip -1", "--grad_clip 5"], 
                        # ["", "--use_locked_drop"], 
+                       ["--num_neg_chunks 200", "--num_neg_chunks 100", "--num_neg_chunks 50"], 
+                       ["--max_span_size 10", "--max_span_size 5"], 
+                       ["--size_emb_dim 50", "--size_emb_dim 25", "--size_emb_dim 10"], 
                        ["fs"], 
                        ["", "--use_elmo"], 
                        ["", "--use_flair"], 
@@ -76,6 +93,10 @@ if __name__ == '__main__':
                        ["--optimizer AdamW --lr 1e-3 --finetune_lr 1e-5", 
                         "--optimizer AdamW --lr 5e-4 --finetune_lr 1e-5", 
                         "--optimizer AdamW --lr 2e-3 --finetune_lr 1e-5"], 
+                       # ["--optimizer AdamW --lr 1e-3 --finetune_lr 5e-5", 
+                       #  "--optimizer AdamW --lr 1e-3 --finetune_lr 1e-4", 
+                       #  "--optimizer AdamW --lr 2e-3 --finetune_lr 5e-5", 
+                       #  "--optimizer AdamW --lr 2e-3 --finetune_lr 1e-4"], 
                        ["--batch_size 48"], 
                        ["--scheduler LinearDecayWithWarmup"], 
                        ["--dec_arch SoftMax", "--dec_arch CRF"],
@@ -87,8 +108,8 @@ if __name__ == '__main__':
                         "--bert_arch RoBERTa_base", 
                         "--bert_arch BERT_large", 
                         "--bert_arch RoBERTa_large"]]
-            
-    elif args.task == 'sequence_tagging_zh':
+    
+    elif args.task == 'entity_recognition' and args.language.lower() == 'chinese':
         if args.command in ('fs', 'from_scratch'):
             options = [["--num_epochs 100"], 
                        ["--optimizer SGD --lr 0.05", 
@@ -121,67 +142,8 @@ if __name__ == '__main__':
                        ["--bert_drop_rate 0.2"], 
                        ["", "--use_interm2"], 
                        ["--bert_arch BERT_base", "--bert_arch RoBERTa_base"]]
-        
-    elif args.task.startswith('text_classification'):
-        if args.command in ('fs', 'from_scratch'):
-            options = [["--num_epochs 50"], 
-                       ["--optimizer SGD --lr 0.05", 
-                        "--optimizer SGD --lr 0.1", 
-                        "--optimizer SGD --lr 0.2", 
-                        "--optimizer SGD --lr 0.5", 
-                        "--optimizer AdamW --lr 5e-4",
-                        "--optimizer AdamW --lr 1e-3",
-                        "--optimizer AdamW --lr 2e-3", 
-                        "--optimizer Adadelta --lr 0.5",
-                        "--optimizer Adadelta --lr 1.0",
-                        "--optimizer Adadelta --lr 2.0"], 
-                       ["--batch_size 64"], 
-                       ["--num_layers 1", "--num_layers 2"], 
-                       ["--agg_mode max_pooling", "--agg_mode multiplicative_attention"], 
-                       ["fs"]]
-        else:
-            options = [["--num_epochs 10"], 
-                       ["--optimizer AdamW --lr 5e-4 --finetune_lr 1e-5", 
-                        "--optimizer AdamW --lr 1e-3 --finetune_lr 1e-5", 
-                        "--optimizer AdamW --lr 2e-3 --finetune_lr 1e-5", 
-                        "--optimizer AdamW --lr 5e-4 --finetune_lr 2e-5", 
-                        "--optimizer AdamW --lr 1e-3 --finetune_lr 2e-5", 
-                        "--optimizer AdamW --lr 2e-3 --finetune_lr 2e-5"], 
-                       ["--batch_size 32"], 
-                       ["--scheduler LinearDecayWithWarmup"], 
-                       ["ft"], 
-                       ["--bert_drop_rate 0.2"], 
-                       ["", "--use_interm2"], 
-                       ["--bert_arch BERT_base", "--bert_arch RoBERTa_base"]]
     
-    elif args.task.startswith('span_classification'):
-        if args.command in ('fs', 'from_scratch'):
-            options = [["--save_for_pipeline"], 
-                       ["--num_epochs 100"], 
-                       ["--optimizer Adadelta --lr 1.0", 
-                        "--optimizer AdamW --lr 1e-3", 
-                        "--optimizer SGD --lr 0.1"], 
-                       ["--batch_size 64"], 
-                       ["--num_layers 1", "--num_layers 2"], 
-                       ["--num_neg_chunks 200", "--num_neg_chunks 100", "--num_neg_chunks 50"], 
-                       ["--max_span_size 10", "--max_span_size 5"], 
-                       ["--size_emb_dim 50", "--size_emb_dim 25", "--size_emb_dim 10"], 
-                       ["fs"]]
-        else:
-            options = [["--save_for_pipeline"], 
-                       ["--num_epochs 50"], 
-                       ["--optimizer AdamW --lr 1e-3 --finetune_lr 5e-5", 
-                        "--optimizer AdamW --lr 1e-3 --finetune_lr 1e-4", 
-                        "--optimizer AdamW --lr 2e-3 --finetune_lr 5e-5", 
-                        "--optimizer AdamW --lr 2e-3 --finetune_lr 1e-4"], 
-                       ["--batch_size 48"], 
-                       ["--scheduler LinearDecayWithWarmup"], 
-                       ["ft"], 
-                       ["--bert_drop_rate 0.2"], 
-                       ["", "--use_interm2"], 
-                       ["--bert_arch BERT_base", "--bert_arch RoBERTa_base"]]
-    
-    elif args.task.startswith('relation_classification'):
+    elif args.task == 'relation_classification':
         if args.command in ('fs', 'from_scratch'):
             options = [["--load_for_pipeline --load_path cache/conll2004_ner/20210421-075646-442088"], 
                        ["--num_epochs 100"], 

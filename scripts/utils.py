@@ -5,19 +5,34 @@ import spacy
 import jieba
 import sklearn.model_selection
 import torch
+import allennlp.modules
+import transformers
+import flair
 
 from eznlp.token import LexiconTokenizer
-from eznlp.metrics import precision_recall_f1_report
 from eznlp.vectors import Vectors
 from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO
+from eznlp.training import Trainer
 from eznlp.training.utils import LRLambda
-from eznlp.training.utils import count_params, collect_params, check_param_groups
+from eznlp.training.utils import collect_params, check_param_groups
 
 logger = logging.getLogger(__name__)
 
 
 spacy_nlp_en = spacy.load("en_core_web_sm", disable=['tagger', 'parser', 'ner'])
 
+dataset2language = {'conll2003': 'English', 
+                    'conll2012': 'English', 
+                    'conll2004': 'English', 
+                    'ResumeNER': 'Chinese', 
+                    'WeiboNER': 'Chinese', 
+                    'SIGHAN2006': 'Chinese', 
+                    'conll2012_zh': 'Chinese', 
+                    'yelp2013': 'English', 
+                    'imdb': 'English', 
+                    'yelp_full': 'English', 
+                    'ChnSentiCorp': 'Chinese', 
+                    'THUCNews_10': 'Chinese'}
 
 def load_data(args: argparse.Namespace):
     if args.dataset == 'conll2003':
@@ -25,6 +40,7 @@ def load_data(args: argparse.Namespace):
         train_data = conll_io.read("data/conll2003/eng.train")
         dev_data   = conll_io.read("data/conll2003/eng.testa")
         test_data  = conll_io.read("data/conll2003/eng.testb")
+        
     elif args.dataset == 'conll2012':
         conll_io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', line_sep_starts=["#begin", "#end", "pt/"], encoding='utf-8', case_mode='None', number_mode='Zeros')
         train_data = conll_io.read("data/conll2012/train.english.v4_gold_conll")
@@ -42,11 +58,13 @@ def load_data(args: argparse.Namespace):
         train_data = conll_io.read("data/ResumeNER/train.char.bmes")
         dev_data   = conll_io.read("data/ResumeNER/dev.char.bmes")
         test_data  = conll_io.read("data/ResumeNER/test.char.bmes")
+        
     elif args.dataset == 'WeiboNER':
         conll_io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BIO2', encoding='utf-8', token_sep="", pad_token="", pre_text_normalizer=lambda x: x[0])
         train_data = conll_io.read("data/WeiboNER/weiboNER_2nd_conll.train")
         dev_data   = conll_io.read("data/WeiboNER/weiboNER_2nd_conll.dev")
         test_data  = conll_io.read("data/WeiboNER/weiboNER_2nd_conll.test")
+        
     elif args.dataset == 'SIGHAN2006':
         # https://github.com/v-mipeng/LexiconAugmentedNER/issues/3
         conll_io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BIO2', encoding='utf-8', token_sep="", pad_token="")
@@ -57,7 +75,7 @@ def load_data(args: argparse.Namespace):
             for data in [train_data, dev_data, test_data]:
                 for data_entry in data:
                     data_entry['tokens'] = data_entry['tokens'][:510]
-                    
+        
     elif args.dataset == 'conll2012_zh':
         conll_io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', line_sep_starts=["#begin", "#end", "pt/"], encoding='utf-8', token_sep="", pad_token="")
         train_data = conll_io.read("data/conll2012/train.chinese.v4_gold_conll")
@@ -70,12 +88,14 @@ def load_data(args: argparse.Namespace):
         train_data = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.train.ss")
         dev_data   = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.dev.ss")
         test_data  = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.test.ss")
+        
     elif args.dataset == 'imdb':
         folder_io = CategoryFolderIO(categories=["pos", "neg"], mapping={"<br />": "\n"}, tokenize_callback=spacy_nlp_en, encoding='utf-8', verbose=args.log_terminal, 
                              case_mode='lower', number_mode='None')
         train_data = folder_io.read("data/imdb/train")
         test_data  = folder_io.read("data/imdb/test")
         train_data, dev_data = sklearn.model_selection.train_test_split(train_data, test_size=0.2, random_state=args.seed)
+        
     elif args.dataset == 'yelp_full':
         tabular_io = TabularIO(text_col_id=1, label_col_id=0, sep=",", mapping={"\\n": "\n", '\\"': '"'}, tokenize_callback=spacy_nlp_en, verbose=args.log_terminal, 
                                case_mode='Lower', number_mode='None')
@@ -89,6 +109,7 @@ def load_data(args: argparse.Namespace):
         train_data = tabular_io.read("data/ChnSentiCorp/train.tsv")
         dev_data   = tabular_io.read("data/ChnSentiCorp/dev.tsv")
         test_data  = tabular_io.read("data/ChnSentiCorp/test.tsv")
+        
     elif args.dataset == 'THUCNews_10':
         tabular_io = TabularIO(text_col_id=1, label_col_id=0, sep='\t', tokenize_callback=jieba.cut, encoding='utf-8', verbose=args.log_terminal, 
                                case_mode='Lower', number_mode='None')
@@ -106,14 +127,52 @@ def load_data(args: argparse.Namespace):
             for data_entry in data:
                 data_entry['tokens'].build_softwords(tokenizer.tokenize)
                 data_entry['tokens'].build_softlexicons(tokenizer.tokenize)
-                
+    
     if args.dataset in ('ChnSentiCorp', 'THUCNews_10'):
         for data in [train_data, dev_data, test_data]:
             for data_entry in data:
                 if len(data_entry['tokens']) > 1200:
                     data_entry['tokens'] = data_entry['tokens'][:300] + data_entry['tokens'][-900:]
-                    
+    
     return train_data, dev_data, test_data
+
+
+
+def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
+    if pretrained_str.lower() == 'elmo':
+        return allennlp.modules.Elmo(options_file="assets/allennlp/elmo_2x4096_512_2048cnn_2xhighway_options.json", 
+                                     weight_file="assets/allennlp/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5", 
+                                     num_output_representations=1)
+    elif pretrained_str.lower() == 'flair':
+        return (flair.models.LanguageModel.load_language_model("assets/flair/news-forward-0.4.1.pt"), 
+                flair.models.LanguageModel.load_language_model("assets/flair/news-backward-0.4.1.pt"))
+    elif args.language.lower() == 'english':
+        if pretrained_str.lower().startswith('bert'):
+            if 'base' in pretrained_str.lower():
+                PATH = "assets/transformers/bert-base-cased" if cased else "assets/transformers/bert-base-uncased"
+            elif 'large' in pretrained_str.lower():
+                PATH = "assets/transformers/bert-large-cased" if cased else "assets/transformers/bert-large-uncased"
+            return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
+                    transformers.BertTokenizer.from_pretrained(PATH))
+        
+        elif pretrained_str.lower().startswith('roberta'):
+            if 'base' in pretrained_str.lower():
+                PATH = "assets/transformers/roberta-base"
+            elif 'large' in pretrained_str.lower():
+                PATH = "assets/transformers/roberta-large"
+            return (transformers.RobertaModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
+                    transformers.RobertaTokenizer.from_pretrained(PATH, add_prefix_space=True))
+        
+    elif args.language.lower() == 'chinese':
+        if pretrained_str.lower().startswith('bert'):
+            PATH = "assets/transformers/hfl/chinese-bert-wwm-ext"
+            return (transformers.AutoModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
+                    transformers.AutoTokenizer.from_pretrained(PATH, model_max_length=512))
+        
+        elif pretrained_str.lower().startswith('roberta'):
+            PATH = "assets/transformers/hfl/chinese-roberta-wwm-ext"
+            return (transformers.AutoModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
+                    transformers.AutoTokenizer.from_pretrained(PATH, model_max_length=512, add_prefix_space=True))
 
 
 
@@ -125,7 +184,7 @@ def header_format(content: str, sep='=', width=100):
 
 
 
-def build_trainer(trainer_cls, model, device, num_train_batches: int, args: argparse.Namespace):
+def build_trainer(model, device, num_train_batches: int, args: argparse.Namespace):
     param_groups = [{'params': model.pretrained_parameters(), 'lr': args.finetune_lr}]
     param_groups.append({'params': collect_params(model, param_groups), 'lr': args.lr})
     assert check_param_groups(model, param_groups)
@@ -144,5 +203,5 @@ def build_trainer(trainer_cls, model, device, num_train_batches: int, args: argp
                                                          num_total_steps=num_train_batches*args.num_epochs)
         scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
     
-    return trainer_cls(model, optimizer=optimizer, scheduler=scheduler, schedule_by_step=schedule_by_step,
-                       device=device, grad_clip=args.grad_clip, use_amp=args.use_amp)
+    return Trainer(model, optimizer=optimizer, scheduler=scheduler, schedule_by_step=schedule_by_step,
+                   device=device, grad_clip=args.grad_clip, use_amp=args.use_amp)
