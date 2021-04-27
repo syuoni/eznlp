@@ -138,9 +138,7 @@ def build_config(args: argparse.Namespace):
         elif args.language.lower() == 'english' and args.emb_dim == 300:
             vectors = GloVe("assets/vectors/glove.840B.300d.txt")
         elif args.language.lower() == 'chinese' and args.emb_dim == 50:
-            vectors = Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
-        elif args.language.lower() == 'chinese' and args.emb_dim == 200:
-            vectors = Vectors.load("assets/vectors/tencent/Tencent_AILab_ChineseEmbedding.txt", encoding='utf-8', skiprows=0)
+            vectors = Vectors.load("assets/vectors/gigaword_chn.all.a2b.uni.ite50.vec", encoding='utf-8')
         else:
             vectors = None
         ohots_config = ConfigDict({'text': OneHotConfig(field='text', vectors=vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze)})

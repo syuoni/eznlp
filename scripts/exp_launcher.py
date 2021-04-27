@@ -14,13 +14,13 @@ python scripts/entity_recognition.py --dataset conll2003 --batch_size 64 --optim
 python scripts/entity_recognition.py --dataset conll2003 --batch_size 48 --optimizer AdamW --lr 1e-3 --finetune_lr 1e-5 --scheduler LinearDecayWithWarmup --num_epochs 50 --dec_arch CRF ft --bert_arch BERT_base
 python scripts/entity_recognition.py --dataset conll2003 --batch_size 48 --optimizer AdamW --lr 1e-3 --finetune_lr 1e-5 --scheduler LinearDecayWithWarmup --num_epochs 50 --dec_arch SpanC ft --bert_arch BERT_base
 
-python scripts/entity_recognition.py --dataset WeiboNER --batch_size 32 --optimizer Adamax --lr 5e-3 --dec_arch CRF --num_layers 2 fs --use_softlexicon
+python scripts/entity_recognition.py --dataset WeiboNER --batch_size 32 --optimizer Adamax --lr 5e-3 --dec_arch CRF --num_layers 2 fs --emb_dim 50 --use_softlexicon
 python scripts/entity_recognition.py --dataset WeiboNER --batch_size 48 --optimizer AdamW --lr 1e-3 --finetune_lr 1e-5 --scheduler LinearDecayWithWarmup --num_epochs 50 --dec_arch CRF ft --bert_arch BERT_base
 
 python scripts/text_classification.py --dataset imdb --batch_size 64 --optimizer Adadelta --lr 0.5 --num_layers 1 fs
 python scripts/text_classification.py --dataset imdb --batch_size 32 --optimizer AdamW --lr 1e-3 --finetune_lr 1e-5 --scheduler LinearDecayWithWarmup --num_epochs 10 ft --bert_arch BERT_base
 
-python scripts/text_classification.py --dataset ChnSentiCorp --batch_size 64 --optimizer Adadelta --lr 0.5 --num_layers 1 fs
+python scripts/text_classification.py --dataset ChnSentiCorp --batch_size 64 --optimizer Adadelta --lr 1.0 --num_layers 2 fs --emb_dim 200
 python scripts/text_classification.py --dataset ChnSentiCorp --batch_size 32 --optimizer AdamW --lr 1e-3 --finetune_lr 1e-5 --scheduler LinearDecayWithWarmup --num_epochs 10 ft --bert_arch BERT_base
 
 python scripts/relation_extraction.py --dataset conll2004 --batch_size 64 --optimizer Adadelta --lr 1.0 --num_layers 2 fs --char_arch LSTM
