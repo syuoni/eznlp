@@ -46,8 +46,7 @@ class TextClassificationDecoderConfig(DecoderConfig):
         
         
     def exemplify(self, data_entry: dict, training: bool=True):
-        label = data_entry.get('label', None)
-        return {'label_id': torch.tensor(self.label2idx[label] if label is not None else -100, dtype=torch.long)}
+        return {'label_id': torch.tensor(self.label2idx[data_entry['label']])}
         
     def batchify(self, batch_examples: List[dict]):
         return {'label_ids': torch.stack([ex['label_id'] for ex in batch_examples])}

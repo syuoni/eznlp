@@ -70,15 +70,3 @@ class TestModel(object):
         self._assert_batch_consistency()
         self._assert_trainable()
         
-        
-    def test_prediction_without_labels(self, yelp_full_demo, device):
-        self.config = ModelConfig('text_classification')
-        self._setup_case(yelp_full_demo, device)
-        
-        data_wo_labels = [{'tokens': entry['tokens']} for entry in yelp_full_demo]
-        dataset_wo_labels = Dataset(data_wo_labels, self.config, training=False)
-        
-        trainer = Trainer(self.model, device=device)
-        set_labels_pred = trainer.predict(dataset_wo_labels)
-        assert len(set_labels_pred) == len(data_wo_labels)
-        
