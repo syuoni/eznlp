@@ -166,4 +166,16 @@ class TestTagger(object):
                             num_epochs=4, 
                             disp_every_steps=1, 
                             eval_every_steps=2)
+        
+        
+    def test_prediction_without_labels(self, conll2003_demo, device):
+        self.config = ModelConfig('sequence_tagging')
+        self._setup_case(conll2003_demo, device)
+        
+        data_wo_labels = [{'tokens': entry['tokens']} for entry in conll2003_demo]
+        dataset_wo_labels = Dataset(data_wo_labels, self.config, training=False)
+        
+        trainer = Trainer(self.model, device=device)
+        set_labels_pred = trainer.predict(dataset_wo_labels)
+        assert len(set_labels_pred) == len(data_wo_labels)
 
