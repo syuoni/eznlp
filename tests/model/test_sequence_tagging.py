@@ -168,14 +168,14 @@ class TestTagger(object):
                             eval_every_steps=2)
         
         
-    def test_prediction_without_labels(self, conll2003_demo, device):
+    def test_prediction_without_gold(self, conll2003_demo, device):
         self.config = ModelConfig('sequence_tagging')
         self._setup_case(conll2003_demo, device)
         
-        data_wo_labels = [{'tokens': entry['tokens']} for entry in conll2003_demo]
-        dataset_wo_labels = Dataset(data_wo_labels, self.config, training=False)
+        data_wo_gold = [{'tokens': entry['tokens']} for entry in conll2003_demo]
+        dataset_wo_gold = Dataset(data_wo_gold, self.config, training=False)
         
         trainer = Trainer(self.model, device=device)
-        set_labels_pred = trainer.predict(dataset_wo_labels)
-        assert len(set_labels_pred) == len(data_wo_labels)
+        set_chunks_pred = trainer.predict(dataset_wo_gold)
+        assert len(set_chunks_pred) == len(data_wo_gold)
 

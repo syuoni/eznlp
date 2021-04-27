@@ -70,17 +70,17 @@ class TestModel(object):
         self._assert_trainable()
         
         
-    def test_prediction_without_labels(self, conll2004_demo, device):
+    def test_prediction_without_gold(self, conll2004_demo, device):
         self.config = ModelConfig('relation_classification')
         self._setup_case(conll2004_demo, device)
         
-        data_wo_labels = [{'tokens': entry['tokens'], 
-                           'chunks': entry['chunks']} for entry in conll2004_demo]
-        dataset_wo_labels = Dataset(data_wo_labels, self.config, training=False)
+        data_wo_gold = [{'tokens': entry['tokens'], 
+                         'chunks': entry['chunks']} for entry in conll2004_demo]
+        dataset_wo_gold = Dataset(data_wo_gold, self.config, training=False)
         
         trainer = Trainer(self.model, device=device)
-        set_labels_pred = trainer.predict(dataset_wo_labels)
-        assert len(set_labels_pred) == len(data_wo_labels)
+        set_relations_pred = trainer.predict(dataset_wo_gold)
+        assert len(set_relations_pred) == len(data_wo_gold)
 
 
 
