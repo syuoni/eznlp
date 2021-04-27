@@ -12,6 +12,8 @@ from .relation_classification import RelationClassificationDecoderConfig
 
 class JointDecoderConfig(DecoderConfig):
     def __init__(self, **kwargs):
+        # It seems that pytorch does not recommend to share weights outside two modules. 
+        # See https://discuss.pytorch.org/t/how-to-create-model-with-sharing-weight/398/2
         self.share_embeddings = kwargs.pop('share_embeddings', False)
         self.ck_decoder = kwargs.pop('ck_decoder', SpanClassificationDecoderConfig())
         self.rel_decoder = kwargs.pop('rel_decoder', RelationClassificationDecoderConfig())
