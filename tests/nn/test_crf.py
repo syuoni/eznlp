@@ -2,7 +2,7 @@
 import torch
 import torchcrf
 
-from eznlp.nn.crf import CRF
+from eznlp.nn import CRF
 
 
 def test_crf():

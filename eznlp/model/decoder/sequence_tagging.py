@@ -4,13 +4,12 @@ from collections import Counter
 import torch
 
 from ...wrapper import TensorWrapper, Batch
+from ...utils import ChunksTagsTranslator
 from ...nn.utils import unpad_seqs
-from ...nn.crf import CRF
-from ...nn.modules import CombinedDropout
+from ...nn.modules import CombinedDropout, CRF
 from ...nn.init import reinit_layer_
 from ...metrics import precision_recall_f1_report
 from .base import DecoderConfig, Decoder
-from .transition import ChunksTagsTranslator
 
 
 

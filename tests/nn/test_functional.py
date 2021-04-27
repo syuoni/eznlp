@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import torch
+
 from eznlp.nn.functional import seq_lens2mask, mask2seq_lens
 
 

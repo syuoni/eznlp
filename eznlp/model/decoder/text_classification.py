@@ -4,8 +4,8 @@ from collections import Counter
 import torch
 
 from ...wrapper import Batch
-from ...nn.init import reinit_layer_
 from ...nn.modules import SequencePooling, SequenceAttention, CombinedDropout
+from ...nn.init import reinit_layer_
 from .base import DecoderConfig, Decoder
 
 

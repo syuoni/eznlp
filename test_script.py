@@ -16,7 +16,7 @@ import transformers
 import flair
 
 from eznlp import auto_device
-from eznlp.utils import find_ascending
+from eznlp.utils import find_ascending, ChunksTagsTranslator
 from eznlp.token import Token, TokenSequence, LexiconTokenizer
 from eznlp.metrics import precision_recall_f1_report
 from eznlp.vectors import Vectors, GloVe, Senna
@@ -31,7 +31,6 @@ from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig
 from eznlp.model import NestedOneHotConfig, CharConfig, SoftLexiconConfig
 from eznlp.model import ELMoConfig, BertLikeConfig, FlairConfig
 from eznlp.model.bert_like import truncate_for_bert_like
-from eznlp.model.decoder.transition import ChunksTagsTranslator
 
 from eznlp.model import (TextClassificationDecoderConfig, 
                          SequenceTaggingDecoderConfig, 

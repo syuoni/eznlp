@@ -6,8 +6,8 @@ import logging
 import torch
 
 from ...wrapper import TensorWrapper, Batch
-from ...nn.init import reinit_embedding_, reinit_layer_
 from ...nn.modules import CombinedDropout
+from ...nn.init import reinit_embedding_, reinit_layer_
 from ...metrics import precision_recall_f1_report
 from .base import DecoderConfig, Decoder
 

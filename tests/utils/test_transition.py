@@ -2,7 +2,7 @@
 import pytest
 
 from eznlp.token import TokenSequence
-from eznlp.model.decoder.transition import ChunksTagsTranslator
+from eznlp.utils import ChunksTagsTranslator
 
 
 @pytest.fixture

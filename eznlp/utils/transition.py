@@ -4,8 +4,8 @@ import re
 from collections import Counter
 import pandas
 
-from ...token import TokenSequence
-from ...utils import find_ascending
+from ..token import TokenSequence
+from . import find_ascending
 
 
 class ChunksTagsTranslator(object):
