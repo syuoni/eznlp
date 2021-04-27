@@ -83,7 +83,8 @@ def parse_arguments(parser: argparse.ArgumentParser):
     
     subparsers = parser.add_subparsers(dest='command', help="sub-commands")
     parser_fs = subparsers.add_parser('from_scratch', aliases=['fs'], 
-                                      help="train from scratch, or with freezed pretrained models")
+                                      help="train from scratch, or with freezed pretrained models", 
+                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_fs.add_argument('--emb_dim', type=int, default=100, 
                            help="embedding dim")
     parser_fs.add_argument('--emb_freeze', default=False, action='store_true', 
@@ -104,7 +105,8 @@ def parse_arguments(parser: argparse.ArgumentParser):
                            help="whether to use softlexicon")
     
     parser_ft = subparsers.add_parser('finetune', aliases=['ft'], 
-                                      help="train by finetuning pretrained models")
+                                      help="train by finetuning pretrained models", 
+                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_ft.add_argument('--bert_arch', type=str, default='BERT_base', 
                            help="bert-like architecture")
     parser_ft.add_argument('--bert_drop_rate', type=float, default=0.2, 
@@ -122,12 +124,9 @@ def parse_arguments(parser: argparse.ArgumentParser):
     return args
 
 
-def build_config(args: argparse.Namespace):
-    if args.use_locked_drop:
-        drop_rates = (0.0, 0.05, args.drop_rate)
-    else:
-        drop_rates = (args.drop_rate, 0.0, 0.0)
-    
+
+def collect_IE_assembly_config(args: argparse.Namespace):
+    drop_rates = (0.0, 0.05, args.drop_rate) if args.use_locked_drop else (args.drop_rate, 0.0, 0.0)
     
     if args.command in ('from_scratch', 'fs'):
         if args.language.lower() == 'english' and args.emb_dim in (50, 100, 200):
@@ -202,6 +201,20 @@ def build_config(args: argparse.Namespace):
     else:
         raise Exception("No sub-command specified")
         
+    return {'ohots': ohots_config, 
+            'mhots': mhots_config, 
+            'nested_ohots': nested_ohots_config, 
+            'intermediate1': interm1_config, 
+            'elmo': elmo_config, 
+            'flair_fw': flair_fw_config, 
+            'flair_bw': flair_bw_config, 
+            'bert_like': bert_like_config, 
+            'intermediate2': interm2_config}
+
+
+def build_ER_config(args: argparse.Namespace):
+    drop_rates = (0.0, 0.05, args.drop_rate) if args.use_locked_drop else (args.drop_rate, 0.0, 0.0)
+    
     if args.dec_arch.lower() in ('crf', 'softmax'):
         decoder_config = SequenceTaggingDecoderConfig(arch=args.dec_arch, 
                                                       scheme=args.scheme, 
@@ -213,16 +226,8 @@ def build_config(args: argparse.Namespace):
                                                          size_emb_dim=args.size_emb_dim, 
                                                          in_drop_rates=drop_rates)
     
-    return ModelConfig(ohots=ohots_config, 
-                       mhots=mhots_config, 
-                       nested_ohots=nested_ohots_config, 
-                       intermediate1=interm1_config, 
-                       elmo=elmo_config, 
-                       flair_fw=flair_fw_config, 
-                       flair_bw=flair_bw_config, 
-                       bert_like=bert_like_config, 
-                       intermediate2=interm2_config, 
-                       decoder=decoder_config)
+    return ModelConfig(**collect_IE_assembly_config(args), decoder=decoder_config)
+
 
 
 if __name__ == '__main__':
@@ -256,7 +261,7 @@ if __name__ == '__main__':
         
     train_data, dev_data, test_data = load_data(args)
     args.language = dataset2language[args.dataset]
-    config = build_config(args)
+    config = build_ER_config(args)
     
     train_set = Dataset(train_data, config, training=True)
     train_set.build_vocabs_and_dims(dev_data, test_data)

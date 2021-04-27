@@ -11,17 +11,12 @@ import numpy
 import torch
 
 from eznlp import auto_device
-from eznlp.vectors import Vectors, GloVe
 from eznlp.dataset import Dataset
-from eznlp.config import ConfigDict
-from eznlp.model import OneHotConfig, EncoderConfig
-from eznlp.model import ELMoConfig, BertLikeConfig, FlairConfig
-from eznlp.model import TextClassificationDecoderConfig
+from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderConfig, RelationClassificationDecoderConfig, JointDecoderConfig
 from eznlp.model import ModelConfig
-from eznlp.model.bert_like import truncate_for_bert_like
 from eznlp.training import Trainer
 from eznlp.training.utils import count_params
-from eznlp.training.evaluation import evaluate_text_classification
+from eznlp.training.evaluation import evaluate_entity_recognition
 
 from utils import load_data, dataset2language, load_pretrained, build_trainer, header_format
 
@@ -34,7 +29,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
                              help="whether log to terminal")
     
     group_data = parser.add_argument_group('dataset')
-    group_data.add_argument('--dataset', type=str, default='imdb', 
+    group_data.add_argument('--dataset', type=str, default='conll2004', 
                             help="dataset name")
     
     group_train = parser.add_argument_group('training hyper-parameters')
@@ -42,7 +37,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
                              help="random seed")
     group_train.add_argument('--use_amp', default=False, action='store_true', 
                              help="whether to use amp")
-    group_train.add_argument('--num_epochs', type=int, default=50, 
+    group_train.add_argument('--num_epochs', type=int, default=100, 
                              help="number of epochs")
     group_train.add_argument('--batch_size', type=int, default=64, 
                              help="batch size")
@@ -67,8 +62,24 @@ def parse_arguments(parser: argparse.ArgumentParser):
                              help="dropout rate")
     group_model.add_argument('--use_locked_drop', default=False, action='store_true', 
                              help="whether to use locked dropout")
-    group_model.add_argument('--agg_mode', type=str, default='multiplicative_attention', 
+    group_model.add_argument('--ck_dec_arch', type=str, default='SpanC', 
+                             help="decoder architecture")
+    group_model.add_argument('--scheme', type=str, default='BIOES', 
+                             help="sequence tagging scheme", choices=['BIOES', 'BIO2'])
+    group_model.add_argument('--agg_mode', type=str, default='max_pooling', 
                              help="aggregating mode")
+    group_model.add_argument('--num_neg_chunks', type=int, default=100, 
+                             help="number of sampling negative chunks")
+    group_model.add_argument('--max_span_size', type=int, default=10, 
+                             help="maximum span size")
+    group_model.add_argument('--size_emb_dim', type=int, default=25, 
+                             help="span size embedding dim")
+    group_model.add_argument('--num_neg_relations', type=int, default=100, 
+                             help="number of sampling negative relations")
+    group_model.add_argument('--ck_size_emb_dim', type=int, default=25, 
+                             help="chunk span size embedding dim")
+    group_model.add_argument('--ck_label_emb_dim', type=int, default=25, 
+                             help="chunk label embedding dim")
     
     subparsers = parser.add_subparsers(dest='command', help="sub-commands")
     parser_fs = subparsers.add_parser('from_scratch', aliases=['fs'], 
@@ -78,12 +89,20 @@ def parse_arguments(parser: argparse.ArgumentParser):
                            help="embedding dim")
     parser_fs.add_argument('--emb_freeze', default=False, action='store_true', 
                            help="whether to freeze embedding weights")
+    parser_fs.add_argument('--char_arch', type=str, default='LSTM', 
+                           help="character-level encoder architecture")
     parser_fs.add_argument('--use_interm1', default=False, action='store_true', 
                            help="whether to use intermediate1")
     parser_fs.add_argument('--use_elmo', default=False, action='store_true', 
                            help="whether to use ELMo")
     parser_fs.add_argument('--use_flair', default=False, action='store_true', 
                            help="whether to use Flair")
+    parser_fs.add_argument('--use_bigram', default=False, action='store_true', 
+                           help="whether to use bigram")
+    parser_fs.add_argument('--use_softword', default=False, action='store_true', 
+                           help="whether to use softword")
+    parser_fs.add_argument('--use_softlexicon', default=False, action='store_true', 
+                           help="whether to use softlexicon")
     
     parser_ft = subparsers.add_parser('finetune', aliases=['ft'], 
                                       help="train by finetuning pretrained models", 
@@ -103,75 +122,33 @@ def parse_arguments(parser: argparse.ArgumentParser):
     
     args.grad_clip = None if args.grad_clip < 0 else args.grad_clip
     return args
-    
 
-def collect_TC_assembly_config(args: argparse.Namespace):
+
+from entity_recognition import collect_IE_assembly_config
+
+
+def build_Joint_ER_RE_config(args: argparse.Namespace):
     drop_rates = (0.0, 0.05, args.drop_rate) if args.use_locked_drop else (args.drop_rate, 0.0, 0.0)
     
-    if args.command in ('from_scratch', 'fs'):
-        if args.language.lower() == 'english' and args.emb_dim in (50, 100, 200):
-            vectors = GloVe(f"assets/vectors/glove.6B.{args.emb_dim}d.txt")
-        elif args.language.lower() == 'english' and args.emb_dim == 300:
-            vectors = GloVe("assets/vectors/glove.840B.300d.txt")
-        elif args.language.lower() == 'chinese' and args.emb_dim == 200:
-            vectors = Vectors.load("assets/vectors/tencent/Tencent_AILab_ChineseEmbedding.txt", encoding='utf-8', skiprows=0)
-        else:
-            vectors = None
-        ohots_config = ConfigDict({'text': OneHotConfig(field='text', min_freq=5, vectors=vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze)})
-        
-        if args.use_interm1:
-            interm1_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
-        else:
-            interm1_config = None
-            
-        interm2_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
-        
-        if args.language.lower() == 'english' and args.use_elmo:
-            elmo_config = ELMoConfig(elmo=load_pretrained('elmo'))
-        else:
-            elmo_config = None
-            
-        if args.language.lower() == 'english' and args.use_flair:
-            flair_fw_lm, flair_bw_lm = load_pretrained('flair')
-            flair_fw_config, flair_bw_config = FlairConfig(flair_lm=flair_fw_lm), FlairConfig(flair_lm=flair_bw_lm)
-            interm2_config.in_proj = True
-        else:
-            flair_fw_config, flair_bw_config = None, None
-            
-        bert_like_config = None
-        
-    elif args.command in ('finetune', 'ft'):
-        ohots_config = None
-        interm1_config = None
-        
-        if args.use_interm2:
-            interm2_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
-        else:
-            interm2_config = None
-        
-        elmo_config = None
-        flair_fw_config, flair_bw_config = None, None
-        
-        # Uncased tokenizer for text classification
-        bert_like, tokenizer = load_pretrained(args.bert_arch, args, cased=False)
-        bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert_like, arch=args.bert_arch, 
-                                          freeze=False, use_truecase=args.bert_arch.startswith('BERT'))
+    if args.ck_dec_arch.lower() in ('crf', 'softmax'):
+        ck_decoder_config = SequenceTaggingDecoderConfig(arch=args.ck_dec_arch, 
+                                                         scheme=args.scheme, 
+                                                         in_drop_rates=drop_rates)
     else:
-        raise Exception("No sub-command specified")
+        ck_decoder_config = SpanClassificationDecoderConfig(agg_mode=args.agg_mode, 
+                                                            num_neg_chunks=args.num_neg_chunks, 
+                                                            max_span_size=args.max_span_size, 
+                                                            size_emb_dim=args.size_emb_dim, 
+                                                            in_drop_rates=drop_rates)
         
-    return {'ohots': ohots_config, 
-            'intermediate1': interm1_config, 
-            'elmo': elmo_config, 
-            'flair_fw': flair_fw_config, 
-            'flair_bw': flair_bw_config, 
-            'bert_like': bert_like_config, 
-            'intermediate2': interm2_config, }
-
-
-def build_TC_config(args: argparse.Namespace):
-    drop_rates = (0.0, 0.05, args.drop_rate) if args.use_locked_drop else (args.drop_rate, 0.0, 0.0)
-    decoder_config = TextClassificationDecoderConfig(agg_mode=args.agg_mode, in_drop_rates=drop_rates)
-    return ModelConfig(**collect_TC_assembly_config(args), decoder=decoder_config)
+    rel_decoder_config = RelationClassificationDecoderConfig(agg_mode=args.agg_mode, 
+                                                             num_neg_relations=args.num_neg_relations, 
+                                                             max_span_size=args.max_span_size, 
+                                                             ck_size_emb_dim=args.ck_size_emb_dim, 
+                                                             ck_label_emb_dim=args.ck_label_emb_dim, 
+                                                             in_drop_rates=drop_rates)
+    decoder_config = JointDecoderConfig(ck_decoder=ck_decoder_config, rel_decoder=rel_decoder_config)
+    return ModelConfig(**collect_IE_assembly_config(args) , decoder=decoder_config)
 
 
 if __name__ == '__main__':
@@ -180,7 +157,7 @@ if __name__ == '__main__':
     
     # Use micro-seconds to ensure different timestamps while adopting multiprocessing
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-    save_path =  f"cache/{args.dataset}-TC/{timestamp}"
+    save_path =  f"cache/{args.dataset}-Joint-ER-RE/{timestamp}"
     if not os.path.exists(save_path):
         os.makedirs(save_path)
         
@@ -202,26 +179,19 @@ if __name__ == '__main__':
     device = auto_device()
     if device.type.startswith('cuda'):
         torch.cuda.set_device(device)
-        temp = torch.randn(100).to(device)
         
     train_data, dev_data, test_data = load_data(args)
     args.language = dataset2language[args.dataset]
-    # train_data, dev_data, test_data = train_data[:1000], dev_data[:1000], test_data[:1000]
-    config = build_TC_config(args)
+    config = build_Joint_ER_RE_config(args)
     
-    if args.command in ('finetune', 'ft'):
-        train_data = truncate_for_bert_like(train_data, config.bert_like.tokenizer, verbose=args.log_terminal)
-        dev_data   = truncate_for_bert_like(dev_data,   config.bert_like.tokenizer, verbose=args.log_terminal)
-        test_data  = truncate_for_bert_like(test_data,  config.bert_like.tokenizer, verbose=args.log_terminal)
-        
     train_set = Dataset(train_data, config, training=True)
     train_set.build_vocabs_and_dims(dev_data, test_data)
     dev_set   = Dataset(dev_data,  train_set.config, training=False)
     test_set  = Dataset(test_data, train_set.config, training=False)
     
     logger.info(train_set.summary)
-    train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
-    dev_loader   = torch.utils.data.DataLoader(dev_set,   batch_size=args.batch_size, shuffle=False, collate_fn=dev_set.collate)
+    train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  num_workers=4, collate_fn=train_set.collate)
+    dev_loader   = torch.utils.data.DataLoader(dev_set,   batch_size=args.batch_size, shuffle=False, num_workers=4, collate_fn=dev_set.collate)
     
     
     logger.info(header_format("Building", sep='-'))
@@ -233,20 +203,22 @@ if __name__ == '__main__':
     if args.pdb: 
         pdb.set_trace()
         
+        
     torch.save(config, f"{save_path}/{config.name}.config")
     def save_callback(model):
         torch.save(model, f"{save_path}/{config.name}.pth")
     trainer.train_steps(train_loader=train_loader, dev_loader=dev_loader, num_epochs=args.num_epochs, 
                         save_callback=save_callback, save_by_loss=False)
     
+    
     logger.info(header_format("Evaluating", sep='-'))
     model = torch.load(f"{save_path}/{config.name}.pth", map_location=device)
     trainer = Trainer(model, device=device)
     
     logger.info("Evaluating on dev-set")
-    evaluate_text_classification(trainer, dev_set)
+    evaluate_entity_recognition(trainer, dev_set)
     logger.info("Evaluating on test-set")
-    evaluate_text_classification(trainer, test_set)
+    evaluate_entity_recognition(trainer, test_set)
     
     logger.info(" ".join(sys.argv))
     logger.info(pprint.pformat(args.__dict__))
