@@ -16,7 +16,7 @@ from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderC
 from eznlp.model import ModelConfig
 from eznlp.training import Trainer
 from eznlp.training.utils import count_params
-from eznlp.training.evaluation import evaluate_entity_recognition
+from eznlp.training.evaluation import evaluate_joint_er_re
 
 from utils import load_data, dataset2language, load_pretrained, build_trainer, header_format
 
@@ -127,7 +127,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
 from entity_recognition import collect_IE_assembly_config
 
 
-def build_Joint_ER_RE_config(args: argparse.Namespace):
+def build_JERRE_config(args: argparse.Namespace):
     drop_rates = (0.0, 0.05, args.drop_rate) if args.use_locked_drop else (args.drop_rate, 0.0, 0.0)
     
     if args.ck_dec_arch.lower() in ('crf', 'softmax'):
@@ -182,7 +182,7 @@ if __name__ == '__main__':
         
     train_data, dev_data, test_data = load_data(args)
     args.language = dataset2language[args.dataset]
-    config = build_Joint_ER_RE_config(args)
+    config = build_JERRE_config(args)
     
     train_set = Dataset(train_data, config, training=True)
     train_set.build_vocabs_and_dims(dev_data, test_data)
@@ -216,9 +216,9 @@ if __name__ == '__main__':
     trainer = Trainer(model, device=device)
     
     logger.info("Evaluating on dev-set")
-    evaluate_entity_recognition(trainer, dev_set)
+    evaluate_joint_er_re(trainer, dev_set)
     logger.info("Evaluating on test-set")
-    evaluate_entity_recognition(trainer, test_set)
+    evaluate_joint_er_re(trainer, test_set)
     
     logger.info(" ".join(sys.argv))
     logger.info(pprint.pformat(args.__dict__))

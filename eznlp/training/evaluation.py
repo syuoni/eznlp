@@ -36,3 +36,18 @@ def evaluate_relation_extraction(trainer: Trainer, dataset: Dataset):
     logger.info(f"Micro F1-score: {micro_f1*100:2.3f}%")
     logger.info(f"Macro F1-score: {macro_f1*100:2.3f}%")
 
+
+def evaluate_joint_er_re(trainer: Trainer, dataset: Dataset):
+    set_chunks_pred, set_relations_pred = trainer.predict(dataset)
+    set_chunks_gold = [ex['chunks'] for ex in dataset.data]
+    set_relations_gold = [ex['relations'] for ex in dataset.data]
+    
+    scores, ave_scores = precision_recall_f1_report(set_chunks_gold, set_chunks_pred)
+    micro_f1, macro_f1 = ave_scores['micro']['f1'], ave_scores['macro']['f1']
+    logger.info(f"ER Micro F1-score: {micro_f1*100:2.3f}%")
+    logger.info(f"ER Macro F1-score: {macro_f1*100:2.3f}%")
+    
+    scores, ave_scores = precision_recall_f1_report(set_relations_gold, set_relations_pred)
+    micro_f1, macro_f1 = ave_scores['micro']['f1'], ave_scores['macro']['f1']
+    logger.info(f"RE Micro F1-score: {micro_f1*100:2.3f}%")
+    logger.info(f"RE Macro F1-score: {macro_f1*100:2.3f}%")
