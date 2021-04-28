@@ -29,6 +29,13 @@ python scripts/relation_extraction.py --dataset conll2004 --num_epochs 100 --bat
 python scripts/relation_extraction.py --dataset conll2004 --num_epochs 50  --batch_size 32 --optimizer AdamW --lr 1e-3 --finetune_lr 1e-4 --scheduler LinearDecayWithWarmup ft
 
 
+python scripts/entity_recognition.py --dataset conll2004 --pipeline --num_epochs 100 --batch_size 64 --optimizer Adadelta --lr 1.0 --ck_decoder span_classification --max_span_size 5 --num_layers 2 fs --char_arch LSTM
+python scripts/relation_extraction.py --dataset conll2004 --pipeline_path cache/conll2004-ER/20210428-032956-418158 --num_epochs 100 --batch_size 64 --optimizer Adadelta --lr 1.0 --num_layers 2 fs --char_arch LSTM
+
+python scripts/entity_recognition.py --dataset conll2004 --pipeline --num_epochs 50  --batch_size 32 --optimizer AdamW --lr 1e-3 --finetune_lr 1e-4 --scheduler LinearDecayWithWarmup --ck_decoder span_classification --max_span_size 5 ft
+python scripts/relation_extraction.py --dataset conll2004 --pipeline_path cache/conll2004-ER/20210428-033018-759756 --num_epochs 50  --batch_size 32 --optimizer AdamW --lr 1e-3 --finetune_lr 1e-4 --scheduler LinearDecayWithWarmup ft
+
+
 python scripts/joint_er_re.py --dataset conll2004 --num_epochs 100 --batch_size 64 --optimizer Adadelta --lr 1.0 --ck_decoder span_classification --max_span_size 5 --num_layers 2 fs --char_arch LSTM
 python scripts/joint_er_re.py --dataset conll2004 --num_epochs 50  --batch_size 32 --optimizer AdamW --lr 1e-3 --finetune_lr 1e-4 --scheduler LinearDecayWithWarmup --ck_decoder span_classification --max_span_size 5 ft
 """
@@ -106,6 +113,7 @@ if __name__ == '__main__':
                        ["--num_layers 1", "--num_layers 2"], 
                        # ["--grad_clip -1", "--grad_clip 5"], 
                        # ["", "--use_locked_drop"], 
+                       ["--ck_decoder sequence_tagging"],
                        ["fs"], 
                        ["", "--use_elmo"], 
                        ["", "--use_flair"], 
@@ -113,10 +121,10 @@ if __name__ == '__main__':
             # options = [["--num_epochs 100"], 
             #            ["--optimizer Adadelta --lr 1.0 --batch_size 64"], 
             #            ["--num_layers 1", "--num_layers 2"], 
-            #            ["--num_neg_chunks 200", "--num_neg_chunks 100", "--num_neg_chunks 50"], 
+            #            ["--ck_decoder span_classification"],
+            #            ["--num_neg_chunks 200", "--num_neg_chunks 100"], 
             #            ["--max_span_size 10", "--max_span_size 5"], 
-            #            ["--size_emb_dim 50", "--size_emb_dim 25", "--size_emb_dim 10"], 
-            #            ["--dec_arch SpanC"],
+            #            ["--ck_size_emb_dim 25", "--ck_size_emb_dim 10"], 
             #            ["fs"], 
             #            ["", "--use_elmo"], 
             #            ["", "--use_flair"], 
@@ -128,7 +136,8 @@ if __name__ == '__main__':
                         "--optimizer AdamW --lr 2e-3 --finetune_lr 1e-5"], 
                        ["--batch_size 48"], 
                        ["--scheduler LinearDecayWithWarmup"], 
-                       ["--dec_arch SoftMax", "--dec_arch CRF"],
+                       ["--ck_decoder sequence_tagging"],
+                       ["--ck_dec_arch SoftMax", "--ck_dec_arch CRF"],
                        # ["", "--use_locked_drop"], 
                        ["ft"], 
                        ["--bert_drop_rate 0.2"], 
@@ -144,7 +153,7 @@ if __name__ == '__main__':
             #             "--optimizer AdamW --lr 2e-3 --finetune_lr 1e-4"], 
             #            ["--batch_size 48"], 
             #            ["--scheduler LinearDecayWithWarmup"], 
-            #            ["--dec_arch SpanC"],
+            #            ["--ck_decoder span_classification"],
             #            ["ft"], 
             #            ["--bert_drop_rate 0.2"], 
             #            ["", "--use_interm2"], 
@@ -165,6 +174,7 @@ if __name__ == '__main__':
                         "--optimizer Adamax --lr 5e-3"], 
                        ["--batch_size 8", "--batch_size 16", "--batch_size 32"], 
                        ["--num_layers 1", "--num_layers 2"], 
+                       ["--ck_decoder sequence_tagging"],
                        ["fs"], 
                        # ["", "--use_softword"], 
                        ["", "--use_bigram", "--use_softlexicon"]]
@@ -178,7 +188,7 @@ if __name__ == '__main__':
                         "--optimizer AdamW --lr 2e-3 --finetune_lr 2e-5"], 
                        ["--batch_size 64", "--batch_size 32", "--batch_size 16"], 
                        ["--scheduler LinearDecayWithWarmup"], 
-                       ["--dec_arch CRF"],
+                       ["--ck_decoder sequence_tagging"],
                        ["ft"], 
                        ["--bert_drop_rate 0.2"], 
                        ["", "--use_interm2"], 
@@ -204,6 +214,35 @@ if __name__ == '__main__':
                         "--optimizer AdamW --lr 2e-3 --finetune_lr 1e-4"], 
                        ["--batch_size 48"], 
                        ["--scheduler LinearDecayWithWarmup"], 
+                       ["ft"], 
+                       ["--bert_drop_rate 0.2"], 
+                       ["", "--use_interm2"], 
+                       ["--bert_arch BERT_base", "--bert_arch RoBERTa_base"]]
+    
+    elif args.task == 'joint_er_re':
+        if args.command in ('fs', 'from_scratch'):
+            options = [["--num_epochs 100"], 
+                       ["--optimizer Adadelta --lr 1.0", 
+                        "--optimizer AdamW --lr 1e-3", 
+                        "--optimizer SGD --lr 0.1"], 
+                       ["--batch_size 64"], 
+                       ["--num_layers 1", "--num_layers 2"], 
+                       ["--ck_decoder span_classification"],
+                       ["--num_neg_chunks 200", "--num_neg_chunks 100"], 
+                       ["--num_neg_relations 200", "--num_neg_relations 100"], 
+                       ["--max_span_size 10", "--max_span_size 5"], 
+                       ["--ck_size_emb_dim 10"], 
+                       ["--ck_label_emb_dim 10"], 
+                       ["fs"]]
+        else:
+            options = [["--num_epochs 50"], 
+                       ["--optimizer AdamW --lr 1e-3 --finetune_lr 5e-5", 
+                        "--optimizer AdamW --lr 1e-3 --finetune_lr 1e-4", 
+                        "--optimizer AdamW --lr 2e-3 --finetune_lr 5e-5", 
+                        "--optimizer AdamW --lr 2e-3 --finetune_lr 1e-4"], 
+                       ["--batch_size 48"], 
+                       ["--scheduler LinearDecayWithWarmup"], 
+                       ["--ck_decoder span_classification"],
                        ["ft"], 
                        ["--bert_drop_rate 0.2"], 
                        ["", "--use_interm2"], 

@@ -6,6 +6,7 @@ import datetime
 import pdb
 import logging
 import pprint
+import numpy
 import torch
 
 from eznlp import auto_device
@@ -29,7 +30,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
                             help="dataset name")
     
     group_decoder = parser.add_argument_group('decoder configurations')
-    group_decoder.add_argument('--ck_decoder', type=str, default='sequence_tagging', 
+    group_decoder.add_argument('--ck_decoder', type=str, default='span_classification', 
                                help="chunk decoding method", choices=['sequence_tagging', 'span_classification'])
     
     group_sequence_tagging = parser.add_argument_group('sequence tagging')
@@ -61,7 +62,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
 def build_JERRE_config(args: argparse.Namespace):
     drop_rates = (0.0, 0.05, args.drop_rate) if args.use_locked_drop else (args.drop_rate, 0.0, 0.0)
     
-    if args.ck_dec_arch.lower() in ('crf', 'softmax'):
+    if args.ck_decoder == 'sequence_tagging':
         ck_decoder_config = SequenceTaggingDecoderConfig(arch=args.ck_dec_arch, 
                                                          scheme=args.scheme, 
                                                          in_drop_rates=drop_rates)
@@ -69,7 +70,7 @@ def build_JERRE_config(args: argparse.Namespace):
         ck_decoder_config = SpanClassificationDecoderConfig(agg_mode=args.agg_mode, 
                                                             num_neg_chunks=args.num_neg_chunks, 
                                                             max_span_size=args.max_span_size, 
-                                                            size_emb_dim=args.size_emb_dim, 
+                                                            size_emb_dim=args.ck_size_emb_dim, 
                                                             in_drop_rates=drop_rates)
         
     rel_decoder_config = RelationClassificationDecoderConfig(agg_mode=args.agg_mode, 
