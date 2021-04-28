@@ -14,7 +14,7 @@ def evaluate_text_classification(trainer: Trainer, dataset: Dataset):
     set_labels_gold = [ex['label'] for ex in dataset.data]
     
     acc = trainer.model.decoder.evaluate(set_labels_gold, set_labels_pred)
-    logger.info(f"Accuracy: {acc*100:2.3f}%")
+    logger.info(f"TC Accuracy: {acc*100:2.3f}%")
 
 
 def evaluate_entity_recognition(trainer: Trainer, dataset: Dataset):
@@ -23,8 +23,8 @@ def evaluate_entity_recognition(trainer: Trainer, dataset: Dataset):
     
     scores, ave_scores = precision_recall_f1_report(set_chunks_gold, set_chunks_pred)
     micro_f1, macro_f1 = ave_scores['micro']['f1'], ave_scores['macro']['f1']
-    logger.info(f"Micro F1-score: {micro_f1*100:2.3f}%")
-    logger.info(f"Macro F1-score: {macro_f1*100:2.3f}%")
+    logger.info(f"ER Micro F1-score: {micro_f1*100:2.3f}%")
+    logger.info(f"ER Macro F1-score: {macro_f1*100:2.3f}%")
 
 
 def evaluate_relation_extraction(trainer: Trainer, dataset: Dataset):
@@ -33,8 +33,8 @@ def evaluate_relation_extraction(trainer: Trainer, dataset: Dataset):
     
     scores, ave_scores = precision_recall_f1_report(set_relations_gold, set_relations_pred)
     micro_f1, macro_f1 = ave_scores['micro']['f1'], ave_scores['macro']['f1']
-    logger.info(f"Micro F1-score: {micro_f1*100:2.3f}%")
-    logger.info(f"Macro F1-score: {macro_f1*100:2.3f}%")
+    logger.info(f"RE Micro F1-score: {micro_f1*100:2.3f}%")
+    logger.info(f"RE Macro F1-score: {macro_f1*100:2.3f}%")
 
 
 def evaluate_joint_er_re(trainer: Trainer, dataset: Dataset):

@@ -9,22 +9,28 @@ import logging
 from utils import dataset2language
 
 """
-python scripts/entity_recognition.py --dataset conll2003 --batch_size 10 --optimizer SGD --lr 0.1 --dec_arch CRF --num_layers 1 fs --char_arch LSTM
-python scripts/entity_recognition.py --dataset conll2003 --batch_size 64 --optimizer Adadelta --lr 1.0 --dec_arch SpanC --num_layers 2 fs --char_arch LSTM
-python scripts/entity_recognition.py --dataset conll2003 --batch_size 48 --optimizer AdamW --lr 1e-3 --finetune_lr 1e-5 --scheduler LinearDecayWithWarmup --num_epochs 50 --dec_arch CRF ft --bert_arch BERT_base
-python scripts/entity_recognition.py --dataset conll2003 --batch_size 48 --optimizer AdamW --lr 1e-3 --finetune_lr 1e-5 --scheduler LinearDecayWithWarmup --num_epochs 50 --dec_arch SpanC ft --bert_arch BERT_base
+python scripts/text_classification.py --dataset imdb --num_epochs 50 --batch_size 64 --optimizer Adadelta --lr 0.5 --num_layers 1 fs
+python scripts/text_classification.py --dataset imdb --num_epochs 10 --batch_size 32 --optimizer AdamW --lr 1e-3 --finetune_lr 1e-5 --scheduler LinearDecayWithWarmup ft
 
-python scripts/entity_recognition.py --dataset WeiboNER --batch_size 32 --optimizer Adamax --lr 5e-3 --dec_arch CRF --num_layers 2 fs --emb_dim 50 --use_softlexicon
-python scripts/entity_recognition.py --dataset WeiboNER --batch_size 48 --optimizer AdamW --lr 1e-3 --finetune_lr 1e-5 --scheduler LinearDecayWithWarmup --num_epochs 50 --dec_arch CRF ft --bert_arch BERT_base
+python scripts/text_classification.py --dataset ChnSentiCorp --num_epochs 50 --batch_size 64 --optimizer Adadelta --lr 1.0 --num_layers 2 fs --emb_dim 200
+python scripts/text_classification.py --dataset ChnSentiCorp --num_epochs 10 --batch_size 32 --optimizer AdamW --lr 1e-3 --finetune_lr 1e-5 --scheduler LinearDecayWithWarmup ft
 
-python scripts/text_classification.py --dataset imdb --batch_size 64 --optimizer Adadelta --lr 0.5 --num_layers 1 fs
-python scripts/text_classification.py --dataset imdb --batch_size 32 --optimizer AdamW --lr 1e-3 --finetune_lr 1e-5 --scheduler LinearDecayWithWarmup --num_epochs 10 ft --bert_arch BERT_base
 
-python scripts/text_classification.py --dataset ChnSentiCorp --batch_size 64 --optimizer Adadelta --lr 1.0 --num_layers 2 fs --emb_dim 200
-python scripts/text_classification.py --dataset ChnSentiCorp --batch_size 32 --optimizer AdamW --lr 1e-3 --finetune_lr 1e-5 --scheduler LinearDecayWithWarmup --num_epochs 10 ft --bert_arch BERT_base
+python scripts/entity_recognition.py --dataset conll2003 --num_epochs 100 --batch_size 32 --optimizer SGD --lr 0.1 --ck_decoder sequence_tagging --ck_dec_arch CRF --num_layers 1 fs --char_arch LSTM
+python scripts/entity_recognition.py --dataset conll2003 --num_epochs 100 --batch_size 64 --optimizer Adadelta --lr 1.0 --ck_decoder span_classification --max_span_size 5 --num_layers 2 fs --char_arch LSTM
+python scripts/entity_recognition.py --dataset conll2003 --num_epochs 50  --batch_size 32 --optimizer AdamW --lr 1e-3 --finetune_lr 1e-5 --scheduler LinearDecayWithWarmup --ck_decoder sequence_tagging --ck_dec_arch CRF ft
+python scripts/entity_recognition.py --dataset conll2003 --num_epochs 50  --batch_size 32 --optimizer AdamW --lr 1e-3 --finetune_lr 1e-5 --scheduler LinearDecayWithWarmup --ck_decoder span_classification --max_span_size 5 ft
 
-python scripts/relation_extraction.py --dataset conll2004 --batch_size 64 --optimizer Adadelta --lr 1.0 --num_layers 2 fs --char_arch LSTM
-python scripts/relation_extraction.py --dataset conll2004 --batch_size 48 --optimizer AdamW --lr 1e-3 --finetune_lr 1e-4 --scheduler LinearDecayWithWarmup --num_epochs 50 ft --bert_arch BERT_base
+python scripts/entity_recognition.py --dataset WeiboNER --num_epochs 100 --batch_size 32 --optimizer Adamax --lr 5e-3 --ck_decoder sequence_tagging --ck_dec_arch CRF --num_layers 2 fs --emb_dim 50 --use_softlexicon
+python scripts/entity_recognition.py --dataset WeiboNER --num_epochs 50  --batch_size 32 --optimizer AdamW --lr 1e-3 --finetune_lr 1e-5 --scheduler LinearDecayWithWarmup --ck_decoder sequence_tagging --ck_dec_arch CRF ft
+
+
+python scripts/relation_extraction.py --dataset conll2004 --num_epochs 100 --batch_size 64 --optimizer Adadelta --lr 1.0 --num_layers 2 fs --char_arch LSTM
+python scripts/relation_extraction.py --dataset conll2004 --num_epochs 50  --batch_size 32 --optimizer AdamW --lr 1e-3 --finetune_lr 1e-4 --scheduler LinearDecayWithWarmup ft
+
+
+python scripts/joint_er_re.py --dataset conll2004 --num_epochs 100 --batch_size 64 --optimizer Adadelta --lr 1.0 --ck_decoder span_classification --max_span_size 5 --num_layers 2 fs --char_arch LSTM
+python scripts/joint_er_re.py --dataset conll2004 --num_epochs 50  --batch_size 32 --optimizer AdamW --lr 1e-3 --finetune_lr 1e-4 --scheduler LinearDecayWithWarmup --ck_decoder span_classification --max_span_size 5 ft
 """
 
 
