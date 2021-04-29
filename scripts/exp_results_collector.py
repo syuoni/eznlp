@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import os
 import glob
 import re
 import argparse
@@ -9,8 +10,8 @@ import pandas
 
 
 dict_re = re.compile("\{[^\{\}]+\}")
-acc_re = re.compile("(?<=Accuracy: )\d+\.\d+(?=%)")
-micro_f1_re = re.compile("(?<=Micro F1-score: )\d+\.\d+(?=%)")
+metircs_re = {'acc': re.compile("(?<=Accuracy: )\d+\.\d+(?=%)"), 
+              'micro_f1': re.compile("(?<=Micro F1-score: )\d+\.\d+(?=%)")}
 
 
 if __name__ == '__main__':
@@ -39,17 +40,20 @@ if __name__ == '__main__':
             try:
                 exp_res = dict_re.search(log_text).group()
                 exp_res = eval(exp_res)
-                exp_res['logging_timestamp'] = fn.split('/')[2]
+                exp_res['logging_timestamp'] = fn.split(os.path.sep)[2]
                 
-                if "Accuracy" in log_text:
-                    dev_acc, test_acc = acc_re.findall(log_text)
-                    exp_res['dev_acc'] = float(dev_acc)
-                    exp_res['test_acc'] = float(test_acc)
-                elif "F1-score" in log_text:
-                    dev_f1, test_f1 = micro_f1_re.findall(log_text)
-                    exp_res['dev_f1'] = float(dev_f1)
-                    exp_res['test_f1'] = float(test_f1)
-                else:
+                num_metrics = 0
+                for m_name, m_re in metircs_re.items():
+                    metirc_list = m_re.findall(log_text)
+                    curr_num_metrics, num_res = divmod(len(metirc_list), 2)
+                    assert num_res == 0
+                    num_metrics += curr_num_metrics
+                    
+                    for k in range(curr_num_metrics):
+                        exp_res[f'dev_{m_name}_{k}'] = float(metirc_list[k])
+                        exp_res[f'test_{m_name}_{k}'] = float(metirc_list[curr_num_metrics+k])
+                
+                if num_metrics == 0:
                     raise RuntimeError("Results not found")
                 
             except:

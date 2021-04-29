@@ -112,6 +112,7 @@ spacy_nlp_en = spacy.load("en_core_web_sm", disable=['tagger', 'parser', 'ner'])
 dataset2language = {'conll2003': 'English', 
                     'conll2012': 'English', 
                     'conll2004': 'English', 
+                    'SciERC': 'English', 
                     'ResumeNER': 'Chinese', 
                     'WeiboNER': 'Chinese', 
                     'SIGHAN2006': 'Chinese', 
@@ -136,10 +137,22 @@ def load_data(args: argparse.Namespace):
         test_data  = conll_io.read("data/conll2012/test.english.v4_gold_conll")
         
     elif args.dataset == 'conll2004':
-        json_io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', case_mode='None', number_mode='Zeros')
+        json_io = JsonIO(text_key='tokens', 
+                         chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', 
+                         relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
+                         case_mode='None', number_mode='Zeros')
         train_data = json_io.read("data/conll2004/conll04_train.json")
         dev_data   = json_io.read("data/conll2004/conll04_dev.json")
         test_data  = json_io.read("data/conll2004/conll04_test.json")
+        
+    elif args.dataset == 'SciERC':
+        json_io = JsonIO(text_key='tokens', 
+                         chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', 
+                         relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
+                         case_mode='None', number_mode='Zeros')
+        train_data = json_io.read("data/SciERC/scierc_train.json")
+        dev_data   = json_io.read("data/SciERC/scierc_dev.json")
+        test_data  = json_io.read("data/SciERC/scierc_test.json")
         
     elif args.dataset == 'ResumeNER':
         conll_io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BMES', encoding='utf-8', token_sep="", pad_token="")
