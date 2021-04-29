@@ -133,7 +133,9 @@ class ChunkPairs(TargetWrapper):
         In this case, `ck_label_ids` is crucial as input. 
         """
         assert not self.is_built
-        self.chunks = list(set(self.chunks + chunks))
+        # Do not use ```self.chunks = list(set(self.chunks + chunks))```,
+        # which may return non-deterministic order?
+        self.chunks = self.chunks + [ck for ck in chunks if ck not in self.chunks]
         
         
     def build(self, config: RelationClassificationDecoderConfig):

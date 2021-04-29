@@ -234,7 +234,7 @@ if __name__ == '__main__':
         # Replace gold chunks with predicted chunks for pipeline
         train_set_chunks_pred = trainer.predict(train_set)
         for ex, chunks_pred in zip(train_data, train_set_chunks_pred):
-            ex['chunks'] = list(set(ex['chunks'] + chunks_pred))
+            ex['chunks'] = ex['chunks'] + [ck for ck in chunks_pred if ck not in ex['chunks']]
         
         dev_set_chunks_pred = trainer.predict(dev_set)
         for ex, chunks_pred in zip(dev_data, dev_set_chunks_pred):

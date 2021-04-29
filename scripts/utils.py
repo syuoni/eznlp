@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 import argparse
-import random
 import logging
 import spacy
 import jieba
+import random
 import numpy
 import sklearn.model_selection
 import torch
@@ -97,12 +97,12 @@ def add_base_arguments(parser: argparse.ArgumentParser):
 
 def parse_to_args(parser: argparse.ArgumentParser):
     args = parser.parse_args()
+    args.grad_clip = None if args.grad_clip < 0 else args.grad_clip
+    
     random.seed(args.seed)
     numpy.random.seed(args.seed)
     torch.manual_seed(args.seed)
     torch.backends.cudnn.deterministic = True
-    
-    args.grad_clip = None if args.grad_clip < 0 else args.grad_clip
     return args
 
 
