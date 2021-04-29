@@ -5,7 +5,7 @@ import random
 import logging
 import torch
 
-from ...wrapper import TensorWrapper, Batch
+from ...wrapper import TargetWrapper, Batch
 from ...nn.modules import CombinedDropout
 from ...nn.init import reinit_embedding_, reinit_layer_
 from ...metrics import precision_recall_f1_report
@@ -80,9 +80,9 @@ class SpanClassificationDecoderConfig(DecoderConfig):
 
 
 
-class Spans(TensorWrapper):
+class Spans(TargetWrapper):
     """
-    A wrapper of spans with original chunks. 
+    A wrapper of spans with underlying chunks. 
     
     Parameters
     ----------
@@ -91,19 +91,17 @@ class Spans(TensorWrapper):
          'chunks': List[tuple]}
     """
     def __init__(self, data_entry: dict, config: SpanClassificationDecoderConfig, training: bool=True):
-        self.training = training
+        super().__init__(training)
         
         self.chunks = data_entry.get('chunks', None)
-        if self.chunks is not None:
-            pos_spans = [(start, end) for label, start, end in data_entry['chunks']]
-            pos_labels = [label for label, start, end in data_entry['chunks']]
+        if training:
+            pos_spans = [(start, end) for label, start, end in self.chunks]
         else:
-            pos_spans, pos_labels = [], []
+            pos_spans = []
         
-        num_tokens = len(data_entry['tokens'])
         neg_spans = []
-        for start in range(num_tokens):
-            for end in range(start+1, min(start+1+config.max_span_size, num_tokens+1)):
+        for start in range(len(data_entry['tokens'])):
+            for end in range(start+1, min(start+1+config.max_span_size, len(data_entry['tokens']) + 1)):
                 if (start, end) not in pos_spans:
                     neg_spans.append((start, end))
                     
@@ -112,12 +110,13 @@ class Spans(TensorWrapper):
         
         self.spans = pos_spans + neg_spans
         # Note: size_id = size - 1
-        self.span_size_ids = torch.tensor([end-start-1 for start, end in self.spans])
+        self.span_size_ids = torch.tensor([end-start-1 for start, end in self.spans], dtype=torch.long)
         self.span_size_ids.masked_fill_(self.span_size_ids>=config.max_span_size, config.max_span_size-1)
         
         if self.chunks is not None:
-            labels = pos_labels + [config.none_label] * len(neg_spans)
-            self.label_ids = torch.tensor([config.label2idx[label] for label in labels])
+            span2label = {(start, end): label for label, start, end in self.chunks}
+            labels = [span2label.get(span, config.none_label) for span in self.spans]
+            self.label_ids = torch.tensor([config.label2idx[label] for label in labels], dtype=torch.long)
 
 
 
@@ -137,33 +136,33 @@ class SpanClassificationDecoder(Decoder):
         reinit_embedding_(self.size_embedding)
         
         
-    def get_span_logits(self, batch: Batch, full_hidden: torch.Tensor):
+    def get_logits(self, batch: Batch, full_hidden: torch.Tensor):
         # full_hidden: (batch, step, hid_dim)
-        batch_span_logits = []
+        batch_logits = []
         for k in range(batch.size):
             # span_hidden: (num_spans, hid_dim)
             span_hidden = torch.stack([full_hidden[k, start:end].max(dim=0).values for start, end in batch.spans_objs[k].spans])
             # size_embedded: (num_spans, emb_dim)
             size_embedded = self.size_embedding(batch.spans_objs[k].span_size_ids)
-            span_logits = self.hid2logit(self.dropout(torch.cat([span_hidden, size_embedded], dim=-1)))
-            batch_span_logits.append(span_logits)
+            logits = self.hid2logit(self.dropout(torch.cat([span_hidden, size_embedded], dim=-1)))
+            batch_logits.append(logits)
             
-        return batch_span_logits
+        return batch_logits
     
     
     def forward(self, batch: Batch, full_hidden: torch.Tensor):
-        batch_span_logits = self.get_span_logits(batch, full_hidden)
+        batch_logits = self.get_logits(batch, full_hidden)
         
-        losses = [self.criterion(batch_span_logits[k], batch.spans_objs[k].label_ids) for k in range(batch.size)]
+        losses = [self.criterion(batch_logits[k], batch.spans_objs[k].label_ids) for k in range(batch.size)]
         return torch.stack(losses)
     
     
     def decode(self, batch: Batch, full_hidden: torch.Tensor):
-        batch_span_logits = self.get_span_logits(batch, full_hidden)
+        batch_logits = self.get_logits(batch, full_hidden)
         
         batch_chunks = []
         for k in range(batch.size):
-            labels = [self.idx2label[i] for i in batch_span_logits[k].argmax(dim=-1).cpu().tolist()]
+            labels = [self.idx2label[i] for i in batch_logits[k].argmax(dim=-1).cpu().tolist()]
             chunks = [(label, start, end) for label, (start, end) in zip(labels, batch.spans_objs[k].spans) if label != self.none_label]
             batch_chunks.append(chunks)
         return batch_chunks

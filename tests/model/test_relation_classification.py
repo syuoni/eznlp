@@ -2,9 +2,8 @@
 import pytest
 import torch
 
-from eznlp.token import TokenSequence
 from eznlp.dataset import Dataset
-from eznlp.model import EncoderConfig, BertLikeConfig, RelationClassificationDecoderConfig, ModelConfig
+from eznlp.model import EncoderConfig, BertLikeConfig, RelationClassificationDecoderConfig, JointDecoderConfig, ModelConfig
 from eznlp.training import Trainer
 
 
@@ -84,40 +83,53 @@ class TestModel(object):
 
 
 
-
-@pytest.mark.parametrize("num_neg_relations, training", [(1, True), 
-                                                         (1, False)])
-def test_span_pairs_obj(num_neg_relations, training):
-    tokenized_raw_text = ["This", "is", "a", "-3.14", "demo", ".", 
-                          "Those", "are", "an", "APPLE", "and", "some", "glass", "bottles", "."]
-    tokens = TokenSequence.from_tokenized_text(tokenized_raw_text)
+@pytest.mark.parametrize("num_neg_relations", [1, 100])
+@pytest.mark.parametrize("training", [True, False])
+@pytest.mark.parametrize("building", [True, False])
+def test_chunk_pairs_obj(re_data_demo, num_neg_relations, training, building):
+    entry = re_data_demo[0]
+    chunks, relations = entry['chunks'], entry['relations']
     
-    entities = [{'type': 'EntA', 'start': 4, 'end': 5},
-                {'type': 'EntA', 'start': 9, 'end': 10},
-                {'type': 'EntB', 'start': 12, 'end': 14}]
-    chunks = [(ent['type'], ent['start'], ent['end']) for ent in entities]
-    
-    raw_relations = [{'type': 'RelA', 'head': 0, 'tail': 1}, 
-                     {'type': 'RelA', 'head': 0, 'tail': 2}, 
-                     {'type': 'RelB', 'head': 1, 'tail': 2}, 
-                     {'type': 'RelB', 'head': 2, 'tail': 1}]
-    relations = [(rel['type'], chunks[rel['head']], chunks[rel['tail']]) for rel in raw_relations]
-    data = [{'tokens': tokens, 'chunks': chunks, 'relations': relations}]
-    
-    config = ModelConfig(decoder=RelationClassificationDecoderConfig(num_neg_relations=num_neg_relations))
-    dataset = Dataset(data, config, training=training)
+    if building:
+        config = ModelConfig(decoder=RelationClassificationDecoderConfig(num_neg_relations=num_neg_relations))
+        rel_decoder_config = config.decoder
+    else:
+        config = ModelConfig(decoder=JointDecoderConfig(rel_decoder=RelationClassificationDecoderConfig(num_neg_relations=num_neg_relations)))
+        rel_decoder_config = config.decoder.rel_decoder
+        
+    dataset = Dataset(re_data_demo, config, training=training)
     dataset.build_vocabs_and_dims()
     
-    span_pairs_obj = dataset[0]['span_pairs_obj']
-    assert span_pairs_obj.relations == relations
-    assert set((rel[1][1], rel[1][2], rel[2][1], rel[2][2]) for rel in relations).issubset(set(span_pairs_obj.sp_pairs))
-    assert (span_pairs_obj.sp_pair_size_ids+1).tolist() == [[he-hs, te-ts] for hs, he, ts, te in span_pairs_obj.sp_pairs]
+    chunk_pairs_obj = dataset[0]['chunk_pairs_obj']
+    assert chunk_pairs_obj.relations == relations
     
-    num_chunks = len(chunks)
-    expected_num_sp_pairs = num_chunks * (num_chunks-1)
+    if building:
+        assert chunk_pairs_obj.chunks == chunks
+        assert chunk_pairs_obj.is_built
+    else:
+        assert chunk_pairs_obj.chunks == chunks if training else len(chunk_pairs_obj.chunks) == 0
+        assert not chunk_pairs_obj.is_built
+        chunks_pred = [('EntA', 0, 1), ('EntB', 1, 2), ('EntA', 2, 3)]
+        chunk_pairs_obj.inject_chunks(chunks_pred)
+        chunk_pairs_obj.build(rel_decoder_config)
+        assert len(chunk_pairs_obj.chunks) == len(chunks) + len(chunks_pred) if training else len(chunk_pairs_obj.chunks) == len(chunks_pred)
+        assert chunk_pairs_obj.is_built
+        
+    num_candidate_chunk_pairs = len(chunk_pairs_obj.chunks) * (len(chunk_pairs_obj.chunks) - 1)
+    
+    rel_chunk_pairs = [(head, tail) for rel_label, head, tail in relations]
+    oov_chunk_pairs = [(head, tail) for rel_label, head, tail in relations if not (head in chunk_pairs_obj.chunks and tail in chunk_pairs_obj.chunks)]
     if training:
-        expected_num_sp_pairs = min(expected_num_sp_pairs, len(relations) + num_neg_relations)
-    assert len(span_pairs_obj.sp_pairs) == expected_num_sp_pairs
+        assert len(oov_chunk_pairs) == 0
+        assert set(rel_chunk_pairs).issubset(set(chunk_pairs_obj.chunk_pairs))
+        assert len(chunk_pairs_obj.chunk_pairs) == min(num_candidate_chunk_pairs, len(relations) + num_neg_relations)
+    else:
+        assert set(rel_chunk_pairs) - set(chunk_pairs_obj.chunk_pairs) == set(oov_chunk_pairs)
+        assert len(chunk_pairs_obj.chunk_pairs) == num_candidate_chunk_pairs
+        
+    assert (chunk_pairs_obj.span_size_ids+1).tolist() == [[he-hs, te-ts] for (hl, hs, he), (tl, ts, te) in chunk_pairs_obj.chunk_pairs]
     
-    assert (span_pairs_obj.rel_label_ids[:len(relations)] != config.decoder.rel_none_idx).all().item()
-    assert (span_pairs_obj.rel_label_ids[len(relations):] == config.decoder.rel_none_idx).all().item()
+    chunk_pair2rel_label = {(head, tail): rel_label for rel_label, head, tail in relations}
+    assert all(chunk_pair2rel_label.get(chunk_pair, rel_decoder_config.rel_none_label) == rel_decoder_config.idx2rel_label[rel_label_id]
+                   for chunk_pair, rel_label_id
+                   in zip(chunk_pairs_obj.chunk_pairs, chunk_pairs_obj.rel_label_ids.tolist()))

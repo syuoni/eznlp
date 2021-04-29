@@ -33,6 +33,8 @@ _is_tensor_like = _create_is_like(lambda x: isinstance(x, (torch.Tensor, TensorW
 
 
 class TensorWrapper(object):
+    """A wrapper of tensors.     
+    """
     def __init__(self, **kwargs):
         self.add_attributes(**kwargs)
         
@@ -88,6 +90,8 @@ class TensorWrapper(object):
 
 
 class Batch(TensorWrapper):
+    """A wrapper of batch. 
+    """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         
@@ -101,4 +105,21 @@ class Batch(TensorWrapper):
     @property
     def step(self):
         return self.seq_lens.max().item()
+
+
+
+class TargetWrapper(TensorWrapper):
+    """
+    A wrapper of modeling targets (tensors) with underlying ground truth (e.g., labels, chunks, relations). 
+    
+    Notes
+    -----
+    (1) `training` is a flag adapting the contents of the current object. 
+        If `training` is False, the object cannot expose the ground truth to **attributes that will be used in decoding**; 
+        in other words, those **attributes that will be used in decoding** should be identical with or without the ground truth. 
+        However, some **attributes that will not be used in decoding** may contain information of the ground truth for computing evaluation loss. 
+    (2) Do NOT check the attributes (being tensors or not) for a target object. 
+    """
+    def __init__(self, training: bool=True):
+        self.training = training
 

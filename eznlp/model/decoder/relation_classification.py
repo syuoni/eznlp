@@ -5,7 +5,7 @@ import random
 import logging
 import torch
 
-from ...wrapper import TensorWrapper, Batch
+from ...wrapper import TargetWrapper, Batch
 from ...nn.modules import CombinedDropout
 from ...nn.init import reinit_embedding_, reinit_layer_
 from ...metrics import precision_recall_f1_report
@@ -43,7 +43,7 @@ class RelationClassificationDecoderConfig(DecoderConfig):
     @property
     def idx2ck_label(self):
         return self._idx2ck_label
-    
+        
     @idx2ck_label.setter
     def idx2ck_label(self, idx2ck_label: List[str]):
         self._idx2ck_label = idx2ck_label
@@ -61,7 +61,7 @@ class RelationClassificationDecoderConfig(DecoderConfig):
     @property
     def ck_voc_dim(self):
         return len(self.ck_label2idx)
-    
+        
     @property
     def ck_none_idx(self):
         return self.ck_label2idx[self.ck_none_label]
@@ -85,19 +85,19 @@ class RelationClassificationDecoderConfig(DecoderConfig):
         self.idx2rel_label = [self.rel_none_label] + list(rel_counter.keys())
         
     def exemplify(self, data_entry: dict, training: bool=True, building: bool=True):
-        return {'span_pairs_obj': SpanPairs(data_entry, self, training=training, building=building)}
+        return {'chunk_pairs_obj': ChunkPairs(data_entry, self, training=training, building=building)}
         
     def batchify(self, batch_examples: List[dict]):
-        return {'span_pairs_objs': [ex['span_pairs_obj'] for ex in batch_examples]}
+        return {'chunk_pairs_objs': [ex['chunk_pairs_obj'] for ex in batch_examples]}
         
     def instantiate(self):
         return RelationClassificationDecoder(self)
 
 
 
-class SpanPairs(TensorWrapper):
+class ChunkPairs(TargetWrapper):
     """
-    A wrapper of span-pairs with original relations. 
+    A wrapper of chunk-pairs with underlying relations. 
     
     Parameters
     ----------
@@ -114,7 +114,8 @@ class SpanPairs(TensorWrapper):
         In this case, `inject_chunks` and `build` should be successively invoked, and the negative samples are generated from injected chunks. 
     """
     def __init__(self, data_entry: dict, config: RelationClassificationDecoderConfig, training: bool=True, building: bool=True):
-        self.training = training
+        super().__init__(training)
+        
         self.chunks = data_entry['chunks'] if training or building else []
         self.relations = data_entry.get('relations', None)
         
@@ -145,38 +146,38 @@ class SpanPairs(TensorWrapper):
         assert not self.is_built
         self.is_built = True
         
-        if self.relations is not None:
-            pos_sp_pairs = [(head[1], head[2], tail[1], tail[2]) for label, head, tail in self.relations]
-            pos_ck_labels = [(head[0], tail[0]) for label, head, tail in self.relations]
-            pos_rel_labels = [label for label, head, tail in self.relations]
+        if self.training:
+            pos_chunk_pairs = [(head, tail) for rel_label, head, tail in self.relations]
         else:
-            pos_sp_pairs, pos_ck_labels, pos_rel_labels = [], [], []
+            pos_chunk_pairs = []
         
-        neg_sp_pairs, neg_ck_labels = [], []
+        neg_chunk_pairs = []
         for head in self.chunks:
             for tail in self.chunks:
-                if head != tail and (head[1], head[2], tail[1], tail[2]) not in pos_sp_pairs:
-                    neg_sp_pairs.append((head[1], head[2], tail[1], tail[2]))
-                    neg_ck_labels.append((head[0], tail[0]))
-                    
-        if self.training and len(neg_sp_pairs) > config.num_neg_relations:
-            sampling_indexes = random.sample(range(len(neg_sp_pairs)), config.num_neg_relations)
-            neg_sp_pairs = [neg_sp_pairs[i] for i in sampling_indexes]
-            neg_ck_labels = [neg_ck_labels[i] for i in sampling_indexes]
-            
-        self.sp_pairs = pos_sp_pairs + neg_sp_pairs
-        # sp_pair_size_ids: (num_pairs, 2)
-        # Note: size_id = size - 1
-        self.sp_pair_size_ids = torch.tensor([[h_end-h_start-1, t_end-t_start-1] for h_start, h_end, t_start, t_end in self.sp_pairs])
-        self.sp_pair_size_ids.masked_fill_(self.sp_pair_size_ids>=config.max_span_size, config.max_span_size-1)
+                if head[1:] != tail[1:] and (head, tail) not in pos_chunk_pairs:
+                    neg_chunk_pairs.append((head, tail))
         
-        # ck_label_ids: (num_pairs, 2)
-        self.ck_labels = pos_ck_labels + neg_ck_labels
-        self.ck_label_ids = torch.tensor([[config.ck_label2idx[hckl], config.ck_label2idx[tckl]] for hckl, tckl in self.ck_labels])
+        if self.training and len(neg_chunk_pairs) > config.num_neg_relations:
+            neg_chunk_pairs = random.sample(neg_chunk_pairs, config.num_neg_relations)
+        
+        self.chunk_pairs = pos_chunk_pairs + neg_chunk_pairs
+        # span_size_ids / ck_label_ids: (num_pairs, 2)
+        # Note: size_id = size - 1
+        self.span_size_ids = torch.tensor([[h_end-h_start-1, t_end-t_start-1] 
+                                               for (h_label, h_start, h_end), (t_label, t_start, t_end) 
+                                               in self.chunk_pairs], 
+                                          dtype=torch.long)
+        self.span_size_ids.masked_fill_(self.span_size_ids>=config.max_span_size, config.max_span_size-1)
+        
+        self.ck_label_ids = torch.tensor([[config.ck_label2idx[h_label], config.ck_label2idx[t_label]] 
+                                              for (h_label, h_start, h_end), (t_label, t_start, t_end) 
+                                              in self.chunk_pairs], 
+                                         dtype=torch.long)
         
         if self.relations is not None:
-            rel_labels = pos_rel_labels + [config.rel_none_label] * len(neg_sp_pairs)
-            self.rel_label_ids = torch.tensor([config.rel_label2idx[label] for label in rel_labels])
+            chunk_pair2rel_label = {(head, tail): rel_label for rel_label, head, tail in self.relations}
+            rel_labels = [chunk_pair2rel_label.get((head, tail), config.rel_none_label) for head, tail in self.chunk_pairs]
+            self.rel_label_ids = torch.tensor([config.rel_label2idx[rel_label] for rel_label in rel_labels], dtype=torch.long)
 
 
 
@@ -206,64 +207,72 @@ class RelationClassificationDecoder(Decoder):
         self.zero_context = torch.nn.Parameter(torch.zeros(config.in_dim))
         
         
-    def get_span_pair_logits(self, batch: Batch, full_hidden: torch.Tensor):
+    def get_logits(self, batch: Batch, full_hidden: torch.Tensor):
         # full_hidden: (batch, step, hid_dim)
-        batch_span_pair_logits = []
+        batch_logits = []
         for k in range(batch.size):
-            # span_pair_hidden: (num_pairs, hid_dim)
-            head_hidden, tail_hidden, contexts = [], [], []
-            for h_start, h_end, t_start, t_end in batch.span_pairs_objs[k].sp_pairs:
-                head_hidden.append(full_hidden[k, h_start:h_end].max(dim=0).values)
-                tail_hidden.append(full_hidden[k, t_start:t_end].max(dim=0).values)
+            if len(batch.chunk_pairs_objs[k].chunk_pairs) == 0:
+                logits = torch.empty(0, self.hid2logit.out_features, device=full_hidden.device)
                 
-                if h_end < t_start:
-                    context = full_hidden[k, h_end:t_start].max(dim=0).values
-                elif t_end < h_start:
-                    context = full_hidden[k, t_end:h_start].max(dim=0).values
-                else:
-                    context = self.zero_context
-                contexts.append(context)
+            else:
+                head_hidden, tail_hidden, contexts = [], [], []
+                for (h_label, h_start, h_end), (t_label, t_start, t_end) in batch.chunk_pairs_objs[k].chunk_pairs:
+                    head_hidden.append(full_hidden[k, h_start:h_end].max(dim=0).values)
+                    tail_hidden.append(full_hidden[k, t_start:t_end].max(dim=0).values)
+                    
+                    if h_end < t_start:
+                        context = full_hidden[k, h_end:t_start].max(dim=0).values
+                    elif t_end < h_start:
+                        context = full_hidden[k, t_end:h_start].max(dim=0).values
+                    else:
+                        context = self.zero_context
+                    contexts.append(context)
+                
+                # head_hiddem/tail_hidden/contexts: (num_pairs, hid_dim)
+                head_hidden = torch.stack(head_hidden)
+                tail_hidden = torch.stack(tail_hidden)
+                contexts = torch.stack(contexts)
+                
+                # ck_size_embedded/ck_label_embedded: (num_pairs, 2, emb_dim) -> (num_pairs, emb_dim*2)
+                ck_size_embedded = self.ck_size_embedding(batch.chunk_pairs_objs[k].span_size_ids).flatten(start_dim=1)
+                ck_label_embedded = self.ck_label_embedding(batch.chunk_pairs_objs[k].ck_label_ids).flatten(start_dim=1)
+                logits = self.hid2logit(self.dropout(torch.cat([head_hidden, tail_hidden, contexts, ck_size_embedded, ck_label_embedded], dim=-1)))
             
-            # head_hiddem/tail_hidden/contexts: (num_pairs, hid_dim)
-            head_hidden = torch.stack(head_hidden)
-            tail_hidden = torch.stack(tail_hidden)
-            contexts = torch.stack(contexts)
+            batch_logits.append(logits)
             
-            # ck_size_embedded/ck_label_embedded: (num_pairs, 2, emb_dim) -> (num_pairs, emb_dim*2)
-            ck_size_embedded = self.ck_size_embedding(batch.span_pairs_objs[k].sp_pair_size_ids).flatten(start_dim=1)
-            ck_label_embedded = self.ck_label_embedding(batch.span_pairs_objs[k].ck_label_ids).flatten(start_dim=1)
-            
-            span_pair_logits = self.hid2logit(self.dropout(torch.cat([head_hidden, tail_hidden, contexts, ck_size_embedded, ck_label_embedded], dim=-1)))
-            batch_span_pair_logits.append(span_pair_logits)
-            
-        return batch_span_pair_logits
+        return batch_logits
     
     
     def forward(self, batch: Batch, full_hidden: torch.Tensor):
-        batch_span_pair_logits = self.get_span_pair_logits(batch, full_hidden)
+        batch_logits = self.get_logits(batch, full_hidden)
         
-        losses = [self.criterion(batch_span_pair_logits[k], batch.span_pairs_objs[k].rel_label_ids) for k in range(batch.size)]
+        losses = [self.criterion(batch_logits[k], batch.chunk_pairs_objs[k].rel_label_ids) 
+                      if len(batch.chunk_pairs_objs[k].chunk_pairs) > 0
+                      else torch.tensor(0.0, device=full_hidden.device)
+                      for k in range(batch.size)]
         return torch.stack(losses)
     
     
     def decode(self, batch: Batch, full_hidden: torch.Tensor):
-        batch_span_pair_logits = self.get_span_pair_logits(batch, full_hidden)
+        batch_logits = self.get_logits(batch, full_hidden)
         
         batch_relations = []
         for k in range(batch.size):
-            rel_labels = [self.idx2rel_label[i] for i in batch_span_pair_logits[k].argmax(dim=-1).cpu().tolist()]
-            
-            relations = [(rel_label, (hckl, h_start, h_end), (tckl, t_start, t_end)) 
-                             for rel_label, (h_start, h_end, t_start, t_end), (hckl, tckl) 
-                             in zip(rel_labels, batch.span_pairs_objs[k].sp_pairs, batch.span_pairs_objs[k].ck_labels) 
-                             if rel_label != self.rel_none_label]
+            if len(batch.chunk_pairs_objs[k].chunk_pairs) > 0:
+                rel_labels = [self.idx2rel_label[i] for i in batch_logits[k].argmax(dim=-1).cpu().tolist()]
+                relations = [(rel_label, (head, tail)) 
+                                 for rel_label, (head, tail)
+                                 in zip(rel_labels, batch.chunk_pairs_objs[k].chunk_pairs) 
+                                 if rel_label != self.rel_none_label]
+            else:
+                relations = []
             batch_relations.append(relations)
             
         return batch_relations
     
     
     def retrieve(self, batch: Batch):
-        return [span_pairs_obj.relations for span_pairs_obj in batch.span_pairs_objs]
+        return [chunk_pairs_obj.relations for chunk_pairs_obj in batch.chunk_pairs_objs]
         
         
     def evaluate(self, y_gold: List[tuple], y_pred: List[tuple]):
@@ -274,9 +283,9 @@ class RelationClassificationDecoder(Decoder):
     def inject_chunks_and_build(self, batch: Batch, batch_chunks_pred: List[List[tuple]], device):
         """This method is to be invoked outside, as the outside invoker is assumed not to know the structure of `batch`. 
         """
-        for span_pairs_obj, chunks_pred in zip(batch.span_pairs_objs, batch_chunks_pred):
-            if not span_pairs_obj.is_built:
-                span_pairs_obj.inject_chunks(chunks_pred)
-                span_pairs_obj.build(self)
-                span_pairs_obj.to(device)
+        for chunk_pairs_obj, chunks_pred in zip(batch.chunk_pairs_objs, batch_chunks_pred):
+            if not chunk_pairs_obj.is_built:
+                chunk_pairs_obj.inject_chunks(chunks_pred)
+                chunk_pairs_obj.build(self)
+                chunk_pairs_obj.to(device)
                 

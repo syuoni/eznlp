@@ -2,7 +2,6 @@
 import pytest
 import torch
 
-from eznlp.token import TokenSequence
 from eznlp.dataset import Dataset
 from eznlp.model import EncoderConfig, BertLikeConfig, SpanClassificationDecoderConfig, ModelConfig
 from eznlp.training import Trainer
@@ -83,40 +82,39 @@ class TestModel(object):
 
 
 
-
-@pytest.mark.parametrize("num_neg_chunks, max_span_size, training", [(10, 5, True), 
-                                                                     (10, 5, False), 
-                                                                     (100, 20, True), 
-                                                                     (100, 20, False)])
-def test_spans_obj(num_neg_chunks, max_span_size, training):
-    tokenized_raw_text = ["This", "is", "a", "-3.14", "demo", ".", 
-                          "Those", "are", "an", "APPLE", "and", "some", "glass", "bottles", "."]
-    tokens = TokenSequence.from_tokenized_text(tokenized_raw_text)
-    
-    entities = [{'type': 'EntA', 'start': 4, 'end': 5},
-                {'type': 'EntA', 'start': 9, 'end': 10},
-                {'type': 'EntB', 'start': 12, 'end': 14}]
-    chunks = [(ent['type'], ent['start'], ent['end']) for ent in entities]
-    data = [{'tokens': tokens, 'chunks': chunks}]
+@pytest.mark.parametrize("num_neg_chunks", [10, 100])
+@pytest.mark.parametrize("max_span_size", [2, 5, 50])
+@pytest.mark.parametrize("training", [True, False])
+def test_spans_obj(re_data_demo, num_neg_chunks, max_span_size, training):
+    entry = re_data_demo[0]
+    tokens, chunks = entry['tokens'], entry['chunks']
     
     config = ModelConfig(decoder=SpanClassificationDecoderConfig(num_neg_chunks=num_neg_chunks, 
                                                                  max_span_size=max_span_size))
-    dataset = Dataset(data, config, training=training)
+    dataset = Dataset(re_data_demo, config, training=training)
     dataset.build_vocabs_and_dims()
     
     spans_obj = dataset[0]['spans_obj']
     assert spans_obj.chunks == chunks
-    assert set((ck[1], ck[2]) for ck in chunks).issubset(set(spans_obj.spans))
-    assert (spans_obj.span_size_ids+1).tolist() == [e-s for s, e in spans_obj.spans]
     
-    num_tokens = len(tokens)
-    if num_tokens > max_span_size:
-        expected_num_spans = (num_tokens-max_span_size)*max_span_size + (max_span_size+1)*max_span_size/2
+    if len(tokens) > max_span_size:
+        num_candidate_spans = (len(tokens) - max_span_size)*max_span_size + (max_span_size+1)*max_span_size/2
     else:
-        expected_num_spans = (num_tokens+1)*num_tokens / 2
+        num_candidate_spans = (len(tokens) + 1) * len(tokens) / 2
+        
+    chunk_spans = [(s, e) for l, s, e in chunks]
+    oov_spans = [(s, e) for l, s, e in chunks if e-s > max_span_size]
     if training:
-        expected_num_spans = min(expected_num_spans, len(chunks) + num_neg_chunks)
-    assert len(spans_obj.spans) == expected_num_spans
+        assert set(chunk_spans).issubset(set(spans_obj.spans))
+        assert len(spans_obj.spans) == min(num_candidate_spans + len(oov_spans), len(chunks) + num_neg_chunks)
+    else:
+        assert set(chunk_spans) - set(spans_obj.spans) == set(oov_spans)
+        assert len(spans_obj.spans) == num_candidate_spans
+        
+    assert (spans_obj.span_size_ids+1).tolist() == [min(e-s, max_span_size) for s, e in spans_obj.spans]
     
-    assert (spans_obj.label_ids[:len(chunks)] != config.decoder.none_idx).all().item()
-    assert (spans_obj.label_ids[len(chunks):] == config.decoder.none_idx).all().item()
+    span2label = {(s, e): l for l, s, e in chunks}
+    assert all(span2label.get(span, config.decoder.none_label) == config.decoder.idx2label[label_id] 
+                   for span, label_id 
+                   in zip(spans_obj.spans, spans_obj.label_ids.tolist()))
+    

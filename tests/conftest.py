@@ -7,6 +7,7 @@ import transformers
 import flair
 
 from eznlp import auto_device
+from eznlp.token import TokenSequence
 from eznlp.vectors import Vectors, GloVe
 from eznlp.io import TabularIO, ConllIO, JsonIO
 
@@ -79,6 +80,20 @@ def conll2004_demo():
                   relation_head_key='head', 
                   relation_tail_key='tail', 
                   verbose=False).read("data/conll2004/demo.conll04_train.json")
+
+
+@pytest.fixture
+def re_data_demo():
+    tokenized_raw_text = ["This", "is", "a", "-3.14", "demo", ".", 
+                          "Those", "are", "an", "APPLE", "and", "some", "glass", "bottles", ".", 
+                          "This", "is", "a", "very", "very", "very", "very", "very", "long", "entity", "?"]
+    tokens = TokenSequence.from_tokenized_text(tokenized_raw_text)
+    chunks = [('EntA', 4, 5), ('EntA', 9, 10), ('EntB', 12, 14), ('EntC', 18, 25)]
+    relations = [('RelA', chunks[0], chunks[1]), 
+                 ('RelA', chunks[0], chunks[2]), 
+                 ('RelB', chunks[1], chunks[2]), 
+                 ('RelB', chunks[2], chunks[1])]
+    return [{'tokens': tokens, 'chunks': chunks, 'relations': relations}]
 
 
 @pytest.fixture
