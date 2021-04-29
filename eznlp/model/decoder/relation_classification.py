@@ -260,7 +260,7 @@ class RelationClassificationDecoder(Decoder):
         for k in range(batch.size):
             if len(batch.chunk_pairs_objs[k].chunk_pairs) > 0:
                 rel_labels = [self.idx2rel_label[i] for i in batch_logits[k].argmax(dim=-1).cpu().tolist()]
-                relations = [(rel_label, (head, tail)) 
+                relations = [(rel_label, head, tail) 
                                  for rel_label, (head, tail)
                                  in zip(rel_labels, batch.chunk_pairs_objs[k].chunk_pairs) 
                                  if rel_label != self.rel_none_label]

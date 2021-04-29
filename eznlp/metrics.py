@@ -93,6 +93,8 @@ def precision_recall_f1_report(list_tuples_gold: List[List[tuple]], list_tuples_
     ----------
     https://github.com/chakki-works/seqeval
     """
+    assert len(list_tuples_gold) == len(list_tuples_pred)
+    
     if macro_over == 'types':
         scores = _prf_scores_over_types(list_tuples_gold, list_tuples_pred, **kwargs)
     elif macro_over == 'samples':
