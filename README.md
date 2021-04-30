@@ -38,6 +38,6 @@ See [Named Entity Recognition](docs/entity_recognition.md) for more details.
 - [x] Experiments on Chinese NER datasets
 - [x] Experiments on text classification datasets
 - [ ] Focal loss (and combined to CRF?)
-- [ ] Relation Extraction
-- [ ] Span-based models (e.g., SpERT)
+- [x] Relation Extraction
+- [x] Span-based models (e.g., SpERT)
 - [ ] Data Augmentation

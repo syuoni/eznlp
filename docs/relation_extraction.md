@@ -14,18 +14,21 @@ Configurations of our implementation:
 
 ### CoNLL 2004 
 | Model | Paper | Reported F1 | Our Imp. F1 (Pipline) | Our Imp. F1 (Joint) | Notes |
-|:-----:|:-----:|:-----------:|:---------------------:|:-------------------:|:---:|
-| SpERT (with CharLSTM + LSTM)| -                     | -             | 86.92 / |  | num_layers=2 |
-| SpERT (with BERT-base)    | Eberts and Ulges (2019) | 88.94 / 71.47 | 89.50 / |  | 
-| SpERT (with BERT-base + LSTM) | -                   | -             | 90.21 / |  | 
-| SpERT (with RoBERTa-base)        | -                | -             | 89.91 / |  | 
-| SpERT (with RoBERTa-base + LSTM) | -                | -             | 90.30 / |  | 
-
+|:-----:|:-----:|:-----------:|:---------------------:|:-------------------:|:-----:|
+| SpERT (with CharLSTM + LSTM)| -                     | -             |  /  | 86.57 / 66.01 | num_layers=2 |
+| SpERT (with BERT-base)    | Eberts and Ulges (2019) | 88.94 / 71.47 |  /  | 88.93 / 70.82 | 
+| SpERT (with BERT-base + LSTM) | -                   | -             |  /  | 89.86 / 72.51 | 
+| SpERT (with RoBERTa-base)        | -                | -             |  /  | 90.18 / 72.64 | 
+| SpERT (with RoBERTa-base + LSTM) | -                | -             |  /  | 89.17 / 75.03 | 
 
 ### SciERC
-
-
-### ADE
+| Model | Paper | Reported F1 | Our Imp. F1 (Joint) | Notes |
+|:-----:|:-----:|:-----------:|:-------------------:|:-----:|
+| SpERT (with CharLSTM + LSTM)| -                     | -             |  /  | num_layers=2 |
+| SpERT (with BERT-base)    | Eberts and Ulges (2019) | 67.62 / 46.44 |  /  | 
+| SpERT (with BERT-base + LSTM) | -                   | -             |  /  | 
+| SpERT (with RoBERTa-base)        | -                | -             |  /  | 
+| SpERT (with RoBERTa-base + LSTM) | -                | -             |  /  | 
 
 
 
