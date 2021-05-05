@@ -27,9 +27,13 @@ def evaluate_entity_recognition(trainer: Trainer, dataset: Dataset):
     logger.info(f"ER Macro F1-score: {macro_f1*100:2.3f}%")
 
 
-def evaluate_relation_extraction(trainer: Trainer, dataset: Dataset):
+def evaluate_relation_extraction(trainer: Trainer, dataset: Dataset, eval_chunk_type_for_relation: bool=True):
     set_relations_pred = trainer.predict(dataset)
     set_relations_gold = [ex['relations'] for ex in dataset.data]
+    
+    if not eval_chunk_type_for_relation:
+        set_relations_gold = [[(rel_type, head[1:], tail[1:]) for rel_type, head, tail in relations] for relations in set_relations_gold]
+        set_relations_pred = [[(rel_type, head[1:], tail[1:]) for rel_type, head, tail in relations] for relations in set_relations_pred]
     
     scores, ave_scores = precision_recall_f1_report(set_relations_gold, set_relations_pred)
     micro_f1, macro_f1 = ave_scores['micro']['f1'], ave_scores['macro']['f1']
@@ -37,10 +41,14 @@ def evaluate_relation_extraction(trainer: Trainer, dataset: Dataset):
     logger.info(f"RE Macro F1-score: {macro_f1*100:2.3f}%")
 
 
-def evaluate_joint_er_re(trainer: Trainer, dataset: Dataset):
+def evaluate_joint_er_re(trainer: Trainer, dataset: Dataset, eval_chunk_type_for_relation: bool=True):
     set_chunks_pred, set_relations_pred = trainer.predict(dataset)
     set_chunks_gold = [ex['chunks'] for ex in dataset.data]
     set_relations_gold = [ex['relations'] for ex in dataset.data]
+    
+    if not eval_chunk_type_for_relation:
+        set_relations_gold = [[(rel_type, head[1:], tail[1:]) for rel_type, head, tail in relations] for relations in set_relations_gold]
+        set_relations_pred = [[(rel_type, head[1:], tail[1:]) for rel_type, head, tail in relations] for relations in set_relations_pred]
     
     scores, ave_scores = precision_recall_f1_report(set_chunks_gold, set_chunks_pred)
     micro_f1, macro_f1 = ave_scores['micro']['f1'], ave_scores['macro']['f1']

@@ -149,9 +149,11 @@ if __name__ == '__main__':
     trainer = Trainer(model, device=device)
     
     logger.info("Evaluating on dev-set")
-    evaluate_joint_er_re(trainer, dev_set)
+    evaluate_joint_er_re(trainer, dev_set, eval_chunk_type_for_relation=True)
+    evaluate_joint_er_re(trainer, dev_set, eval_chunk_type_for_relation=False)
     logger.info("Evaluating on test-set")
-    evaluate_joint_er_re(trainer, test_set)
+    evaluate_joint_er_re(trainer, test_set, eval_chunk_type_for_relation=True)
+    evaluate_joint_er_re(trainer, test_set, eval_chunk_type_for_relation=False)
     
     logger.info(" ".join(sys.argv))
     logger.info(pprint.pformat(args.__dict__))
