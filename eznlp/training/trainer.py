@@ -13,6 +13,11 @@ logger = logging.getLogger(__name__)
 
 class Trainer(object):
     """
+    Parameters
+    ----------
+    num_grad_acc_steps: int
+        The "real" batch size is "nominal" `batch_size` * `num_grad_acc_steps`. 
+    
     References
     ----------
     [1] https://pytorch.org/tutorials/recipes/recipes/amp_recipe.html
@@ -22,6 +27,7 @@ class Trainer(object):
                  optimizer: torch.optim.Optimizer=None, 
                  scheduler: torch.optim.lr_scheduler._LRScheduler=None, 
                  schedule_by_step: bool=False, 
+                 num_grad_acc_steps: int=None, 
                  device: torch.device=None, 
                  grad_clip: float=None, 
                  use_amp: bool=False):
@@ -36,6 +42,8 @@ class Trainer(object):
             assert not isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau)
         self.scheduler = scheduler
         self.schedule_by_step = schedule_by_step
+        self.num_grad_acc_steps = num_grad_acc_steps if isinstance(num_grad_acc_steps, int) and num_grad_acc_steps > 0 else 1
+        self.num_steps = 0
         
         assert device is not None
         self.device = device
@@ -72,22 +80,30 @@ class Trainer(object):
         loss: torch.Tensor
             A scalar tensor. 
         """
+        # Average loss over the "real" batch. 
+        # Note gradient accumulation is equivalent to summing the loss 
+        loss = loss / self.num_grad_acc_steps
         # Backward propagation
         self.scaler.scale(loss).backward()
         
-        if self.grad_clip is not None and self.grad_clip > 0:
-            self.scaler.unscale_(self.optimizer)
-            # torch.nn.utils.clip_grad_value_(self.model.parameters(), self.grad_clip)
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
-            
-        # Update weights
-        self.scaler.step(self.optimizer)
-        self.scaler.update()
-        self.optimizer.zero_grad()
+        # `optimizer` follows the "real" steps
+        self.num_steps += 1
+        if self.num_steps % self.num_grad_acc_steps == 0:
+            if self.grad_clip is not None and self.grad_clip > 0:
+                self.scaler.unscale_(self.optimizer)
+                # torch.nn.utils.clip_grad_value_(self.model.parameters(), self.grad_clip)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
+                
+            # Update weights
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
+            self.optimizer.zero_grad()
+        
+        # `scheduler` follows the "nominal" steps
         if self.scheduler is not None and self.schedule_by_step:
             self.scheduler.step()
-            
-            
+        
+        
     def predict(self, dataset: Dataset, batch_size: int=32):
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, collate_fn=dataset.collate)
         
