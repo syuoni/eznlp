@@ -34,6 +34,10 @@ def parse_arguments(parser: argparse.ArgumentParser):
     group_rel_classification = parser.add_argument_group('relation classification')
     group_rel_classification.add_argument('--agg_mode', type=str, default='max_pooling', 
                                           help="aggregating mode")
+    group_rel_classification.add_argument('--criterion', type=str, default='cross_entropy', 
+                                          help="decoder loss criterion")
+    group_rel_classification.add_argument('--focal_gamma', type=float, default=2.0, 
+                                          help="Focal Loss gamma")
     group_rel_classification.add_argument('--num_neg_relations', type=int, default=100, 
                                           help="number of sampling negative relations")
     group_rel_classification.add_argument('--max_span_size', type=int, default=10, 
@@ -51,6 +55,8 @@ def build_RE_config(args: argparse.Namespace):
     drop_rates = (0.0, 0.05, args.drop_rate) if args.use_locked_drop else (args.drop_rate, 0.0, 0.0)
     
     decoder_config = RelationClassificationDecoderConfig(agg_mode=args.agg_mode, 
+                                                         criterion=args.criterion,
+                                                         gamma=args.focal_gamma, 
                                                          num_neg_relations=args.num_neg_relations, 
                                                          max_span_size=args.max_span_size, 
                                                          ck_size_emb_dim=args.ck_size_emb_dim, 

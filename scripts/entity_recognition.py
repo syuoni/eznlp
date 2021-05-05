@@ -37,10 +37,12 @@ def parse_arguments(parser: argparse.ArgumentParser):
     group_decoder = parser.add_argument_group('decoder configurations')
     group_decoder.add_argument('--ck_decoder', type=str, default='sequence_tagging', 
                                help="chunk decoding method", choices=['sequence_tagging', 'span_classification'])
+    group_decoder.add_argument('--criterion', type=str, default='CRF', 
+                               help="decoder loss criterion")
+    group_decoder.add_argument('--focal_gamma', type=float, default=2.0, 
+                               help="Focal Loss gamma")
     
     group_sequence_tagging = parser.add_argument_group('sequence tagging')
-    group_sequence_tagging.add_argument('--ck_dec_arch', type=str, default='CRF', 
-                                        help="decoder architecture")
     group_sequence_tagging.add_argument('--scheme', type=str, default='BIOES', 
                                         help="sequence tagging scheme", choices=['BIOES', 'BIO2'])
     
@@ -148,11 +150,14 @@ def build_ER_config(args: argparse.Namespace):
     drop_rates = (0.0, 0.05, args.drop_rate) if args.use_locked_drop else (args.drop_rate, 0.0, 0.0)
     
     if args.ck_decoder == 'sequence_tagging':
-        decoder_config = SequenceTaggingDecoderConfig(arch=args.ck_dec_arch, 
-                                                      scheme=args.scheme, 
+        decoder_config = SequenceTaggingDecoderConfig(scheme=args.scheme, 
+                                                      criterion=args.criterion, 
+                                                      gamma=args.focal_gamma, 
                                                       in_drop_rates=drop_rates)
     else:
         decoder_config = SpanClassificationDecoderConfig(agg_mode=args.agg_mode, 
+                                                         criterion=args.criterion, 
+                                                         gamma=args.focal_gamma, 
                                                          num_neg_chunks=args.num_neg_chunks, 
                                                          max_span_size=args.max_span_size, 
                                                          size_emb_dim=args.ck_size_emb_dim, 

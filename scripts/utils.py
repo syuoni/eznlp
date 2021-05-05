@@ -48,6 +48,8 @@ def add_base_arguments(parser: argparse.ArgumentParser):
                              help="learning rate for finetuning")
     group_train.add_argument('--scheduler', type=str, default='None', 
                              help='scheduler', choices=['None', 'ReduceLROnPlateau', 'LinearDecayWithWarmup'])
+    group_train.add_argument('--num_grad_acc_steps', type=int, default=1, 
+                             help="number of gradient accumulation steps")
     
     group_model = parser.add_argument_group('model configurations')
     group_model.add_argument('--hid_dim', type=int, default=200, 
@@ -304,5 +306,5 @@ def build_trainer(model, device, num_train_batches: int, args: argparse.Namespac
                                                          num_total_steps=num_train_batches*args.num_epochs)
         scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
     
-    return Trainer(model, optimizer=optimizer, scheduler=scheduler, schedule_by_step=schedule_by_step,
+    return Trainer(model, optimizer=optimizer, scheduler=scheduler, schedule_by_step=schedule_by_step, num_grad_acc_steps=args.num_grad_acc_steps,
                    device=device, grad_clip=args.grad_clip, use_amp=args.use_amp)
