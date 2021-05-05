@@ -6,7 +6,7 @@ import logging
 import torch
 
 from ...wrapper import TargetWrapper, Batch
-from ...nn.modules import CombinedDropout
+from ...nn.modules import CombinedDropout, LabelSmoothCrossEntropyLoss, FocalLoss
 from ...nn.init import reinit_embedding_, reinit_layer_
 from ...metrics import precision_recall_f1_report
 from .base import DecoderConfig, Decoder
@@ -18,12 +18,18 @@ class RelationClassificationDecoderConfig(DecoderConfig):
     def __init__(self, **kwargs):
         self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
         
-        self.agg_mode = kwargs.pop('agg_mode', 'max_pooling')
         self.num_neg_relations = kwargs.pop('num_neg_relations', 100)
         self.max_span_size = kwargs.pop('max_span_size', 10)
-        
         self.ck_size_emb_dim = kwargs.pop('ck_size_emb_dim', 25)
         self.ck_label_emb_dim = kwargs.pop('ck_label_emb_dim', 25)
+        
+        self.agg_mode = kwargs.pop('agg_mode', 'max_pooling')
+        self.criterion = kwargs.pop('criterion', 'cross_entropy')
+        assert self.criterion.lower() in ('cross_entropy', 'focal', 'label_smooth')
+        if self.criterion.lower() == 'focal':
+            self.gamma = kwargs.pop('gamma', 2.0)
+        elif self.criterion.lower() == 'label_smooth':
+            self.epsilon = kwargs.pop('epsilon', 0.1)
         
         self.ck_none_label = kwargs.pop('ck_none_label', '<none>')
         self.idx2ck_label = kwargs.pop('idx2ck_label', None)
@@ -34,10 +40,10 @@ class RelationClassificationDecoderConfig(DecoderConfig):
         
     @property
     def name(self):
-        return self.agg_mode
+        return self._name_sep.join([self.agg_mode, self.criterion])
     
     def __repr__(self):
-        repr_attr_dict = {key: getattr(self, key) for key in ['agg_mode', 'in_dim', 'in_drop_rates']}
+        repr_attr_dict = {key: getattr(self, key) for key in ['in_dim', 'in_drop_rates', 'agg_mode', 'criterion']}
         return self._repr_non_config_attrs(repr_attr_dict)
         
     @property
@@ -186,10 +192,6 @@ class ChunkPairs(TargetWrapper):
 class RelationClassificationDecoder(Decoder):
     def __init__(self, config: RelationClassificationDecoderConfig):
         super().__init__(config)
-        self.dropout = CombinedDropout(*config.in_drop_rates)
-        self.hid2logit = torch.nn.Linear(config.in_dim*3+config.ck_size_emb_dim*2+config.ck_label_emb_dim*2, config.rel_voc_dim)
-        reinit_layer_(self.hid2logit, 'sigmoid')
-        
         self.num_neg_relations = config.num_neg_relations
         self.max_span_size = config.max_span_size
         self.ck_none_label = config.ck_none_label
@@ -199,14 +201,23 @@ class RelationClassificationDecoder(Decoder):
         self.idx2rel_label = config.idx2rel_label
         self.rel_label2idx = config.rel_label2idx
         
-        self.criterion = torch.nn.CrossEntropyLoss(reduction='sum')
-        
         self.ck_size_embedding = torch.nn.Embedding(config.max_span_size, config.ck_size_emb_dim)
         reinit_embedding_(self.ck_size_embedding)
         self.ck_label_embedding = torch.nn.Embedding(config.ck_voc_dim, config.ck_label_emb_dim)
         reinit_embedding_(self.ck_label_embedding)
         # Trainable context vector for overlapping chunks
         self.zero_context = torch.nn.Parameter(torch.zeros(config.in_dim))
+        
+        self.dropout = CombinedDropout(*config.in_drop_rates)
+        self.hid2logit = torch.nn.Linear(config.in_dim*3+config.ck_size_emb_dim*2+config.ck_label_emb_dim*2, config.rel_voc_dim)
+        reinit_layer_(self.hid2logit, 'sigmoid')
+        
+        if config.criterion.lower() == 'focal':
+            self.criterion = FocalLoss(gamma=config.gamma, reduction='sum')
+        elif config.criterion.lower() == 'label_smooth':
+            self.criterion = LabelSmoothCrossEntropyLoss(epsilon=config.epsilon, reduction='sum')
+        else:
+            self.criterion = torch.nn.CrossEntropyLoss(reduction='sum')
         
         
     def get_logits(self, batch: Batch, full_hidden: torch.Tensor):

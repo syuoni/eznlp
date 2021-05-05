@@ -54,12 +54,12 @@ class TestModel(object):
         assert isinstance(self.config.name, str) and len(self.config.name) > 0
         
         
-    @pytest.mark.parametrize("enc_arch", ['Conv', 'Gehring', 'LSTM', 'GRU', 'Transformer'])
+    @pytest.mark.parametrize("arch", ['Conv', 'Gehring', 'LSTM', 'GRU', 'Transformer'])
     @pytest.mark.parametrize("shortcut", [False, True])
-    @pytest.mark.parametrize("dec_arch", ['softmax', 'CRF'])
-    def test_model(self, enc_arch, shortcut, dec_arch, conll2003_demo, device):
-        self.config = ModelConfig(intermediate2=EncoderConfig(arch=enc_arch, shortcut=shortcut), 
-                                  decoder=SequenceTaggingDecoderConfig(arch=dec_arch))
+    @pytest.mark.parametrize("criterion", ['crf', 'cross_entropy', 'focal'])
+    def test_model(self, arch, shortcut, criterion, conll2003_demo, device):
+        self.config = ModelConfig(intermediate2=EncoderConfig(arch=arch, shortcut=shortcut), 
+                                  decoder=SequenceTaggingDecoderConfig(criterion=criterion))
         self._setup_case(conll2003_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()

@@ -5,6 +5,7 @@ import torch
 
 from ...wrapper import Batch
 from ...nn.modules import SequencePooling, SequenceAttention, CombinedDropout
+from ...nn.modules import LabelSmoothCrossEntropyLoss, FocalLoss
 from ...nn.init import reinit_layer_
 from .base import DecoderConfig, Decoder
 
@@ -14,15 +15,22 @@ class TextClassificationDecoderConfig(DecoderConfig):
         self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
         
         self.agg_mode = kwargs.pop('agg_mode', 'multiplicative_attention')
+        self.criterion = kwargs.pop('criterion', 'cross_entropy')
+        assert self.criterion.lower() in ('cross_entropy', 'focal', 'label_smooth')
+        if self.criterion.lower() == 'focal':
+            self.gamma = kwargs.pop('gamma', 2.0)
+        elif self.criterion.lower() == 'label_smooth':
+            self.epsilon = kwargs.pop('epsilon', 0.1)
+            
         self.idx2label = kwargs.pop('idx2label', None)
         super().__init__(**kwargs)
         
     @property
     def name(self):
-        return self.agg_mode
+        return self._name_sep.join([self.agg_mode, self.criterion])
         
     def __repr__(self):
-        repr_attr_dict = {key: getattr(self, key) for key in ['agg_mode', 'in_dim', 'in_drop_rates']}
+        repr_attr_dict = {key: getattr(self, key) for key in ['in_dim', 'in_drop_rates', 'agg_mode', 'criterion']}
         return self._repr_non_config_attrs(repr_attr_dict)
         
     @property
@@ -60,6 +68,9 @@ class TextClassificationDecoderConfig(DecoderConfig):
 class TextClassificationDecoder(Decoder):
     def __init__(self, config: TextClassificationDecoderConfig):
         super().__init__(config)
+        self.idx2label = config.idx2label
+        self.label2idx = config.label2idx
+        
         self.dropout = CombinedDropout(*config.in_drop_rates)
         self.hid2logit = torch.nn.Linear(config.in_dim, config.voc_dim)
         reinit_layer_(self.hid2logit, 'sigmoid')
@@ -68,10 +79,13 @@ class TextClassificationDecoder(Decoder):
             self.aggregating = SequencePooling(mode=config.agg_mode.replace('_pooling', ''))
         elif config.agg_mode.lower().endswith('_attention'):
             self.aggregating = SequenceAttention(config.in_dim, scoring=config.agg_mode.replace('_attention', ''))
-        
-        self.idx2label = config.idx2label
-        self.label2idx = config.label2idx
-        self.criterion = torch.nn.CrossEntropyLoss(reduction='none')
+            
+        if config.criterion.lower() == 'focal':
+            self.criterion = FocalLoss(gamma=config.gamma, reduction='none')
+        elif config.criterion.lower() == 'label_smooth':
+            self.criterion = LabelSmoothCrossEntropyLoss(epsilon=config.epsilon, reduction='none')
+        else:
+            self.criterion = torch.nn.CrossEntropyLoss(reduction='none')
         
         
     def forward(self, batch: Batch, full_hidden: torch.Tensor):

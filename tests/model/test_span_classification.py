@@ -48,11 +48,12 @@ class TestModel(object):
         assert isinstance(self.config.name, str) and len(self.config.name) > 0
         
         
-    @pytest.mark.parametrize("enc_arch", ['Conv', 'LSTM'])
+    @pytest.mark.parametrize("arch", ['Conv', 'LSTM'])
     @pytest.mark.parametrize("agg_mode", ['max_pooling'])
-    def test_model(self, enc_arch, agg_mode, conll2004_demo, device):
-        self.config = ModelConfig(intermediate2=EncoderConfig(arch=enc_arch), 
-                                  decoder=SpanClassificationDecoderConfig(agg_mode=agg_mode))
+    @pytest.mark.parametrize("criterion", ['cross_entropy', 'focal'])
+    def test_model(self, arch, agg_mode, criterion, conll2004_demo, device):
+        self.config = ModelConfig(intermediate2=EncoderConfig(arch=arch), 
+                                  decoder=SpanClassificationDecoderConfig(agg_mode=agg_mode, criterion=criterion))
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
