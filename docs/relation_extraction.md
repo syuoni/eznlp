@@ -12,8 +12,8 @@ Configurations of our implementation:
     * Scheduler: Learning rate warmup at the first 20% steps followed by linear decay
     * BERT/RoBERTa models are loaded with dropout rate of 0.2
 
-♦ use both training and development splits for training. ([SpERT](https://github.com/lavis-nlp/spert/issues/2#issuecomment-559775207))
-♠️ do not consider entity type correctness when evaluating relation extraction. 
+♦ use both training and development splits for training ([SpERT](https://github.com/lavis-nlp/spert/issues/2#issuecomment-559775207)).  
+♠️ do not consider entity type correctness when evaluating relation extraction.  
 
 ### CoNLL 2004 
 | Model | Paper | Reported F1 | Our Imp. F1 (Pipline) | Our Imp. F1 (Joint) | Notes |
