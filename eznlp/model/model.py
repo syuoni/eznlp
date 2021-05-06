@@ -1,13 +1,19 @@
 # -*- coding: utf-8 -*-
-from typing import List
+from typing import List, Union
 import torch
 
-from ..token import TokenSequence
-from ..data.wrapper import Batch
+from ..wrapper import Batch
+from ..nn.functional import mask2seq_lens
 from ..config import Config, ConfigDict
 from .embedder import OneHotConfig
 from .encoder import EncoderConfig
 from .nested_embedder import SoftLexiconConfig
+from .decoder.base import DecoderConfig
+from .decoder.text_classification import TextClassificationDecoderConfig
+from .decoder.sequence_tagging import SequenceTaggingDecoderConfig
+from .decoder.span_classification import SpanClassificationDecoderConfig
+from .decoder.relation_classification import RelationClassificationDecoderConfig
+from .decoder.joint import JointDecoderConfig
 
 
 class ModelConfig(Config):
@@ -29,9 +35,9 @@ class ModelConfig(Config):
     _embedder_names = ['ohots', 'mhots', 'nested_ohots']
     _encoder_names = ['intermediate1', 'intermediate2']
     _pretrained_names = ['elmo', 'bert_like', 'flair_fw', 'flair_bw']
-    _all_names = _embedder_names + _encoder_names + _pretrained_names
+    _all_names = _embedder_names + ['intermediate1'] + _pretrained_names + ['intermediate2'] + ['decoder']
     
-    def __init__(self, **kwargs):
+    def __init__(self, decoder: Union[DecoderConfig, str]='text_classification', **kwargs):
         self.ohots = kwargs.pop('ohots', ConfigDict({'text': OneHotConfig(field='text')}))
         self.mhots = kwargs.pop('mhots', None)
         self.nested_ohots = kwargs.pop('nested_ohots', None)
@@ -42,33 +48,40 @@ class ModelConfig(Config):
         self.flair_fw = kwargs.pop('flair_fw', None)
         self.flair_bw = kwargs.pop('flair_bw', None)
         self.intermediate2 = kwargs.pop('intermediate2', EncoderConfig(arch='LSTM'))
+        
+        if isinstance(decoder, DecoderConfig):
+            self.decoder = decoder
+        elif isinstance(decoder, str):
+            if decoder.lower().startswith('text'):
+                self.decoder = TextClassificationDecoderConfig()
+            elif decoder.lower().startswith('sequence'):
+                self.decoder = SequenceTaggingDecoderConfig()
+            elif decoder.lower().startswith('span'):
+                self.decoder = SpanClassificationDecoderConfig()
+            elif decoder.lower().startswith('relation'):
+                self.decoder = RelationClassificationDecoderConfig()
+            elif decoder.lower().startswith('joint'):
+                self.decoder = JointDecoderConfig()
+            else:
+                raise ValueError(f"Invalid `decoder`: {decoder}")
+        
         super().__init__(**kwargs)
         
         
     @property
     def valid(self):
+        if self.bert_like is not None and not self.bert_like.from_tokenized:
+            if self.full_emb_dim != 0 or self.full_hid_dim != self.bert_like.out_dim:
+                return False
         return all(getattr(self, name) is None or getattr(self, name).valid for name in self._all_names)
         
     @property
     def name(self):
-        elements = []
+        return self._name_sep.join(getattr(self, name).name for name in self._all_names if getattr(self, name) is not None)
         
-        if self.intermediate1 is not None:
-            elements.append(self.intermediate1.arch)
-            
-        for name in self._pretrained_names:
-            if getattr(self, name) is not None:
-                elements.append(getattr(self, name).arch)
-                
-        if self.intermediate2 is not None:
-            elements.append(self.intermediate2.arch)
-            
-        return "-".join(elements)
-        
-    
     def __repr__(self):
         return self._repr_config_attrs(self.__dict__)
-    
+        
     @property
     def full_emb_dim(self):
         return sum(getattr(self, name).out_dim for name in self._embedder_names if getattr(self, name) is not None)
@@ -103,24 +116,30 @@ class ModelConfig(Config):
             
         if self.intermediate2 is not None:
             self.intermediate2.in_dim = self.full_hid_dim
+            self.decoder.in_dim = self.intermediate2.out_dim
+        else:
+            self.decoder.in_dim = self.full_hid_dim
             
-            
-    def exemplify(self, tokens: TokenSequence):
+        self.decoder.build_vocab(*partitions)
+        
+        
+    def exemplify(self, data_entry: dict, training: bool=True):
         example = {}
         
         if self.ohots is not None:
-            example['ohots'] = {f: c.exemplify(tokens) for f, c in self.ohots.items()}
+            example['ohots'] = {f: c.exemplify(data_entry['tokens']) for f, c in self.ohots.items()}
         
         if self.mhots is not None:
-            example['mhots'] = {f: c.exemplify(tokens) for f, c in self.mhots.items()}
+            example['mhots'] = {f: c.exemplify(data_entry['tokens']) for f, c in self.mhots.items()}
             
         if self.nested_ohots is not None:
-            example['nested_ohots'] = {f: c.exemplify(tokens) for f, c in self.nested_ohots.items()}
+            example['nested_ohots'] = {f: c.exemplify(data_entry['tokens']) for f, c in self.nested_ohots.items()}
             
         for name in self._pretrained_names:
             if getattr(self, name) is not None:
-                example[name] = getattr(self, name).exemplify(tokens)
+                example[name] = getattr(self, name).exemplify(data_entry['tokens'])
                 
+        example.update(self.decoder.exemplify(data_entry, training=training))
         return example
         
     
@@ -140,18 +159,30 @@ class ModelConfig(Config):
             if getattr(self, name) is not None:
                 batch[name] = getattr(self, name).batchify([ex[name] for ex in batch_examples])
                 
+        # Replace mask/seq_lens if re-tokenization
+        if self.bert_like is not None and not self.bert_like.from_tokenized:
+            batch['mask'] = batch['bert_like']['sub_mask'][:, 2:]
+            batch['seq_lens'] = mask2seq_lens(batch['mask'])
+            
+        batch.update(self.decoder.batchify(batch_examples))
         return batch
-        
     
     
+    def instantiate(self):
+        # Only check validity at the most outside level
+        assert self.valid
+        return Model(self)
+
+
+
 class Model(torch.nn.Module):
     def __init__(self, config: ModelConfig):
         super().__init__()
         for name, c in config.__dict__.items():
             if c is not None:
                 setattr(self, name, c.instantiate())
-                
-                
+    
+    
     def get_full_embedded(self, batch: Batch):
         embedded = []
         
@@ -191,6 +222,7 @@ class Model(torch.nn.Module):
         else:
             return full_hidden
         
+        
     def pretrained_parameters(self):
         params = []
         
@@ -206,5 +238,23 @@ class Model(torch.nn.Module):
             params.extend(self.flair_bw.flair_lm.parameters())
         
         return params
+        
+        
+    def forward(self, batch: Batch, return_hidden: bool=False):
+        full_hidden = self.get_full_hidden(batch)
+        losses = self.decoder(batch, full_hidden)
+        
+        # Return `hidden` for the `decode` method, to avoid duplicated computation. 
+        if return_hidden:
+            return losses, full_hidden
+        else:
+            return losses
+        
+        
+    def decode(self, batch: Batch, full_hidden: torch.Tensor=None):
+        if full_hidden is None:
+            full_hidden = self.get_full_hidden(batch)
+            
+        return self.decoder.decode(batch, full_hidden)
     
     

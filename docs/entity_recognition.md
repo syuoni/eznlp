@@ -21,10 +21,9 @@ Configurations of our implementation:
 ♦ use both training and development splits for training. 
 
 ### CoNLL 2003 
-| Model | Paper | Reported F1 | Our Implementation F1 | Notes |
-|:-----:|:-----:|:-----------:|:---------------------:|:-----:|
+| Model | Paper | Reported F1 | Our Imp. F1 | Notes |
+|:-----:|:-----:|:-----------:|:-----------:|:-----:|
 | CharLSTM + LSTM + CRF       | Lample et al. (2016)  | 90.94         | 91.28 | num_layers=1 |
-| SpERT (with CharLSTM + LSTM)| -                     | -             | 91.22 | num_layers=2 |
 | CharCNN + LSTM + CRF        | Ma and Hovy (2016)    | 91.21         | 90.70 | num_layers=1 |
 | ELMo + Char + LSTM + CRF    | Peters et al. (2018)  | 92.22 (0.10)  | 92.60 | num_layers=1 |
 | Flair + Char + LSTM + CRF   | Akbik et al. (2018)   | 93.09♦ (0.12) | 92.60 | num_layers=1 |
@@ -32,23 +31,27 @@ Configurations of our implementation:
 | BERT-base + Softmax         | Devlin et al. (2018)  | 92.4          | 92.02 | 
 | BERT-base + CRF             | -                     | -             | 92.38 | 
 | BERT-base + LSTM + CRF      | -                     | -             | 92.40 | 
-| SpERT (with BERT-base)    | Eberts and Ulges (2019) | -             | 92.18 | 
-| SpERT (with BERT-base + LSTM) | -                   | -             | 92.50 | 
 | BERT-large + Softmax        | Devlin et al. (2018)  | 92.8          | 92.34 | 
 | BERT-large + CRF            | -                     | -             | 92.64 | 
 | BERT-large + LSTM + CRF     | -                     | -             | 92.80 | 
 | RoBERTa-base + Softmax      | Liu et al. (2019)     | -             | 92.39 | 
 | RoBERTa-base + CRF          | -                     | -             | 92.59 | 
 | RoBERTa-base + LSTM + CRF   | -                     | -             | 92.71 | 
-| SpERT (with RoBERTa-base)        | -                | -             | 92.37 | 
-| SpERT (with RoBERTa-base + LSTM) | -                | -             | 92.66 | 
 | RoBERTa-large + Softmax     | Liu et al. (2019)     | -             | 92.81 | 
 | RoBERTa-large + CRF         | -                     | -             | 93.20 | 
 | RoBERTa-large + LSTM + CRF  | -                     | -             | 93.26 | 
 
+| Model | Paper | Reported F1 | Our Imp. F1 | Notes |
+|:-----:|:-----:|:-----------:|:-----------:|:-----:|
+| SpERT (with CharLSTM + LSTM)| -                     | -             | 91.22 | num_layers=2 |
+| SpERT (with BERT-base)    | Eberts and Ulges (2019) | -             | 91.97 | 
+| SpERT (with BERT-base + LSTM) | -                   | -             | 92.62 | 
+| SpERT (with RoBERTa-base)        | -                | -             | 92.36 | 
+| SpERT (with RoBERTa-base + LSTM) | -                | -             | 92.50 | 
+
 ### OntoNotes v5 
-| Model | Paper | Reported F1 | Our Implementation F1 | Notes |
-|:-----:|:-----:|:-----------:|:---------------------:|:-----:|
+| Model | Paper | Reported F1 | Our Imp. F1 | Notes |
+|:-----:|:-----:|:-----------:|:-----------:|:-----:|
 | CharLSTM + LSTM + CRF       | Lample et al. (2016)    | -            | 87.68 | num_layers=2 |
 | CharCNN + LSTM + CRF        | Chiu and Nichols (2016) | 86.17 (0.22) | 87.43 | num_layers=2 |
 | ELMo + Char + LSTM + CRF    | Peters et al. (2018)    | -            | 89.71 | num_layers=2 |
@@ -79,8 +82,8 @@ Configurations of our implementation:
     * BERT/RoBERTa models are loaded with dropout rate of 0.2
 
 ### MSRA (SIGHAN 2006) 
-| Model | Paper | Reported F1 | Our Implementation F1 | Notes |
-|:-----:|:-----:|:-----------:|:---------------------:|:-----:|
+| Model | Paper | Reported F1 | Our Imp. F1 | Notes |
+|:-----:|:-----:|:-----------:|:-----------:|:-----:|
 | LSTM + CRF                  | Zhang and Yang (2018) | 88.81 | 89.49 | num_layers=2 |
 | Bichar + LSTM + CRF         | Zhang and Yang (2018) | 91.87 | 92.02 | num_layers=2 |
 | Lattice-LSTM + CRF          | Zhang and Yang (2018) | 93.18 |
@@ -92,8 +95,8 @@ Configurations of our implementation:
 | SoftLexicon + BERT + CRF    | Ma et al. (2020)      | 95.42 |
 
 ### WeiboNER v2 
-| Model | Paper | Reported F1 | Our Implementation F1 | Notes |
-|:-----:|:-----:|:-----------:|:---------------------:|:-----:|
+| Model | Paper | Reported F1 | Our Imp. F1 | Notes |
+|:-----:|:-----:|:-----------:|:-----------:|:-----:|
 | LSTM + CRF                  | Zhang and Yang (2018) | 52.77 | 50.19 | num_layers=2 |
 | Bichar + LSTM + CRF         | Zhang and Yang (2018) | 56.75 | 57.18 | num_layers=2 |
 | Lattice-LSTM + CRF          | Zhang and Yang (2018) | 58.79 |
@@ -105,8 +108,8 @@ Configurations of our implementation:
 | SoftLexicon + BERT + CRF    | Ma et al. (2020)      | 70.50 |
 
 ### ResumeNER 
-| Model | Paper | Reported F1 | Our Implementation F1 | Notes |
-|:-----:|:-----:|:-----------:|:---------------------:|:-----:|
+| Model | Paper | Reported F1 | Our Imp. F1 | Notes |
+|:-----:|:-----:|:-----------:|:-----------:|:-----:|
 | LSTM + CRF                  | Zhang and Yang (2018) | 93.48 | 94.93 | num_layers=2 |
 | Bichar + LSTM + CRF         | Zhang and Yang (2018) | 94.41 | 94.51 | num_layers=2 |
 | Lattice-LSTM + CRF          | Zhang and Yang (2018) | 94.46 |

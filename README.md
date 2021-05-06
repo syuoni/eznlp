@@ -1,13 +1,15 @@
 # Easy Natural Language Processing
 
-This repository consists of:
-* `eznlp.text_classification`
-* `eznlp.sequence_tagging`
-* `eznlp.language_modeling`
+`eznlp` is a `PyTorch`-based package for neural natural language processing, currently supporting:
+* Text classification
+* Named Entity Recognition
+    * Sequence tagging
+    * Span classification
+* Relation extraction
+    * Relation classification
 
 
 ## Experiment Results
-
 ### Text Classification 
 | Dataset      | Language | Best Acc. | Model Specification |
 |:------------:|:--------:|:---------:|:-------------------:|
@@ -32,12 +34,21 @@ See [Text Classification](docs/text_classification.md) for more details.
 See [Named Entity Recognition](docs/entity_recognition.md) for more details. 
 
 
+### Relation Extraction
+| Dataset      | Language | Best F1 | Model Specification |
+|:------------:|:--------:|:-------:|:-------------------:|
+| CoNLL 2004   | English  | 89.17 / 75.03 | SpERT (with RoBERTa-base + LSTM) |
+| SciERC       | English  | 69.29 / 36.65 | SpERT (with RoBERTa-base)        |
+
+See [Relation Extraction](docs/relation_extraction.md) for more details. 
+
+
 ## Future Plans
 - [x] SoftLexicon
 - [ ] Radical-Level Features
 - [x] Experiments on Chinese NER datasets
 - [x] Experiments on text classification datasets
-- [ ] Focal loss (and combined to CRF?)
-- [ ] Relation Extraction
-- [ ] Span-based models (e.g., SpERT)
+- [x] Focal loss (and combined to CRF?)
+- [x] Relation Extraction
+- [x] Span-based models (e.g., SpERT)
 - [ ] Data Augmentation

@@ -8,7 +8,7 @@ import torchtext
 from ..token import TokenSequence
 from ..nn.init import reinit_embedding_, reinit_embedding_by_pretrained_, reinit_layer_
 from ..config import Config
-from ..pretrained.vectors import Vectors
+from ..vectors import Vectors
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,10 @@ class OneHotConfig(Config):
     @property
     def valid(self):
         return all(attr is not None for name, attr in self.__dict__.items() if name != 'vectors')
+        
+    @property
+    def name(self):
+        return self.field
         
     @property
     def out_dim(self):
@@ -109,6 +113,10 @@ class MultiHotConfig(Config):
         self.use_emb = kwargs.pop('use_emb', True)
         self.emb_dim = kwargs.pop('emb_dim', 50)
         super().__init__(**kwargs)
+    
+    @property
+    def name(self):
+        return self.field
     
     @property
     def out_dim(self):

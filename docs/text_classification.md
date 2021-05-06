@@ -13,24 +13,24 @@ Configurations of our implementation:
     * BERT/RoBERTa models are loaded with dropout rate of 0.2
 
 ### IMDb
-| Model | Paper | Reported Acc. | Our Implementation Acc. | Notes |
-|:-----:|:-----:|:-------------:|:-----------------------:|:-----:|
+| Model | Paper | Reported Acc. | Our Imp. Acc. | Notes |
+|:-----:|:-----:|:-------------:|:-------------:|:-----:|
 | LSTM + MaxPooling        | -                    | -     | 91.58 | num_layers=1 |
 | LSTM + Attention         | McCann et al. (2017) | 91.1  | 92.09 | num_layers=1 |
 | BERT-base + Attention    | Sun et al. (2019)    | 94.60 | 94.37 |
 | RoBERTa-base + Attention | -                    | -     | 95.78 |
 
 ### Yelp Full
-| Model | Paper | Reported Acc. | Our Implementation Acc. | Notes |
-|:-----:|:-----:|:-------------:|:-----------------------:|:-----:|
+| Model | Paper | Reported Acc. | Our Imp. Acc. | Notes |
+|:-----:|:-----:|:-------------:|:-------------:|:-----:|
 | LSTM + MaxPooling        | Zhang et al. (2015)  | 58.17 | 65.97 | num_layers=2 |
 | LSTM + Attention         | -                    | -     | 68.61 | num_layers=2 |
 | BERT-base + Attention    | Sun et al. (2019)    | 69.94 | 70.27 |
 | RoBERTa-base + Attention | -                    | -     | 71.55 |
 
 ### Yelp 2013 (with User and Product IDs)
-| Model | Paper | Reported Acc. | Our Implementation Acc. | Notes |
-|:-----:|:-----:|:-------------:|:-----------------------:|:-----:|
+| Model | Paper | Reported Acc. | Our Imp. Acc. | Notes |
+|:-----:|:-----:|:-------------:|:-------------:|:-----:|
 | LSTM + MaxPooling        | Chen et al. (2016)   | 62.7  | 64.96 | num_layers=2 |
 | LSTM + Attention         | Chen et al. (2016)   | 63.1  | 64.84 | num_layers=2 |
 | BERT-base + Attention    | -                    | -     | 68.76 |
@@ -53,8 +53,8 @@ Configurations of our implementation:
     * BERT/RoBERTa models are loaded with dropout rate of 0.2
 
 ### ChnSentiCorp
-| Model | Paper | Reported Acc. | Our Implementation Acc. | Notes |
-|:-----:|:-----:|:-------------:|:-----------------------:|:-----:|
+| Model | Paper | Reported Acc. | Our Imp. Acc. | Notes |
+|:-----:|:-----:|:-------------:|:-------------:|:-----:|
 | Multi-Channel CNN                      | Liu et al. (2018) | 92.08 |       |
 | LSTM + MaxPooling                      | -                 |       | 92.25 | num_layers=2 |
 | LSTM + Attention                       | -                 |       | 92.42 | num_layers=2 |
@@ -64,8 +64,8 @@ Configurations of our implementation:
 | RoBERTa-base + Attention               | Cui et al. (2019) | 95.8  | 95.08 |
 
 ### THUCNews-10
-| Model | Paper | Reported Acc. | Our Implementation Acc. | Notes |
-|:-----:|:-----:|:-------------:|:-----------------------:|:-----:|
+| Model | Paper | Reported Acc. | Our Imp. Acc. | Notes |
+|:-----:|:-----:|:-------------:|:-------------:|:-----:|
 | LSTM + MaxPooling                      | -                 |       | 97.66 | num_layers=2 |
 | LSTM + Attention                       | -                 |       | 97.24 | num_layers=2 |
 | Tencent Embeddings + LSTM + MaxPooling | -                 |       | 98.79 | num_layers=2 |

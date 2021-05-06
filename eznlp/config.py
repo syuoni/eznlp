@@ -24,6 +24,9 @@ class Config(object):
     
     `Config` are NOT suggested to be registered as attribute of the corresponding model or assembly. 
     """
+    
+    _name_sep = '-'
+    
     def __init__(self, **kwargs):
         if len(kwargs) > 0:
             logger.warning(f"Some configurations are set without checking: {kwargs}, "
@@ -34,13 +37,15 @@ class Config(object):
     @property
     def valid(self):
         for name, attr in self.__dict__.items():
-            if isinstance(attr, Config):
-                if not attr.valid:
-                    return False
-            else:
-                if attr is None:
-                    return False
+            if attr is None:
+                return False
+            elif isinstance(attr, Config) and not attr.valid:
+                return False
         return True
+        
+    @property
+    def name(self):
+        raise NotImplementedError("Not Implemented `name`")
         
     def __repr__(self):
         return self._repr_non_config_attrs(self.__dict__)
@@ -76,6 +81,10 @@ class ConfigList(Config):
     def valid(self):
         return len(self.config_list) > 0 and all(c.valid for c in self.config_list)
     
+    @property
+    def name(self):
+        return self._name_sep.join(c.name for c in self.config_list)
+        
     def __len__(self):
         return len(self.config_list)
     
@@ -121,6 +130,10 @@ class ConfigDict(Config):
     def valid(self):
         return len(self.config_dict) > 0 and all(c.valid for c in self.config_dict.values())
         
+    @property
+    def name(self):
+        return self._name_sep.join(c.name for c in self.config_dict.values())
+    
     def __len__(self):
         return len(self.config_dict)
     

@@ -130,5 +130,88 @@ def _execute_pos_proj(x: torch.FloatTensor, pos_proj: torch.BoolTensor, agg_mode
                 curr_proj_values.append(x[k, curr_pos_proj].min(dim=0).values)
         proj_values.append(torch.stack(curr_proj_values))
     return torch.stack(proj_values)
-            
-            
+
+
+
+
+def _reduce_losses(losses: torch.Tensor, reduction: str):
+    if reduction.lower() == 'sum':
+        return losses.sum()
+    elif reduction.lower() == 'mean':
+        return losses.mean()
+    else:
+        return losses
+
+
+def soft_label_cross_entropy(logits: torch.Tensor, soft_target: torch.Tensor, weight: torch.Tensor=None, reduction: str='none'):
+    """
+    Parameters
+    ----------
+    logits : torch.Tensor (num_entries, logit_dim)
+        Logits before softmax. 
+    soft_target : torch.Tensor (num_entries, logit_dim)
+        `target.sum(dim=-1)` should equal 1 in all entries.
+    weight : torch.Tensor (logit_dim, )
+        A manual rescaling weight given to each class. 
+    """
+    log_prob = torch.nn.functional.log_softmax(logits, dim=-1)
+    if weight is not None:
+        log_prob = log_prob * weight
+    
+    losses = -(log_prob * soft_target).sum(dim=-1)
+    return _reduce_losses(losses, reduction)
+
+
+def smooth_label_cross_entropy(logits: torch.Tensor, target: torch.LongTensor, 
+                               epsilon: float=0.1, weight: torch.Tensor=None, ignore_index: int=-100, reduction: str='none'):
+    """
+    Parameters
+    ----------
+    logits : torch.Tensor (num_entries, logit_dim)
+        Logits before softmax. 
+    target : torch.LongTensor (num_entries, )
+        `target` is the index of ground truth. 
+    epsilon : float
+    weight : torch.Tensor (logit_dim, )
+        A manual rescaling weight given to each class. 
+    """
+    target_wo_ignore_index = target.masked_fill(target==ignore_index, 0)
+    smooth_target = torch.where(torch.nn.functional.one_hot(target_wo_ignore_index, num_classes=logits.size(dim=-1)).type(torch.bool), 
+                                1 - epsilon, 
+                                epsilon / (logits.size(dim=-1) - 1))
+    losses = soft_label_cross_entropy(logits, smooth_target, weight=weight, reduction='none')
+    losses.masked_fill_(target==ignore_index, 0)
+    return _reduce_losses(losses, reduction)
+
+
+def focal_loss(logits: torch.Tensor, target: torch.LongTensor, 
+               gamma: float=0.0, weight: torch.Tensor=None, ignore_index: int=-100, reduction: str='none'):
+    """
+    Parameters
+    ----------
+    logits : torch.Tensor (num_entries, logit_dim)
+        Logits before softmax. 
+    target : torch.LongTensor (num_entries, )
+        `target` is the index of ground truth. 
+    gamma : float
+        \mathrm{FocalLoss}(p_t) = -\alpha_t (1-p_t)^{\gamma} \log (p_t)
+    weight : torch.Tensor (logit_dim, )
+        A manual rescaling weight given to each class. 
+        `weight` is referred as `alpha` in Lin et al. (2017). 
+    
+    References
+    ----------
+    [1] Lin et al. (2017). Focal Loss for Dense Object Detection. ICCV 2017. 
+    """
+    log_prob = torch.nn.functional.log_softmax(logits, dim=-1)
+    if weight is not None:
+        log_prob = log_prob * weight
+    
+    target_wo_ignore_index = target.masked_fill(target==ignore_index, 0)
+    log_prob_t = log_prob.gather(dim=1, index=target_wo_ignore_index.unsqueeze(-1)).squeeze(-1)
+    
+    prob_t = log_prob_t.exp()
+    losses = -log_prob_t * torch.pow(1 - prob_t, gamma)
+    
+    losses.masked_fill_(target==ignore_index, 0)
+    return _reduce_losses(losses, reduction)

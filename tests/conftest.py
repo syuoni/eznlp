@@ -7,7 +7,8 @@ import transformers
 import flair
 
 from eznlp import auto_device
-from eznlp.pretrained import Vectors, GloVe
+from eznlp.token import TokenSequence
+from eznlp.vectors import Vectors, GloVe
 from eznlp.io import TabularIO, ConllIO, JsonIO
 
 
@@ -44,7 +45,8 @@ def spacy_nlp_en():
 def conll2003_demo():
     return ConllIO(text_col_id=0, 
                    tag_col_id=3, 
-                   scheme='BIO1').read("data/conll2003/demo.eng.train")
+                   scheme='BIO1', 
+                   verbose=False).read("data/conll2003/demo.eng.train")
 
 @pytest.fixture
 def ResumeNER_demo():
@@ -53,7 +55,8 @@ def ResumeNER_demo():
                    scheme='BMES', 
                    encoding='utf-8', 
                    token_sep="", 
-                   pad_token="").read("data/ResumeNER/demo.train.char.bmes")
+                   pad_token="", 
+                   verbose=False).read("data/ResumeNER/demo.train.char.bmes")
 
 @pytest.fixture
 def yelp_full_demo(spacy_nlp_en):
@@ -62,7 +65,8 @@ def yelp_full_demo(spacy_nlp_en):
                      sep=",", 
                      mapping={"\\n": "\n", '\\"': '"'}, 
                      tokenize_callback=spacy_nlp_en, 
-                     case_mode='lower').read("data/yelp_review_full/demo.train.csv")
+                     case_mode='lower', 
+                     verbose=False).read("data/yelp_review_full/demo.train.csv")
 
 @pytest.fixture
 def conll2004_demo():
@@ -70,7 +74,26 @@ def conll2004_demo():
                   chunk_key='entities', 
                   chunk_type_key='type', 
                   chunk_start_key='start', 
-                  chunk_end_key='end').read("data/conll2004/demo.conll04_train.json")
+                  chunk_end_key='end', 
+                  relation_key='relations', 
+                  relation_type_key='type', 
+                  relation_head_key='head', 
+                  relation_tail_key='tail', 
+                  verbose=False).read("data/conll2004/demo.conll04_train.json")
+
+
+@pytest.fixture
+def re_data_demo():
+    tokenized_raw_text = ["This", "is", "a", "-3.14", "demo", ".", 
+                          "Those", "are", "an", "APPLE", "and", "some", "glass", "bottles", ".", 
+                          "This", "is", "a", "very", "very", "very", "very", "very", "long", "entity", "?"]
+    tokens = TokenSequence.from_tokenized_text(tokenized_raw_text)
+    chunks = [('EntA', 4, 5), ('EntA', 9, 10), ('EntB', 12, 14), ('EntC', 18, 25)]
+    relations = [('RelA', chunks[0], chunks[1]), 
+                 ('RelA', chunks[0], chunks[2]), 
+                 ('RelB', chunks[1], chunks[2]), 
+                 ('RelB', chunks[2], chunks[1])]
+    return [{'tokens': tokens, 'chunks': chunks, 'relations': relations}]
 
 
 @pytest.fixture

@@ -4,7 +4,7 @@ import numpy
 import pandas
 
 from ..token import TokenSequence
-from ..utils import segment_text_with_hierarchical_seps, segment_text_uniformly
+from ..utils.segmentation import segment_text_with_hierarchical_seps, segment_text_uniformly
 from .base import IO
 
 

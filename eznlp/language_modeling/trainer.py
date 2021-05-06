@@ -18,6 +18,6 @@ class MaskedLMTrainer(Trainer):
         if loss.dim() > 0:
             loss = loss.mean()
             
-        return (loss, )
+        return loss
     
     

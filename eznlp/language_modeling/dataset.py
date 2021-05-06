@@ -4,10 +4,10 @@ import random
 import logging
 import torch
 
-from ..data.wrapper import Batch
-from ..data.dataset import Dataset
+from ..wrapper import Batch
+from ..dataset import Dataset
 from .model import MaskedLMConfig
-from ..pretrained.bert_like import _tokenized2nested
+from ..model.bert_like import _tokenized2nested
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +17,8 @@ class MaskedLMDataset(Dataset):
     """
     Dataset for Masked Language Modeling. 
     """
-    def __init__(self, data: List[dict], config: MaskedLMConfig):
-        super().__init__(data, config)
+    def __init__(self, data: List[dict], config: MaskedLMConfig, training: bool=True):
+        super().__init__(data, config, training=training)
         
     def __getitem__(self, i):
         data_entry = self.data[i]
@@ -83,11 +83,11 @@ class FolderLikeMaskedLMDataset(torch.utils.data.IterableDataset):
                 continue
             
             sub_tokens_from_text = self.config.tokenizer.tokenize(text)
-            n_examples = len(sub_tokens_from_text) // cut_len
+            num_examples = len(sub_tokens_from_text) // cut_len
             if len(sub_tokens_from_text) % cut_len >= (cut_len / 10):
-                n_examples += 1
+                num_examples += 1
             
-            for k in range(n_examples):
+            for k in range(num_examples):
                 sub_tokens = sub_tokens_from_text[(cut_len*k):(cut_len*(k+1))]
                 yield self.config.exemplify(sub_tokens)
                 
