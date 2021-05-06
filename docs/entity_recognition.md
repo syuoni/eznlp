@@ -43,11 +43,11 @@ Configurations of our implementation:
 
 | Model | Paper | Reported F1 | Our Imp. F1 | Notes |
 |:-----:|:-----:|:-----------:|:-----------:|:-----:|
-| SpERT (with CharLSTM + LSTM)| -                     | -             |  | num_layers=2 |
-| SpERT (with BERT-base)    | Eberts and Ulges (2019) | -             |  | 
-| SpERT (with BERT-base + LSTM) | -                   | -             |  | 
-| SpERT (with RoBERTa-base)        | -                | -             |  | 
-| SpERT (with RoBERTa-base + LSTM) | -                | -             |  | 
+| SpERT (with CharLSTM + LSTM)| -                     | -             | 91.22 | num_layers=2 |
+| SpERT (with BERT-base)    | Eberts and Ulges (2019) | -             | 91.97 | 
+| SpERT (with BERT-base + LSTM) | -                   | -             | 92.62 | 
+| SpERT (with RoBERTa-base)        | -                | -             | 92.36 | 
+| SpERT (with RoBERTa-base + LSTM) | -                | -             | 92.50 | 
 
 ### OntoNotes v5 
 | Model | Paper | Reported F1 | Our Imp. F1 | Notes |
