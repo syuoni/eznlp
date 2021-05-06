@@ -9,44 +9,16 @@ from ...wrapper import TargetWrapper, Batch
 from ...nn.modules import CombinedDropout, SmoothLabelCrossEntropyLoss, FocalLoss
 from ...nn.init import reinit_embedding_, reinit_layer_
 from ...metrics import precision_recall_f1_report
-from .base import DecoderConfig, Decoder
+from .base import DecoderMixin, DecoderConfig, Decoder
 
 logger = logging.getLogger(__name__)
 
 
-class SpanClassificationDecoderConfig(DecoderConfig):
-    def __init__(self, **kwargs):
-        self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
-        
-        self.num_neg_chunks = kwargs.pop('num_neg_chunks', 100)
-        self.max_span_size = kwargs.pop('max_span_size', 10)
-        self.size_emb_dim = kwargs.pop('size_emb_dim', 25)
-        
-        self.agg_mode = kwargs.pop('agg_mode', 'max_pooling')
-        self.criterion = kwargs.pop('criterion', 'CE')
-        assert self.criterion.lower() in ('ce', 'fl', 'sl')
-        if self.criterion.lower() == 'fl':
-            self.gamma = kwargs.pop('gamma', 2.0)
-        elif self.criterion.lower() == 'sl':
-            self.epsilon = kwargs.pop('epsilon', 0.1)
-        
-        self.none_label = kwargs.pop('none_label', '<none>')
-        self.idx2label = kwargs.pop('idx2label', None)
-        super().__init__(**kwargs)
-        
-        
-    @property
-    def name(self):
-        return self._name_sep.join([self.agg_mode, self.criterion])
-        
-    def __repr__(self):
-        repr_attr_dict = {key: getattr(self, key) for key in ['in_dim', 'in_drop_rates', 'agg_mode', 'criterion']}
-        return self._repr_non_config_attrs(repr_attr_dict)
-        
+class SpanClassificationDecoderMixin(DecoderMixin):
     @property
     def idx2label(self):
         return self._idx2label
-    
+        
     @idx2label.setter
     def idx2label(self, idx2label: List[str]):
         self._idx2label = idx2label
@@ -60,29 +32,24 @@ class SpanClassificationDecoderConfig(DecoderConfig):
     def none_idx(self):
         return self.label2idx[self.none_label]
         
-    def build_vocab(self, *partitions):
-        counter = Counter()
-        size_counter = Counter()
-        for data in partitions:
-            for data_entry in data:
-                counter.update([ck[0] for ck in data_entry['chunks']])
-                size_counter.update([ck[2]-ck[1] for ck in data_entry['chunks']])
-        self.idx2label = [self.none_label] + list(counter.keys())
-        
-        num_spans = sum(size_counter.values())
-        num_oov_spans = sum([num for size, num in size_counter.items() if size > self.max_span_size])
-        if num_oov_spans > 0:
-            logger.warning(f"OOV positive spans: {num_oov_spans} ({num_oov_spans/num_spans*100:.2f}%)")
-            
-        
     def exemplify(self, data_entry: dict, training: bool=True):
         return {'spans_obj': Spans(data_entry, self, training=training)}
         
     def batchify(self, batch_examples: List[dict]):
         return {'spans_objs': [ex['spans_obj'] for ex in batch_examples]}
         
-    def instantiate(self):
-        return SpanClassificationDecoder(self)
+    def retrieve(self, batch: Batch):
+        return [spans_obj.chunks for spans_obj in batch.spans_objs]
+        
+    def evaluate(self, y_gold: List[tuple], y_pred: List[tuple]):
+        """Micro-F1 for entity recognition. 
+        
+        References
+        ----------
+        https://www.clips.uantwerpen.be/conll2000/chunking/output.html
+        """
+        scores, ave_scores = precision_recall_f1_report(y_gold, y_pred)
+        return ave_scores['micro']['f1']
 
 
 
@@ -96,7 +63,7 @@ class Spans(TargetWrapper):
         {'tokens': TokenSequence, 
          'chunks': List[tuple]}
     """
-    def __init__(self, data_entry: dict, config: SpanClassificationDecoderConfig, training: bool=True):
+    def __init__(self, data_entry: dict, config: SpanClassificationDecoderMixin, training: bool=True):
         super().__init__(training)
         
         self.chunks = data_entry.get('chunks', None)
@@ -126,12 +93,60 @@ class Spans(TargetWrapper):
 
 
 
-class SpanClassificationDecoder(Decoder):
+class SpanClassificationDecoderConfig(DecoderConfig, SpanClassificationDecoderMixin):
+    def __init__(self, **kwargs):
+        self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
+        
+        self.num_neg_chunks = kwargs.pop('num_neg_chunks', 100)
+        self.max_span_size = kwargs.pop('max_span_size', 10)
+        self.size_emb_dim = kwargs.pop('size_emb_dim', 25)
+        
+        self.agg_mode = kwargs.pop('agg_mode', 'max_pooling')
+        self.criterion = kwargs.pop('criterion', 'CE')
+        assert self.criterion.lower() in ('ce', 'fl', 'sl')
+        if self.criterion.lower() == 'fl':
+            self.gamma = kwargs.pop('gamma', 2.0)
+        elif self.criterion.lower() == 'sl':
+            self.epsilon = kwargs.pop('epsilon', 0.1)
+        
+        self.none_label = kwargs.pop('none_label', '<none>')
+        self.idx2label = kwargs.pop('idx2label', None)
+        super().__init__(**kwargs)
+        
+        
+    @property
+    def name(self):
+        return self._name_sep.join([self.agg_mode, self.criterion])
+        
+    def __repr__(self):
+        repr_attr_dict = {key: getattr(self, key) for key in ['in_dim', 'in_drop_rates', 'agg_mode', 'criterion']}
+        return self._repr_non_config_attrs(repr_attr_dict)
+        
+    def build_vocab(self, *partitions):
+        counter = Counter()
+        size_counter = Counter()
+        for data in partitions:
+            for data_entry in data:
+                counter.update([ck[0] for ck in data_entry['chunks']])
+                size_counter.update([ck[2]-ck[1] for ck in data_entry['chunks']])
+        self.idx2label = [self.none_label] + list(counter.keys())
+        
+        num_spans = sum(size_counter.values())
+        num_oov_spans = sum([num for size, num in size_counter.items() if size > self.max_span_size])
+        if num_oov_spans > 0:
+            logger.warning(f"OOV positive spans: {num_oov_spans} ({num_oov_spans/num_spans*100:.2f}%)")
+        
+        
+    def instantiate(self):
+        return SpanClassificationDecoder(self)
+
+
+
+class SpanClassificationDecoder(Decoder, SpanClassificationDecoderMixin):
     def __init__(self, config: SpanClassificationDecoderConfig):
         super().__init__(config)
         self.none_label = config.none_label
         self.idx2label = config.idx2label
-        self.label2idx = config.label2idx
         
         self.size_embedding = torch.nn.Embedding(config.max_span_size, config.size_emb_dim)
         reinit_embedding_(self.size_embedding)
@@ -160,15 +175,15 @@ class SpanClassificationDecoder(Decoder):
             batch_logits.append(logits)
             
         return batch_logits
-    
-    
+        
+        
     def forward(self, batch: Batch, full_hidden: torch.Tensor):
         batch_logits = self.get_logits(batch, full_hidden)
         
         losses = [self.criterion(batch_logits[k], batch.spans_objs[k].label_ids) for k in range(batch.size)]
         return torch.stack(losses)
-    
-    
+        
+        
     def decode(self, batch: Batch, full_hidden: torch.Tensor):
         batch_logits = self.get_logits(batch, full_hidden)
         
@@ -178,18 +193,3 @@ class SpanClassificationDecoder(Decoder):
             chunks = [(label, start, end) for label, (start, end) in zip(labels, batch.spans_objs[k].spans) if label != self.none_label]
             batch_chunks.append(chunks)
         return batch_chunks
-        
-        
-    def retrieve(self, batch: Batch):
-        return [spans_obj.chunks for spans_obj in batch.spans_objs]
-        
-        
-    def evaluate(self, y_gold: List[tuple], y_pred: List[tuple]):
-        """Micro-F1 for entity recognition. 
-        
-        References
-        ----------
-        https://www.clips.uantwerpen.be/conll2000/chunking/output.html
-        """
-        scores, ave_scores = precision_recall_f1_report(y_gold, y_pred)
-        return ave_scores['micro']['f1']

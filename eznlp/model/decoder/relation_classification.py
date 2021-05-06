@@ -9,43 +9,12 @@ from ...wrapper import TargetWrapper, Batch
 from ...nn.modules import CombinedDropout, SmoothLabelCrossEntropyLoss, FocalLoss
 from ...nn.init import reinit_embedding_, reinit_layer_
 from ...metrics import precision_recall_f1_report
-from .base import DecoderConfig, Decoder
+from .base import DecoderMixin, DecoderConfig, Decoder
 
 logger = logging.getLogger(__name__)
 
 
-class RelationClassificationDecoderConfig(DecoderConfig):
-    def __init__(self, **kwargs):
-        self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
-        
-        self.num_neg_relations = kwargs.pop('num_neg_relations', 100)
-        self.max_span_size = kwargs.pop('max_span_size', 10)
-        self.ck_size_emb_dim = kwargs.pop('ck_size_emb_dim', 25)
-        self.ck_label_emb_dim = kwargs.pop('ck_label_emb_dim', 25)
-        
-        self.agg_mode = kwargs.pop('agg_mode', 'max_pooling')
-        self.criterion = kwargs.pop('criterion', 'CE')
-        assert self.criterion.lower() in ('ce', 'fl', 'sl')
-        if self.criterion.lower() == 'fl':
-            self.gamma = kwargs.pop('gamma', 2.0)
-        elif self.criterion.lower() == 'sl':
-            self.epsilon = kwargs.pop('epsilon', 0.1)
-        
-        self.ck_none_label = kwargs.pop('ck_none_label', '<none>')
-        self.idx2ck_label = kwargs.pop('idx2ck_label', None)
-        self.rel_none_label = kwargs.pop('rel_none_label', '<none>')
-        self.idx2rel_label = kwargs.pop('idx2rel_label', None)
-        super().__init__(**kwargs)
-        
-        
-    @property
-    def name(self):
-        return self._name_sep.join([self.agg_mode, self.criterion])
-    
-    def __repr__(self):
-        repr_attr_dict = {key: getattr(self, key) for key in ['in_dim', 'in_drop_rates', 'agg_mode', 'criterion']}
-        return self._repr_non_config_attrs(repr_attr_dict)
-        
+class PairClassificationDecoderMixin(DecoderMixin):
     @property
     def idx2ck_label(self):
         return self._idx2ck_label
@@ -80,24 +49,28 @@ class RelationClassificationDecoderConfig(DecoderConfig):
     def rel_none_idx(self):
         return self.rel_label2idx[self.rel_none_label]
         
-    def build_vocab(self, *partitions):
-        ck_counter = Counter()
-        rel_counter = Counter()
-        for data in partitions:
-            for data_entry in data:
-                ck_counter.update([ck[0] for ck in data_entry['chunks']])
-                rel_counter.update([rel[0] for rel in data_entry['relations']])
-        self.idx2ck_label = [self.ck_none_label] + list(ck_counter.keys())
-        self.idx2rel_label = [self.rel_none_label] + list(rel_counter.keys())
-        
     def exemplify(self, data_entry: dict, training: bool=True, building: bool=True):
         return {'chunk_pairs_obj': ChunkPairs(data_entry, self, training=training, building=building)}
         
     def batchify(self, batch_examples: List[dict]):
         return {'chunk_pairs_objs': [ex['chunk_pairs_obj'] for ex in batch_examples]}
         
-    def instantiate(self):
-        return RelationClassificationDecoder(self)
+    def retrieve(self, batch: Batch):
+        return [chunk_pairs_obj.relations for chunk_pairs_obj in batch.chunk_pairs_objs]
+        
+    def evaluate(self, y_gold: List[tuple], y_pred: List[tuple]):
+        scores, ave_scores = precision_recall_f1_report(y_gold, y_pred)
+        return ave_scores['micro']['f1']
+        
+    def inject_chunks_and_build(self, batch: Batch, batch_chunks_pred: List[List[tuple]], device=None):
+        """This method is to be invoked outside, as the outside invoker is assumed not to know the structure of `batch`. 
+        """
+        for chunk_pairs_obj, chunks_pred in zip(batch.chunk_pairs_objs, batch_chunks_pred):
+            if not chunk_pairs_obj.is_built:
+                chunk_pairs_obj.inject_chunks(chunks_pred)
+                chunk_pairs_obj.build(self)
+                if device is not None:
+                    chunk_pairs_obj.to(device)
 
 
 
@@ -119,7 +92,7 @@ class ChunkPairs(TargetWrapper):
     (2) If `building` is `False`, `data_entry['chunks']` is known for training but not for evaluation (e.g., joint modeling).
         In this case, `inject_chunks` and `build` should be successively invoked, and the negative samples are generated from injected chunks. 
     """
-    def __init__(self, data_entry: dict, config: RelationClassificationDecoderConfig, training: bool=True, building: bool=True):
+    def __init__(self, data_entry: dict, config: PairClassificationDecoderMixin, training: bool=True, building: bool=True):
         super().__init__(training)
         
         self.chunks = data_entry['chunks'] if training or building else []
@@ -144,12 +117,8 @@ class ChunkPairs(TargetWrapper):
         self.chunks = self.chunks + [ck for ck in chunks if ck not in self.chunks]
         
         
-    def build(self, config: RelationClassificationDecoderConfig):
+    def build(self, config: PairClassificationDecoderMixin):
         """Generate negative samples from `self.chunks` and build up tensors. 
-        
-        Notes
-        -----
-        `config` could also be a `RelationClassificationDecoder`.
         """
         assert not self.is_built
         self.is_built = True
@@ -189,17 +158,64 @@ class ChunkPairs(TargetWrapper):
 
 
 
-class RelationClassificationDecoder(Decoder):
+
+class RelationClassificationDecoderConfig(DecoderConfig, PairClassificationDecoderMixin):
+    def __init__(self, **kwargs):
+        self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
+        
+        self.num_neg_relations = kwargs.pop('num_neg_relations', 100)
+        self.max_span_size = kwargs.pop('max_span_size', 10)
+        self.ck_size_emb_dim = kwargs.pop('ck_size_emb_dim', 25)
+        self.ck_label_emb_dim = kwargs.pop('ck_label_emb_dim', 25)
+        
+        self.agg_mode = kwargs.pop('agg_mode', 'max_pooling')
+        self.criterion = kwargs.pop('criterion', 'CE')
+        assert self.criterion.lower() in ('ce', 'fl', 'sl')
+        if self.criterion.lower() == 'fl':
+            self.gamma = kwargs.pop('gamma', 2.0)
+        elif self.criterion.lower() == 'sl':
+            self.epsilon = kwargs.pop('epsilon', 0.1)
+        
+        self.ck_none_label = kwargs.pop('ck_none_label', '<none>')
+        self.idx2ck_label = kwargs.pop('idx2ck_label', None)
+        self.rel_none_label = kwargs.pop('rel_none_label', '<none>')
+        self.idx2rel_label = kwargs.pop('idx2rel_label', None)
+        super().__init__(**kwargs)
+        
+        
+    @property
+    def name(self):
+        return self._name_sep.join([self.agg_mode, self.criterion])
+    
+    def __repr__(self):
+        repr_attr_dict = {key: getattr(self, key) for key in ['in_dim', 'in_drop_rates', 'agg_mode', 'criterion']}
+        return self._repr_non_config_attrs(repr_attr_dict)
+        
+    def build_vocab(self, *partitions):
+        ck_counter = Counter()
+        rel_counter = Counter()
+        for data in partitions:
+            for data_entry in data:
+                ck_counter.update([ck[0] for ck in data_entry['chunks']])
+                rel_counter.update([rel[0] for rel in data_entry['relations']])
+        self.idx2ck_label = [self.ck_none_label] + list(ck_counter.keys())
+        self.idx2rel_label = [self.rel_none_label] + list(rel_counter.keys())
+        
+    def instantiate(self):
+        return RelationClassificationDecoder(self)
+
+
+
+
+class RelationClassificationDecoder(Decoder, PairClassificationDecoderMixin):
     def __init__(self, config: RelationClassificationDecoderConfig):
         super().__init__(config)
         self.num_neg_relations = config.num_neg_relations
         self.max_span_size = config.max_span_size
         self.ck_none_label = config.ck_none_label
         self.idx2ck_label = config.idx2ck_label
-        self.ck_label2idx = config.ck_label2idx
         self.rel_none_label = config.rel_none_label
         self.idx2rel_label = config.idx2rel_label
-        self.rel_label2idx = config.rel_label2idx
         
         self.ck_size_embedding = torch.nn.Embedding(config.max_span_size, config.ck_size_emb_dim)
         reinit_embedding_(self.ck_size_embedding)
@@ -284,21 +300,4 @@ class RelationClassificationDecoder(Decoder):
         return batch_relations
     
     
-    def retrieve(self, batch: Batch):
-        return [chunk_pairs_obj.relations for chunk_pairs_obj in batch.chunk_pairs_objs]
-        
-        
-    def evaluate(self, y_gold: List[tuple], y_pred: List[tuple]):
-        scores, ave_scores = precision_recall_f1_report(y_gold, y_pred)
-        return ave_scores['micro']['f1']
-        
-        
-    def inject_chunks_and_build(self, batch: Batch, batch_chunks_pred: List[List[tuple]], device):
-        """This method is to be invoked outside, as the outside invoker is assumed not to know the structure of `batch`. 
-        """
-        for chunk_pairs_obj, chunks_pred in zip(batch.chunk_pairs_objs, batch_chunks_pred):
-            if not chunk_pairs_obj.is_built:
-                chunk_pairs_obj.inject_chunks(chunks_pred)
-                chunk_pairs_obj.build(self)
-                chunk_pairs_obj.to(device)
-                
+    
