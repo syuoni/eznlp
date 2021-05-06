@@ -3,8 +3,8 @@ import pytest
 import torch
 
 from eznlp.dataset import Dataset
-from eznlp.model import EncoderConfig, BertLikeConfig, JointDecoderConfig, ModelConfig
-from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderConfig, RelationClassificationDecoderConfig
+from eznlp.model import EncoderConfig, BertLikeConfig, ModelConfig
+from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderConfig, PairClassificationDecoderConfig, JointERREDecoderConfig
 from eznlp.training import Trainer
 
 
@@ -60,8 +60,8 @@ class TestModel(object):
         else:
             ck_decoder_config = SpanClassificationDecoderConfig(agg_mode=agg_mode, criterion=criterion)
         self.config = ModelConfig(intermediate2=EncoderConfig(arch=arch), 
-                                  decoder=JointDecoderConfig(ck_decoder=ck_decoder_config, 
-                                                             rel_decoder=RelationClassificationDecoderConfig(agg_mode=agg_mode, criterion=criterion)))
+                                  decoder=JointERREDecoderConfig(ck_decoder=ck_decoder_config, 
+                                                                 rel_decoder=PairClassificationDecoderConfig(agg_mode=agg_mode, criterion=criterion)))
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()

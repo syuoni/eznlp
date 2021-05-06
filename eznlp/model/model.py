@@ -12,8 +12,8 @@ from .decoder.base import DecoderConfig
 from .decoder.text_classification import TextClassificationDecoderConfig
 from .decoder.sequence_tagging import SequenceTaggingDecoderConfig
 from .decoder.span_classification import SpanClassificationDecoderConfig
-from .decoder.relation_classification import RelationClassificationDecoderConfig
-from .decoder.joint import JointDecoderConfig
+from .decoder.pair_classification import PairClassificationDecoderConfig
+from .decoder.joint_er_re import JointERREDecoderConfig
 
 
 class ModelConfig(Config):
@@ -58,10 +58,10 @@ class ModelConfig(Config):
                 self.decoder = SequenceTaggingDecoderConfig()
             elif decoder.lower().startswith('span'):
                 self.decoder = SpanClassificationDecoderConfig()
-            elif decoder.lower().startswith('relation'):
-                self.decoder = RelationClassificationDecoderConfig()
+            elif decoder.lower().startswith('pair'):
+                self.decoder = PairClassificationDecoderConfig()
             elif decoder.lower().startswith('joint'):
-                self.decoder = JointDecoderConfig()
+                self.decoder = JointERREDecoderConfig()
             else:
                 raise ValueError(f"Invalid `decoder`: {decoder}")
         

@@ -11,7 +11,7 @@ import torch
 
 from eznlp import auto_device
 from eznlp.dataset import Dataset
-from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderConfig, RelationClassificationDecoderConfig, JointDecoderConfig
+from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderConfig, PairClassificationDecoderConfig, JointERREDecoderConfig
 from eznlp.model import ModelConfig
 from eznlp.training import Trainer
 from eznlp.training.utils import count_params
@@ -78,15 +78,15 @@ def build_JERRE_config(args: argparse.Namespace):
                                                             size_emb_dim=args.ck_size_emb_dim, 
                                                             in_drop_rates=drop_rates)
         
-    rel_decoder_config = RelationClassificationDecoderConfig(agg_mode=args.agg_mode, 
-                                                             criterion=args.criterion, 
-                                                             gamma=args.focal_gamma, 
-                                                             num_neg_relations=args.num_neg_relations, 
-                                                             max_span_size=args.max_span_size, 
-                                                             ck_size_emb_dim=args.ck_size_emb_dim, 
-                                                             ck_label_emb_dim=args.ck_label_emb_dim, 
-                                                             in_drop_rates=drop_rates)
-    decoder_config = JointDecoderConfig(ck_decoder=ck_decoder_config, rel_decoder=rel_decoder_config)
+    rel_decoder_config = PairClassificationDecoderConfig(agg_mode=args.agg_mode, 
+                                                         criterion=args.criterion, 
+                                                         gamma=args.focal_gamma, 
+                                                         num_neg_relations=args.num_neg_relations, 
+                                                         max_span_size=args.max_span_size, 
+                                                         ck_size_emb_dim=args.ck_size_emb_dim, 
+                                                         ck_label_emb_dim=args.ck_label_emb_dim, 
+                                                         in_drop_rates=drop_rates)
+    decoder_config = JointERREDecoderConfig(ck_decoder=ck_decoder_config, rel_decoder=rel_decoder_config)
     return ModelConfig(**collect_IE_assembly_config(args) , decoder=decoder_config)
 
 

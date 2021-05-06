@@ -120,7 +120,7 @@ class SequenceTaggingDecoderConfig(DecoderConfig, SequenceTaggingDecoderMixin):
 
 class SequenceTaggingDecoder(Decoder, SequenceTaggingDecoderMixin):
     def __init__(self, config: SequenceTaggingDecoderConfig):
-        super().__init__(config)
+        super().__init__()
         self.scheme = config.scheme
         self.idx2tag = config.idx2tag
         

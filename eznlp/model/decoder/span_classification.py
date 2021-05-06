@@ -144,7 +144,7 @@ class SpanClassificationDecoderConfig(DecoderConfig, SpanClassificationDecoderMi
 
 class SpanClassificationDecoder(Decoder, SpanClassificationDecoderMixin):
     def __init__(self, config: SpanClassificationDecoderConfig):
-        super().__init__(config)
+        super().__init__()
         self.none_label = config.none_label
         self.idx2label = config.idx2label
         

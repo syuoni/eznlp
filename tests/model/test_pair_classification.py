@@ -3,7 +3,7 @@ import pytest
 import torch
 
 from eznlp.dataset import Dataset
-from eznlp.model import EncoderConfig, BertLikeConfig, RelationClassificationDecoderConfig, JointDecoderConfig, ModelConfig
+from eznlp.model import EncoderConfig, BertLikeConfig, PairClassificationDecoderConfig, JointERREDecoderConfig, ModelConfig
 from eznlp.training import Trainer
 
 
@@ -53,7 +53,7 @@ class TestModel(object):
     @pytest.mark.parametrize("criterion", ['CE', 'FL'])
     def test_model(self, arch, agg_mode, criterion, conll2004_demo, device):
         self.config = ModelConfig(intermediate2=EncoderConfig(arch=arch), 
-                                  decoder=RelationClassificationDecoderConfig(agg_mode=agg_mode, criterion=criterion))
+                                  decoder=PairClassificationDecoderConfig(agg_mode=agg_mode, criterion=criterion))
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
@@ -61,7 +61,7 @@ class TestModel(object):
         
     def test_model_with_bert_like(self, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
-        self.config = ModelConfig('relation_classification', 
+        self.config = ModelConfig('pair_classification', 
                                   ohots=None, 
                                   bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert), 
                                   intermediate2=None)
@@ -71,7 +71,7 @@ class TestModel(object):
         
         
     def test_prediction_without_gold(self, conll2004_demo, device):
-        self.config = ModelConfig('relation_classification')
+        self.config = ModelConfig('pair_classification')
         self._setup_case(conll2004_demo, device)
         
         data_wo_gold = [{'tokens': entry['tokens'], 
@@ -92,10 +92,10 @@ def test_chunk_pairs_obj(re_data_demo, num_neg_relations, training, building):
     chunks, relations = entry['chunks'], entry['relations']
     
     if building:
-        config = ModelConfig(decoder=RelationClassificationDecoderConfig(num_neg_relations=num_neg_relations))
+        config = ModelConfig(decoder=PairClassificationDecoderConfig(num_neg_relations=num_neg_relations))
         rel_decoder_config = config.decoder
     else:
-        config = ModelConfig(decoder=JointDecoderConfig(rel_decoder=RelationClassificationDecoderConfig(num_neg_relations=num_neg_relations)))
+        config = ModelConfig(decoder=JointERREDecoderConfig(rel_decoder=PairClassificationDecoderConfig(num_neg_relations=num_neg_relations)))
         rel_decoder_config = config.decoder.rel_decoder
         
     dataset = Dataset(re_data_demo, config, training=training)

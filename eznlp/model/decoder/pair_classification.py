@@ -159,7 +159,7 @@ class ChunkPairs(TargetWrapper):
 
 
 
-class RelationClassificationDecoderConfig(DecoderConfig, PairClassificationDecoderMixin):
+class PairClassificationDecoderConfig(DecoderConfig, PairClassificationDecoderMixin):
     def __init__(self, **kwargs):
         self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
         
@@ -202,14 +202,14 @@ class RelationClassificationDecoderConfig(DecoderConfig, PairClassificationDecod
         self.idx2rel_label = [self.rel_none_label] + list(rel_counter.keys())
         
     def instantiate(self):
-        return RelationClassificationDecoder(self)
+        return PairClassificationDecoder(self)
 
 
 
 
-class RelationClassificationDecoder(Decoder, PairClassificationDecoderMixin):
-    def __init__(self, config: RelationClassificationDecoderConfig):
-        super().__init__(config)
+class PairClassificationDecoder(Decoder, PairClassificationDecoderMixin):
+    def __init__(self, config: PairClassificationDecoderConfig):
+        super().__init__()
         self.num_neg_relations = config.num_neg_relations
         self.max_span_size = config.max_span_size
         self.ck_none_label = config.ck_none_label

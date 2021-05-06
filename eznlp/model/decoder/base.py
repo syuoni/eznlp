@@ -51,7 +51,7 @@ class DecoderConfig(Config):
 
 
 class Decoder(torch.nn.Module):
-    def __init__(self, config: DecoderConfig):
+    def __init__(self):
         """
         `Decoder` forward from hidden states to outputs. 
         """

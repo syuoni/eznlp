@@ -77,7 +77,7 @@ class TextClassificationDecoderConfig(DecoderConfig, TextClassificationDecoderMi
 
 class TextClassificationDecoder(Decoder, TextClassificationDecoderMixin):
     def __init__(self, config: TextClassificationDecoderConfig):
-        super().__init__(config)
+        super().__init__()
         self.idx2label = config.idx2label
         
         self.dropout = CombinedDropout(*config.in_drop_rates)

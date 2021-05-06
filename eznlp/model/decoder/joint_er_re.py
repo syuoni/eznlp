@@ -6,7 +6,7 @@ from ...wrapper import Batch
 from .base import DecoderMixin, DecoderConfig, Decoder
 from .sequence_tagging import SequenceTaggingDecoderConfig
 from .span_classification import SpanClassificationDecoderConfig
-from .relation_classification import RelationClassificationDecoderConfig
+from .pair_classification import PairClassificationDecoderConfig
 
 
 class JointERREDecoderMixin(DecoderMixin):
@@ -31,13 +31,13 @@ class JointERREDecoderMixin(DecoderMixin):
 
 
 
-class JointDecoderConfig(DecoderConfig, JointERREDecoderMixin):
+class JointERREDecoderConfig(DecoderConfig, JointERREDecoderMixin):
     def __init__(self, **kwargs):
         # It seems that pytorch does not recommend to share weights outside two modules. 
         # See https://discuss.pytorch.org/t/how-to-create-model-with-sharing-weight/398/2
         self.share_embeddings = kwargs.pop('share_embeddings', False)
         self.ck_decoder = kwargs.pop('ck_decoder', SpanClassificationDecoderConfig())
-        self.rel_decoder = kwargs.pop('rel_decoder', RelationClassificationDecoderConfig())
+        self.rel_decoder = kwargs.pop('rel_decoder', PairClassificationDecoderConfig())
         super().__init__(**kwargs)
         
     @property
@@ -65,13 +65,13 @@ class JointDecoderConfig(DecoderConfig, JointERREDecoderMixin):
         self.rel_decoder.build_vocab(*partitions)
         
     def instantiate(self):
-        return JointDecoder(self)
+        return JointERREDecoder(self)
 
 
 
-class JointDecoder(Decoder, JointERREDecoderMixin):
-    def __init__(self, config: JointDecoderConfig):
-        super().__init__(config)
+class JointERREDecoder(Decoder, JointERREDecoderMixin):
+    def __init__(self, config: JointERREDecoderConfig):
+        super().__init__()
         self.ck_decoder = config.ck_decoder.instantiate()
         self.rel_decoder = config.rel_decoder.instantiate()
         
