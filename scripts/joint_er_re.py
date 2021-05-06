@@ -32,7 +32,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
     group_decoder = parser.add_argument_group('decoder configurations')
     group_decoder.add_argument('--ck_decoder', type=str, default='span_classification', 
                                help="chunk decoding method", choices=['sequence_tagging', 'span_classification'])
-    group_decoder.add_argument('--criterion', type=str, default='cross_entropy', 
+    group_decoder.add_argument('--criterion', type=str, default='CE', 
                                help="decoder loss criterion")
     group_decoder.add_argument('--focal_gamma', type=float, default=2.0, 
                                help="Focal Loss gamma")

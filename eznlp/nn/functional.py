@@ -143,7 +143,7 @@ def _reduce_losses(losses: torch.Tensor, reduction: str):
         return losses
 
 
-def soft_cross_entropy(logits: torch.Tensor, soft_target: torch.Tensor, weight: torch.Tensor=None, reduction: str='none'):
+def soft_label_cross_entropy(logits: torch.Tensor, soft_target: torch.Tensor, weight: torch.Tensor=None, reduction: str='none'):
     """
     Parameters
     ----------
@@ -162,7 +162,7 @@ def soft_cross_entropy(logits: torch.Tensor, soft_target: torch.Tensor, weight: 
     return _reduce_losses(losses, reduction)
 
 
-def label_smooth_cross_entropy(logits: torch.Tensor, target: torch.LongTensor, 
+def smooth_label_cross_entropy(logits: torch.Tensor, target: torch.LongTensor, 
                                epsilon: float=0.1, weight: torch.Tensor=None, ignore_index: int=-100, reduction: str='none'):
     """
     Parameters
@@ -177,9 +177,9 @@ def label_smooth_cross_entropy(logits: torch.Tensor, target: torch.LongTensor,
     """
     target_wo_ignore_index = target.masked_fill(target==ignore_index, 0)
     smooth_target = torch.where(torch.nn.functional.one_hot(target_wo_ignore_index, num_classes=logits.size(dim=-1)).type(torch.bool), 
-                                1-epsilon, 
-                                epsilon/logits.size(dim=-1))
-    losses = soft_cross_entropy(logits, smooth_target, weight=weight, reduction='none')
+                                1 - epsilon, 
+                                epsilon / (logits.size(dim=-1) - 1))
+    losses = soft_label_cross_entropy(logits, smooth_target, weight=weight, reduction='none')
     losses.masked_fill_(target==ignore_index, 0)
     return _reduce_losses(losses, reduction)
 

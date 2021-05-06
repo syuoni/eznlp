@@ -5,7 +5,7 @@ import torch
 
 from ...wrapper import Batch
 from ...nn.modules import SequencePooling, SequenceAttention, CombinedDropout
-from ...nn.modules import LabelSmoothCrossEntropyLoss, FocalLoss
+from ...nn.modules import SmoothLabelCrossEntropyLoss, FocalLoss
 from ...nn.init import reinit_layer_
 from .base import DecoderConfig, Decoder
 
@@ -15,11 +15,11 @@ class TextClassificationDecoderConfig(DecoderConfig):
         self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
         
         self.agg_mode = kwargs.pop('agg_mode', 'multiplicative_attention')
-        self.criterion = kwargs.pop('criterion', 'cross_entropy')
-        assert self.criterion.lower() in ('cross_entropy', 'focal', 'label_smooth')
-        if self.criterion.lower() == 'focal':
+        self.criterion = kwargs.pop('criterion', 'CE')
+        assert self.criterion.lower() in ('ce', 'fl', 'sl')
+        if self.criterion.lower() == 'fl':
             self.gamma = kwargs.pop('gamma', 2.0)
-        elif self.criterion.lower() == 'label_smooth':
+        elif self.criterion.lower() == 'sl':
             self.epsilon = kwargs.pop('epsilon', 0.1)
             
         self.idx2label = kwargs.pop('idx2label', None)
@@ -80,10 +80,10 @@ class TextClassificationDecoder(Decoder):
         elif config.agg_mode.lower().endswith('_attention'):
             self.aggregating = SequenceAttention(config.in_dim, scoring=config.agg_mode.replace('_attention', ''))
             
-        if config.criterion.lower() == 'focal':
+        if config.criterion.lower() == 'fl':
             self.criterion = FocalLoss(gamma=config.gamma, reduction='none')
-        elif config.criterion.lower() == 'label_smooth':
-            self.criterion = LabelSmoothCrossEntropyLoss(epsilon=config.epsilon, reduction='none')
+        elif config.criterion.lower() == 'sl':
+            self.criterion = SmoothLabelCrossEntropyLoss(epsilon=config.epsilon, reduction='none')
         else:
             self.criterion = torch.nn.CrossEntropyLoss(reduction='none')
         

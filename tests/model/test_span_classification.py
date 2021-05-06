@@ -50,7 +50,7 @@ class TestModel(object):
         
     @pytest.mark.parametrize("arch", ['Conv', 'LSTM'])
     @pytest.mark.parametrize("agg_mode", ['max_pooling'])
-    @pytest.mark.parametrize("criterion", ['cross_entropy', 'focal'])
+    @pytest.mark.parametrize("criterion", ['CE', 'FL'])
     def test_model(self, arch, agg_mode, criterion, conll2004_demo, device):
         self.config = ModelConfig(intermediate2=EncoderConfig(arch=arch), 
                                   decoder=SpanClassificationDecoderConfig(agg_mode=agg_mode, criterion=criterion))

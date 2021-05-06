@@ -34,7 +34,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
     group_rel_classification = parser.add_argument_group('relation classification')
     group_rel_classification.add_argument('--agg_mode', type=str, default='max_pooling', 
                                           help="aggregating mode")
-    group_rel_classification.add_argument('--criterion', type=str, default='cross_entropy', 
+    group_rel_classification.add_argument('--criterion', type=str, default='CE', 
                                           help="decoder loss criterion")
     group_rel_classification.add_argument('--focal_gamma', type=float, default=2.0, 
                                           help="Focal Loss gamma")

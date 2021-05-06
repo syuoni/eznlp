@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 import torch
 
-from ..functional import soft_cross_entropy, label_smooth_cross_entropy, focal_loss
+from ..functional import soft_label_cross_entropy, smooth_label_cross_entropy, focal_loss
 
 
-class SoftCrossEntropyLoss(torch.nn.modules.loss._WeightedLoss):
+class SoftLabelCrossEntropyLoss(torch.nn.modules.loss._WeightedLoss):
     def __init__(self, weight: torch.Tensor=None, reduction: str='none'):
         weight = weight if weight is None or isinstance(weight, torch.Tensor) else torch.tensor(weight)
         super().__init__(weight, reduction=reduction)
@@ -13,11 +13,11 @@ class SoftCrossEntropyLoss(torch.nn.modules.loss._WeightedLoss):
         return f"weight={self.weight}"
         
     def forward(self, logits: torch.Tensor, soft_target: torch.Tensor):
-        return soft_cross_entropy(logits, soft_target, weight=self.weight, reduction=self.reduction)
+        return soft_label_cross_entropy(logits, soft_target, weight=self.weight, reduction=self.reduction)
 
 
 
-class LabelSmoothCrossEntropyLoss(torch.nn.modules.loss._WeightedLoss):
+class SmoothLabelCrossEntropyLoss(torch.nn.modules.loss._WeightedLoss):
     def __init__(self, epsilon: float=0.1, weight: torch.Tensor=None, ignore_index: int=-100, reduction: str='none'):
         weight = weight if weight is None or isinstance(weight, torch.Tensor) else torch.tensor(weight)
         super().__init__(weight, reduction=reduction)
@@ -28,7 +28,7 @@ class LabelSmoothCrossEntropyLoss(torch.nn.modules.loss._WeightedLoss):
         return f"epsilon={self.epsilon}, weight={self.weight}"
         
     def forward(self, logits: torch.Tensor, target: torch.LongTensor):
-        return label_smooth_cross_entropy(logits, target, epsilon=self.epsilon, weight=self.weight, ignore_index=self.ignore_index, reduction=self.reduction)
+        return smooth_label_cross_entropy(logits, target, epsilon=self.epsilon, weight=self.weight, ignore_index=self.ignore_index, reduction=self.reduction)
 
 
 

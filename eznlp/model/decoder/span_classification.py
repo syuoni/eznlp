@@ -6,7 +6,7 @@ import logging
 import torch
 
 from ...wrapper import TargetWrapper, Batch
-from ...nn.modules import CombinedDropout, LabelSmoothCrossEntropyLoss, FocalLoss
+from ...nn.modules import CombinedDropout, SmoothLabelCrossEntropyLoss, FocalLoss
 from ...nn.init import reinit_embedding_, reinit_layer_
 from ...metrics import precision_recall_f1_report
 from .base import DecoderConfig, Decoder
@@ -23,11 +23,11 @@ class SpanClassificationDecoderConfig(DecoderConfig):
         self.size_emb_dim = kwargs.pop('size_emb_dim', 25)
         
         self.agg_mode = kwargs.pop('agg_mode', 'max_pooling')
-        self.criterion = kwargs.pop('criterion', 'cross_entropy')
-        assert self.criterion.lower() in ('cross_entropy', 'focal', 'label_smooth')
-        if self.criterion.lower() == 'focal':
+        self.criterion = kwargs.pop('criterion', 'CE')
+        assert self.criterion.lower() in ('ce', 'fl', 'sl')
+        if self.criterion.lower() == 'fl':
             self.gamma = kwargs.pop('gamma', 2.0)
-        elif self.criterion.lower() == 'label_smooth':
+        elif self.criterion.lower() == 'sl':
             self.epsilon = kwargs.pop('epsilon', 0.1)
         
         self.none_label = kwargs.pop('none_label', '<none>')
@@ -140,10 +140,10 @@ class SpanClassificationDecoder(Decoder):
         self.hid2logit = torch.nn.Linear(config.in_dim+config.size_emb_dim, config.voc_dim)
         reinit_layer_(self.hid2logit, 'sigmoid')
         
-        if config.criterion.lower() == 'focal':
+        if config.criterion.lower() == 'fl':
             self.criterion = FocalLoss(gamma=config.gamma, reduction='sum')
-        elif config.criterion.lower() == 'label_smooth':
-            self.criterion = LabelSmoothCrossEntropyLoss(epsilon=config.epsilon, reduction='sum')
+        elif config.criterion.lower() == 'sl':
+            self.criterion = SmoothLabelCrossEntropyLoss(epsilon=config.epsilon, reduction='sum')
         else:
             self.criterion = torch.nn.CrossEntropyLoss(reduction='sum')
         

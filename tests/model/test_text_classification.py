@@ -51,7 +51,7 @@ class TestModel(object):
     @pytest.mark.parametrize("arch", ['Conv', 'LSTM'])
     @pytest.mark.parametrize("agg_mode", ['min_pooling', 'max_pooling', 'mean_pooling', 
                                           'dot_attention', 'multiplicative_attention', 'additive_attention'])
-    @pytest.mark.parametrize("criterion", ['cross_entropy', 'focal', 'label_smooth'])
+    @pytest.mark.parametrize("criterion", ['CE', 'FL', 'SL'])
     def test_model(self, arch, agg_mode, criterion, yelp_full_demo, device):
         self.config = ModelConfig(intermediate2=EncoderConfig(arch=arch), 
                                   decoder=TextClassificationDecoderConfig(agg_mode=agg_mode, criterion=criterion))

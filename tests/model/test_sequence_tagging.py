@@ -56,7 +56,7 @@ class TestModel(object):
         
     @pytest.mark.parametrize("arch", ['Conv', 'Gehring', 'LSTM', 'GRU', 'Transformer'])
     @pytest.mark.parametrize("shortcut", [False, True])
-    @pytest.mark.parametrize("criterion", ['crf', 'cross_entropy', 'focal'])
+    @pytest.mark.parametrize("criterion", ['CRF', 'CE', 'FL'])
     def test_model(self, arch, shortcut, criterion, conll2003_demo, device):
         self.config = ModelConfig(intermediate2=EncoderConfig(arch=arch, shortcut=shortcut), 
                                   decoder=SequenceTaggingDecoderConfig(criterion=criterion))

@@ -6,7 +6,7 @@ import torch
 from ...wrapper import TargetWrapper, Batch
 from ...utils import ChunksTagsTranslator
 from ...nn.utils import unpad_seqs
-from ...nn.modules import CombinedDropout, CRF, LabelSmoothCrossEntropyLoss, FocalLoss
+from ...nn.modules import CombinedDropout, CRF, SmoothLabelCrossEntropyLoss, FocalLoss
 from ...nn.init import reinit_layer_
 from ...metrics import precision_recall_f1_report
 from .base import DecoderConfig, Decoder
@@ -19,10 +19,10 @@ class SequenceTaggingDecoderConfig(DecoderConfig):
         
         self.scheme = kwargs.pop('scheme', 'BIOES')
         self.criterion = kwargs.pop('criterion', 'CRF')
-        assert self.criterion.lower() in ('crf', 'cross_entropy', 'focal', 'label_smooth')
-        if self.criterion.lower() == 'focal':
+        assert self.criterion.lower() in ('crf', 'ce', 'fl', 'sl')
+        if self.criterion.lower() == 'fl':
             self.gamma = kwargs.pop('gamma', 2.0)
-        elif self.criterion.lower() == 'label_smooth':
+        elif self.criterion.lower() == 'sl':
             self.epsilon = kwargs.pop('epsilon', 0.1)
             
         self.idx2tag = kwargs.pop('idx2tag', None)
@@ -117,10 +117,10 @@ class SequenceTaggingDecoder(Decoder):
         
         if config.criterion.lower() == 'crf':
             self.criterion = CRF(tag_dim=config.voc_dim, pad_idx=config.pad_idx, batch_first=True)
-        elif config.criterion.lower() == 'focal':
+        elif config.criterion.lower() == 'fl':
             self.criterion = FocalLoss(gamma=config.gamma, ignore_index=config.pad_idx, reduction='sum')
-        elif config.criterion.lower() == 'label_smooth':
-            self.criterion = LabelSmoothCrossEntropyLoss(epsilon=config.epsilon, ignore_index=config.pad_idx, reduction='sum')
+        elif config.criterion.lower() == 'sl':
+            self.criterion = SmoothLabelCrossEntropyLoss(epsilon=config.epsilon, ignore_index=config.pad_idx, reduction='sum')
         else:
             self.criterion = torch.nn.CrossEntropyLoss(ignore_index=config.pad_idx, reduction='sum')
         
