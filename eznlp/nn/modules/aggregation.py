@@ -60,7 +60,7 @@ class SequenceAttention(torch.nn.Module):
             return x_projed.matmul(self.query)
         elif self.scoring.lower() == 'additive':
             # x: (batch, step, hid_dim) -> (batch, step, query_dim)
-            x_query = torch.cat([x, self.query.repeat(x.size(0), x.size(1), 1)], dim=-1)
+            x_query = torch.cat([x, self.query.expand(x.size(0), x.size(1), -1)], dim=-1)
             x_query_projed = self.proj_layer(x_query)
             return x_query_projed.matmul(self.w2)
             

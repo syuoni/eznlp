@@ -119,7 +119,7 @@ class CRF(torch.nn.Module):
         
         # Note: The first elements are assumed to be NOT masked. 
         # log_partitions: (batch, tag_dim)
-        log_partitions = self.sos_transitions.repeat(batch_size, 1) + emissions[0]
+        log_partitions = self.sos_transitions.expand(batch_size, -1) + emissions[0]
         
         for t in range(1, step):
             # Transition -> Emission
@@ -144,7 +144,7 @@ class CRF(torch.nn.Module):
         
         # Note: The first elements are assumed to be NOT masked. 
         # log_best_scores: (batch, tag_dim)
-        log_best_scores = self.sos_transitions.repeat(batch_size, 1) + emissions[0]
+        log_best_scores = self.sos_transitions.expand(batch_size, -1) + emissions[0]
         # history: list of ``indices`` of shape (batch, tag_dim)
         # In the ``k``-th example of a batch, at timestep ``t``, for each ``j``, 
         # the best transition is from ``history[t][k, j]`` to ``j``. 

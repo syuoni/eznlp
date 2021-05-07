@@ -17,7 +17,7 @@ def seq_lens2mask(seq_lens: torch.LongTensor, max_len: int=None):
         The positions with values of True are MASKED, while the others are NOT MASKED. 
     """
     max_len = seq_lens.max().item() if max_len is None else max_len
-    steps = torch.arange(max_len, device=seq_lens.device).repeat(seq_lens.size(0), 1)
+    steps = torch.arange(max_len, device=seq_lens.device).expand(seq_lens.size(0), -1)
     return (steps >= seq_lens.unsqueeze(1))
 
 
@@ -90,7 +90,7 @@ def sequence_group_aggregating(x: torch.FloatTensor, group_by: torch.LongTensor,
     agg_step = (group_by.max().item() + 1) if agg_step is None else agg_step
     
     # pos_proj: (agg_step, ori_step)
-    pos_proj = torch.arange(agg_step, device=group_by.device).unsqueeze(1).repeat(1, group_by.size(1))
+    pos_proj = torch.arange(agg_step, device=group_by.device).unsqueeze(1).expand(-1, group_by.size(1))
     
     # pos_proj: (batch, agg_step, ori_step)
     pos_proj = (pos_proj.unsqueeze(0) == group_by.unsqueeze(1))

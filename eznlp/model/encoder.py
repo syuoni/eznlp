@@ -188,9 +188,9 @@ class RNNEncoder(Encoder):
                                                                   batch_first=True, 
                                                                   enforce_sorted=False)
         if hasattr(self, 'h_0'):
-            h_0 = self.h_0.repeat(1, embedded.size(0), 1)
+            h_0 = self.h_0.expand(-1, embedded.size(0), -1)
             if hasattr(self, 'c_0'):
-                c_0 = self.c_0.repeat(1, embedded.size(0), 1)
+                c_0 = self.c_0.expand(-1, embedded.size(0), -1)
                 h_0 = (h_0, c_0)
         else:
             h_0 = None
