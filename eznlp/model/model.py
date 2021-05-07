@@ -12,6 +12,7 @@ from .decoder.base import DecoderConfig
 from .decoder.text_classification import TextClassificationDecoderConfig
 from .decoder.sequence_tagging import SequenceTaggingDecoderConfig
 from .decoder.span_classification import SpanClassificationDecoderConfig
+from .decoder.boundary_selection import BoundarySelectionDecoderConfig
 from .decoder.pair_classification import PairClassificationDecoderConfig
 from .decoder.joint_er_re import JointERREDecoderConfig
 
@@ -58,6 +59,8 @@ class ModelConfig(Config):
                 self.decoder = SequenceTaggingDecoderConfig()
             elif decoder.lower().startswith('span'):
                 self.decoder = SpanClassificationDecoderConfig()
+            elif decoder.lower().startswith('boundary'):
+                self.decoder = BoundarySelectionDecoderConfig()
             elif decoder.lower().startswith('pair'):
                 self.decoder = PairClassificationDecoderConfig()
             elif decoder.lower().startswith('joint'):
