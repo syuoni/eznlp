@@ -54,7 +54,7 @@ class TestModel(object):
         assert isinstance(self.config.name, str) and len(self.config.name) > 0
         
         
-    @pytest.mark.parametrize("arch", ['Conv', 'Gehring', 'LSTM', 'GRU', 'Transformer'])
+    @pytest.mark.parametrize("arch", ['FFN', 'Conv', 'Gehring', 'LSTM', 'GRU', 'Transformer'])
     @pytest.mark.parametrize("shortcut", [False, True])
     @pytest.mark.parametrize("criterion", ['CRF', 'CE', 'FL'])
     def test_model(self, arch, shortcut, criterion, conll2003_demo, device):

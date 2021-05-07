@@ -21,7 +21,12 @@ class EncoderConfig(Config):
         else:
             self.hid_dim = kwargs.pop('hid_dim', 128)
             
-            if self.arch.lower() in ('lstm', 'gru'):
+            if self.arch.lower() == 'ffn':
+                self.num_layers = kwargs.pop('num_layers', 1)
+                self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
+                self.hid_drop_rate = kwargs.pop('hid_drop_rate', 0.5)
+                
+            elif self.arch.lower() in ('lstm', 'gru'):
                 self.train_init_hidden = kwargs.pop('train_init_hidden', False)
                 self.num_layers = kwargs.pop('num_layers', 1)
                 self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
@@ -44,12 +49,12 @@ class EncoderConfig(Config):
                 raise ValueError(f"Invalid encoder architecture {self.arch}")
         
         super().__init__(**kwargs)
-        
-        
+    
+    
     @property
     def name(self):
         return self.arch
-        
+    
     @property
     def out_dim(self):
         if self.arch.lower() == 'identity':
@@ -61,11 +66,13 @@ class EncoderConfig(Config):
             out_dim = out_dim + self.in_dim
             
         return out_dim
-        
+    
     
     def instantiate(self):
         if self.arch.lower() == 'identity':
             return IdentityEncoder(self)
+        elif self.arch.lower() == 'ffn':
+            return FFNEncoder(self)
         elif self.arch.lower() in ('lstm', 'gru'):
             return RNNEncoder(self)
         elif self.arch.lower() == 'conv':
@@ -74,9 +81,10 @@ class EncoderConfig(Config):
             return GehringConvEncoder(self)
         elif self.arch.lower() == 'transformer':
             return TransformerEncoder(self)
-        
-        
-        
+
+
+
+
 class Encoder(torch.nn.Module):
     """
     `Encoder` forwards from embeddings to hidden states. 
@@ -104,18 +112,52 @@ class Encoder(torch.nn.Module):
             return torch.cat([hidden, embedded], dim=-1)
         else:
             return hidden
-        
-        
-        
+
+
+
+
 class IdentityEncoder(Encoder):
     def __init__(self, config: EncoderConfig):
         super().__init__(config)
         
     def embedded2hidden(self, embedded: torch.FloatTensor, mask: torch.BoolTensor):
         return embedded
-    
-    
-    
+
+
+
+
+class FeedForwardBlock(torch.nn.Module):
+    def __init__(self, in_dim: int, out_dim: int, drop_rate: float):
+        super().__init__()
+        self.proj_layer = torch.nn.Linear(in_dim, out_dim)
+        self.relu = torch.nn.ReLU()
+        reinit_layer_(self.proj_layer, 'relu')
+        self.dropout = torch.nn.Dropout(drop_rate)
+        
+    def forward(self, x: torch.FloatTensor):
+        return self.relu(self.proj_layer(self.dropout(x)))
+
+
+class FFNEncoder(Encoder):
+    def __init__(self, config: EncoderConfig):
+        super().__init__(config)
+        # NOTE: Only the first layer is differently configured, consistent to `torch.nn.RNN` modules
+        self.ff_blocks = torch.nn.ModuleList(
+            [FeedForwardBlock(in_dim=(config.in_dim if k==0 else config.hid_dim), 
+                              out_dim=config.hid_dim, 
+                              drop_rate=(0.0 if k==0 else config.hid_drop_rate)) for k in range(config.num_layers)]
+        )
+        
+    def embedded2hidden(self, embedded: torch.FloatTensor, mask: torch.BoolTensor):
+        hidden = embedded
+        for ff_block in self.ff_blocks:
+            hidden = ff_block(hidden)
+            
+        return hidden
+
+
+
+
 class RNNEncoder(Encoder):
     def __init__(self, config: EncoderConfig):
         super().__init__(config)
@@ -138,8 +180,8 @@ class RNNEncoder(Encoder):
             self.h_0 = torch.nn.Parameter(torch.zeros(config.num_layers*2, 1, config.hid_dim//2))
             if isinstance(self.rnn, torch.nn.LSTM):
                 self.c_0 = torch.nn.Parameter(torch.zeros(config.num_layers*2, 1, config.hid_dim//2))
-                
-                
+        
+        
     def embedded2hidden(self, embedded: torch.FloatTensor, mask: torch.BoolTensor, return_last_hidden: bool=False):
         packed_embedded = torch.nn.utils.rnn.pack_padded_sequence(embedded, 
                                                                   lengths=mask2seq_lens(mask).cpu(), 
@@ -173,9 +215,10 @@ class RNNEncoder(Encoder):
             return self.embedded2hidden(self.in_proj_layer(self.dropout(embedded)), mask, return_last_hidden=True)
         else:
             return self.embedded2hidden(self.dropout(embedded), mask, return_last_hidden=True)
-        
-        
-        
+
+
+
+
 class ConvBlock(torch.nn.Module):
     def __init__(self, in_dim: int, out_dim: int, kernel_size: int, drop_rate: float):
         super().__init__()
@@ -194,8 +237,8 @@ class ConvBlock(torch.nn.Module):
         # mask: (batch, step)
         x.masked_fill_(mask.unsqueeze(1), 0)
         return self.relu(self.conv(self.dropout(x)))
-        
-        
+
+
 class ConvEncoder(Encoder):
     def __init__(self, config: EncoderConfig):
         super().__init__(config)
@@ -215,9 +258,10 @@ class ConvEncoder(Encoder):
             
         # hidden: (batch, hid_dim, step) -> (batch, step, hid_dim)
         return hidden.permute(0, 2, 1)
-    
-    
-    
+
+
+
+
 class GehringConvBlock(torch.nn.Module):
     def __init__(self, hid_dim: int, kernel_size: int, drop_rate: float):
         super().__init__()
@@ -234,8 +278,8 @@ class GehringConvBlock(torch.nn.Module):
         
         # Residual connection
         return (x + conved) * (0.5**0.5)
-    
-    
+
+
 class GehringConvEncoder(Encoder):
     """
     References
@@ -266,9 +310,10 @@ class GehringConvEncoder(Encoder):
         final_hidden = hidden.permute(0, 2, 1)
         # Residual connection
         return (init_hidden + final_hidden) * (0.5**0.5)
-    
-    
-    
+
+
+
+
 class TransformerEncoder(Encoder):
     """
     References
