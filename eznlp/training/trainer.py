@@ -100,7 +100,8 @@ class Trainer(object):
             self.optimizer.zero_grad()
         
         # `scheduler` follows the "nominal" steps
-        if self.scheduler is not None and self.schedule_by_step:
+        # `scheduler.step()` before `optimizer.step()` will raise warnings
+        if self.scheduler is not None and self.schedule_by_step and self.num_steps >= self.num_grad_acc_steps:
             self.scheduler.step()
         
         
