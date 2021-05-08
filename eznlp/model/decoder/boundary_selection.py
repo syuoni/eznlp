@@ -79,6 +79,8 @@ class BoundarySelectionDecoderConfig(DecoderConfig, BoundarySelectionDecoderMixi
         self.biaffine = kwargs.pop('biaffine', True)
         self.affine = kwargs.pop('affine', EncoderConfig(arch='FFN', hid_dim=150, num_layers=1, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2))
         
+        self.max_span_size = kwargs.pop('max_span_size', 50)
+        self.size_emb_dim = kwargs.pop('size_emb_dim', 25)
         self.hid_drop_rates = kwargs.pop('hid_drop_rates', (0.2, 0.0, 0.0))
         
         self.criterion = kwargs.pop('criterion', 'CE')
@@ -129,20 +131,25 @@ class BoundarySelectionDecoder(Decoder, BoundarySelectionDecoderMixin):
         self.none_label = config.none_label
         self.idx2label = config.idx2label
         
-        # Note: size_id = size - 1
-        self.register_buffer('span_size_ids', torch.arange(config.max_len) - torch.arange(config.max_len).unsqueeze(-1))
-        self.register_buffer('span_non_mask', self.span_size_ids >= 0)
-        
         if config.biaffine:
             self.affine_start = config.affine.instantiate()
             self.affine_end = config.affine.instantiate()
         else:
             self.affine = config.affine.instantiate()
         
+        # Note: size_id = size - 1
+        span_sizes = torch.arange(config.max_len) - torch.arange(config.max_len).unsqueeze(-1) + 1
+        self.register_buffer('span_size_ids', span_sizes - 1)
+        self.span_size_ids.masked_fill_(span_sizes <= 0, 0)
+        self.span_size_ids.masked_fill_(span_sizes > config.max_span_size, config.max_span_size-1)
+        self.register_buffer('span_non_mask', span_sizes > 0)
+        self.size_embedding = torch.nn.Embedding(config.max_span_size, config.size_emb_dim)
+        reinit_embedding_(self.size_embedding)
+        
         self.dropout = CombinedDropout(*config.hid_drop_rates)
         
         self.U = torch.nn.Parameter(torch.empty(config.voc_dim, config.affine.out_dim, config.affine.out_dim))
-        self.W = torch.nn.Parameter(torch.empty(config.voc_dim, config.affine.out_dim*2))
+        self.W = torch.nn.Parameter(torch.empty(config.voc_dim, config.affine.out_dim*2 + config.size_emb_dim))
         self.b = torch.nn.Parameter(torch.empty(config.voc_dim))
         torch.nn.init.orthogonal_(self.U.data)
         torch.nn.init.orthogonal_(self.W.data)
@@ -171,10 +178,14 @@ class BoundarySelectionDecoder(Decoder, BoundarySelectionDecoderMixin):
         # affined_end: (batch, end_step, affine_dim) -> (batch, 1, affine_dim, end_step)
         # scores1: (batch, 1, start_step, affine_dim) * (voc_dim, affine_dim, affine_dim) * (batch, 1, affine_dim, end_step) -> (batch, voc_dim, start_step, end_step)
         scores1 = affined_start.unsqueeze(1).matmul(self.U).matmul(affined_end.permute(0, 2, 1).unsqueeze(1))
-        # affined_cat: (batch, start_step, end_step, affine_dim*2)
+        
+        # size_embedded: (start_step, end_step, emb_dim)
+        size_embedded = self.size_embedding(self.span_size_ids[:affined_start.size(1), :affined_end.size(1)])
+        # affined_cat: (batch, start_step, end_step, affine_dim*2 + emb_dim)
         affined_cat = torch.cat([affined_start.unsqueeze(2).expand(-1, -1, affined_end.size(1), -1), 
-                                 affined_end.unsqueeze(1).expand(-1, affined_start.size(1), -1, -1)], dim=-1)
-        # scores2: (voc_dim, affine_dim*2) * (batch, start_step, end_step, affine_dim*2, 1) -> (batch, start_step, end_step, voc_dim, 1)
+                                 affined_end.unsqueeze(1).expand(-1, affined_start.size(1), -1, -1), 
+                                 size_embedded.unsqueeze(0).expand(batch.size, -1, -1, -1)], dim=-1)
+        # scores2: (voc_dim, affine_dim*2 + emb_dim) * (batch, start_step, end_step, affine_dim*2 + emb_dim, 1) -> (batch, start_step, end_step, voc_dim, 1)
         scores2 = self.W.matmul(affined_cat.unsqueeze(-1))
         # scores: (batch, start_step, end_step, voc_dim)
         return scores1.permute(0, 2, 3, 1) + scores2.squeeze(-1) + self.b
