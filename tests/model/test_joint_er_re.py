@@ -4,7 +4,8 @@ import torch
 
 from eznlp.dataset import Dataset
 from eznlp.model import EncoderConfig, BertLikeConfig, ModelConfig
-from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderConfig, PairClassificationDecoderConfig, JointERREDecoderConfig
+from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderConfig, BoundarySelectionDecoderConfig
+from eznlp.model import PairClassificationDecoderConfig, JointERREDecoderConfig
 from eznlp.training import Trainer
 
 
@@ -23,7 +24,7 @@ class TestModel(object):
         assert delta_hidden.abs().max().item() < 1e-4
         
         delta_losses = losses012[1:] - losses123[:-1]
-        assert delta_losses.abs().max().item() < 2e-4
+        assert delta_losses.abs().max().item() < 5e-4
         
         chunks_pred012, relations_pred012 = self.model.decode(batch012)
         chunks_pred123, relations_pred123 = self.model.decode(batch123)
@@ -51,14 +52,16 @@ class TestModel(object):
         
         
     @pytest.mark.parametrize("arch", ['Conv', 'LSTM'])
-    @pytest.mark.parametrize("ck_decoder", ['sequence_tagging', 'span_classification'])
+    @pytest.mark.parametrize("ck_decoder", ['sequence_tagging', 'span_classification', 'boundary_selection'])
     @pytest.mark.parametrize("agg_mode", ['max_pooling'])
     @pytest.mark.parametrize("criterion", ['CE', 'FL'])
     def test_model(self, arch, ck_decoder, agg_mode, criterion, conll2004_demo, device):
         if ck_decoder.lower() == 'sequence_tagging':
             ck_decoder_config = SequenceTaggingDecoderConfig(criterion='CRF')
-        else:
+        elif ck_decoder.lower() == 'span_classification':
             ck_decoder_config = SpanClassificationDecoderConfig(agg_mode=agg_mode, criterion=criterion)
+        elif ck_decoder.lower() == 'boundary_selection':
+            ck_decoder_config = BoundarySelectionDecoderConfig(criterion=criterion)
         self.config = ModelConfig(intermediate2=EncoderConfig(arch=arch), 
                                   decoder=JointERREDecoderConfig(ck_decoder=ck_decoder_config, 
                                                                  rel_decoder=PairClassificationDecoderConfig(agg_mode=agg_mode, criterion=criterion)))

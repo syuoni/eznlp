@@ -23,7 +23,7 @@ class TestModel(object):
         assert delta_hidden.abs().max().item() < 1e-4
         
         delta_losses = losses012[1:] - losses123[:-1]
-        assert delta_losses.abs().max().item() < 2e-4
+        assert delta_losses.abs().max().item() < 5e-4
         
         pred012 = self.model.decode(batch012)
         pred123 = self.model.decode(batch123)
@@ -51,10 +51,13 @@ class TestModel(object):
         
     @pytest.mark.parametrize("arch", ['Conv', 'LSTM'])
     @pytest.mark.parametrize("biaffine", [True, False])
+    @pytest.mark.parametrize("affine_arch", ['FFN', 'LSTM'])
     @pytest.mark.parametrize("criterion", ['CE', 'FL'])
-    def test_model(self, arch, biaffine, criterion, conll2004_demo, device):
+    def test_model(self, arch, biaffine, affine_arch, criterion, conll2004_demo, device):
         self.config = ModelConfig(intermediate2=EncoderConfig(arch=arch), 
-                                  decoder=BoundarySelectionDecoderConfig(biaffine=biaffine, criterion=criterion))
+                                  decoder=BoundarySelectionDecoderConfig(biaffine=biaffine, 
+                                                                         affine=EncoderConfig(arch=affine_arch), 
+                                                                         criterion=criterion))
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
