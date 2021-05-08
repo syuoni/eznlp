@@ -15,7 +15,7 @@ from eznlp.dataset import Dataset
 from eznlp.config import ConfigDict
 from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig, CharConfig, SoftLexiconConfig
 from eznlp.model import ELMoConfig, BertLikeConfig, FlairConfig
-from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderConfig
+from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderConfig, BoundarySelectionDecoderConfig
 from eznlp.model import ModelConfig
 from eznlp.training import Trainer
 from eznlp.training.utils import count_params
@@ -36,7 +36,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
     
     group_decoder = parser.add_argument_group('decoder configurations')
     group_decoder.add_argument('--ck_decoder', type=str, default='sequence_tagging', 
-                               help="chunk decoding method", choices=['sequence_tagging', 'span_classification'])
+                               help="chunk decoding method", choices=['sequence_tagging', 'span_classification', 'boundary_selection'])
     group_decoder.add_argument('--criterion', type=str, default='CRF', 
                                help="decoder loss criterion")
     group_decoder.add_argument('--focal_gamma', type=float, default=2.0, 
@@ -56,6 +56,9 @@ def parse_arguments(parser: argparse.ArgumentParser):
     group_span_classification.add_argument('--ck_size_emb_dim', type=int, default=25, 
                                            help="span size embedding dim")
     
+    group_boundary_selection = parser.add_argument_group('boundary selection')
+    group_boundary_selection.add_argument('--no_biaffine', dest='biaffine', default=True, action='store_false', 
+                                          help="whether to use biaffine")
     return parse_to_args(parser)
 
 
@@ -154,7 +157,7 @@ def build_ER_config(args: argparse.Namespace):
                                                       criterion=args.criterion, 
                                                       gamma=args.focal_gamma, 
                                                       in_drop_rates=drop_rates)
-    else:
+    elif args.ck_decoder == 'span_classification':
         decoder_config = SpanClassificationDecoderConfig(agg_mode=args.agg_mode, 
                                                          criterion=args.criterion, 
                                                          gamma=args.focal_gamma, 
@@ -162,6 +165,11 @@ def build_ER_config(args: argparse.Namespace):
                                                          max_span_size=args.max_span_size, 
                                                          size_emb_dim=args.ck_size_emb_dim, 
                                                          in_drop_rates=drop_rates)
+    elif args.ck_decoder == 'boundary_selection':
+        decoder_config = BoundarySelectionDecoderConfig(biaffine=args.biaffine, 
+                                                        criterion=args.criterion, 
+                                                        gamma=args.focal_gamma, 
+                                                        hid_drop_rates=drop_rates)
     return ModelConfig(**collect_IE_assembly_config(args), decoder=decoder_config)
 
 
