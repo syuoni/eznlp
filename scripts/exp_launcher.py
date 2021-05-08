@@ -127,8 +127,18 @@ if __name__ == '__main__':
             #            ["--max_span_size 10", "--max_span_size 5"], 
             #            ["--ck_size_emb_dim 25", "--ck_size_emb_dim 10"], 
             #            ["fs"], 
-            #            ["", "--use_elmo"], 
-            #            ["", "--use_flair"], 
+            #            ["--char_arch LSTM", "--char_arch Conv"]]
+            # options = [["--num_epochs 100"], 
+            #            ["--optimizer AdamW --lr 1e-3 --batch_size 64", 
+            #             "--optimizer Adadelta --lr 1.0 --batch_size 64"], 
+            #            ["--num_layers 1", "--num_layers 2"], 
+            #            ["--ck_decoder boundary_selection"],
+            #            ["--affine_arch FFN", "--affine_arch LSTM"], 
+            #            ["--criterion CE", 
+            #             "--criterion FL --focal_gamma 1.0", 
+            #             "--criterion FL --focal_gamma 2.0", 
+            #             "--criterion FL --focal_gamma 3.0"],
+            #            ["fs"], 
             #            ["--char_arch LSTM", "--char_arch Conv"]]
         else:
             options = [["--num_epochs 50"], 
@@ -160,7 +170,24 @@ if __name__ == '__main__':
             #            ["--bert_drop_rate 0.2"], 
             #            ["", "--use_interm2"], 
             #            ["--bert_arch BERT_base", "--bert_arch RoBERTa_base"]]
-    
+            # options = [["--num_epochs 50"], 
+            #            ["--optimizer AdamW --lr 1e-3 --finetune_lr 5e-5", 
+            #             "--optimizer AdamW --lr 1e-3 --finetune_lr 1e-4", 
+            #             "--optimizer AdamW --lr 2e-3 --finetune_lr 5e-5", 
+            #             "--optimizer AdamW --lr 2e-3 --finetune_lr 1e-4"], 
+            #            ["--batch_size 48"], 
+            #            ["--scheduler LinearDecayWithWarmup"], 
+            #            ["--ck_decoder boundary_selection"],
+            #            ["--affine_arch FFN", "--affine_arch LSTM"], 
+            #            ["--criterion CE", 
+            #             "--criterion FL --focal_gamma 1.0", 
+            #             "--criterion FL --focal_gamma 2.0", 
+            #             "--criterion FL --focal_gamma 3.0"],
+            #            ["ft"], 
+            #            ["--bert_drop_rate 0.2"], 
+            #            ["", "--use_interm2"], 
+            #            ["--bert_arch BERT_base", "--bert_arch RoBERTa_base"]]
+            
     elif args.task == 'entity_recognition' and args.language.lower() == 'chinese':
         if args.command in ('fs', 'from_scratch'):
             options = [["--num_epochs 100"], 
