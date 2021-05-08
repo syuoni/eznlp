@@ -192,13 +192,9 @@ class PairClassificationDecoderConfig(DecoderConfig, PairClassificationDecoderMi
         return self._repr_non_config_attrs(repr_attr_dict)
         
     def build_vocab(self, *partitions):
-        ck_counter = Counter()
-        rel_counter = Counter()
-        for data in partitions:
-            for data_entry in data:
-                ck_counter.update([ck[0] for ck in data_entry['chunks']])
-                rel_counter.update([rel[0] for rel in data_entry['relations']])
+        ck_counter = Counter(label for data in partitions for entry in data for label, start, end in entry['chunks'])
         self.idx2ck_label = [self.ck_none_label] + list(ck_counter.keys())
+        rel_counter = Counter(label for data in partitions for entry in data for label, start, end in entry['relations'])
         self.idx2rel_label = [self.rel_none_label] + list(rel_counter.keys())
         
     def instantiate(self):

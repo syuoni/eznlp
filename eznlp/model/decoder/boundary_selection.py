@@ -5,6 +5,7 @@ import logging
 import torch
 
 from ...wrapper import TargetWrapper, Batch
+from ...utils.chunk import detect_nested, filter_clashed_by_priority
 from ...nn.modules import CombinedDropout, SmoothLabelCrossEntropyLoss, FocalLoss
 from ...nn.init import reinit_embedding_, reinit_layer_
 from ...metrics import precision_recall_f1_report
@@ -79,6 +80,7 @@ class BoundarySelectionDecoderConfig(DecoderConfig, BoundarySelectionDecoderMixi
         self.biaffine = kwargs.pop('biaffine', True)
         self.affine = kwargs.pop('affine', EncoderConfig(arch='FFN', hid_dim=150, num_layers=1, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2))
         
+        self.max_len = kwargs.pop('max_len', None)
         self.max_span_size = kwargs.pop('max_span_size', 50)
         self.size_emb_dim = kwargs.pop('size_emb_dim', 25)
         self.hid_drop_rates = kwargs.pop('hid_drop_rates', (0.2, 0.0, 0.0))
@@ -92,6 +94,8 @@ class BoundarySelectionDecoderConfig(DecoderConfig, BoundarySelectionDecoderMixi
         
         self.none_label = kwargs.pop('none_label', '<none>')
         self.idx2label = kwargs.pop('idx2label', None)
+        # Note: non-nested overlapping chunks are never allowed
+        self.allow_nested = kwargs.pop('allow_nested', None)
         super().__init__(**kwargs)
         
         
@@ -112,12 +116,17 @@ class BoundarySelectionDecoderConfig(DecoderConfig, BoundarySelectionDecoderMixi
         self.affine.in_dim = dim
         
     def build_vocab(self, *partitions):
-        counter = Counter()
-        for data in partitions:
-            for data_entry in data:
-                counter.update([ck[0] for ck in data_entry['chunks']])
+        counter = Counter(label for data in partitions for entry in data for label, start, end in entry['chunks'])
         self.idx2label = [self.none_label] + list(counter.keys())
+        
+        self.allow_nested = any(detect_nested(entry['chunks']) for data in partitions for entry in data)
+        if self.allow_nested:
+            logger.info("Nested chunks detected, nested chunks are allowed in decoding...")
+        else:
+            logger.info("No nested chunks detected, only flat chunks are allowed in decoding...")
+        
         self.max_len = max(len(data_entry['tokens']) for data in partitions for data_entry in data)
+        
         
     def instantiate(self):
         return BoundarySelectionDecoder(self)
@@ -130,6 +139,7 @@ class BoundarySelectionDecoder(Decoder, BoundarySelectionDecoderMixin):
         super().__init__()
         self.none_label = config.none_label
         self.idx2label = config.idx2label
+        self.allow_nested = config.allow_nested
         
         if config.biaffine:
             self.affine_start = config.affine.instantiate()
@@ -208,8 +218,14 @@ class BoundarySelectionDecoder(Decoder, BoundarySelectionDecoderMixin):
         batch_chunks = []
         for curr_scores, curr_len in zip(batch_scores, batch.seq_lens.cpu().tolist()):
             curr_non_mask = self.span_non_mask[:curr_len, :curr_len]
-            labels = [self.idx2label[i] for i in curr_scores[:curr_len, :curr_len][curr_non_mask].argmax(dim=-1).cpu().tolist()]
+            confidences, label_ids = curr_scores[:curr_len, :curr_len][curr_non_mask].softmax(dim=-1).max(dim=-1)
+            labels = [self.idx2label[i] for i in label_ids.cpu().tolist()]
             chunks = [(label, start, end) for label, (start, end) in zip(labels, _generate_spans_from_upper_triangular(curr_len)) if label != self.none_label]
+            
+            # Sort chunks from high to low confidences
+            chunks = [ck for _, ck in sorted(zip(confidences.cpu().tolist(), chunks), reverse=True)]
+            chunks = filter_clashed_by_priority(chunks, allow_nested=self.allow_nested)
+            
             batch_chunks.append(chunks)
         return batch_chunks
 

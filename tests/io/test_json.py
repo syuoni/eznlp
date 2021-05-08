@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from eznlp.io import JsonIO
+from eznlp.utils.chunk import detect_nested, filter_clashed_by_priority
 
 
 class TestJsonIO(object):
@@ -32,6 +33,9 @@ class TestJsonIO(object):
         assert sum(len(ex['chunks']) for ex in test_data) == 1_079
         assert sum(len(ex['relations']) for ex in test_data) == 422
         
+        assert not any(detect_nested(ex['chunks']) for data in [train_data, dev_data, test_data] for ex in data)
+        assert all(filter_clashed_by_priority(ex['chunks'], allow_nested=False) == ex['chunks'] for data in [train_data, dev_data, test_data] for ex in data)
+        
         
     def test_SciERC(self):
         json_io = JsonIO(text_key='tokens', 
@@ -49,13 +53,16 @@ class TestJsonIO(object):
         
         assert len(train_data) == 1_861
         assert sum(len(ex['chunks']) for ex in train_data) == 5_598
-        assert sum(len(ex['relations']) for ex in train_data) == 3_219
+        assert sum(len(ex['relations']) for ex in train_data) == 3_215  # 4 duplicated relations dropped here
         assert len(dev_data) == 275
         assert sum(len(ex['chunks']) for ex in dev_data) == 811
         assert sum(len(ex['relations']) for ex in dev_data) == 455
         assert len(test_data) == 551
         assert sum(len(ex['chunks']) for ex in test_data) == 1_685
         assert sum(len(ex['relations']) for ex in test_data) == 974
+        
+        assert any(detect_nested(ex['chunks']) for data in [train_data, dev_data, test_data] for ex in data)
+        assert all(filter_clashed_by_priority(ex['chunks'], allow_nested=True) == ex['chunks'] for data in [train_data, dev_data, test_data] for ex in data)
         
         
     def test_ADE(self):
@@ -74,4 +81,5 @@ class TestJsonIO(object):
         assert sum(len(ex['chunks']) for ex in data) == 10_839
         assert sum(len(ex['relations']) for ex in data) == 6_821
         
-        
+        assert any(detect_nested(ex['chunks']) for ex in data)
+        assert all(filter_clashed_by_priority(ex['chunks'], allow_nested=True) == ex['chunks'] for ex in data)

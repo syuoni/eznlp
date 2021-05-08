@@ -6,6 +6,7 @@ import logging
 import torch
 
 from ...wrapper import TargetWrapper, Batch
+from ...utils.chunk import detect_nested, filter_clashed_by_priority
 from ...nn.modules import CombinedDropout, SmoothLabelCrossEntropyLoss, FocalLoss
 from ...nn.init import reinit_embedding_, reinit_layer_
 from ...metrics import precision_recall_f1_report
@@ -111,6 +112,8 @@ class SpanClassificationDecoderConfig(DecoderConfig, SpanClassificationDecoderMi
         
         self.none_label = kwargs.pop('none_label', '<none>')
         self.idx2label = kwargs.pop('idx2label', None)
+        # Note: non-nested overlapping chunks are never allowed
+        self.allow_nested = kwargs.pop('allow_nested', None)
         super().__init__(**kwargs)
         
         
@@ -123,14 +126,16 @@ class SpanClassificationDecoderConfig(DecoderConfig, SpanClassificationDecoderMi
         return self._repr_non_config_attrs(repr_attr_dict)
         
     def build_vocab(self, *partitions):
-        counter = Counter()
-        size_counter = Counter()
-        for data in partitions:
-            for data_entry in data:
-                counter.update([ck[0] for ck in data_entry['chunks']])
-                size_counter.update([ck[2]-ck[1] for ck in data_entry['chunks']])
+        counter = Counter(label for data in partitions for entry in data for label, start, end in entry['chunks'])
         self.idx2label = [self.none_label] + list(counter.keys())
         
+        self.allow_nested = any(detect_nested(entry['chunks']) for data in partitions for entry in data)
+        if self.allow_nested:
+            logger.info("Nested chunks detected, nested chunks are allowed in decoding...")
+        else:
+            logger.info("No nested chunks detected, only flat chunks are allowed in decoding...")
+        
+        size_counter = Counter([end-start for data in partitions for entry in data for label, start, end in entry['chunks']])
         num_spans = sum(size_counter.values())
         num_oov_spans = sum([num for size, num in size_counter.items() if size > self.max_span_size])
         if num_oov_spans > 0:
@@ -147,6 +152,7 @@ class SpanClassificationDecoder(Decoder, SpanClassificationDecoderMixin):
         super().__init__()
         self.none_label = config.none_label
         self.idx2label = config.idx2label
+        self.allow_nested = config.allow_nested
         
         self.size_embedding = torch.nn.Embedding(config.max_span_size, config.size_emb_dim)
         reinit_embedding_(self.size_embedding)
@@ -189,7 +195,13 @@ class SpanClassificationDecoder(Decoder, SpanClassificationDecoderMixin):
         
         batch_chunks = []
         for k in range(batch.size):
-            labels = [self.idx2label[i] for i in batch_logits[k].argmax(dim=-1).cpu().tolist()]
+            confidences, label_ids = batch_logits[k].softmax(dim=-1).max(dim=-1)
+            labels = [self.idx2label[i] for i in label_ids.cpu().tolist()]
             chunks = [(label, start, end) for label, (start, end) in zip(labels, batch.spans_objs[k].spans) if label != self.none_label]
+            
+            # Sort chunks from high to low confidences
+            chunks = [ck for _, ck in sorted(zip(confidences.cpu().tolist(), chunks), reverse=True)]
+            chunks = filter_clashed_by_priority(chunks, allow_nested=self.allow_nested)
+            
             batch_chunks.append(chunks)
         return batch_chunks
