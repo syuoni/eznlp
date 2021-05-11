@@ -244,7 +244,8 @@ def _tokenized2nested(tokenized_raw_text: List[str], tokenizer: transformers.Pre
 
 
 def truncate_for_bert_like(data: list, tokenizer: transformers.PreTrainedTokenizer, mode: str='head+tail', verbose=True):
-    """
+    """Truncate overlong tokens in `data`, typically for text classification. 
+    
     Truncation methods:
         1. head-only: keep the first 510 tokens;
         2. tail-only: keep the last 510 tokens;
@@ -296,3 +297,57 @@ def truncate_for_bert_like(data: list, tokenizer: transformers.PreTrainedTokeniz
     logger.info(f"Truncated sequences: {num_truncated} ({num_truncated/len(data)*100:.2f}%)")
     return data
 
+
+
+def segment_uniformly_for_bert_like(data: list, tokenizer: transformers.PreTrainedTokenizer, verbose=True):
+    """Segment overlong tokens in `data`, typically for entity recognition. 
+    """
+    max_len = tokenizer.model_max_length - 2
+    
+    new_data = []
+    num_segmented = 0
+    for data_entry in tqdm.tqdm(data, disable=not verbose, ncols=100, desc="Segmenting data"):
+        tokens, chunks = data_entry['tokens'], data_entry['chunks']
+        nested_sub_tokens = _tokenized2nested(tokens.raw_text, tokenizer)
+        sub_tok_seq_lens = [len(tok) for tok in nested_sub_tokens]
+        
+        num_sub_tokens = sum(sub_tok_seq_lens)
+        if num_sub_tokens > max_len:
+            is_segmentable = [True for _ in range(len(tokens))]
+            for _, start, end in chunks:
+                for i in range(start+1, end):
+                    is_segmentable[i] = False
+            
+            num_spans = int(num_sub_tokens / (max_len*0.8)) + 1
+            span_size = num_sub_tokens / num_spans
+            
+            cum_lens = numpy.cumsum(sub_tok_seq_lens).tolist()
+            
+            new_entries = []
+            span_start = 0
+            for i in range(1, num_spans+1):
+                if i < num_spans:
+                    _, span_end = find_ascending(cum_lens, span_size*i)
+                    while not is_segmentable[span_end]:
+                        span_end -= 1
+                else:
+                    span_end = len(tokens)
+                assert sum(sub_tok_seq_lens[span_start:span_end]) <= max_len
+                
+                new_entry = {k: v for k, v in data_entry.items() if k not in ('tokens', 'chunks')}
+                new_entry['tokens'] = tokens[span_start:span_end]
+                new_entry['chunks'] = [(label, start-span_start, end-span_start) for label, start, end in chunks if span_start <= start and end <= span_end]
+                new_entries.append(new_entry)
+                span_start = span_end
+            
+            assert len(new_entries) == num_spans
+            assert [text for entry in new_entries for text in entry['tokens'].raw_text] == data_entry['tokens'].raw_text
+            assert [label for entry in new_entries for label, *_ in entry['chunks']] == [label for label, *_ in data_entry['chunks']]
+            new_data.extend(new_entries)
+            num_segmented += 1
+            
+        else:
+            new_data.append(data_entry)
+    
+    logger.info(f"Segmented sequences: {num_segmented} ({num_segmented/len(data)*100:.2f}%)")
+    return new_data
