@@ -65,8 +65,9 @@ def test_truncate_for_bert_like(mode, bert_with_tokenizer):
     assert (sub_lens == max_len).sum() >= (len(sub_lens) / 2)
 
 
-@pytest.mark.parametrize("token_len", [1, 2, 3])
-@pytest.mark.parametrize("max_len", [30, 50, 120])
+
+@pytest.mark.parametrize("token_len", [1, 2, 5])
+@pytest.mark.parametrize("max_len", [50, 120])
 def test_segment_uniformly_for_bert_like(bert_with_tokenizer, token_len, max_len):
     bert, tokenizer = bert_with_tokenizer
     tokenizer.model_max_length = max_len + 2
@@ -77,6 +78,11 @@ def test_segment_uniformly_for_bert_like(bert_with_tokenizer, token_len, max_len
     new_data = segment_uniformly_for_bert_like(data, tokenizer, verbose=False)
     
     assert all(len(entry['tokens']) <= max_len for entry in new_data)
+    assert all(0 <= start and end <= len(entry['tokens']) for entry in new_data for label, start, end in entry['chunks'])
+    
+    chunk_texts = [tokens[start:end].raw_text for label, start, end in chunks]
+    chunk_texts_retr = [entry['tokens'][start:end].raw_text for entry in new_data for label, start, end in entry['chunks']]
+    assert chunk_texts_retr == chunk_texts
     
     span_starts = [0] + numpy.cumsum([len(entry['tokens']) for entry in new_data]).tolist()
     chunks_retr = [(label, span_start+start, span_start+end) for entry, span_start in zip(new_data, span_starts) for label, start, end in entry['chunks']]
