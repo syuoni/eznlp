@@ -17,6 +17,7 @@ from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig, CharConfig,
 from eznlp.model import ELMoConfig, BertLikeConfig, FlairConfig
 from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderConfig, BoundarySelectionDecoderConfig
 from eznlp.model import ModelConfig
+from eznlp.model.bert_like import segment_uniformly_for_bert_like
 from eznlp.training import Trainer
 from eznlp.training.utils import count_params
 from eznlp.training.evaluation import evaluate_entity_recognition
@@ -204,10 +205,16 @@ if __name__ == '__main__':
     device = auto_device()
     if device.type.startswith('cuda'):
         torch.cuda.set_device(device)
+        temp = torch.randn(100).to(device)
         
     train_data, dev_data, test_data = load_data(args)
     args.language = dataset2language[args.dataset]
     config = build_ER_config(args)
+    
+    if args.command in ('finetune', 'ft') and args.dataset == 'SIGHAN2006':
+        train_data = segment_uniformly_for_bert_like(train_data, config.bert_like.tokenizer, verbose=args.log_terminal)
+        dev_data   = segment_uniformly_for_bert_like(dev_data,   config.bert_like.tokenizer, verbose=args.log_terminal)
+        test_data  = segment_uniformly_for_bert_like(test_data,  config.bert_like.tokenizer, verbose=args.log_terminal)
     
     train_set = Dataset(train_data, config, training=True)
     train_set.build_vocabs_and_dims(dev_data, test_data)

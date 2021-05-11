@@ -174,10 +174,6 @@ def load_data(args: argparse.Namespace):
         train_data = conll_io.read("data/SIGHAN2006/train.txt")
         dev_data   = conll_io.read("data/SIGHAN2006/test.txt")
         test_data  = conll_io.read("data/SIGHAN2006/test.txt")
-        if args.command in ('finetune', 'ft'):
-            for data in [train_data, dev_data, test_data]:
-                for data_entry in data:
-                    data_entry['tokens'] = data_entry['tokens'][:510]
         
     elif args.dataset == 'conll2012_zh':
         conll_io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', line_sep_starts=["#begin", "#end", "pt/"], encoding='utf-8', token_sep="", pad_token="")
