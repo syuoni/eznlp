@@ -169,7 +169,7 @@ def load_data(args: argparse.Namespace):
         test_data  = conll_io.read("data/WeiboNER/weiboNER_2nd_conll.test")
         
     elif args.dataset == 'SIGHAN2006':
-        # https://github.com/v-mipeng/LexiconAugmentedNER/issues/3
+        # https://github.com/v-mipeng/LexiconAugmentedNER/issues/3#issuecomment-634563407
         conll_io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BIO2', encoding='utf-8', token_sep="", pad_token="")
         train_data = conll_io.read("data/SIGHAN2006/train.txt")
         dev_data   = conll_io.read("data/SIGHAN2006/test.txt")
@@ -190,7 +190,7 @@ def load_data(args: argparse.Namespace):
         
     elif args.dataset == 'imdb':
         folder_io = CategoryFolderIO(categories=["pos", "neg"], mapping={"<br />": "\n"}, tokenize_callback=spacy_nlp_en, encoding='utf-8', verbose=args.log_terminal, 
-                             case_mode='lower', number_mode='None')
+                                     case_mode='lower', number_mode='None')
         train_data = folder_io.read("data/imdb/train")
         test_data  = folder_io.read("data/imdb/test")
         train_data, dev_data = sklearn.model_selection.train_test_split(train_data, test_size=0.2, random_state=args.seed)

@@ -93,6 +93,8 @@ Configurations of our implementation:
     * BERT/RoBERTa models are loaded with dropout rate of 0.2
 
 ### MSRA (SIGHAN 2006) 
+* All experiments use testing split as development split ([SoftLexicon](https://github.com/v-mipeng/LexiconAugmentedNER/issues/3#issuecomment-634563407)). 
+
 | Model | Paper | Reported F1 | Our Imp. F1 | Notes |
 |:-----:|:-----:|:-----------:|:-----------:|:-----:|
 | LSTM + CRF                  | Zhang and Yang (2018) | 88.81 | 89.49 | num_layers=2 |
@@ -100,8 +102,8 @@ Configurations of our implementation:
 | Lattice-LSTM + CRF          | Zhang and Yang (2018) | 93.18 |
 | FLAT + CRF                  | Li et al. (2019)      | 94.35 |
 | SoftLexicon + LSTM + CRF    | Ma et al. (2020)      | 93.66 | 93.64 | num_layers=2; Adamax (lr=1e-3) |
-| BERT + CRF                  | Ma et al. (2020)      | 93.76 | 93.16 |
-| BERT + LSTM + CRF           | Ma et al. (2020)      | 94.83 | 93.13 |
+| BERT + CRF                  | Ma et al. (2020)      | 93.76 | 95.92 |
+| BERT + LSTM + CRF           | Ma et al. (2020)      | 94.83 | 96.18 |
 | FLAT + BERT + CRF           | Li et al. (2019)      | 96.09 |
 | SoftLexicon + BERT + CRF    | Ma et al. (2020)      | 95.42 |
 
