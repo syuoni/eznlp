@@ -27,8 +27,8 @@ class TestMetric(object):
                                 'micro': {'precision': 0.5, 'recall': 0.5, 'f1': 0.5}})])
     def test_example(self, tags_gold_data, tags_pred_data, expected_ave_scores):
         translator = ChunksTagsTranslator(scheme='BIO2')
-        chunks_gold_data = [translator.tags2chunks(tags, False) for tags in tags_gold_data]
-        chunks_pred_data = [translator.tags2chunks(tags, False) for tags in tags_pred_data]
+        chunks_gold_data = [translator.tags2chunks(tags) for tags in tags_gold_data]
+        chunks_pred_data = [translator.tags2chunks(tags) for tags in tags_pred_data]
         
         scores, ave_scores = precision_recall_f1_report(chunks_gold_data, chunks_pred_data)
         self._assert_scores_equal(ave_scores, expected_ave_scores)

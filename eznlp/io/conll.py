@@ -21,9 +21,10 @@ class ConllIO(IO):
                  tag_col_id=1, 
                  sep=None, 
                  scheme='BIO1', 
+                 tag_sep='-',
+                 breaking_for_types=True, 
                  additional_col_id2name=None, 
                  line_sep_starts=None, 
-                 breaking_for_types=True, 
                  encoding=None, 
                  verbose: bool=True, 
                  **kwargs):
@@ -31,7 +32,7 @@ class ConllIO(IO):
         self.tag_col_id = tag_col_id
         self.sep = sep
         
-        self.translator = ChunksTagsTranslator(scheme=scheme)
+        self.translator = ChunksTagsTranslator(scheme=scheme, sep=tag_sep, breaking_for_types=breaking_for_types)
         if additional_col_id2name is None:
             self.additional_col_id2name = {}
         else:
@@ -45,7 +46,6 @@ class ConllIO(IO):
             assert all(isinstance(start, str) for start in line_sep_starts)
             self.line_sep_starts = line_sep_starts
             
-        self.breaking_for_types = breaking_for_types
         super().__init__(encoding=encoding, verbose=verbose, **kwargs)
         
         
@@ -62,7 +62,7 @@ class ConllIO(IO):
                     if len(text) > 0:
                         additional_tags = {self.additional_col_id2name[col_id]: atags for col_id, atags in additional.items()}
                         tokens = TokenSequence.from_tokenized_text(text, additional_tags, **self.kwargs)
-                        chunks = self.translator.tags2chunks(tags, self.breaking_for_types)
+                        chunks = self.translator.tags2chunks(tags)
                         data.append({'tokens': tokens, 'chunks': chunks})
                         
                         text, tags = [], []
@@ -77,7 +77,7 @@ class ConllIO(IO):
             if len(text) > 0:
                 additional_tags = {self.additional_col_id2name[col_id]: atags for col_id, atags in additional.items()}
                 tokens = TokenSequence.from_tokenized_text(text, additional_tags, **self.kwargs)
-                chunks = self.translator.tags2chunks(tags, self.breaking_for_types)
+                chunks = self.translator.tags2chunks(tags)
                 data.append({'tokens': tokens, 'chunks': chunks})
             
         return data

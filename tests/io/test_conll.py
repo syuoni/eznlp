@@ -155,3 +155,17 @@ class TestConllIO(object):
         assert len(test_data) == 270
         assert sum(len(ex['chunks']) for ex in test_data) == 418
         assert sum(len(ex['tokens']) for ex in test_data) == 14_842
+        
+        
+    def test_clerd(self):
+        self.io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BIO2', tag_sep='_', encoding='utf-8')
+        train_data = self.io.read("data/CLERD/ner/train.txt")
+        dev_data   = self.io.read("data/CLERD/ner/validation.txt")
+        test_data  = self.io.read("data/CLERD/ner/test.txt")
+        
+        assert len(train_data) == 24_165
+        assert sum(len(ex['chunks']) for ex in train_data) == 133_105
+        assert len(dev_data) == 1_895
+        assert sum(len(ex['chunks']) for ex in dev_data) == 10_571
+        assert len(test_data) == 2_837
+        assert sum(len(ex['chunks']) for ex in test_data) == 16_186

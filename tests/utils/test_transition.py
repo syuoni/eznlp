@@ -43,9 +43,9 @@ class TestChunksTagsTranslator(object):
         text_chunks = [(ent['entity'], ent['type'], ent['start'], ent['end']) for ent in entities]
         tags = ['O', 'O', 'O', 'O', 'S-EntA', 'O', 'O', 'O', 'O', 'S-EntA', 'O', 'O', 'B-EntB', 'E-EntC', 'O']
         
-        translator = ChunksTagsTranslator(scheme='BIOES')
+        translator = ChunksTagsTranslator(scheme='BIOES', breaking_for_types=False)
         tags_built, *_ = translator.text_chunks2tags(text_chunks, raw_text, tokens)
-        text_chunks_retr = translator.tags2text_chunks(tags, raw_text, tokens, breaking_for_types=False)
+        text_chunks_retr = translator.tags2text_chunks(tags, raw_text, tokens)
         
         assert tags_built[-2] == 'E-EntB'
         tags_built[-2] = 'E-EntC'
@@ -54,10 +54,11 @@ class TestChunksTagsTranslator(object):
         
         text_chunks_retr_spans = []
         for span in tokens.spans_within_max_length(10):
-            text_chunks_retr_spans.extend(translator.tags2text_chunks(tags[span], raw_text, tokens[span], breaking_for_types=False))
+            text_chunks_retr_spans.extend(translator.tags2text_chunks(tags[span], raw_text, tokens[span]))
         assert text_chunks_retr_spans == text_chunks
         
-        text_chunks_retr = translator.tags2text_chunks(tags, raw_text, tokens, breaking_for_types=True)
+        translator = ChunksTagsTranslator(scheme='BIOES', breaking_for_types=True)
+        text_chunks_retr = translator.tags2text_chunks(tags, raw_text, tokens)
         assert text_chunks_retr[:2] == text_chunks[:2]
         assert text_chunks_retr[2][1] == 'EntB'
         assert text_chunks_retr[3][1] == 'EntC'
