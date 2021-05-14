@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import numpy
+
 from ..token import TokenSequence
 from ..utils import ChunksTagsTranslator
 from .base import IO
@@ -90,4 +92,23 @@ class ConllIO(IO):
                 return True
             
         return False
-
+    
+    
+    def flatten_to_characters(self, data: list):
+        additional_keys = [key for key in data[0]['tokens'][0].__dict__.keys() if key not in ('text', 'raw_text')]
+        
+        new_data = []
+        for entry in data:
+            tokenized_raw_text = entry['tokens'].raw_text
+            char_seq_lens = [len(tok) for tok in tokenized_raw_text]
+            cum_char_seq_lens = [0] + numpy.cumsum(char_seq_lens).tolist()
+            
+            flattened_tokenized_raw_text = [char for tok in tokenized_raw_text for char in tok]
+            # Repeat additional-tags for every character in a token
+            flattened_additional_tags = {key: [atag for atag, tok in zip(getattr(entry['tokens'], key), tokenized_raw_text) for char in tok] 
+                                             for key in additional_keys}
+            flattened_tokens = TokenSequence.from_tokenized_text(flattened_tokenized_raw_text, flattened_additional_tags, **self.kwargs)
+            flattened_chunks = [(label, cum_char_seq_lens[start], cum_char_seq_lens[end]) for label, start, end in entry['chunks']]
+            new_data.append({'tokens': flattened_tokens, 'chunks': flattened_chunks})
+            
+        return new_data

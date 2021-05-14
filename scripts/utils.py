@@ -180,6 +180,9 @@ def load_data(args: argparse.Namespace):
         train_data = conll_io.read("data/conll2012/train.chinese.v4_gold_conll")
         dev_data   = conll_io.read("data/conll2012/dev.chinese.v4_gold_conll")
         test_data  = conll_io.read("data/conll2012/test.chinese.v4_gold_conll")
+        train_data = conll_io.flatten_to_characters(train_data)
+        dev_data   = conll_io.flatten_to_characters(dev_data)
+        test_data  = conll_io.flatten_to_characters(test_data)
         
     elif args.dataset == 'yelp2013':
         tabular_io = TabularIO(text_col_id=3, label_col_id=2, sep="\t\t", mapping={"<sssss>": "\n"}, encoding='utf-8', verbose=args.log_terminal, 
