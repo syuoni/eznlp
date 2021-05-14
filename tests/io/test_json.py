@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from eznlp.io import JsonIO
+from eznlp.io import JsonIO, SQuADIO
 from eznlp.utils.chunk import detect_nested, filter_clashed_by_priority
 
 
@@ -83,3 +83,18 @@ class TestJsonIO(object):
         
         assert any(detect_nested(ex['chunks']) for ex in data)
         assert all(filter_clashed_by_priority(ex['chunks'], allow_nested=True) == ex['chunks'] for ex in data)
+
+
+
+class TestSQuADIO(object):
+    def test_squad_v2(self, spacy_nlp_en):
+        io = SQuADIO(tokenize_callback=spacy_nlp_en, verbose=False)
+        train_data, train_errors, train_mismatches = io.read("data/SQuAD/train-v2.0.json", return_errors=True)
+        dev_data,   dev_errors,   dev_mismatches   = io.read("data/SQuAD/dev-v2.0.json", return_errors=True)
+        
+        assert len(train_data) == 130_319
+        assert len(train_errors) == 0
+        assert len(train_mismatches) == 1_009
+        assert len(dev_data) == 11873
+        assert len(dev_errors) == 0
+        assert len(dev_mismatches) == 208

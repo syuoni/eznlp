@@ -1,9 +1,13 @@
 # -*- coding: utf-8 -*-
 from typing import List
+import logging
 import json
 
 from ..token import TokenSequence
+from ..utils import TextChunksTranslator
 from .base import IO
+
+logger = logging.getLogger(__name__)
 
 
 def _filter_duplicated(tuples: List[tuple]):
@@ -73,3 +77,45 @@ class JsonIO(IO):
             
         return data
 
+
+
+
+class SQuADIO(IO):
+    def __init__(self, tokenize_callback=None, encoding=None, verbose: bool=True, **kwargs):
+        self.translator = TextChunksTranslator(has_chunk_text=True)
+        self.tokenize_callback = tokenize_callback
+        super().__init__(encoding=encoding, verbose=verbose, **kwargs)
+        
+    def read(self, file_path, return_errors: bool=False):
+        with open(file_path, 'r', encoding=self.encoding) as f:
+            raw_data = json.load(f)
+        raw_data = raw_data['data']
+        
+        data = []
+        errors, mismatches = [], []
+        for doc in raw_data:
+            for parag in doc['paragraphs']:
+                context = TokenSequence.from_raw_text(parag['context'], self.tokenize_callback, **self.kwargs)
+                
+                for qas in parag['qas']:
+                    assert qas['is_impossible'] or len(qas['answers']) > 0
+                    
+                    question = TokenSequence.from_raw_text(qas['question'], self.tokenize_callback, **self.kwargs)
+                    answers = [('<ans>', ans['answer_start'], ans['answer_start']+len(ans['text']), ans['text']) for ans in qas['answers']]
+                    answers, curr_errors, curr_mismatches = self.translator.text_chunks2chunks(answers, context, parag['context'])
+                    answers = _filter_duplicated(answers)
+                    errors.extend(curr_errors)
+                    mismatches.extend(curr_mismatches)
+                    data.append({'id': qas['id'], 
+                                 'title': doc['title'], 
+                                 'context': context, 
+                                 'question': question, 
+                                 'answers': answers})
+        
+        if len(errors) > 0 or len(mismatches) > 0:
+            logger.info(f"{len(errors)} errors and {len(mismatches)} mismatches detected during parsing...")
+        
+        if return_errors:
+            return data, errors, mismatches
+        else:
+            return data

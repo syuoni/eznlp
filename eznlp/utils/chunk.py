@@ -90,13 +90,13 @@ class TextChunksTranslator(object):
                 
                 # Mis-matched data
                 if not find_start:
-                    mismatches.append([raw_text[text_starts[chunk_start-1]:text_ends[chunk_start-1]], 
+                    mismatches.append((raw_text[text_starts[chunk_start-1]:text_ends[chunk_start-1]], 
                                        raw_text[text_starts[chunk_start-1]:chunk_start_in_text], 
-                                       raw_text[chunk_start_in_text:text_ends[chunk_start-1]]])
+                                       raw_text[chunk_start_in_text:text_ends[chunk_start-1]]))
                 if not find_end:
-                    mismatches.append([raw_text[text_starts[chunk_end_m1]:text_ends[chunk_end_m1]], 
+                    mismatches.append((raw_text[text_starts[chunk_end_m1]:text_ends[chunk_end_m1]], 
                                        raw_text[text_starts[chunk_end_m1]:chunk_end_in_text], 
-                                       raw_text[chunk_end_in_text:text_ends[chunk_end_m1]]])
+                                       raw_text[chunk_end_in_text:text_ends[chunk_end_m1]]))
             
             # If it is exactly found...
             if find_start and find_end:
