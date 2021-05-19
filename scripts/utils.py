@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import argparse
 import logging
+import re
 import spacy
 import jieba
 import random
@@ -250,7 +251,9 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
                 flair.models.LanguageModel.load_language_model("assets/flair/news-backward-0.4.1.pt"))
     elif args.language.lower() == 'english':
         if pretrained_str.lower().startswith('bert'):
-            if 'base' in pretrained_str.lower():
+            if 'wwm' in pretrained_str.lower():
+                PATH = "assets/transformers/bert-large-cased-whole-word-masking" if cased else "assets/transformers/bert-large-uncased-whole-word-masking"
+            elif 'base' in pretrained_str.lower():
                 PATH = "assets/transformers/bert-base-cased" if cased else "assets/transformers/bert-base-uncased"
             elif 'large' in pretrained_str.lower():
                 PATH = "assets/transformers/bert-large-cased" if cased else "assets/transformers/bert-large-uncased"
@@ -265,16 +268,33 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
             return (transformers.RobertaModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.RobertaTokenizer.from_pretrained(PATH, add_prefix_space=True))
         
+        elif pretrained_str.lower().startswith('albert'):
+            size = re.search("x*(base|large)", pretrained_str.lower())
+            if size is not None:
+                PATH = f"assets/transformers/albert-{size.group()}-v2"
+            return (transformers.AlbertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
+                    transformers.AlbertTokenizer.from_pretrained(PATH))
+        
+        elif pretrained_str.lower().startswith('spanbert'):
+            if 'base' in pretrained_str.lower():
+                PATH = "assets/transformers/SpanBERT/spanbert-base-cased"
+            elif 'large' in pretrained_str.lower():
+                PATH = "assets/transformers/SpanBERT/spanbert-large-cased"
+            return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
+                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=False))
+            
     elif args.language.lower() == 'chinese':
         if pretrained_str.lower().startswith('bert'):
             PATH = "assets/transformers/hfl/chinese-bert-wwm-ext"
-            return (transformers.AutoModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
-                    transformers.AutoTokenizer.from_pretrained(PATH, model_max_length=512))
+            return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
+                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512))
         
         elif pretrained_str.lower().startswith('roberta'):
+            # RoBERTa-like BERT
+            # https://github.com/ymcui/Chinese-BERT-wwm#faq
             PATH = "assets/transformers/hfl/chinese-roberta-wwm-ext"
-            return (transformers.AutoModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
-                    transformers.AutoTokenizer.from_pretrained(PATH, model_max_length=512, add_prefix_space=True))
+            return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
+                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512))
 
 
 

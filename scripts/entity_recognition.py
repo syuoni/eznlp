@@ -137,7 +137,7 @@ def collect_IE_assembly_config(args: argparse.Namespace):
         # Cased tokenizer for NER task
         bert_like, tokenizer = load_pretrained(args.bert_arch, args, cased=True)
         bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert_like, arch=args.bert_arch, 
-                                          freeze=False, use_truecase=args.bert_arch.startswith('BERT'))
+                                          freeze=False, use_truecase='cased' in os.path.basename(bert_like.name_or_path).split('-'))
     else:
         raise Exception("No sub-command specified")
         

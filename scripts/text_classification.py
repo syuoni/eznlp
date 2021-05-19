@@ -91,7 +91,7 @@ def collect_TC_assembly_config(args: argparse.Namespace):
         # Uncased tokenizer for text classification
         bert_like, tokenizer = load_pretrained(args.bert_arch, args, cased=False)
         bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert_like, arch=args.bert_arch, 
-                                          freeze=False, use_truecase=args.bert_arch.startswith('BERT'))
+                                          freeze=False, use_truecase='cased' in os.path.basename(bert_like.name_or_path).split('-'))
     else:
         raise Exception("No sub-command specified")
         
