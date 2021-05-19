@@ -51,6 +51,7 @@ Configurations of our implementation:
     * Number of epochs: 10
     * Scheduler: Learning rate warmup at the first 20% steps followed by linear decay
     * BERT/RoBERTa models are loaded with dropout rate of 0.2
+    * BERT/RoBERTa refers to BERT/RoBERTa-wwm (Cui et al., 2019)
 
 ### ChnSentiCorp
 | Model | Paper | Reported Acc. | Our Imp. Acc. | Notes |

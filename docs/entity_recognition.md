@@ -90,7 +90,8 @@ Configurations of our implementation:
     * Batch size: 48
     * Number of epochs: 50
     * Scheduler: Learning rate warmup at the first 20% steps followed by linear decay
-    * BERT/RoBERTa models are loaded with dropout rate of 0.2
+    * BERT models are loaded with dropout rate of 0.2
+    * BERT refers to BERT-wwm (Cui et al., 2019)
 
 ### MSRA (SIGHAN 2006) 
 * All experiments use testing split as development split ([SoftLexicon](https://github.com/v-mipeng/LexiconAugmentedNER/issues/3#issuecomment-634563407)). 
@@ -133,6 +134,28 @@ Configurations of our implementation:
 | FLAT + BERT + CRF           | Li et al. (2019)      | 95.86 |
 | SoftLexicon + BERT + CRF    | Ma et al. (2020)      | 96.11 |
 
+### OntoNotes v4 
+| Model | Paper | Reported F1 | Our Imp. F1 | Notes |
+|:-----:|:-----:|:-----------:|:-----------:|:-----:|
+| LSTM + CRF                  | Zhang and Yang (2018) | 64.30 |  |  |
+| Bichar + LSTM + CRF         | Zhang and Yang (2018) | 71.89 |  |  |
+| Lattice-LSTM + CRF          | Zhang and Yang (2018) | 73.88 |
+| FLAT + CRF                  | Li et al. (2019)      | 76.45 |
+| SoftLexicon + LSTM + CRF    | Ma et al. (2020)      | 75.64 |  |  | 
+| BERT + CRF                  | Ma et al. (2020)      | 77.93 |  |
+| BERT + LSTM + CRF           | Ma et al. (2020)      | 81.82 |  |
+| FLAT + BERT + CRF           | Li et al. (2019)      | 81.82 |
+| SoftLexicon + BERT + CRF    | Ma et al. (2020)      | 82.81 |
+
+### OntoNotes v5 
+| Model | Paper | Reported F1 | Our Imp. F1 | Notes |
+|:-----:|:-----:|:-----------:|:-----------:|:-----:|
+| LSTM + CRF                  |                   | -     | 73.30 | num_layers=2 |
+| Bichar + LSTM + CRF         |                   | -     | 75.36 | num_layers=2 |
+| Lattice-LSTM + CRF          | Jie and Lu (2019) | 76.67 |
+| SoftLexicon + LSTM + CRF    | Ma et al. (2020)  | -     | 76.13 | num_layers=2; Adamax (lr=2e-3) | 
+| BERT + CRF                  |                   | -     | 80.34 |
+| BERT + LSTM + CRF           |                   | -     | 80.31 |
 
 
 ## References
@@ -145,6 +168,7 @@ Configurations of our implementation:
 * Zhang, Y., and Yang, J. (2018). Chinese NER Using Lattice LSTM. *ACL 2018*.
 * Devlin, J., Chang, M. W., Lee, K., and Toutanova, K. (2018). BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding. *NAACL-HLT 2019*.
 * Liu, Y., Ott, M., Goyal, N., Du, J., Joshi, M., Chen, D., ... and Stoyanov, V. (2019). RoBERTa: A Robustly Optimized BERT Pretraining Approach. arXiv preprint arXiv:1907.11692. 
+* Jie, Z., and Lu, W. (2019). Dependency-Guided LSTM-CRF for Named Entity Recognition. *EMNLP 2019*.
 * Eberts, M., and Ulges, A. (2019). Span-based joint entity and relation extraction with Transformer pre-training. *ECAI 2020*.
 * Cui, Y., Che, W., Liu, T., Qin, B., Yang, Z., Wang, S., and Hu, G. (2019). Pre-training with whole word masking for Chinese BERT. *EMNLP 2020*. 
 * Yu, J., Bohnet, B., and Poesio, M. (2020). Named entity recognition as dependency parsing. *ACL 2020*. 
