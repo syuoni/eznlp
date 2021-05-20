@@ -43,6 +43,19 @@ Configurations of our implementation:
 
 | Model | Paper | Reported F1 | Our Imp. F1 | Notes |
 |:-----:|:-----:|:-----------:|:-----------:|:-----:|
+| BERT-large-wwm + CRF        | Devlin et al. (2018)  | - | 92.60 |
+| BERT-large-wwm + LSTM + CRF | -                     | - | 92.68 |
+| ALBERT-base + CRF           | Lan et al. (2019)     | - | 90.19 |
+| ALBERT-base + LSTM + CRF    | -                     | - | 90.39 |
+| ALBERT-xxlarge + CRF        | Lan et al. (2019)     | - | 92.30 |
+| ALBERT-xxlarge + LSTM + CRF | -                     | - | 92.46 |
+| SpanBERT-base + CRF         | Joshi et al. (2020)   | - | 92.29 |
+| SpanBERT-base + LSTM + CRF  | -                     | - | 92.27 |
+| SpanBERT-large + CRF        | Joshi et al. (2020)   | - | 93.07 |
+| SpanBERT-large + LSTM + CRF | -                     | - | 93.04 |
+
+| Model | Paper | Reported F1 | Our Imp. F1 | Notes |
+|:-----:|:-----:|:-----------:|:-----------:|:-----:|
 | SpERT (with CharLSTM + LSTM)| -                     | -             | 91.22 | num_layers=2 |
 | SpERT (with BERT-base)    | Eberts and Ulges (2019) | -             | 91.97 | 
 | SpERT (with BERT-base + LSTM) | -                   | -             | 92.62 | 
@@ -168,9 +181,11 @@ Configurations of our implementation:
 * Zhang, Y., and Yang, J. (2018). Chinese NER Using Lattice LSTM. *ACL 2018*.
 * Devlin, J., Chang, M. W., Lee, K., and Toutanova, K. (2018). BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding. *NAACL-HLT 2019*.
 * Liu, Y., Ott, M., Goyal, N., Du, J., Joshi, M., Chen, D., ... and Stoyanov, V. (2019). RoBERTa: A Robustly Optimized BERT Pretraining Approach. arXiv preprint arXiv:1907.11692. 
+* Lan, Z., Chen, M., Goodman, S., Gimpel, K., Sharma, P., and Soricut, R. (2019). ALBERT: A Lite BERT for Self-supervised Learning of Language Representations. arXiv preprint arXiv:1909.11942. 
 * Jie, Z., and Lu, W. (2019). Dependency-Guided LSTM-CRF for Named Entity Recognition. *EMNLP 2019*.
-* Eberts, M., and Ulges, A. (2019). Span-based joint entity and relation extraction with Transformer pre-training. *ECAI 2020*.
-* Cui, Y., Che, W., Liu, T., Qin, B., Yang, Z., Wang, S., and Hu, G. (2019). Pre-training with whole word masking for Chinese BERT. *EMNLP 2020*. 
-* Yu, J., Bohnet, B., and Poesio, M. (2020). Named entity recognition as dependency parsing. *ACL 2020*. 
-* Li, X., Yan, H., Qiu, X., and Huang, X. J. (2020). FLAT: Chinese NER using flat-lattice transformer. *ACL 2020*.
+* Eberts, M., and Ulges, A. (2019). Span-based Joint Entity and Relation Extraction with Transformer Pre-training. *ECAI 2020*.
+* Cui, Y., Che, W., Liu, T., Qin, B., Yang, Z., Wang, S., and Hu, G. (2019). Pre-training with Whole Word Masking for Chinese BERT. *EMNLP 2020*. 
+* Joshi, M., Chen, D., Liu, Y., Weld, D. S., Zettlemoyer, L., and Levy, O. (2020). SpanBERT: Improving Pre-training by Representing and Predicting Spans. *TACL*, 8:64-77.
+* Yu, J., Bohnet, B., and Poesio, M. (2020). Named Entity Recognition as Dependency Parsing. *ACL 2020*. 
+* Li, X., Yan, H., Qiu, X., and Huang, X. J. (2020). FLAT: Chinese NER using Flat-Lattice Transformer. *ACL 2020*.
 * Ma, R., Peng, M., Zhang, Q., Wei, Z., and Huang, X. J. (2020). Simplify the Usage of Lexicon in Chinese NER. *ACL 2020*.

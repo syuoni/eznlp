@@ -76,12 +76,12 @@ Configurations of our implementation:
 
 
 ## References
-* Zhang, X., Zhao, J., and LeCun, Y. (2015). Character-level convolutional networks for text classification. *NIPS 2015*.
-* Chen, H., Sun, M., Tu, C., Lin, Y., and Liu, Z. (2016). Neural sentiment classification with user and product attention. *EMNLP 2016*.
-* McCann, B., Bradbury, J., Xiong, C., and Socher, R. (2017). Learned in translation: Contextualized word vectors. *NIPS 2017*. 
-* Liu, P., Zhang, J., Leung, C. W. K., He, C., and Griffiths, T. L. (2018). Exploiting effective representations for Chinese sentiment analysis using a multi-channel convolutional neural network. arXiv preprint arXiv:1808.02961. 
-* Song, Y., Shi, S., Li, J., and Zhang, H. (2018). Directional skip-gram: Explicitly distinguishing left and right context for word embeddings. *NAACL-HLT 2018*.
+* Zhang, X., Zhao, J., and LeCun, Y. (2015). Character-level Convolutional Networks for Text Classification. *NIPS 2015*.
+* Chen, H., Sun, M., Tu, C., Lin, Y., and Liu, Z. (2016). Neural Sentiment Classification with User and Product Attention. *EMNLP 2016*.
+* McCann, B., Bradbury, J., Xiong, C., and Socher, R. (2017). Learned in Translation: Contextualized Word Vectors. *NIPS 2017*. 
+* Liu, P., Zhang, J., Leung, C. W. K., He, C., and Griffiths, T. L. (2018). Exploiting Effective Representations for Chinese Sentiment Analysis using a Multi-channel Convolutional Neural Network. arXiv preprint arXiv:1808.02961. 
+* Song, Y., Shi, S., Li, J., and Zhang, H. (2018). Directional Skip-gram: Explicitly Distinguishing Left and Right Context for Word Embeddings. *NAACL-HLT 2018*.
 * Devlin, J., Chang, M. W., Lee, K., and Toutanova, K. (2018). BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding. *NAACL-HLT 2019*.
 * Liu, Y., Ott, M., Goyal, N., Du, J., Joshi, M., Chen, D., ... and Stoyanov, V. (2019). RoBERTa: A Robustly Optimized BERT Pretraining Approach. arXiv preprint arXiv:1907.11692. 
-* Sun, C., Qiu, X., Xu, Y., and Huang, X. (2019). How to fine-tune BERT for text classification? *CCL 2019*.
-* Cui, Y., Che, W., Liu, T., Qin, B., Yang, Z., Wang, S., and Hu, G. (2019). Pre-training with whole word masking for Chinese BERT. *EMNLP 2020*. 
+* Sun, C., Qiu, X., Xu, Y., and Huang, X. (2019). How to Fine-tune BERT for Text Classification? *CCL 2019*.
+* Cui, Y., Che, W., Liu, T., Qin, B., Yang, Z., Wang, S., and Hu, G. (2019). Pre-training with Whole Word Masking for Chinese BERT. *EMNLP 2020*. 

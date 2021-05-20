@@ -35,7 +35,7 @@ Configurations of our implementation:
 
 
 ## References
-* Bekoulis, G., Deleu, J., Demeester, T., and Develder, C. (2018). Joint entity recognition and relation extraction as a multi-head selection problem. *Expert Systems with Applications*, 114: 34-45.
+* Bekoulis, G., Deleu, J., Demeester, T., and Develder, C. (2018). Joint Entity Recognition and Relation Extraction as a Multi-head Selection Problem. *Expert Systems with Applications*, 114: 34-45.
 * Devlin, J., Chang, M. W., Lee, K., and Toutanova, K. (2018). BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding. *NAACL-HLT 2019*.
 * Liu, Y., Ott, M., Goyal, N., Du, J., Joshi, M., Chen, D., ... and Stoyanov, V. (2019). RoBERTa: A Robustly Optimized BERT Pretraining Approach. arXiv preprint arXiv:1907.11692. 
-* Eberts, M., and Ulges, A. (2019). Span-based joint entity and relation extraction with Transformer pre-training. *ECAI 2020*.
+* Eberts, M., and Ulges, A. (2019). Span-based Joint Entity and Relation Extraction with Transformer Pre-training. *ECAI 2020*.
