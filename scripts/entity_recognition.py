@@ -211,7 +211,7 @@ if __name__ == '__main__':
     args.language = dataset2language[args.dataset]
     config = build_ER_config(args)
     
-    if args.command in ('finetune', 'ft') and args.dataset == 'SIGHAN2006':
+    if args.command in ('finetune', 'ft') and args.dataset in ('SIGHAN2006', 'yidu_s4k'):
         train_data = segment_uniformly_for_bert_like(train_data, config.bert_like.tokenizer, verbose=args.log_terminal)
         dev_data   = segment_uniformly_for_bert_like(dev_data,   config.bert_like.tokenizer, verbose=args.log_terminal)
         test_data  = segment_uniformly_for_bert_like(test_data,  config.bert_like.tokenizer, verbose=args.log_terminal)
