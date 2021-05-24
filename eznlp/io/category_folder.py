@@ -3,26 +3,23 @@ from typing import List
 import tqdm
 import glob
 
-from ..token import TokenSequence
 from .base import IO
 
 
 class CategoryFolderIO(IO):
-    """
-    An IO interface of text files in category-specific folders. 
+    """An IO interface of text files in category-specific folders. 
     
     """
     def __init__(self, 
                  categories: List[str], 
-                 mapping=None, 
                  tokenize_callback=None, 
+                 mapping=None, 
                  encoding=None, 
                  verbose: bool=True, 
-                 **kwargs):
+                 **token_kwargs):
         self.categories = categories
         self.mapping = {} if mapping is None else mapping
-        self.tokenize_callback = tokenize_callback
-        super().__init__(encoding=encoding, verbose=verbose, **kwargs)
+        super().__init__(is_tokenized=False, tokenize_callback=tokenize_callback, encoding=encoding, verbose=verbose, **token_kwargs)
         
         
     def read(self, folder_path):
@@ -35,9 +32,7 @@ class CategoryFolderIO(IO):
                 for pattern, repl in self.mapping.items():
                     raw_text = raw_text.replace(pattern, repl)
                     
-                tokens = TokenSequence.from_raw_text(raw_text, self.tokenize_callback, **self.kwargs)
+                tokens = self._build_tokens(raw_text)
                 data.append({'tokens': tokens, 'label': label})
                 
         return data
-    
-    

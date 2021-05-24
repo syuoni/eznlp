@@ -162,8 +162,7 @@ def _pipline(*normalizers):
 
 
 class Token(object):
-    """
-    A token at the modeling level (e.g., word level for English text, or character level for Chinese text). 
+    """A token at the modeling level (e.g., word level for English text, or character level for Chinese text). 
     
     `Token` provides access to lower-level attributes (prefixes, suffixes). 
     """
@@ -262,8 +261,8 @@ class Token(object):
     
     
 class TokenSequence(object):
-    """
-    A wrapper of token list, providing sequential attribute access to all tokens. 
+    """A wrapper of token list, providing sequential attribute access to all tokens. 
+    
     """
     _softword_idx2tag = ['B', 'M', 'E', 'S']
     _softword_tag2idx = {t: i for i, t in enumerate(_softword_idx2tag)}
@@ -401,6 +400,7 @@ class TokenSequence(object):
                 
     def attach_additional_tags(self, additional_tags: dict=None, additional_tok2tags: list=None):
         """
+        
         Parameters
         ----------
         additional_tags : dict of lists, optional
@@ -422,8 +422,15 @@ class TokenSequence(object):
     
     
     @classmethod
-    def from_tokenized_text(cls, tokenized_text: list, additional_tags=None, additional_tok2tags=None, 
+    def from_tokenized_text(cls, tokenized_text: List[str], additional_tags=None, additional_tok2tags=None, 
                             token_sep=" ", pad_token="<pad>", softword_none_token="<none>", **kwargs):
+        """Build `TokenSequence` from tokenized text. 
+        
+        Parameters
+        ----------
+        tokenized_text: List[str]
+            A list of tokenized text. 
+        """
         token_list = [Token(tok_text, **kwargs) for tok_text in tokenized_text]
         tokens = cls(token_list, token_sep=token_sep, pad_token=pad_token, softword_none_token=softword_none_token)
         tokens.attach_additional_tags(additional_tags=additional_tags, additional_tok2tags=additional_tok2tags)
@@ -433,8 +440,21 @@ class TokenSequence(object):
     @classmethod
     def from_raw_text(cls, raw_text: str, tokenize_callback=None, additional_tok2tags=None, 
                       token_sep=" ", pad_token="<pad>", softword_none_token="<none>", **kwargs):
-        if tokenize_callback is None:
+        """Build `TokenSequence` from raw text. 
+        
+        Parameters
+        ----------
+        raw_text: str
+            A string of raw text. 
+        tokenize_callback: `None`, str or callable
+            (1) `None`, "space": split text by space. 
+            (2) "char": split text into characters. 
+            (3) spacy.language.Language, jieba.Tokenizer.cut, jieba.Tokenizer.tokenize: split text by given tokenize method. 
+        """
+        if tokenize_callback is None or (isinstance(tokenize_callback, str) and tokenize_callback.lower().startswith('space')):
             token_list = [Token(tok_text, **kwargs) for tok_text in raw_text.split()]
+        elif isinstance(tokenize_callback, str) and tokenize_callback.lower().startswith('char'):
+            token_list = [Token(tok_text, start=k, end=k+1, **kwargs) for k, tok_text in enumerate(raw_text)]
         elif isinstance(tokenize_callback, spacy.language.Language):
             token_list = [Token(tok.text, start=tok.idx, end=tok.idx+len(tok.text), **kwargs) for tok in tokenize_callback(raw_text)]
         elif hasattr(tokenize_callback, '__self__') and isinstance(tokenize_callback.__self__, jieba.Tokenizer):
@@ -450,9 +470,9 @@ class TokenSequence(object):
         tokens = cls(token_list, token_sep=token_sep, pad_token=pad_token, softword_none_token=softword_none_token)
         tokens.attach_additional_tags(additional_tok2tags=additional_tok2tags)
         return tokens
-    
-    
-    
+
+
+
 class LexiconTokenizer(object):
     def __init__(self, lexicon: Iterable[str], max_len: int=10, return_singleton: bool=False):
         self.lexicon = set(lexicon)
@@ -466,8 +486,9 @@ class LexiconTokenizer(object):
                 word_text = text[word_start:word_end]
                 if (self.return_singleton and word_end-word_start==1) or (word_text in self.lexicon):
                     yield (word_text, word_start, word_end)
-                    
-                    
+
+
+
 def custom_spacy_tokenizer(nlp, custom_prefixes=None, custom_suffixes=None, custom_infixes=None):
     """
     References:
@@ -486,7 +507,7 @@ def custom_spacy_tokenizer(nlp, custom_prefixes=None, custom_suffixes=None, cust
         infix_finditer = nlp.tokenizer.infix_finditer
     else:
         infix_finditer = spacy.util.compile_infix_regex(tuple(list(nlp.Defaults.infixes) + custom_infixes)).finditer
-
+    
     return spacy.tokenizer.Tokenizer(nlp.vocab, 
                                      rules=nlp.tokenizer.rules,
                                      prefix_search=prefix_search, 

@@ -6,15 +6,15 @@ from eznlp.io import BratIO
 
 
 class TestBratIO(object):
-    @pytest.mark.parametrize("pre_inserted_spaces", [False, True])
-    def test_demo(self, pre_inserted_spaces):
+    @pytest.mark.parametrize("has_ins_space", [False, True])
+    def test_demo(self, has_ins_space):
         brat_io = BratIO(attr_names=['Denied', 'Analyzed'], 
-                         pre_inserted_spaces=pre_inserted_spaces, 
-                         tokenize_callback=jieba.cut, 
+                         has_ins_space=has_ins_space, 
+                         ins_space_tokenize_callback=jieba.cut if has_ins_space else None, 
                          encoding='utf-8')
         
         src_fn = "data/brat/demo.txt"
-        mark = "spaces" if pre_inserted_spaces else "nospaces"
+        mark = "spaces" if has_ins_space else "nospaces"
         trg_fn = f"data/brat/demo-write-{mark}.txt"
         data = brat_io.read(src_fn)
         brat_io.write(data, trg_fn)

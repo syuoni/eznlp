@@ -3,36 +3,36 @@ import re
 import numpy
 import pandas
 
-from ..token import TokenSequence
 from ..utils.segmentation import segment_text_with_hierarchical_seps, segment_text_uniformly
 from .base import IO
 
 
 class BratIO(IO):
-    """
-    An IO interface of brat-format files. 
+    """An IO interface of brat-format files. 
     
     Note: Only support character-based format for Chinese text. 
     """
     def __init__(self, 
+                 tokenize_callback='char', 
                  attr_names=None, 
-                 pre_inserted_spaces=True, 
-                 tokenize_callback=None, 
+                 has_ins_space: bool=False, 
+                 ins_space_tokenize_callback=None, 
                  max_len=500, 
                  encoding=None, 
                  verbose: bool=True, 
-                 **kwargs):
+                 **token_kwargs):
         self.attr_names = [] if attr_names is None else attr_names
-        self.pre_inserted_spaces = pre_inserted_spaces
-        self.tokenize_callback = tokenize_callback
+        self.has_ins_space = has_ins_space
+        self.ins_space_tokenize_callback = ins_space_tokenize_callback
+        assert not (self.has_ins_space and self.ins_space_tokenize_callback is None)
+        
         self.max_len = max_len
-        self.kwargs = kwargs
         self.line_sep = "\r\n"
         self.sentence_seps = ["。"]
         self.phrase_seps = ["；", "，", ";", ","]
         self.attr_sep = "<a>"
         self.inserted_mark = "😀"
-        super().__init__(encoding=encoding, verbose=verbose, **kwargs)
+        super().__init__(is_tokenized=False, tokenize_callback=tokenize_callback, encoding=encoding, verbose=verbose, **token_kwargs)
         
         
     def _parse_chunk_ann(self, ann):
@@ -84,7 +84,7 @@ class BratIO(IO):
         
         text, text_chunks = self._clean_text_chunks(text, text_chunks)
         self._check_text_chunks(text, text_chunks)
-        if self.pre_inserted_spaces:
+        if self.has_ins_space:
             text, text_chunks = self._remove_pre_inserted_spaces(text, text_chunks)    
             self._check_text_chunks(text, text_chunks)
         
@@ -120,7 +120,7 @@ class BratIO(IO):
             chunk_end = chunk_end_in_text - line_start
             chunks.append((chunk_type, chunk_start, chunk_end))
             
-        return {'tokens': TokenSequence.from_tokenized_text(list(text[line_start:line_end]), **self.kwargs),
+        return {'tokens': self._build_tokens(text[line_start:line_end], **self.token_kwargs),
                 'chunks': chunks}
         
     def _remove_pre_inserted_spaces(self, text: str, text_chunks: dict):
@@ -195,7 +195,7 @@ class BratIO(IO):
         
         text, text_chunks = self._clean_text_chunks(text, text_chunks)
         self._check_text_chunks(text, text_chunks)
-        if self.pre_inserted_spaces:
+        if self.has_ins_space:
             text, text_chunks = self._insert_spaces(text, text_chunks)
             self._check_text_chunks(text, text_chunks)
             
@@ -223,7 +223,7 @@ class BratIO(IO):
             
     def _tokenize_and_rejoin(self, text: str):
         tokenized = []
-        for tok in self.tokenize_callback(text):
+        for tok in self.ins_space_tokenize_callback(text):
             if (not re.fullmatch("\s+", tok)) and (len(tokenized) > 0):
                 tokenized.append(self.inserted_mark)
             tokenized.append(tok)

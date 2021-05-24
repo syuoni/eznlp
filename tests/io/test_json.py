@@ -83,6 +83,36 @@ class TestJsonIO(object):
         
         assert any(detect_nested(ex['chunks']) for ex in data)
         assert all(filter_clashed_by_priority(ex['chunks'], allow_nested=True) == ex['chunks'] for ex in data)
+        
+        
+    def test_yidu_s4k(self):
+        io = JsonIO(is_tokenized=False, 
+                    tokenize_callback='char', 
+                    text_key='originalText', 
+                    chunk_key='entities', 
+                    chunk_type_key='label_type', 
+                    chunk_start_key='start_pos', 
+                    chunk_end_key='end_pos', 
+                    is_whole_piece=False, 
+                    encoding='utf-8-sig')
+        train_data1, train_errors1, train_mismatches1 = io.read("data/yidu_s4k/subtask1_training_part1.txt", return_errors=True)
+        train_data2, train_errors2, train_mismatches2 = io.read("data/yidu_s4k/subtask1_training_part2.txt", return_errors=True)
+        train_data,  train_errors,  train_mismatches  = (train_data1 + train_data2, 
+                                                         train_errors1 + train_errors2, 
+                                                         train_mismatches1 + train_mismatches2)
+        test_data,   test_errors,   test_mismatches   = io.read("data/yidu_s4k/subtask1_test_set_with_answer.json", return_errors=True)
+        
+        assert len(train_data) == 1_000
+        assert sum(len(ex['chunks']) for ex in train_data) == 17_653
+        assert len(train_errors) == 0
+        assert len(train_mismatches) == 0
+        assert len(test_data) == 379
+        assert sum(len(ex['chunks']) for ex in test_data) == 6_002
+        assert len(test_errors) == 0
+        assert len(test_mismatches) == 0
+        
+        assert not any(detect_nested(ex['chunks']) for data in [train_data, test_data] for ex in data)
+        assert all(filter_clashed_by_priority(ex['chunks'], allow_nested=False) == ex['chunks'] for data in [train_data, test_data] for ex in data)
 
 
 
