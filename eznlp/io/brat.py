@@ -164,7 +164,7 @@ class BratIO(IO):
             curr_text = text[span_start_in_text:span_end_in_text]
             
             if len(curr_text.strip()) > 0:
-                tokens = self._build_tokens(curr_text, **self.token_kwargs)
+                tokens = self._build_tokens(curr_text)
                 curr_text_chunks = {chunk_id: (chunk_type, chunk_start_in_text-span_start_in_text, chunk_end_in_text-span_start_in_text, chunk_text) 
                                         for chunk_id, (chunk_type, chunk_start_in_text, chunk_end_in_text, chunk_text) in text_chunks.items() 
                                         if span_start_in_text <= chunk_start_in_text and chunk_end_in_text <= span_end_in_text}
