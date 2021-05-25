@@ -5,6 +5,7 @@ from eznlp.utils.chunk import detect_nested, filter_clashed_by_priority
 
 class TestJsonIO(object):
     """
+    
     References
     ----------
     [1] Eberts and Ulges. 2019. Span-based joint entity and relation extraction with Transformer pre-training. ECAI 2020.

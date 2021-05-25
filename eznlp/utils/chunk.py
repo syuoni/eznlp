@@ -60,7 +60,7 @@ class TextChunksTranslator(object):
         self.mapping = {'\s': ' ', '[-–]': '-'}
         
         
-    def text_chunks2chunks(self, text_chunks: List[tuple], tokens: TokenSequence, raw_text: str=None):
+    def text_chunks2chunks(self, text_chunks: List[tuple], tokens: TokenSequence, raw_text: str=None, place_none_for_errors: bool=False):
         text_starts, text_ends = tokens.start, tokens.end
         
         chunks = []
@@ -85,6 +85,8 @@ class TextChunksTranslator(object):
                             chunk_start_in_text = chunk_end_in_text - len(chunk_text)
                         else:
                             errors.append((chunk_text, raw_text[chunk_start_in_text:chunk_end_in_text]))
+                            if place_none_for_errors:
+                                chunks.append(None)
                             continue
             
             # Mis-matched data
@@ -102,12 +104,15 @@ class TextChunksTranslator(object):
                 chunks.append((chunk_type, chunk_start, chunk_end_m1+1))
                 
             # If it is almost found... 
-            if (not find_start) and find_end and (chunk_start_in_text - text_starts[chunk_start-1] <= self.mismatch_tol):
+            elif (not find_start) and find_end and (chunk_start_in_text - text_starts[chunk_start-1] <= self.mismatch_tol):
                 chunk_start = chunk_start - 1
                 chunks.append((chunk_type, chunk_start, chunk_end_m1+1))
                 
-            if find_start and (not find_end) and (text_ends[chunk_end_m1] - chunk_end_in_text <= self.mismatch_tol):
+            elif find_start and (not find_end) and (text_ends[chunk_end_m1] - chunk_end_in_text <= self.mismatch_tol):
                 chunks.append((chunk_type, chunk_start, chunk_end_m1+1))
+                
+            elif place_none_for_errors:
+                chunks.append(None)
         
         return chunks, errors, mismatches
         

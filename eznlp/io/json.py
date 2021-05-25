@@ -80,21 +80,21 @@ class JsonIO(IO):
                 if self.chunk_text_key is not None:
                     chunks = [(*ck, chunk[self.chunk_text_key]) for ck, chunk in zip(chunks, raw_entry[self.chunk_key])]
                 
-                chunks, curr_errors, curr_mismatches = self.text_translator.text_chunks2chunks(chunks, tokens, raw_entry[self.text_key])
+                chunks, curr_errors, curr_mismatches = self.text_translator.text_chunks2chunks(chunks, tokens, raw_entry[self.text_key], place_none_for_errors=True)
                 errors.extend(curr_errors)
                 mismatches.extend(curr_mismatches)
             
             if self.drop_duplicated:
                 chunks = _filter_duplicated(chunks)
             
-            data_entry = {'tokens': tokens, 'chunks': chunks}
+            data_entry = {'tokens': tokens, 'chunks': [ck for ck in chunks if ck is not None]}
             
             if self.relation_key is not None:
                 relations = [(rel[self.relation_type_key], 
                               chunks[rel[self.relation_head_key]], 
                               chunks[rel[self.relation_tail_key]]) for rel in raw_entry[self.relation_key]]
                 relations = _filter_duplicated(relations) if self.drop_duplicated else relations
-                data_entry.update({'relations': relations})
+                data_entry.update({'relations': [(rel_type, head, tail) for rel_type, head, tail in relations if head is not None and tail is not None]})
                 
             data.append(data_entry)
             
