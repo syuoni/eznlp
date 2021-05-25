@@ -14,7 +14,7 @@ import flair
 
 from eznlp.token import LexiconTokenizer
 from eznlp.vectors import Vectors
-from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO
+from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO, BratIO
 from eznlp.training import Trainer
 from eznlp.training.utils import LRLambda
 from eznlp.training.utils import collect_params, check_param_groups
@@ -121,6 +121,7 @@ dataset2language = {'conll2003': 'English',
                     'SIGHAN2006': 'Chinese', 
                     'conll2012_zh': 'Chinese', 
                     'yidu_s4k': 'Chinese', 
+                    'CLERD': 'Chinese', 
                     'yelp2013': 'English', 
                     'imdb': 'English', 
                     'yelp_full': 'English', 
@@ -193,6 +194,13 @@ def load_data(args: argparse.Namespace):
         train_data = io.read("data/yidu_s4k/subtask1_training_part1.txt") + io.read("data/yidu_s4k/subtask1_training_part2.txt")
         test_data  = io.read("data/yidu_s4k/subtask1_test_set_with_answer.json")
         train_data, dev_data = sklearn.model_selection.train_test_split(train_data, test_size=0.2, random_state=args.seed)
+        
+    elif args.dataset == 'CLERD':
+        io = BratIO(tokenize_callback='char', has_ins_space=False, parse_attrs=False, parse_relations=True, 
+                    max_len=500, line_sep="\n", allow_broken_chunk_text=True, encoding='utf-8', token_sep="", pad_token="")
+        train_data = io.read_folder("data/CLERD/relation_extraction/Training")
+        dev_data   = io.read_folder("data/CLERD/relation_extraction/Validation")
+        test_data  = io.read_folder("data/CLERD/relation_extraction/Testing")
         
     elif args.dataset == 'yelp2013':
         tabular_io = TabularIO(text_col_id=3, label_col_id=2, sep="\t\t", mapping={"<sssss>": "\n"}, encoding='utf-8', verbose=args.log_terminal, 
