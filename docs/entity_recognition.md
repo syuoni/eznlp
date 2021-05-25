@@ -170,6 +170,15 @@ Configurations of our implementation:
 | BERT + CRF                  |                   | -     | 80.34 |
 | BERT + LSTM + CRF           |                   | -     | 80.31 |
 
+# Yidu S4K (CCKS 2019)
+| Model | Paper | Reported F1 | Our Imp. F1 | Notes |
+|:-----:|:-----:|:-----------:|:-----------:|:-----:|
+| LSTM + CRF                  |                                                | -     | 80.43 | num_layers=2 |
+| Bichar + LSTM + CRF         | [DeepIE](https://github.com/loujie0822/DeepIE) | 81.76 | 81.04 | num_layers=2 |
+| SoftLexicon + LSTM + CRF    | [DeepIE](https://github.com/loujie0822/DeepIE) | 82.76 | 82.70 | num_layers=2; Adamax (lr=2e-3) | 
+| BERT + CRF                  | [DeepIE](https://github.com/loujie0822/DeepIE) | 83.49 | 82.97 |
+| BERT + LSTM + CRF           |                                                | -     | 82.94 |
+
 
 ## References
 * Lample, G., Ballesteros, M., Subramanian, S., Kawakami, K., and Dyer, C. (2016). Neural Architectures for Named Entity Recognition. *NAACL-HLT 2016*.
