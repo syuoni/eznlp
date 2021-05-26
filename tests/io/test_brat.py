@@ -15,20 +15,25 @@ class TestBratIO(object):
     def test_clerd(self):
         self.io = BratIO(tokenize_callback='char', has_ins_space=False, parse_attrs=False, parse_relations=True, 
                          max_len=500, line_sep="\n", allow_broken_chunk_text=True, consistency_mapping={'[・;é]': '、'}, encoding='utf-8')
-        train_data = self.io.read_folder("data/CLERD/relation_extraction/Training")
-        dev_data   = self.io.read_folder("data/CLERD/relation_extraction/Validation")
-        test_data  = self.io.read_folder("data/CLERD/relation_extraction/Testing")
+        train_data, train_errors, train_mismatches = self.io.read_folder("data/CLERD/relation_extraction/Training", return_errors=True)
+        dev_data,   dev_errors,   dev_mismatches   = self.io.read_folder("data/CLERD/relation_extraction/Validation", return_errors=True)
+        test_data,  test_errors,  test_mismatches  = self.io.read_folder("data/CLERD/relation_extraction/Testing", return_errors=True)
         
         assert len(train_data) == 2_820
         assert sum(len(ex['chunks']) for ex in train_data) == 124_712
         assert sum(len(ex['relations']) for ex in train_data) == 13_135
+        assert len(train_errors) == 2
+        assert len(train_mismatches) == 0
         assert len(dev_data) == 264
         assert sum(len(ex['chunks']) for ex in dev_data) == 11_899
         assert sum(len(ex['relations']) for ex in dev_data) == 1_319
+        assert len(dev_errors) == 0
+        assert len(dev_mismatches) == 0
         assert len(test_data) == 367
         assert sum(len(ex['chunks']) for ex in test_data) == 16_780
         assert sum(len(ex['relations']) for ex in test_data) == 1_636
-
+        assert len(test_errors) == 0
+        assert len(test_mismatches) == 0
 
 
 
