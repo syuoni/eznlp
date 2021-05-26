@@ -4,3 +4,4 @@ from .category_folder import CategoryFolderIO
 from .conll import ConllIO
 from .brat import BratIO
 from .json import JsonIO, SQuADIO
+from .processing import PostIO

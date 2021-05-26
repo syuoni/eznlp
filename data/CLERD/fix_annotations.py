@@ -12,7 +12,7 @@ for folder_name in ['ner', 'relation_extraction']:
 
 
 
-def make_repl(offset: int=0, offset_start: int=0):
+def _make_repl(offset: int=0, offset_start: int=0):
     def repl(x):
         x_str = x.group()
         x_int = int(x_str)
@@ -32,7 +32,7 @@ for file_path, offset, offset_start in [("relation_extraction/Training/1122.txt"
                                         ("relation_extraction/Training/898.txt", -1, 2993), # Two fixes on this file
                                         ("relation_extraction/Training/905.txt", -1, 2511), 
                                         ("relation_extraction/Training/907.txt", -1, 2992)]:
-    repl = make_repl(offset, offset_start)
+    repl = _make_repl(offset, offset_start)
     
     with open(file_path.replace('.txt', '.ann'), 'r', encoding='utf-8') as f:
         anns = f.readlines()

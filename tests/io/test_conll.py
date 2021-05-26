@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
+from collections import Counter
 import pytest
 import numpy
 
-from eznlp.io import ConllIO
+from eznlp.io import ConllIO, PostIO
 
 
 class TestConllIO(object):
@@ -169,3 +170,13 @@ class TestConllIO(object):
         assert sum(len(ex['chunks']) for ex in dev_data) == 10_571
         assert len(test_data) == 2_837
         assert sum(len(ex['chunks']) for ex in test_data) == 16_186
+        
+        # Check post-IO processing
+        data = train_data + dev_data + test_data
+        ck_counter = Counter(ck[0] for entry in data for ck in entry['chunks'])
+        
+        post_io = PostIO(chunk_type_mapping=lambda x: x.title() if x not in ('Physical', 'Term') else None)
+        data = post_io.process(data)
+        post_ck_counter = Counter(ck[0] for entry in data for ck in entry['chunks'])
+        assert len(post_ck_counter) == 7
+        assert sum(ck_counter.values()) - sum(post_ck_counter.values()) == 94
