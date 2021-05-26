@@ -14,20 +14,20 @@ class TestBratIO(object):
     """
     def test_clerd(self):
         self.io = BratIO(tokenize_callback='char', has_ins_space=False, parse_attrs=False, parse_relations=True, 
-                         max_len=500, line_sep="\n", allow_broken_chunk_text=True, encoding='utf-8')
+                         max_len=500, line_sep="\n", allow_broken_chunk_text=True, consistency_mapping={'[・;é]': '、'}, encoding='utf-8')
         train_data = self.io.read_folder("data/CLERD/relation_extraction/Training")
         dev_data   = self.io.read_folder("data/CLERD/relation_extraction/Validation")
         test_data  = self.io.read_folder("data/CLERD/relation_extraction/Testing")
         
         assert len(train_data) == 2_820
-        assert sum(len(ex['chunks']) for ex in train_data) == 122_813
-        assert sum(len(ex['relations']) for ex in train_data) == 12_936
+        assert sum(len(ex['chunks']) for ex in train_data) == 124_712
+        assert sum(len(ex['relations']) for ex in train_data) == 13_135
         assert len(dev_data) == 264
-        assert sum(len(ex['chunks']) for ex in dev_data) == 11_896
-        assert sum(len(ex['relations']) for ex in dev_data) == 1_318
+        assert sum(len(ex['chunks']) for ex in dev_data) == 11_899
+        assert sum(len(ex['relations']) for ex in dev_data) == 1_319
         assert len(test_data) == 367
-        assert sum(len(ex['chunks']) for ex in test_data) == 16_771
-        assert sum(len(ex['relations']) for ex in test_data) == 1_634
+        assert sum(len(ex['chunks']) for ex in test_data) == 16_780
+        assert sum(len(ex['relations']) for ex in test_data) == 1_636
 
 
 

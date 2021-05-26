@@ -99,7 +99,7 @@ class JsonIO(IO):
             data.append(data_entry)
             
         if len(errors) > 0 or len(mismatches) > 0:
-            logger.info(f"{len(errors)} errors and {len(mismatches)} mismatches detected during parsing...")
+            logger.warning(f"{len(errors)} errors and {len(mismatches)} mismatches detected during parsing {file_path}")
         
         if return_errors:
             return data, errors, mismatches
@@ -145,7 +145,7 @@ class SQuADIO(IO):
                                  'answers': answers})
         
         if len(errors) > 0 or len(mismatches) > 0:
-            logger.info(f"{len(errors)} errors and {len(mismatches)} mismatches detected during parsing...")
+            logger.warning(f"{len(errors)} errors and {len(mismatches)} mismatches detected during parsing {file_path}")
         
         if return_errors:
             return data, errors, mismatches

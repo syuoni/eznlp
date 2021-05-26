@@ -55,9 +55,20 @@ class TextChunksTranslator(object):
     raw_text : str
         The raw text. 
     """
-    def __init__(self, mismatch_tol: int=2):
+    def __init__(self, mismatch_tol: int=2, consistency_mapping: dict=None):
         self.mismatch_tol = mismatch_tol
-        self.mapping = {'\s': ' ', '[-–]': '-'}
+        self.consistency_mapping = {'\s': ' '} 
+        if consistency_mapping is not None:
+            self.consistency_mapping.update(consistency_mapping)
+        
+    def is_consistency(self, text: str, gold_text: str):
+        if text == gold_text:
+            return True
+        
+        for pattern, repl in self.consistency_mapping.items():
+            text = re.sub(pattern, repl, text)
+            gold_text = re.sub(pattern, repl, gold_text)
+        return text == gold_text
         
         
     def text_chunks2chunks(self, text_chunks: List[tuple], tokens: TokenSequence, raw_text: str=None, place_none_for_errors: bool=False):
@@ -73,21 +84,16 @@ class TextChunksTranslator(object):
                 chunk_text = possible_chunk_text[0]
                 
                 # Error data
-                if chunk_text != raw_text[chunk_start_in_text:chunk_end_in_text]:
-                    for pattern, repl in self.mapping.items():
-                        if re.sub(pattern, repl, chunk_text) == re.sub(pattern, repl, raw_text[chunk_start_in_text:chunk_end_in_text]):
-                            break
-                        
+                if not self.is_consistency(chunk_text, raw_text[chunk_start_in_text:chunk_end_in_text]):
+                    if self.is_consistency(chunk_text, raw_text[chunk_start_in_text:chunk_start_in_text+len(chunk_text)]):
+                        chunk_end_in_text = chunk_start_in_text + len(chunk_text)
+                    elif self.is_consistency(chunk_text, raw_text[chunk_end_in_text-len(chunk_text):chunk_end_in_text]):
+                        chunk_start_in_text = chunk_end_in_text - len(chunk_text)
                     else:
-                        if chunk_text == raw_text[chunk_start_in_text:chunk_start_in_text+len(chunk_text)]:
-                            chunk_end_in_text = chunk_start_in_text + len(chunk_text)
-                        elif chunk_text == raw_text[chunk_end_in_text-len(chunk_text):chunk_end_in_text]:
-                            chunk_start_in_text = chunk_end_in_text - len(chunk_text)
-                        else:
-                            errors.append((chunk_text, raw_text[chunk_start_in_text:chunk_end_in_text]))
-                            if place_none_for_errors:
-                                chunks.append(None)
-                            continue
+                        errors.append((chunk_text, raw_text[chunk_start_in_text:chunk_end_in_text]))
+                        if place_none_for_errors:
+                            chunks.append(None)
+                        continue
             
             # Mis-matched data
             if not find_start:

@@ -28,6 +28,7 @@ class BratIO(IO):
                  sentence_seps=None, 
                  phrase_seps=None, 
                  allow_broken_chunk_text: bool=False, 
+                 consistency_mapping: dict=None, 
                  encoding=None, 
                  verbose: bool=True, 
                  **token_kwargs):
@@ -44,10 +45,11 @@ class BratIO(IO):
         self.sentence_seps = ["。"] if sentence_seps is None else sentence_seps
         self.phrase_seps = ["；", "，", ";", ","] if phrase_seps is None else phrase_seps
         self.hie_seps = [[self.line_sep], self.sentence_seps, self.phrase_seps]
+        
         self.allow_broken_chunk_text = allow_broken_chunk_text
         
         super().__init__(is_tokenized=False, tokenize_callback=tokenize_callback, encoding=encoding, verbose=verbose, **token_kwargs)
-        self.text_translator = TextChunksTranslator()
+        self.text_translator = TextChunksTranslator(consistency_mapping=consistency_mapping)
         
         
     def _parse_text_chunk_ann(self, ann: str):
@@ -88,12 +90,14 @@ class BratIO(IO):
         # Check chunk-text consistenty
         for chunk_id, text_chunk in text_chunks.items():
             chunk_type, chunk_start_in_text, chunk_end_in_text, chunk_text = text_chunk
-            chunk_text_consistency = re.sub('\s', ' ', text[chunk_start_in_text:chunk_end_in_text]) == re.sub('\s', ' ', chunk_text)
+            chunk_text_retr = text[chunk_start_in_text:chunk_end_in_text]
+            
             if self.allow_broken_chunk_text:
-                if not chunk_text_consistency:
-                    logger.warning(f"Inconsistent chunk text detected: {text[chunk_start_in_text:chunk_end_in_text]} vs. {chunk_text}")
+                if not self.text_translator.is_consistency(chunk_text, chunk_text_retr):
+                    logger.warning(f"Inconsistent chunk text detected: {chunk_text} vs. {chunk_text_retr}")
             else:
-                assert chunk_text_consistency
+                assert self.text_translator.is_consistency(chunk_text, chunk_text_retr)
+        
         
     def _clean_text_chunks(self, text: str, text_chunks: dict):
         # Replace `"\t"` with `" "`
@@ -119,7 +123,7 @@ class BratIO(IO):
                 new_anns.append(ann)
             else:
                 assert new_anns[-1].startswith('T')
-                logger.warning(f"Fixed ann: {new_anns[-1]} <- {ann}")
+                logger.info(f"Fixing annotation: {new_anns[-1].strip()} <- {ann.strip()}")
                 
                 chunk_id, (chunk_type, chunk_start_in_text, chunk_end_in_text, chunk_text) = self._parse_text_chunk_ann(new_anns[-1] + ann)
                 chunk_end_in_text = chunk_start_in_text + len(chunk_text)
@@ -194,7 +198,7 @@ class BratIO(IO):
                 data.append(data_entry)
                 
         if len(errors) > 0 or len(mismatches) > 0:
-            logger.info(f"{len(errors)} errors and {len(mismatches)} mismatches detected during parsing...")
+            logger.warning(f"{len(errors)} errors and {len(mismatches)} mismatches detected during parsing {file_path}")
         
         if return_errors:
             return data, errors, mismatches
@@ -202,16 +206,24 @@ class BratIO(IO):
             return data
         
         
-    def read_files(self, file_paths):
+    def read_files(self, file_paths, return_errors: bool=False):
         data = []
+        errors, mismatches = [], []
         for file_path in file_paths:
-            curr_data = self.read(file_path)
+            curr_data, curr_errors, curr_mismatches = self.read(file_path, return_errors=True)
             data.extend(curr_data)
-        return data
+            errors.extend(curr_errors)
+            mismatches.extend(curr_mismatches)
+            
+        if return_errors:
+            return data, errors, mismatches
+        else:
+            return data
         
-    def read_folder(self, folder_path):
+        
+    def read_folder(self, folder_path, return_errors: bool=False):
         file_paths = [file_path for file_path in glob.iglob(f"{folder_path}/*.txt") if os.path.exists(file_path.replace('.txt', '.ann'))]
-        return self.read_files(file_paths)
+        return self.read_files(file_paths, return_errors=return_errors)
         
         
     def write(self, data: List[dict], file_path):
