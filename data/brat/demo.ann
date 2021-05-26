@@ -1,0 +1,34 @@
+T1	Symptom 24 29	右侧 胸痛
+T2	Symptom 44 49	轻度 胸闷
+T3	Symptom 55 60	咳嗽 咳痰
+T4	Symptom 77 81	无 咯血
+A2	Denied T4
+T5	Symptom 84 91	无 头痛 头晕
+A3	Denied T5
+T6	Symptom 94 98	无 恶心
+A4	Denied T6
+T7	Symptom 101 103	呕吐
+A5	Denied T7
+T8	Symptom 106 110	无 腹痛
+A6	Denied T8
+T9	Symptom 113 115	腹胀
+A7	Denied T9
+A8	Analyzed T9
+T10	Test 146 154	胸部 CT 平扫
+T11	Test 194 199	胸部 CT
+T12	Test_Res_Abnorm 204 219	VP - RADS   2 类
+T13	Test_Res_Abnorm 222 237	两肺 部分 支气管 轻度 扩张
+T14	Test_Res_Abnorm 240 270	两肺 多发 感染 ， 部分 较前 吸收 ， 部分 明显 进展
+T15	Test 274 280	急诊 血常规
+T16	Test_Res 282 308	白细胞 计数： 6.6   * 10 ^ 9 / L
+T17	Test_Res 311 331	中性 粒细胞 分类： 59.50   %
+T18	Test_Res 334 349	淋巴细胞 分类： 34.80%
+T19	Test_Res 352 376	红细胞 计数： 4.52 * 10 ^ 12 /
+T20	Test_Res 379 393	血红蛋白： 139g / l
+T21	Test_Res 396 420	血小板 计数： 247 * 10 ^ 9 / L
+T22	Test_Res 423 457	C 反应 蛋白   2.5   0.0 － 8.0   mg / L
+T23	Disease_Syndrome 487 499	支气管 扩张 ( 症 )
+T24	Disease_Syndrome 580 587	青霉素 过敏史
+A9	Analyzed T23
+A10	Analyzed T24
+T25	Check_Mark 0 2	患者

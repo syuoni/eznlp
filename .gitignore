@@ -132,5 +132,6 @@ dmypy.json
 /data/*
 !/data/*/
 /data/*/*
-
+!/data/*/demo.*
+!/data/conlleval/*.txt
 !/data/*/fix_*.py
