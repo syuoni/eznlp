@@ -207,9 +207,9 @@ def load_data(args: argparse.Namespace):
         post_io = PostIO(max_span_size=20, 
                          chunk_type_mapping=lambda x: x.split('-')[0] if x not in ('Physical', 'Term') else None, 
                          relation_type_mapping=lambda x: x if x not in ('Coreference', ) else None)
-        train_data = post_io.process(train_data)
-        dev_data   = post_io.process(dev_data)
-        test_data  = post_io.process(test_data)
+        train_data = post_io.map_process(train_data)
+        dev_data   = post_io.map_process(dev_data)
+        test_data  = post_io.map_process(test_data)
         
     elif args.dataset == 'yelp2013':
         tabular_io = TabularIO(text_col_id=3, label_col_id=2, sep="\t\t", mapping={"<sssss>": "\n"}, encoding='utf-8', verbose=args.log_terminal, 

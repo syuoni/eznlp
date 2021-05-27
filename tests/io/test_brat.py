@@ -46,7 +46,7 @@ class TestBratIO(object):
         post_io = PostIO(max_span_size=20, 
                          chunk_type_mapping=lambda x: x.split('-')[0] if x not in ('Physical', 'Term') else None, 
                          relation_type_mapping=lambda x: x if x not in ('Coreference', ) else None)
-        data = post_io.process(data)
+        data = post_io.map_process(data)
         
         post_ck_counter = Counter(ck[0] for entry in data for ck in entry['chunks'])
         post_rel_counter = Counter(rel[0] for entry in data for rel in entry['relations'])
