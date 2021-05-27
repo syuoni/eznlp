@@ -15,6 +15,7 @@ import flair
 from eznlp.token import LexiconTokenizer
 from eznlp.vectors import Vectors
 from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO, BratIO
+from eznlp.io import PostIO
 from eznlp.training import Trainer
 from eznlp.training.utils import LRLambda
 from eznlp.training.utils import collect_params, check_param_groups
@@ -197,10 +198,18 @@ def load_data(args: argparse.Namespace):
         
     elif args.dataset == 'CLERD':
         io = BratIO(tokenize_callback='char', has_ins_space=False, parse_attrs=False, parse_relations=True, 
-                    max_len=500, line_sep="\n", allow_broken_chunk_text=True, encoding='utf-8', token_sep="", pad_token="")
+                    max_len=500, line_sep="\n", allow_broken_chunk_text=True, consistency_mapping={'[・;é]': '、'}, 
+                    encoding='utf-8', token_sep="", pad_token="")
         train_data = io.read_folder("data/CLERD/relation_extraction/Training")
         dev_data   = io.read_folder("data/CLERD/relation_extraction/Validation")
         test_data  = io.read_folder("data/CLERD/relation_extraction/Testing")
+        
+        post_io = PostIO(max_span_size=20, 
+                         chunk_type_mapping=lambda x: x.split('-')[0] if x not in ('Physical', 'Term') else None, 
+                         relation_type_mapping=lambda x: x if x not in ('Coreference', ) else None)
+        train_data = post_io.process(train_data)
+        dev_data   = post_io.process(dev_data)
+        test_data  = post_io.process(test_data)
         
     elif args.dataset == 'yelp2013':
         tabular_io = TabularIO(text_col_id=3, label_col_id=2, sep="\t\t", mapping={"<sssss>": "\n"}, encoding='utf-8', verbose=args.log_terminal, 

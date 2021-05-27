@@ -24,6 +24,7 @@ from eznlp.vectors import Vectors, GloVe, Senna
 from eznlp.wrapper import Batch
 
 from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, BratIO, JsonIO, SQuADIO
+from eznlp.io import PostIO
 
 from eznlp.dataset import Dataset
 
