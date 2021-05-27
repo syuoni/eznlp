@@ -174,9 +174,13 @@ class TestConllIO(object):
         # Check post-IO processing
         data = train_data + dev_data + test_data
         ck_counter = Counter(ck[0] for entry in data for ck in entry['chunks'])
+        assert max(ck[2]-ck[1] for entry in data for ck in entry['chunks']) == 315
         
-        post_io = PostIO(chunk_type_mapping=lambda x: x.title() if x not in ('Physical', 'Term') else None)
+        post_io = PostIO(max_span_size=20, 
+                         chunk_type_mapping=lambda x: x.title() if x not in ('Physical', 'Term') else None)
         data = post_io.process(data)
+        
         post_ck_counter = Counter(ck[0] for entry in data for ck in entry['chunks'])
+        assert max(ck[2]-ck[1] for entry in data for ck in entry['chunks']) == 20
         assert len(post_ck_counter) == 7
-        assert sum(ck_counter.values()) - sum(post_ck_counter.values()) == 94
+        assert sum(ck_counter.values()) - sum(post_ck_counter.values()) == 154

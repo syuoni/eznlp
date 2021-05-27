@@ -15,7 +15,7 @@ class TestBratIO(object):
     """
     def test_clerd(self):
         io = BratIO(tokenize_callback='char', has_ins_space=False, parse_attrs=False, parse_relations=True, 
-                         max_len=500, line_sep="\n", allow_broken_chunk_text=True, consistency_mapping={'[・;é]': '、'}, encoding='utf-8')
+                    max_len=500, line_sep="\n", allow_broken_chunk_text=True, consistency_mapping={'[・;é]': '、'}, encoding='utf-8')
         train_data, train_errors, train_mismatches = io.read_folder("data/CLERD/relation_extraction/Training", return_errors=True)
         dev_data,   dev_errors,   dev_mismatches   = io.read_folder("data/CLERD/relation_extraction/Validation", return_errors=True)
         test_data,  test_errors,  test_mismatches  = io.read_folder("data/CLERD/relation_extraction/Testing", return_errors=True)
@@ -41,19 +41,23 @@ class TestBratIO(object):
         ck_counter = Counter(ck[0] for entry in data for ck in entry['chunks'])
         rel_counter = Counter(rel[0] for entry in data for rel in entry['relations'])
         rel_ck_counter = Counter(ck[0] for entry in data for rel in entry['relations'] for ck in rel[1:])
+        assert max(ck[2]-ck[1] for entry in data for ck in entry['chunks']) == 205
         
-        post_io = PostIO(chunk_type_mapping=lambda x: x.split('-')[0] if x not in ('Physical', 'Term') else None, 
+        post_io = PostIO(max_span_size=20, 
+                         chunk_type_mapping=lambda x: x.split('-')[0] if x not in ('Physical', 'Term') else None, 
                          relation_type_mapping=lambda x: x if x not in ('Coreference', ) else None)
         data = post_io.process(data)
+        
         post_ck_counter = Counter(ck[0] for entry in data for ck in entry['chunks'])
         post_rel_counter = Counter(rel[0] for entry in data for rel in entry['relations'])
         post_rel_ck_counter = Counter(ck[0] for entry in data for rel in entry['relations'] for ck in rel[1:])
+        assert max(ck[2]-ck[1] for entry in data for ck in entry['chunks']) == 20
         assert len(post_ck_counter) == 7
-        assert sum(ck_counter.values()) - sum(post_ck_counter.values()) == 95
+        assert sum(ck_counter.values()) - sum(post_ck_counter.values()) == 398
         assert len(post_rel_counter) == 9
-        assert sum(rel_counter.values()) - sum(post_rel_counter.values()) == 2
+        assert sum(rel_counter.values()) - sum(post_rel_counter.values()) == 91
         assert len(post_rel_ck_counter) == 4
-        assert sum(rel_ck_counter.values()) - sum(post_rel_ck_counter.values()) == 4
+        assert sum(rel_ck_counter.values()) - sum(post_rel_ck_counter.values()) == 182
 
 
 
