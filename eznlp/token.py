@@ -191,8 +191,11 @@ class Token(object):
         
         for k, v in kwargs.items():
             setattr(self, k, v)
-            
-            
+        
+
+    def __eq__(self, other):
+        return isinstance(other, Token) and self.raw_text == other.raw_text and self.text == other.text
+        
     def __len__(self):
         return len(self.raw_text)
     
@@ -267,11 +270,11 @@ class TokenSequence(object):
     _softword_idx2tag = ['B', 'M', 'E', 'S']
     _softword_tag2idx = {t: i for i, t in enumerate(_softword_idx2tag)}
     
-    def __init__(self, token_list: List[Token], token_sep=" ", pad_token="<pad>", softword_none_token="<none>"):
+    def __init__(self, token_list: List[Token], token_sep=" ", pad_token="<pad>", none_token="<none>"):
         self.token_list = token_list
         self.token_sep = token_sep
         self.pad_token = pad_token
-        self.softword_none_token = softword_none_token
+        self.none_token = none_token
         
     def __getattr__(self, name):
         # NOTE: `__attr__` method is only invoked if the attribute wasn't found the usual ways, so 
@@ -282,7 +285,11 @@ class TokenSequence(object):
             return [getattr(tok, name) for tok in self.token_list]
         else:
             raise AttributeError(f"type object {self.__class__.__name__} has no attribute {name}")
-            
+        
+        
+    def __eq__(self, other):
+        return isinstance(other, TokenSequence) and self.__getstate__() == other.__getstate__()
+    
     def __len__(self):
         return len(self.token_list)
     
@@ -293,7 +300,7 @@ class TokenSequence(object):
         return {'token_list': self.token_list, 
                 'token_sep': self.token_sep, 
                 'pad_token': self.pad_token, 
-                'softword_none_token': self.softword_none_token}
+                'none_token': self.none_token}
         
     def __setstate__(self, state: dict):
         self.__dict__.update(state)
@@ -306,7 +313,7 @@ class TokenSequence(object):
             return TokenSequence(self.token_list[i], 
                                  token_sep=self.token_sep, 
                                  pad_token=self.pad_token, 
-                                 softword_none_token=self.softword_none_token)
+                                 none_token=self.none_token)
         else:
             raise TypeError(f"Invalid subscript type of {i}")
             
@@ -314,7 +321,7 @@ class TokenSequence(object):
         return TokenSequence(self.token_list + other.token_list, 
                              token_sep=self.token_sep, 
                              pad_token=self.pad_token, 
-                             softword_none_token=self.softword_none_token)
+                             none_token=self.none_token)
     
     
     def build_pseudo_boundaries(self, sep_width: int=None):
@@ -366,7 +373,7 @@ class TokenSequence(object):
         for word_sets in self.softlexicon:
             for word_set in word_sets:
                 if len(word_set) == 0:
-                    word_set.append(self.softword_none_token)
+                    word_set.append(self.none_token)
                     
                     
     @cached_property
@@ -423,7 +430,7 @@ class TokenSequence(object):
     
     @classmethod
     def from_tokenized_text(cls, tokenized_text: List[str], additional_tags=None, additional_tok2tags=None, 
-                            token_sep=" ", pad_token="<pad>", softword_none_token="<none>", **kwargs):
+                            token_sep=" ", pad_token="<pad>", none_token="<none>", **kwargs):
         """Build `TokenSequence` from tokenized text. 
         
         Parameters
@@ -432,14 +439,14 @@ class TokenSequence(object):
             A list of tokenized text. 
         """
         token_list = [Token(tok_text, **kwargs) for tok_text in tokenized_text]
-        tokens = cls(token_list, token_sep=token_sep, pad_token=pad_token, softword_none_token=softword_none_token)
+        tokens = cls(token_list, token_sep=token_sep, pad_token=pad_token, none_token=none_token)
         tokens.attach_additional_tags(additional_tags=additional_tags, additional_tok2tags=additional_tok2tags)
         return tokens
     
     
     @classmethod
     def from_raw_text(cls, raw_text: str, tokenize_callback=None, additional_tok2tags=None, 
-                      token_sep=" ", pad_token="<pad>", softword_none_token="<none>", **kwargs):
+                      token_sep=" ", pad_token="<pad>", none_token="<none>", **kwargs):
         """Build `TokenSequence` from raw text. 
         
         Parameters
@@ -467,7 +474,7 @@ class TokenSequence(object):
         else:
             raise ValueError(f"Invalid `tokenize_callback`: {tokenize_callback}")
         
-        tokens = cls(token_list, token_sep=token_sep, pad_token=pad_token, softword_none_token=softword_none_token)
+        tokens = cls(token_list, token_sep=token_sep, pad_token=pad_token, none_token=none_token)
         tokens.attach_additional_tags(additional_tok2tags=additional_tok2tags)
         return tokens
 
