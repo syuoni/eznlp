@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from typing import Union, List, Callable
+import copy
 
 
 def _make_tuple_mapping(type_mapping: Union[Callable, dict]=None):
@@ -32,6 +33,8 @@ class PostIO(object):
         self.chunk_mapping = _make_tuple_mapping(chunk_type_mapping)
         self.attribute_mapping = _make_tuple_mapping(attribute_type_mapping)
         self.relation_mapping = _make_tuple_mapping(relation_type_mapping)
+        self.attr_sep = "♦️"
+
         
     def _map_chunk(self, chunk: tuple):
         chunk_type, start, end = chunk
@@ -58,6 +61,7 @@ class PostIO(object):
             return self.relation_mapping((rel_type, new_head, new_tail))
         
     def map_process(self, data: List[dict]):
+        data = copy.deepcopy(data)
         for entry in data:
             if 'chunks' in entry:
                 entry['chunks'] = [self._map_chunk(ck) for ck in entry['chunks'] if self._map_chunk(ck) is not None]
@@ -68,9 +72,37 @@ class PostIO(object):
         return data
         
         
-    def absorb_attributes(self, data: List[dict]):
-        pass
-        
+    def absorb_attributes(self, data: List[dict], absorb_attr_types: List[str]):
+        data = copy.deepcopy(data)
+        for entry in data:
+            chunk2attrs = {ck: [] for ck in entry['chunks']}
+            for attr_type, chunk in entry['attributes']:
+                if attr_type in absorb_attr_types:
+                    chunk2attrs[chunk].append(attr_type)
+
+            chunk2new_chunk = {ck: (self.attr_sep.join((ck[0], *sorted(chunk2attrs[ck]))), *ck[1:]) for ck in entry['chunks']}
+            entry['chunks'] = [chunk2new_chunk[ck] for ck in entry['chunks']]
+            entry['attributes'] = [(attr_type, chunk2new_chunk[ck]) for attr_type, ck in entry['attributes'] if attr_type not in absorb_attr_types]
+            if 'relations' in entry:
+                entry['relations'] = [(rel_type, chunk2new_chunk[head], chunk2new_chunk[tail]) for rel_type, head, tail in entry['relations']]
+        return data
+
+
+    def exclude_attributes(self, data: List[dict]):
+        data = copy.deepcopy(data)
+        for entry in data:
+            new_attributes = []
+            for ck in entry['chunks']:
+                for attr_type in ck[0].split(self.attr_sep)[1:]:
+                    new_attributes.append((attr_type, ck))
+            
+            chunk2new_chunk = {ck: (ck[0].split(self.attr_sep)[0], *ck[1:]) for ck in entry['chunks']}
+            entry['chunks'] = [chunk2new_chunk[ck] for ck in entry['chunks']]
+            entry['attributes'] = [(attr_type, chunk2new_chunk[ck]) for attr_type, ck in entry['attributes'] + new_attributes]
+            if 'relations' in entry:
+                entry['relations'] = [(rel_type, chunk2new_chunk[head], chunk2new_chunk[tail]) for rel_type, head, tail in entry['relations']]
+        return data
+
         
     def process(self, data: List[dict]):
         data = self.map_process(data)

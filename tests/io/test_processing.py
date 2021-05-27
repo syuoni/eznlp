@@ -1,0 +1,29 @@
+# -*- coding: utf-8 -*-
+import jieba
+import pytest
+
+from eznlp.io import BratIO, PostIO
+
+
+@pytest.mark.parametrize("absorb_attr_types", [['Analyzed'], 
+                                               ['Analyzed', 'Denied'], 
+                                               ['Unconfirmed', 'Analyzed', 'Denied']])
+def test_absorb_attributes(absorb_attr_types):
+    brat_io = BratIO(tokenize_callback='char', 
+                     has_ins_space=True, ins_space_tokenize_callback=jieba.cut, 
+                     parse_attrs=True, parse_relations=True, 
+                     line_sep="\r\n", max_len=500, encoding='utf-8', token_sep="", pad_token="")
+    data = brat_io.read("data/HwaMei/demo.ChaFangJiLu.txt")
+    post_io = PostIO()
+
+    data_abs = post_io.absorb_attributes(data, absorb_attr_types=absorb_attr_types)
+    assert all(attr_type not in absorb_attr_types for entry_abs in data_abs for attr_type, ck in entry_abs['attributes'])
+    assert len(set(ck[0] for entry in data for ck in entry['chunks'])) < len(set(ck[0] for entry in data_abs for ck in entry['chunks']))
+    assert all(ck in entry['chunks'] for entry in data_abs for attr_type, ck in entry['attributes'])
+    assert all(head in entry['chunks'] and tail in entry['chunks'] for entry in data_abs for rel_type, head, tail in entry['relations'])
+
+    data_retr = post_io.exclude_attributes(data_abs)
+    assert all(entry['tokens'] == entry_retr['tokens'] for entry, entry_retr in zip(data, data_retr))
+    assert all(entry['chunks'] == entry_retr['chunks'] for entry, entry_retr in zip(data, data_retr))
+    assert all(set(entry['attributes']) == set(entry_retr['attributes']) for entry, entry_retr in zip(data, data_retr))
+    assert all(entry['relations'] == entry_retr['relations'] for entry, entry_retr in zip(data, data_retr))
