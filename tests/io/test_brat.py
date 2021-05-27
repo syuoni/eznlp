@@ -68,9 +68,9 @@ def test_read_write_consistency(has_ins_space):
                      has_ins_space=has_ins_space, ins_space_tokenize_callback=jieba.cut if has_ins_space else None, 
                      parse_attrs=True, parse_relations=True, encoding='utf-8')
     
-    src_fn = "data/brat/demo.txt"
+    src_fn = "data/HwaMei/demo.txt"
     mark = "spaces" if has_ins_space else "nospaces"
-    trg_fn = f"data/brat/demo-write-{mark}.txt"
+    trg_fn = f"data/HwaMei/demo-write-{mark}.txt"
     data = brat_io.read(src_fn)
     brat_io.write(data, trg_fn)
     

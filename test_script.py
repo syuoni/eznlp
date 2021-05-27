@@ -62,7 +62,7 @@ if __name__ == '__main__':
     
     # flair_fw_lm = flair.models.LanguageModel.load_language_model("assets/flair/news-forward-0.4.1.pt")
     # flair_bw_lm = flair.models.LanguageModel.load_language_model("assets/flair/news-backward-0.4.1.pt")
-        
+    
     # options_file = "assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_options.json"
     # weight_file = "assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_weights.hdf5"
     # elmo = allennlp.modules.Elmo(options_file, weight_file, 1)
@@ -106,8 +106,8 @@ if __name__ == '__main__':
     
     
     # brat_io = BratIO(attr_names=['Denied', 'Analyzed'], tokenize_callback=jieba.cut, max_len=50, encoding='utf-8')
-    # brat_data = brat_io.read("data/brat/demo.txt")
-    # brat_io.write(brat_data, "data/brat/demo-write.txt")
+    # brat_data = brat_io.read("data/HwaMei/demo.txt")
+    # brat_io.write(brat_data, "data/HwaMei/demo-write.txt")
     
     # brat_set = Dataset(brat_data, ModelConfig('sequence_tagging'))
     # brat_set.build_vocabs_and_dims()
