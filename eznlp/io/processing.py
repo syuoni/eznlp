@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from typing import Union, List, Callable
 import copy
+import tqdm
 
 
 def _make_tuple_mapping(type_mapping: Union[Callable, dict]=None):
@@ -30,11 +31,13 @@ class PostIO(object):
                  max_span_size: int=None, 
                  chunk_type_mapping: Union[Callable, dict]=None, 
                  attribute_type_mapping: Union[Callable, dict]=None, 
-                 relation_type_mapping: Union[Callable, dict]=None):
+                 relation_type_mapping: Union[Callable, dict]=None, 
+                 verbose: bool=True):
         self.max_span_size = max_span_size
         self.chunk_mapping = _make_tuple_mapping(chunk_type_mapping)
         self.attribute_mapping = _make_tuple_mapping(attribute_type_mapping)
         self.relation_mapping = _make_tuple_mapping(relation_type_mapping)
+        self.verbose = verbose
         self.attr_sep = "♦️"
 
         
@@ -64,7 +67,7 @@ class PostIO(object):
         
     def map_process(self, data: List[dict]):
         data = copy.deepcopy(data)
-        for entry in data:
+        for entry in tqdm.tqdm(data, disable=not self.verbose, ncols=100, desc="Map processing"):
             if 'chunks' in entry:
                 entry['chunks'] = [self._map_chunk(ck) for ck in entry['chunks'] if self._map_chunk(ck) is not None]
             if 'attributes' in entry:
@@ -76,7 +79,7 @@ class PostIO(object):
         
     def absorb_attributes(self, data: List[dict], absorb_attr_types: List[str]):
         data = copy.deepcopy(data)
-        for entry in data:
+        for entry in tqdm.tqdm(data, disable=not self.verbose, ncols=100, desc="Attribute absorbing"):
             chunk2attrs = {ck: [] for ck in entry['chunks']}
             for attr_type, chunk in entry['attributes']:
                 if attr_type in absorb_attr_types:
@@ -92,7 +95,7 @@ class PostIO(object):
 
     def exclude_attributes(self, data: List[dict]):
         data = copy.deepcopy(data)
-        for entry in data:
+        for entry in tqdm.tqdm(data, disable=not self.verbose, ncols=100, desc="Attribute excluding"):
             new_attributes = []
             for ck in entry['chunks']:
                 for attr_type in ck[0].split(self.attr_sep)[1:]:
@@ -146,7 +149,7 @@ class PostIO(object):
 
     def infer_relations(self, data: List[dict], group_rel_types: List[str]):
         data = copy.deepcopy(data)
-        for entry in data:
+        for entry in tqdm.tqdm(data, disable=not self.verbose, ncols=100, desc="Relation inferring"):
             chunk2group = self._build_chunk2group(entry, group_rel_types)
             new_relations = self._detect_relations(entry, group_rel_types, chunk2group)
             entry['relations'].extend(new_relations)
