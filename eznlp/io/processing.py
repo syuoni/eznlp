@@ -40,7 +40,8 @@ class PostIO(object):
 
     def map_chunks(self, data: List[dict], chunk_type_mapping: Union[Callable, dict]=None, max_span_size: int=None):
         data = [{k: v for k, v in entry.items()} for entry in data]
-        chunk_mapping = _make_tuple_mapping(chunk_type_mapping, aux_check=lambda ck: ck[2]-ck[1] <= max_span_size)
+        chunk_mapping = _make_tuple_mapping(chunk_type_mapping, 
+                                            aux_check=(lambda ck: ck[2]-ck[1] <= max_span_size) if max_span_size is not None else None)
 
         for entry in tqdm.tqdm(data, disable=not self.verbose, ncols=100, desc="Chunk mapping"):
             if 'chunks' in entry:
