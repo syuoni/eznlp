@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 from typing import Union, List, Callable
-import copy
 import tqdm
 
 
-def _make_tuple_mapping(type_mapping: Union[Callable, dict]=None):
+def _make_tuple_mapping(type_mapping: Union[Callable, dict]=None, aux_check: Callable=None):
     def tuple_mapping(x):
+        if aux_check is not None and not aux_check(x):
+            return None
+
         if type_mapping is None:
             return x
         
@@ -26,64 +28,58 @@ class PostIO(object):
         (2) *drop* or *merge* chunks, attributes or relations of specific types; 
         (3) *absorb* specific type of attributes into chunk-type, or *exclude* it;
         (4) *infer* relations given specific grouping relation-types.  
+    
+    Notes
+    -----
+    All methods make a **shallow copy** of input `data` before processing. 
+    Hence, do not use inplace modification like ``entry['chunks'].append`` or ``entry['chunks'].extend`` in the code. 
     """
-    def __init__(self, 
-                 max_span_size: int=None, 
-                 chunk_type_mapping: Union[Callable, dict]=None, 
-                 attribute_type_mapping: Union[Callable, dict]=None, 
-                 relation_type_mapping: Union[Callable, dict]=None, 
-                 inplace: bool=False, 
-                 verbose: bool=True):
-        self.max_span_size = max_span_size
-        self.chunk_mapping = _make_tuple_mapping(chunk_type_mapping)
-        self.attribute_mapping = _make_tuple_mapping(attribute_type_mapping)
-        self.relation_mapping = _make_tuple_mapping(relation_type_mapping)
-        self.inplace = inplace
+    def __init__(self, verbose: bool=True):
         self.verbose = verbose
         self.attr_sep = "♦️"
 
-        
-    def _map_chunk(self, chunk: tuple):
-        chunk_type, start, end = chunk
-        if self.max_span_size is not None and end - start > self.max_span_size:
-            return None
-        else:
-            return self.chunk_mapping(chunk)
-        
-    def _map_attribute(self, attribute: tuple):
-        attr_type, chunk = attribute
-        new_chunk = self._map_chunk(chunk)
-        if new_chunk is None:
-            return None
-        else:
-            return self.attribute_mapping((attr_type, new_chunk))
-        
-    def _map_relation(self, relation: tuple):
-        rel_type, head, tail = relation
-        new_head = self._map_chunk(head)
-        new_tail = self._map_chunk(tail)
-        if new_head is None or new_tail is None:
-            return None
-        else:
-            return self.relation_mapping((rel_type, new_head, new_tail))
-        
-    def map_process(self, data: List[dict]):
-        if not self.inplace:
-            data = copy.deepcopy(data)
-        
-        for entry in tqdm.tqdm(data, disable=not self.verbose, ncols=100, desc="Map processing"):
+    def map_chunks(self, data: List[dict], chunk_type_mapping: Union[Callable, dict]=None, max_span_size: int=None):
+        data = [{k: v for k, v in entry.items()} for entry in data]
+        chunk_mapping = _make_tuple_mapping(chunk_type_mapping, aux_check=lambda ck: ck[2]-ck[1] <= max_span_size)
+
+        for entry in tqdm.tqdm(data, disable=not self.verbose, ncols=100, desc="Chunk mapping"):
             if 'chunks' in entry:
-                entry['chunks'] = [self._map_chunk(ck) for ck in entry['chunks'] if self._map_chunk(ck) is not None]
+                entry['chunks'] = [chunk_mapping(ck) for ck in entry['chunks'] if chunk_mapping(ck) is not None]
             if 'attributes' in entry:
-                entry['attributes'] = [self._map_attribute(attr) for attr in entry['attributes'] if self._map_attribute(attr) is not None]
+                entry['attributes'] = [(attr_type, chunk_mapping(ck)) for attr_type, ck in entry['attributes'] if chunk_mapping(ck) is not None]
             if 'relations' in entry:
-                entry['relations'] = [self._map_relation(rel) for rel in entry['relations'] if self._map_relation(rel) is not None]
+                entry['relations'] = [(rel_type, chunk_mapping(head), chunk_mapping(tail)) 
+                                          for rel_type, head, tail in entry['relations']
+                                          if chunk_mapping(head) is not None and chunk_mapping(tail) is not None]
         return data
-        
-        
+
+    def map_attributes(self, data: List[dict], attribute_type_mapping: Union[Callable, dict]=None):
+        data = [{k: v for k, v in entry.items()} for entry in data]
+        attribute_mapping = _make_tuple_mapping(attribute_type_mapping)
+
+        for entry in tqdm.tqdm(data, disable=not self.verbose, ncols=100, desc="Attribute mapping"):
+            if 'attributes' in entry:
+                entry['attributes'] = [attribute_mapping(attr) for attr in entry['attributes'] if attribute_mapping(attr) is not None]
+        return data
+
+    def map_relations(self, data: List[dict], relation_type_mapping: Union[Callable, dict]=None):
+        data = [{k: v for k, v in entry.items()} for entry in data]
+        relation_mapping = _make_tuple_mapping(relation_type_mapping)
+
+        for entry in tqdm.tqdm(data, disable=not self.verbose, ncols=100, desc="Relation mapping"):
+            if 'relations' in entry:
+                entry['relations'] = [relation_mapping(rel) for rel in entry['relations'] if relation_mapping(rel) is not None]
+        return data
+
+    def map(self, data: List[dict], **kwargs):
+        data = self.map_chunks(data, **{kw: kwargs.get(kw, None) for kw in ['chunk_type_mapping', 'max_span_size']})
+        data = self.map_attributes(data, **{kw: kwargs.get(kw, None) for kw in ['attribute_type_mapping']})
+        data = self.map_relations(data, **{kw: kwargs.get(kw, None) for kw in ['relation_type_mapping']})
+        return data
+
+
     def absorb_attributes(self, data: List[dict], absorb_attr_types: List[str]):
-        if not self.inplace:
-            data = copy.deepcopy(data)
+        data = [{k: v for k, v in entry.items()} for entry in data]
         
         for entry in tqdm.tqdm(data, disable=not self.verbose, ncols=100, desc="Attribute absorbing"):
             chunk2attrs = {ck: [] for ck in entry['chunks']}
@@ -100,8 +96,7 @@ class PostIO(object):
 
 
     def exclude_attributes(self, data: List[dict]):
-        if not self.inplace:
-            data = copy.deepcopy(data)
+        data = [{k: v for k, v in entry.items()} for entry in data]
         
         for entry in tqdm.tqdm(data, disable=not self.verbose, ncols=100, desc="Attribute excluding"):
             new_attributes = []
@@ -156,11 +151,10 @@ class PostIO(object):
         return new_relations
 
     def infer_relations(self, data: List[dict], group_rel_types: List[str]):
-        if not self.inplace:
-            data = copy.deepcopy(data)
+        data = [{k: v for k, v in entry.items()} for entry in data]
         
         for entry in tqdm.tqdm(data, disable=not self.verbose, ncols=100, desc="Relation inferring"):
             chunk2group = self._build_chunk2group(entry, group_rel_types)
             new_relations = self._detect_relations(entry, group_rel_types, chunk2group)
-            entry['relations'].extend(new_relations)
+            entry['relations'] = entry['relations'] + new_relations
         return data

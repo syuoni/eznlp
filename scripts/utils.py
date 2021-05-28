@@ -204,12 +204,13 @@ def load_data(args: argparse.Namespace):
         dev_data   = io.read_folder("data/CLERD/relation_extraction/Validation")
         test_data  = io.read_folder("data/CLERD/relation_extraction/Testing")
         
-        post_io = PostIO(max_span_size=20, 
-                         chunk_type_mapping=lambda x: x.split('-')[0] if x not in ('Physical', 'Term') else None, 
-                         relation_type_mapping=lambda x: x if x not in ('Coreference', ) else None)
-        train_data = post_io.map_process(train_data)
-        dev_data   = post_io.map_process(dev_data)
-        test_data  = post_io.map_process(test_data)
+        post_io = PostIO(verbose=False)
+        kwargs = {'max_span_size': 20, 
+                  'chunk_type_mapping': lambda x: x.split('-')[0] if x not in ('Physical', 'Term') else None, 
+                  'relation_type_mapping': lambda x: x if x not in ('Coreference', ) else None}
+        train_data = post_io.map(train_data, **kwargs)
+        dev_data   = post_io.map(dev_data, **kwargs)
+        test_data  = post_io.map(test_data, **kwargs)
         
     elif args.dataset == 'yelp2013':
         tabular_io = TabularIO(text_col_id=3, label_col_id=2, sep="\t\t", mapping={"<sssss>": "\n"}, encoding='utf-8', verbose=args.log_terminal, 

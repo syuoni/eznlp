@@ -43,10 +43,10 @@ class TestBratIO(object):
         rel_ck_counter = Counter(ck[0] for entry in data for rel in entry['relations'] for ck in rel[1:])
         assert max(ck[2]-ck[1] for entry in data for ck in entry['chunks']) == 205
         
-        post_io = PostIO(max_span_size=20, 
-                         chunk_type_mapping=lambda x: x.split('-')[0] if x not in ('Physical', 'Term') else None, 
-                         relation_type_mapping=lambda x: x if x not in ('Coreference', ) else None)
-        data = post_io.map_process(data)
+        post_io = PostIO(verbose=False)
+        data = post_io.map(data, 
+                           chunk_type_mapping=lambda x: x.split('-')[0] if x not in ('Physical', 'Term') else None, max_span_size=20, 
+                           relation_type_mapping=lambda x: x if x not in ('Coreference', ) else None)
         
         post_ck_counter = Counter(ck[0] for entry in data for ck in entry['chunks'])
         post_rel_counter = Counter(rel[0] for entry in data for rel in entry['relations'])
