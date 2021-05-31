@@ -73,12 +73,11 @@ class Spans(TargetWrapper):
         else:
             pos_spans = []
         
-        neg_spans = []
-        for start in range(len(data_entry['tokens'])):
-            for end in range(start+1, min(start+1+config.max_span_size, len(data_entry['tokens']) + 1)):
-                if (start, end) not in pos_spans:
-                    neg_spans.append((start, end))
-                    
+        neg_spans = [(start, end) 
+                         for start in range(len(data_entry['tokens'])) 
+                         for end in range(start+1, min(start+1+config.max_span_size, len(data_entry['tokens']) + 1))
+                         if (start, end) not in pos_spans]
+        
         if training and len(neg_spans) > config.num_neg_chunks:
             neg_spans = random.sample(neg_spans, config.num_neg_chunks)
         

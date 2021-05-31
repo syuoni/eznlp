@@ -40,6 +40,15 @@ def detect_nested(chunks: List[tuple]):
     return False
 
 
+def chunk_pair_distance(chunk1: tuple, chunk2: tuple, overlap_distance: int=-1):
+    (_, s1, e1), (_, s2, e2) = chunk1, chunk2
+    if e1 <= s2:
+        return s2 - e1
+    elif e2 <= s1:
+        return s1 - e2
+    else:
+        return overlap_distance
+
 
 class TextChunksTranslator(object):
     """The translator between chunks and text-chunks. 

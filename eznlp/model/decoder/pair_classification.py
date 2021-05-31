@@ -6,6 +6,7 @@ import logging
 import torch
 
 from ...wrapper import TargetWrapper, Batch
+from ...utils.chunk import chunk_pair_distance
 from ...nn.modules import CombinedDropout, SmoothLabelCrossEntropyLoss, FocalLoss
 from ...nn.init import reinit_embedding_, reinit_layer_
 from ...metrics import precision_recall_f1_report
@@ -128,11 +129,11 @@ class ChunkPairs(TargetWrapper):
         else:
             pos_chunk_pairs = []
         
-        neg_chunk_pairs = []
-        for head in self.chunks:
-            for tail in self.chunks:
-                if head[1:] != tail[1:] and (head, tail) not in pos_chunk_pairs:
-                    neg_chunk_pairs.append((head, tail))
+        neg_chunk_pairs = [(head, tail) for head in self.chunks for tail in self.chunks 
+                               if (head[1:] != tail[1:] 
+                               and (head[0], tail[0]) in config.legal_head_tail_types 
+                               and chunk_pair_distance(head, tail) <= config.max_pair_distance
+                               and (head, tail) not in pos_chunk_pairs)]
         
         if self.training and len(neg_chunk_pairs) > config.num_neg_relations:
             neg_chunk_pairs = random.sample(neg_chunk_pairs, config.num_neg_relations)
@@ -165,6 +166,7 @@ class PairClassificationDecoderConfig(DecoderConfig, PairClassificationDecoderMi
         
         self.num_neg_relations = kwargs.pop('num_neg_relations', 100)
         self.max_span_size = kwargs.pop('max_span_size', 10)
+        self.max_pair_distance = kwargs.pop('max_pair_distance', 100)
         self.ck_size_emb_dim = kwargs.pop('ck_size_emb_dim', 25)
         self.ck_label_emb_dim = kwargs.pop('ck_label_emb_dim', 25)
         
@@ -194,9 +196,11 @@ class PairClassificationDecoderConfig(DecoderConfig, PairClassificationDecoderMi
     def build_vocab(self, *partitions):
         ck_counter = Counter(label for data in partitions for entry in data for label, start, end in entry['chunks'])
         self.idx2ck_label = [self.ck_none_label] + list(ck_counter.keys())
-        rel_counter = Counter(label for data in partitions for entry in data for label, start, end in entry['relations'])
+        rel_counter = Counter(label for data in partitions for entry in data for label, head, tail in entry['relations'])
         self.idx2rel_label = [self.rel_none_label] + list(rel_counter.keys())
-        
+        ht_counter = Counter((head[0], tail[0]) for data in partitions for entry in data for label, head, tail in entry['relations'])
+        self.legal_head_tail_types = set(list(ht_counter.keys()))
+
     def instantiate(self):
         return PairClassificationDecoder(self)
 
@@ -208,10 +212,12 @@ class PairClassificationDecoder(Decoder, PairClassificationDecoderMixin):
         super().__init__()
         self.num_neg_relations = config.num_neg_relations
         self.max_span_size = config.max_span_size
+        self.max_pair_distance = config.max_pair_distance
         self.ck_none_label = config.ck_none_label
         self.idx2ck_label = config.idx2ck_label
         self.rel_none_label = config.rel_none_label
         self.idx2rel_label = config.idx2rel_label
+        self.legal_head_tail_types = config.legal_head_tail_types
         
         self.ck_size_embedding = torch.nn.Embedding(config.max_span_size, config.ck_size_emb_dim)
         reinit_embedding_(self.ck_size_embedding)

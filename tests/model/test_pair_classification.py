@@ -116,7 +116,10 @@ def test_chunk_pairs_obj(re_data_demo, num_neg_relations, training, building):
         assert len(chunk_pairs_obj.chunks) == len(chunks) + len(chunks_pred) if training else len(chunk_pairs_obj.chunks) == len(chunks_pred)
         assert chunk_pairs_obj.is_built
         
-    num_candidate_chunk_pairs = len(chunk_pairs_obj.chunks) * (len(chunk_pairs_obj.chunks) - 1)
+    # num_candidate_chunk_pairs = len(chunk_pairs_obj.chunks) * (len(chunk_pairs_obj.chunks) - 1)
+    num_candidate_chunk_pairs = len([(head, tail) for head in chunk_pairs_obj.chunks for tail in chunk_pairs_obj.chunks 
+                                         if head[1:] != tail[1:]
+                                         and (head[0], tail[0]) in rel_decoder_config.legal_head_tail_types])
     
     rel_chunk_pairs = [(head, tail) for rel_label, head, tail in relations]
     oov_chunk_pairs = [(head, tail) for rel_label, head, tail in relations if not (head in chunk_pairs_obj.chunks and tail in chunk_pairs_obj.chunks)]
