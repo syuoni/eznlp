@@ -23,7 +23,7 @@ from eznlp.metrics import precision_recall_f1_report
 from eznlp.vectors import Vectors, GloVe, Senna
 from eznlp.wrapper import Batch
 
-from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, BratIO, JsonIO, SQuADIO
+from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, BratIO, JsonIO, SQuADIO, ChipIO
 from eznlp.io import PostIO
 
 from eznlp.dataset import Dataset

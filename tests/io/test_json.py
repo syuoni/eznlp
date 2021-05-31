@@ -2,7 +2,7 @@
 import pytest
 import jieba
 
-from eznlp.io import JsonIO, SQuADIO, BratIO, json
+from eznlp.io import JsonIO, SQuADIO, BratIO
 from eznlp.utils.chunk import detect_nested, filter_clashed_by_priority
 
 
