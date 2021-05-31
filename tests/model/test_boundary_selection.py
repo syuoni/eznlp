@@ -49,14 +49,14 @@ class TestModel(object):
         assert isinstance(self.config.name, str) and len(self.config.name) > 0
         
         
-    @pytest.mark.parametrize("arch", ['Conv', 'LSTM'])
     @pytest.mark.parametrize("use_biaffine", [True, False])
     @pytest.mark.parametrize("affine_arch", ['FFN', 'LSTM'])
+    @pytest.mark.parametrize("size_emb_dim", [25, 0])
     @pytest.mark.parametrize("criterion", ['CE', 'FL'])
-    def test_model(self, arch, use_biaffine, affine_arch, criterion, conll2004_demo, device):
-        self.config = ModelConfig(intermediate2=EncoderConfig(arch=arch), 
-                                  decoder=BoundarySelectionDecoderConfig(use_biaffine=use_biaffine, 
+    def test_model(self, use_biaffine, affine_arch, size_emb_dim, criterion, conll2004_demo, device):
+        self.config = ModelConfig(decoder=BoundarySelectionDecoderConfig(use_biaffine=use_biaffine, 
                                                                          affine=EncoderConfig(arch=affine_arch), 
+                                                                         size_emb_dim=size_emb_dim, 
                                                                          criterion=criterion))
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()

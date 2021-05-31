@@ -51,19 +51,17 @@ class TestModel(object):
         assert isinstance(self.config.name, str) and len(self.config.name) > 0
         
         
-    @pytest.mark.parametrize("arch", ['Conv', 'LSTM'])
     @pytest.mark.parametrize("ck_decoder", ['sequence_tagging', 'span_classification', 'boundary_selection'])
     @pytest.mark.parametrize("agg_mode", ['max_pooling'])
     @pytest.mark.parametrize("criterion", ['CE', 'FL'])
-    def test_model(self, arch, ck_decoder, agg_mode, criterion, conll2004_demo, device):
+    def test_model(self, ck_decoder, agg_mode, criterion, conll2004_demo, device):
         if ck_decoder.lower() == 'sequence_tagging':
             ck_decoder_config = SequenceTaggingDecoderConfig(criterion='CRF')
         elif ck_decoder.lower() == 'span_classification':
             ck_decoder_config = SpanClassificationDecoderConfig(agg_mode=agg_mode, criterion=criterion)
         elif ck_decoder.lower() == 'boundary_selection':
             ck_decoder_config = BoundarySelectionDecoderConfig(criterion=criterion)
-        self.config = ModelConfig(intermediate2=EncoderConfig(arch=arch), 
-                                  decoder=JointERREDecoderConfig(ck_decoder=ck_decoder_config, 
+        self.config = ModelConfig(decoder=JointERREDecoderConfig(ck_decoder=ck_decoder_config, 
                                                                  rel_decoder=PairClassificationDecoderConfig(agg_mode=agg_mode, criterion=criterion)))
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
@@ -92,4 +90,3 @@ class TestModel(object):
         set_chunks_pred, set_relations_pred = trainer.predict(dataset_wo_gold)
         assert len(set_chunks_pred) == len(data_wo_gold)
         assert len(set_relations_pred) == len(dataset_wo_gold)
-
