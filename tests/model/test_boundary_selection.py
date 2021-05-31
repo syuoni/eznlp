@@ -50,12 +50,12 @@ class TestModel(object):
         
         
     @pytest.mark.parametrize("arch", ['Conv', 'LSTM'])
-    @pytest.mark.parametrize("biaffine", [True, False])
+    @pytest.mark.parametrize("use_biaffine", [True, False])
     @pytest.mark.parametrize("affine_arch", ['FFN', 'LSTM'])
     @pytest.mark.parametrize("criterion", ['CE', 'FL'])
-    def test_model(self, arch, biaffine, affine_arch, criterion, conll2004_demo, device):
+    def test_model(self, arch, use_biaffine, affine_arch, criterion, conll2004_demo, device):
         self.config = ModelConfig(intermediate2=EncoderConfig(arch=arch), 
-                                  decoder=BoundarySelectionDecoderConfig(biaffine=biaffine, 
+                                  decoder=BoundarySelectionDecoderConfig(use_biaffine=use_biaffine, 
                                                                          affine=EncoderConfig(arch=affine_arch), 
                                                                          criterion=criterion))
         self._setup_case(conll2004_demo, device)

@@ -58,7 +58,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                            help="span size embedding dim")
     
     group_boundary_selection = parser.add_argument_group('boundary selection')
-    group_boundary_selection.add_argument('--no_biaffine', dest='biaffine', default=True, action='store_false', 
+    group_boundary_selection.add_argument('--no_biaffine', dest='use_biaffine', default=True, action='store_false', 
                                           help="whether to use biaffine")
     group_boundary_selection.add_argument('--affine_arch', type=str, default='FFN', 
                                           help="affine encoder architecture")
@@ -169,7 +169,7 @@ def build_ER_config(args: argparse.Namespace):
                                                          size_emb_dim=args.ck_size_emb_dim, 
                                                          in_drop_rates=drop_rates)
     elif args.ck_decoder == 'boundary_selection':
-        decoder_config = BoundarySelectionDecoderConfig(biaffine=args.biaffine, 
+        decoder_config = BoundarySelectionDecoderConfig(use_biaffine=args.use_biaffine, 
                                                         affine=EncoderConfig(arch=args.affine_arch, hid_dim=150, num_layers=1, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2), 
                                                         criterion=args.criterion, 
                                                         gamma=args.focal_gamma, 

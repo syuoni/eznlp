@@ -77,7 +77,7 @@ class Boundaries(TargetWrapper):
 
 class BoundarySelectionDecoderConfig(DecoderConfig, BoundarySelectionDecoderMixin):
     def __init__(self, **kwargs):
-        self.biaffine = kwargs.pop('biaffine', True)
+        self.use_biaffine = kwargs.pop('use_biaffine', True)
         self.affine = kwargs.pop('affine', EncoderConfig(arch='FFN', hid_dim=150, num_layers=1, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2))
         
         self.max_len = kwargs.pop('max_len', None)
@@ -141,7 +141,7 @@ class BoundarySelectionDecoder(Decoder, BoundarySelectionDecoderMixin):
         self.idx2label = config.idx2label
         self.allow_nested = config.allow_nested
         
-        if config.biaffine:
+        if config.use_biaffine:
             self.affine_start = config.affine.instantiate()
             self.affine_end = config.affine.instantiate()
         else:
