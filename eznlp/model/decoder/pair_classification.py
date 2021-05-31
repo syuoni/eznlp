@@ -7,7 +7,9 @@ import torch
 
 from ...wrapper import TargetWrapper, Batch
 from ...utils.chunk import chunk_pair_distance
-from ...nn.modules import CombinedDropout, SmoothLabelCrossEntropyLoss, FocalLoss
+from ...nn.modules import SequencePooling, SequenceAttention, CombinedDropout
+from ...nn.modules import SmoothLabelCrossEntropyLoss, FocalLoss
+from ...nn.functional import seq_lens2mask
 from ...nn.init import reinit_embedding_, reinit_layer_
 from ...metrics import precision_recall_f1_report
 from .base import DecoderMixin, DecoderConfig, Decoder
@@ -226,12 +228,19 @@ class PairClassificationDecoder(Decoder, PairClassificationDecoderMixin):
         self.idx2rel_label = config.idx2rel_label
         self.legal_head_tail_types = config.legal_head_tail_types
         
-        self.ck_size_embedding = torch.nn.Embedding(config.max_span_size, config.ck_size_emb_dim)
-        reinit_embedding_(self.ck_size_embedding)
-        self.ck_label_embedding = torch.nn.Embedding(config.ck_voc_dim, config.ck_label_emb_dim)
-        reinit_embedding_(self.ck_label_embedding)
+        if config.agg_mode.lower().endswith('_pooling'):
+            self.aggregating = SequencePooling(mode=config.agg_mode.replace('_pooling', ''))
+        elif config.agg_mode.lower().endswith('_attention'):
+            self.aggregating = SequenceAttention(config.in_dim, scoring=config.agg_mode.replace('_attention', ''))
         # Trainable context vector for overlapping chunks
         self.zero_context = torch.nn.Parameter(torch.zeros(config.in_dim))
+
+        if config.ck_size_emb_dim > 0:
+            self.ck_size_embedding = torch.nn.Embedding(config.max_span_size, config.ck_size_emb_dim)
+            reinit_embedding_(self.ck_size_embedding)
+        if config.ck_label_emb_dim > 0:
+            self.ck_label_embedding = torch.nn.Embedding(config.ck_voc_dim, config.ck_label_emb_dim)
+            reinit_embedding_(self.ck_label_embedding)
         
         self.dropout = CombinedDropout(*config.in_drop_rates)
         self.hid2logit = torch.nn.Linear(config.in_dim*3+config.ck_size_emb_dim*2+config.ck_label_emb_dim*2, config.rel_voc_dim)
@@ -255,26 +264,45 @@ class PairClassificationDecoder(Decoder, PairClassificationDecoderMixin):
             else:
                 head_hidden, tail_hidden, contexts = [], [], []
                 for (h_label, h_start, h_end), (t_label, t_start, t_end) in batch.chunk_pairs_objs[k].chunk_pairs:
-                    head_hidden.append(full_hidden[k, h_start:h_end].max(dim=0).values)
-                    tail_hidden.append(full_hidden[k, t_start:t_end].max(dim=0).values)
+                    head_hidden.append(full_hidden[k, h_start:h_end])
+                    tail_hidden.append(full_hidden[k, t_start:t_end])
                     
                     if h_end < t_start:
-                        context = full_hidden[k, h_end:t_start].max(dim=0).values
+                        contexts.append(full_hidden[k, h_end:t_start])
                     elif t_end < h_start:
-                        context = full_hidden[k, t_end:h_start].max(dim=0).values
+                        contexts.append(full_hidden[k, t_end:h_start])
                     else:
-                        context = self.zero_context
-                    contexts.append(context)
+                        contexts.append(self.zero_context.unsqueeze(0))
                 
-                # head_hiddem/tail_hidden/contexts: (num_pairs, hid_dim)
-                head_hidden = torch.stack(head_hidden)
-                tail_hidden = torch.stack(tail_hidden)
-                contexts = torch.stack(contexts)
+                # head_hidden: (num_pairs, span_size, hid_dim) -> (num_pairs, hid_dim)
+                head_mask = seq_lens2mask(torch.tensor([h.size(0) for h in head_hidden], dtype=torch.long, device=full_hidden.device))
+                head_hidden = torch.nn.utils.rnn.pad_sequence(head_hidden, batch_first=True, padding_value=0.0)
+                head_hidden = self.aggregating(self.dropout(head_hidden), mask=head_mask)
+
+                # tail_hidden: (num_pairs, span_size, hid_dim) -> (num_pairs, hid_dim)
+                tail_mask = seq_lens2mask(torch.tensor([h.size(0) for h in tail_hidden], dtype=torch.long, device=full_hidden.device))
+                tail_hidden = torch.nn.utils.rnn.pad_sequence(tail_hidden, batch_first=True, padding_value=0.0)
+                tail_hidden = self.aggregating(self.dropout(tail_hidden), mask=tail_mask)
+
+                # contexts: (num_pairs, span_size, hid_dim) -> (num_pairs, hid_dim)
+                ctx_mask = seq_lens2mask(torch.tensor([c.size(0) for c in contexts], dtype=torch.long, device=full_hidden.device))
+                contexts = torch.nn.utils.rnn.pad_sequence(contexts, batch_first=True, padding_value=0.0)
+                contexts = self.aggregating(self.dropout(contexts), mask=ctx_mask)
                 
-                # ck_size_embedded/ck_label_embedded: (num_pairs, 2, emb_dim) -> (num_pairs, emb_dim*2)
-                ck_size_embedded = self.ck_size_embedding(batch.chunk_pairs_objs[k].span_size_ids).flatten(start_dim=1)
-                ck_label_embedded = self.ck_label_embedding(batch.chunk_pairs_objs[k].ck_label_ids).flatten(start_dim=1)
-                logits = self.hid2logit(self.dropout(torch.cat([head_hidden, tail_hidden, contexts, ck_size_embedded, ck_label_embedded], dim=-1)))
+                # pair_hidden: (num_pairs, hid_dim*3)
+                pair_hidden = torch.cat([head_hidden, tail_hidden, contexts], dim=-1)
+
+                if hasattr(self, 'ck_size_embedding'):
+                    # ck_size_embedded: (num_pairs, 2, emb_dim) -> (num_pairs, emb_dim*2)
+                    ck_size_embedded = self.ck_size_embedding(batch.chunk_pairs_objs[k].span_size_ids).flatten(start_dim=1)
+                    pair_hidden = torch.cat([pair_hidden, self.dropout(ck_size_embedded)], dim=-1)
+
+                if hasattr(self, 'ck_label_embedding'):
+                    # ck_label_embedded: (num_pairs, 2, emb_dim) -> (num_pairs, emb_dim*2)
+                    ck_label_embedded = self.ck_label_embedding(batch.chunk_pairs_objs[k].ck_label_ids).flatten(start_dim=1)
+                    pair_hidden = torch.cat([pair_hidden, self.dropout(ck_label_embedded)], dim=-1)
+
+                logits = self.hid2logit(pair_hidden)
             
             batch_logits.append(logits)
             
@@ -307,6 +335,3 @@ class PairClassificationDecoder(Decoder, PairClassificationDecoderMixin):
             batch_relations.append(relations)
             
         return batch_relations
-    
-    
-    

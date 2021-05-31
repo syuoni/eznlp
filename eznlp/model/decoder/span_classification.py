@@ -7,7 +7,9 @@ import torch
 
 from ...wrapper import TargetWrapper, Batch
 from ...utils.chunk import detect_nested, filter_clashed_by_priority
-from ...nn.modules import CombinedDropout, SmoothLabelCrossEntropyLoss, FocalLoss
+from ...nn.modules import SequencePooling, SequenceAttention, CombinedDropout
+from ...nn.modules import SmoothLabelCrossEntropyLoss, FocalLoss
+from ...nn.functional import seq_lens2mask
 from ...nn.init import reinit_embedding_, reinit_layer_
 from ...metrics import precision_recall_f1_report
 from .base import DecoderMixin, DecoderConfig, Decoder
@@ -153,8 +155,14 @@ class SpanClassificationDecoder(Decoder, SpanClassificationDecoderMixin):
         self.idx2label = config.idx2label
         self.allow_nested = config.allow_nested
         
-        self.size_embedding = torch.nn.Embedding(config.max_span_size, config.size_emb_dim)
-        reinit_embedding_(self.size_embedding)
+        if config.agg_mode.lower().endswith('_pooling'):
+            self.aggregating = SequencePooling(mode=config.agg_mode.replace('_pooling', ''))
+        elif config.agg_mode.lower().endswith('_attention'):
+            self.aggregating = SequenceAttention(config.in_dim, scoring=config.agg_mode.replace('_attention', ''))
+
+        if config.size_emb_dim > 0:
+            self.size_embedding = torch.nn.Embedding(config.max_span_size, config.size_emb_dim)
+            reinit_embedding_(self.size_embedding)
         
         self.dropout = CombinedDropout(*config.in_drop_rates)
         self.hid2logit = torch.nn.Linear(config.in_dim+config.size_emb_dim, config.voc_dim)
@@ -172,11 +180,19 @@ class SpanClassificationDecoder(Decoder, SpanClassificationDecoderMixin):
         # full_hidden: (batch, step, hid_dim)
         batch_logits = []
         for k in range(batch.size):
-            # span_hidden: (num_spans, hid_dim)
-            span_hidden = torch.stack([full_hidden[k, start:end].max(dim=0).values for start, end in batch.spans_objs[k].spans])
-            # size_embedded: (num_spans, emb_dim)
-            size_embedded = self.size_embedding(batch.spans_objs[k].span_size_ids)
-            logits = self.hid2logit(self.dropout(torch.cat([span_hidden, size_embedded], dim=-1)))
+            # span_hidden: (num_spans, span_size, hid_dim) -> (num_spans, hid_dim)
+            # span_hidden = torch.stack([full_hidden[k, start:end].max(dim=0).values for start, end in batch.spans_objs[k].spans])
+            span_hidden = [full_hidden[k, start:end] for start, end in batch.spans_objs[k].spans]
+            span_mask = seq_lens2mask(torch.tensor([h.size(0) for h in span_hidden], dtype=torch.long, device=full_hidden.device))
+            span_hidden = torch.nn.utils.rnn.pad_sequence(span_hidden, batch_first=True, padding_value=0.0)
+            span_hidden = self.aggregating(self.dropout(span_hidden), mask=span_mask)
+
+            if hasattr(self, 'size_embedding'):
+                # size_embedded: (num_spans, emb_dim)
+                size_embedded = self.size_embedding(batch.spans_objs[k].span_size_ids)
+                span_hidden = torch.cat([span_hidden, self.dropout(size_embedded)], dim=-1)
+                
+            logits = self.hid2logit(span_hidden)
             batch_logits.append(logits)
             
         return batch_logits
