@@ -30,6 +30,9 @@ class JsonIO(IO):
                  chunk_start_key='start', 
                  chunk_end_key='end', 
                  chunk_text_key=None, 
+                 attribute_key=None, 
+                 attribute_type_key=None, 
+                 attribute_chunk_key=None, 
                  relation_key=None, 
                  relation_type_key=None, 
                  relation_head_key=None, 
@@ -45,6 +48,14 @@ class JsonIO(IO):
         self.chunk_start_key = chunk_start_key
         self.chunk_end_key = chunk_end_key
         self.chunk_text_key = chunk_text_key
+
+        if all(key is not None for key in [attribute_key, attribute_type_key, attribute_chunk_key]):
+            self.attribute_key = attribute_key
+            self.attribute_type_key = attribute_type_key
+            self.attribute_chunk_key = attribute_chunk_key
+        else:
+            self.attribute_key = None
+
         if all(key is not None for key in [relation_key, relation_type_key, relation_head_key, relation_tail_key]):
             self.relation_key = relation_key
             self.relation_type_key = relation_type_key
@@ -84,19 +95,27 @@ class JsonIO(IO):
                 errors.extend(curr_errors)
                 mismatches.extend(curr_mismatches)
             
-            if self.drop_duplicated:
-                chunks = _filter_duplicated(chunks)
+            entry = {'tokens': tokens, 'chunks': [ck for ck in chunks if ck is not None]}
             
-            data_entry = {'tokens': tokens, 'chunks': [ck for ck in chunks if ck is not None]}
-            
+            if self.attribute_key is not None:
+                attributes = [(attr[self.attribute_type_key], 
+                               chunks[attr[self.attribute_chunk_key]]) for attr in raw_entry[self.attribute_key]]
+                entry.update({'attributes': [(attr_type, ck) for attr_type, ck in attributes if ck is not None]})
+
             if self.relation_key is not None:
                 relations = [(rel[self.relation_type_key], 
                               chunks[rel[self.relation_head_key]], 
                               chunks[rel[self.relation_tail_key]]) for rel in raw_entry[self.relation_key]]
-                relations = _filter_duplicated(relations) if self.drop_duplicated else relations
-                data_entry.update({'relations': [(rel_type, head, tail) for rel_type, head, tail in relations if head is not None and tail is not None]})
+                entry.update({'relations': [(rel_type, head, tail) for rel_type, head, tail in relations if head is not None and tail is not None]})
                 
-            data.append(data_entry)
+            if self.drop_duplicated:
+                entry['chunks'] = _filter_duplicated(entry['chunks'])
+                if self.attribute_key is not None:
+                    entry['attributes'] = _filter_duplicated(entry['attributes'])
+                if self.relation_key is not None:
+                    entry['relations'] = _filter_duplicated(entry['relations'])
+
+            data.append(entry)
             
         if len(errors) > 0 or len(mismatches) > 0:
             logger.warning(f"{len(errors)} errors and {len(mismatches)} mismatches detected during parsing {file_path}")
@@ -106,6 +125,32 @@ class JsonIO(IO):
         else:
             return data
 
+
+    def write(self, data: List[dict], file_path):
+        raw_data = []
+        for entry in data:
+            raw_entry = {self.text_key: entry['tokens'].raw_text}
+            
+            chunk2idx = {ck: k for k, ck in enumerate(entry['chunks'])}
+            raw_entry[self.chunk_key] = [{self.chunk_type_key: chunk_type, 
+                                          self.chunk_start_key: chunk_start, 
+                                          self.chunk_end_key: chunk_end} for chunk_type, chunk_start, chunk_end in entry['chunks']]
+            if self.attribute_key is not None:
+                raw_entry[self.attribute_key] = [{self.attribute_type_key: attr_type, 
+                                                  self.attribute_chunk_key: chunk2idx[ck]} for attr_type, ck in entry['attributes']]
+            if self.relation_key is not None:
+                raw_entry[self.relation_key] = [{self.relation_type_key: rel_type, 
+                                                 self.relation_head_key: chunk2idx[head], 
+                                                 self.relation_tail_key: chunk2idx[tail]} for rel_type, head, tail in entry['relations']]
+            raw_data.append(raw_entry)
+
+        with open(file_path, 'w', encoding=self.encoding) as f:
+            if self.is_whole_piece:
+                json.dump(raw_data, f)
+            else:
+                for raw_entry in raw_data:
+                    f.write(json.dumps(raw_entry))
+                    f.write("\n")
 
 
 

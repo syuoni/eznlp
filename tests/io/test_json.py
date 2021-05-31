@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-from eznlp.io import JsonIO, SQuADIO
+import pytest
+import jieba
+
+from eznlp.io import JsonIO, SQuADIO, BratIO, json
 from eznlp.utils.chunk import detect_nested, filter_clashed_by_priority
 
 
@@ -114,6 +117,27 @@ class TestJsonIO(object):
         
         assert not any(detect_nested(ex['chunks']) for data in [train_data, test_data] for ex in data)
         assert all(filter_clashed_by_priority(ex['chunks'], allow_nested=False) == ex['chunks'] for data in [train_data, test_data] for ex in data)
+
+
+
+@pytest.mark.parametrize("is_whole_piece", [False, True])
+def test_read_write_consistency(is_whole_piece):
+    brat_io = BratIO(tokenize_callback='char', 
+                     has_ins_space=True, ins_space_tokenize_callback=jieba.cut, max_len=200, 
+                     parse_attrs=True, parse_relations=True, encoding='utf-8')
+    json_io = JsonIO(is_tokenized=True, 
+                     attribute_key='attributes', attribute_type_key='type', attribute_chunk_key='entity', 
+                     relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
+                     is_whole_piece=is_whole_piece, encoding='utf-8')
+
+    src_fn = "data/HwaMei/demo.txt"
+    mark = "wp" if is_whole_piece else "nonwp"
+    trg_fn = f"data/HwaMei/demo-write-{mark}.json"
+    data = brat_io.read(src_fn)
+    json_io.write(data, trg_fn)
+
+    data_retr = json_io.read(trg_fn)
+    assert data_retr == data
 
 
 
