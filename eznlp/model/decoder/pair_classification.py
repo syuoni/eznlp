@@ -201,6 +201,13 @@ class PairClassificationDecoderConfig(DecoderConfig, PairClassificationDecoderMi
         ht_counter = Counter((head[0], tail[0]) for data in partitions for entry in data for label, head, tail in entry['relations'])
         self.legal_head_tail_types = set(list(ht_counter.keys()))
 
+        dist_counter = Counter(chunk_pair_distance(head, tail) for data in partitions for entry in data for label, head, tail in entry['relations'])
+        num_pairs = sum(dist_counter.values())
+        num_oov_pairs = sum(num for dist, num in dist_counter.items() if dist > self.max_pair_distance)
+        if num_oov_pairs > 0:
+            logger.warning(f"OOV positive pairs: {num_oov_pairs} ({num_oov_pairs/num_pairs*100:.2f}%)")
+
+
     def instantiate(self):
         return PairClassificationDecoder(self)
 

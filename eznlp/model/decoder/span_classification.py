@@ -134,9 +134,9 @@ class SpanClassificationDecoderConfig(DecoderConfig, SpanClassificationDecoderMi
         else:
             logger.info("No nested chunks detected, only flat chunks are allowed in decoding...")
         
-        size_counter = Counter([end-start for data in partitions for entry in data for label, start, end in entry['chunks']])
+        size_counter = Counter(end-start for data in partitions for entry in data for label, start, end in entry['chunks'])
         num_spans = sum(size_counter.values())
-        num_oov_spans = sum([num for size, num in size_counter.items() if size > self.max_span_size])
+        num_oov_spans = sum(num for size, num in size_counter.items() if size > self.max_span_size)
         if num_oov_spans > 0:
             logger.warning(f"OOV positive spans: {num_oov_spans} ({num_oov_spans/num_spans*100:.2f}%)")
         
