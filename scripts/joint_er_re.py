@@ -54,6 +54,8 @@ def parse_arguments(parser: argparse.ArgumentParser):
     group_rel_classification = parser.add_argument_group('relation classification')
     group_rel_classification.add_argument('--num_neg_relations', type=int, default=100, 
                                           help="number of sampling negative relations")
+    group_rel_classification.add_argument('--max_pair_distance', type=int, default=100, 
+                                          help="maximum pair distance")
     group_rel_classification.add_argument('--ck_label_emb_dim', type=int, default=25, 
                                           help="chunk label embedding dim")
     
@@ -83,6 +85,7 @@ def build_JERRE_config(args: argparse.Namespace):
                                                          gamma=args.focal_gamma, 
                                                          num_neg_relations=args.num_neg_relations, 
                                                          max_span_size=args.max_span_size, 
+                                                         max_pair_distance=args.max_pair_distance, 
                                                          ck_size_emb_dim=args.ck_size_emb_dim, 
                                                          ck_label_emb_dim=args.ck_label_emb_dim, 
                                                          in_drop_rates=drop_rates)
