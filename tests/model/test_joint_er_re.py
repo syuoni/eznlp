@@ -5,7 +5,7 @@ import torch
 from eznlp.dataset import Dataset
 from eznlp.model import EncoderConfig, BertLikeConfig, ModelConfig
 from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderConfig, BoundarySelectionDecoderConfig
-from eznlp.model import PairClassificationDecoderConfig, JointERREDecoderConfig
+from eznlp.model import SpanRelClassificationDecoderConfig, JointERREDecoderConfig
 from eznlp.training import Trainer
 
 
@@ -62,7 +62,7 @@ class TestModel(object):
         elif ck_decoder.lower() == 'boundary_selection':
             ck_decoder_config = BoundarySelectionDecoderConfig(criterion=criterion)
         self.config = ModelConfig(decoder=JointERREDecoderConfig(ck_decoder=ck_decoder_config, 
-                                                                 rel_decoder=PairClassificationDecoderConfig(agg_mode=agg_mode, criterion=criterion)))
+                                                                 rel_decoder=SpanRelClassificationDecoderConfig(agg_mode=agg_mode, criterion=criterion)))
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
@@ -70,7 +70,7 @@ class TestModel(object):
         
     def test_model_with_bert_like(self, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
-        self.config = ModelConfig('joint', 
+        self.config = ModelConfig('joint_er_re', 
                                   ohots=None, 
                                   bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert), 
                                   intermediate2=None)
@@ -80,7 +80,7 @@ class TestModel(object):
         
         
     def test_prediction_without_gold(self, conll2004_demo, device):
-        self.config = ModelConfig('joint')
+        self.config = ModelConfig('joint_er_re')
         self._setup_case(conll2004_demo, device)
         
         data_wo_gold = [{'tokens': entry['tokens']} for entry in conll2004_demo]

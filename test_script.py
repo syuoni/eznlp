@@ -37,8 +37,8 @@ from eznlp.model.bert_like import truncate_for_bert_like
 from eznlp.model import (TextClassificationDecoderConfig, 
                          SequenceTaggingDecoderConfig, 
                          SpanClassificationDecoderConfig, 
+                         SpanRelClassificationDecoderConfig, 
                          BoundarySelectionDecoderConfig, 
-                         PairClassificationDecoderConfig, 
                          JointERREDecoderConfig)
 from eznlp.model import ModelConfig
 

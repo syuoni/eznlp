@@ -12,8 +12,8 @@ from .decoder.base import DecoderConfig
 from .decoder.text_classification import TextClassificationDecoderConfig
 from .decoder.sequence_tagging import SequenceTaggingDecoderConfig
 from .decoder.span_classification import SpanClassificationDecoderConfig
+from .decoder.span_rel_classification import SpanRelClassificationDecoderConfig
 from .decoder.boundary_selection import BoundarySelectionDecoderConfig
-from .decoder.pair_classification import PairClassificationDecoderConfig
 from .decoder.joint_er_re import JointERREDecoderConfig
 
 
@@ -55,15 +55,15 @@ class ModelConfig(Config):
         elif isinstance(decoder, str):
             if decoder.lower().startswith('text'):
                 self.decoder = TextClassificationDecoderConfig()
-            elif decoder.lower().startswith('sequence'):
+            elif decoder.lower().startswith('sequence_tagging'):
                 self.decoder = SequenceTaggingDecoderConfig()
-            elif decoder.lower().startswith('span'):
+            elif decoder.lower().startswith('span_classification'):
                 self.decoder = SpanClassificationDecoderConfig()
+            elif decoder.lower().startswith('span_rel'):
+                self.decoder = SpanRelClassificationDecoderConfig()
             elif decoder.lower().startswith('boundary'):
                 self.decoder = BoundarySelectionDecoderConfig()
-            elif decoder.lower().startswith('pair'):
-                self.decoder = PairClassificationDecoderConfig()
-            elif decoder.lower().startswith('joint'):
+            elif decoder.lower().startswith('joint_er_re'):
                 self.decoder = JointERREDecoderConfig()
             else:
                 raise ValueError(f"Invalid `decoder`: {decoder}")
