@@ -3,6 +3,6 @@ import torch
 import flair
 flair.device = torch.device('cpu')
 
-__version__ = '0.1.2'
+__version__ = '0.1.3'
 
 from .training.utils import auto_device
