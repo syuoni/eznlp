@@ -78,8 +78,7 @@ class PairClassificationDecoderMixin(DecoderMixin):
 
 
 class ChunkPairs(TargetWrapper):
-    """
-    A wrapper of chunk-pairs with underlying relations. 
+    """A wrapper of chunk-pairs with underlying relations. 
     
     Parameters
     ----------

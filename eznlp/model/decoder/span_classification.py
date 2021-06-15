@@ -57,8 +57,7 @@ class SpanClassificationDecoderMixin(DecoderMixin):
 
 
 class Spans(TargetWrapper):
-    """
-    A wrapper of spans with underlying chunks. 
+    """A wrapper of spans with underlying chunks. 
     
     Parameters
     ----------
