@@ -8,7 +8,7 @@ from .model.model import ModelConfig
 
 
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self, data: List[dict], config: ModelConfig, training: bool=True):
+    def __init__(self, data: List[dict], config: ModelConfig=None, training: bool=True):
         """
         Parameters
         ----------
@@ -48,12 +48,17 @@ class Dataset(torch.utils.data.Dataset):
         if 'label' in self.data[0]:
             num_label_types = len({data_entry['label'] for data_entry in self.data})
             summary.append(f"The dataset has {num_label_types:,} categories")
-            
+        
         if 'chunks' in self.data[0]:
             num_chunks = sum(len(data_entry['chunks']) for data_entry in self.data)
             num_chunk_types = len({ck[0] for data_entry in self.data for ck in data_entry['chunks']})
             summary.append(f"The dataset has {num_chunks:,} chunks of {num_chunk_types:,} types")
-            
+        
+        if 'attributes' in self.data[0]:
+            num_attributes = sum(len(data_entry['attributes']) for data_entry in self.data)
+            num_attr_types = len({attr[0] for data_entry in self.data for attr in data_entry['attributes']})
+            summary.append(f"The dataset has {num_attributes:,} attributes of {num_attr_types:,} types")
+        
         if 'relations' in self.data[0]:
             num_relations = sum(len(data_entry['relations']) for data_entry in self.data)
             num_relation_types = len({rel[0] for data_entry in self.data for rel in data_entry['relations']})
@@ -61,7 +66,7 @@ class Dataset(torch.utils.data.Dataset):
         
         return "\n".join(summary)
         
-    
+        
     def build_vocabs_and_dims(self, *others):
         self.config.build_vocabs_and_dims(self.data, *others)
         
@@ -82,4 +87,3 @@ class Dataset(torch.utils.data.Dataset):
         
         batch.update(self.config.batchify(batch_examples))
         return Batch(**batch)
-        

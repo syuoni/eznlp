@@ -1,28 +1,20 @@
 # -*- coding: utf-8 -*-
+from typing import List
 import os
 import re
 from collections import Counter
 import pandas
 
-from ..token import TokenSequence
-from . import find_ascending
-
 
 class ChunksTagsTranslator(object):
-    """
-    The translator between chunks and tags. 
+    """The translator between chunks and tags. 
     
     Args
     ----
-    tags : list
-        list of tags. e.g., ['O', 'B-Ent', 'I-Ent', ...]. 
     chunks: list
         list of (chunk_type, chunk_start, chunk_end). 
-        
-    text_chunks: list
-        list of (chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text)
-    raw_text : str
-        The raw text. 
+    tags : list
+        list of tags. e.g., ['O', 'B-Ent', 'I-Ent', ...]. 
     tokens : `TokenSequence`
         Token sequence object. 
         
@@ -30,7 +22,7 @@ class ChunksTagsTranslator(object):
     ----------
     https://github.com/chakki-works/seqeval
     """
-    def __init__(self, scheme='BIOES'):
+    def __init__(self, scheme='BIOES', sep: str='-', breaking_for_types: bool=True):
         assert scheme in ('BIO1', 'BIO2', 'BIOES', 'BMES', 'BILOU', 'OntoNotes')
         self.scheme = scheme
         
@@ -50,20 +42,22 @@ class ChunksTagsTranslator(object):
             
         trans = trans.set_index(['from_tag', 'to_tag'])
         self.trans = {tr: trans.loc[tr].to_dict() for tr in trans.index.tolist()}
+        self.sep = sep
+        self.breaking_for_types = breaking_for_types
         
     def __repr__(self):
         return f"{self.__class__.__name__}(scheme={self.scheme})"
         
-    def check_transitions_legal(self, tags: list):
-        """
-        Check if the transitions between tags are legal. 
+        
+    def check_transitions_legal(self, tags: List[str]):
+        """Check if the transitions between tags are legal. 
         """
         # TODO: also check types
-        padded_tags = ['O'] + [tag.split('-', maxsplit=1)[0] for tag in tags] + ['O']
+        padded_tags = ['O'] + [tag.split(self.sep, maxsplit=1)[0] for tag in tags] + ['O']
         return all([self.trans[(prev_tag, this_tag)]['legal'] for prev_tag, this_tag in zip(padded_tags[:-1], padded_tags[1:])])
         
-    
-    def chunks2group_by(self, chunks: list, seq_len: int):
+        
+    def chunks2group_by(self, chunks: List[tuple], seq_len: int):
         group_by = [-1 for _ in range(seq_len)]
         
         for i, (chunk_type, chunk_start, chunk_end) in enumerate(chunks):
@@ -73,7 +67,7 @@ class ChunksTagsTranslator(object):
         return group_by
         
         
-    def chunks2tags(self, chunks: list, seq_len: int):
+    def chunks2tags(self, chunks: List[tuple], seq_len: int):
         tags = ['O' for _ in range(seq_len)]
         
         # Longer chunks are of higher priority
@@ -94,33 +88,33 @@ class ChunksTagsTranslator(object):
             
             if self.scheme == 'BIO1':
                 if chunk_start == 0 or tags[chunk_start-1] == 'O':
-                    tags[chunk_start] = 'I-' + chunk_type
+                    tags[chunk_start] = f"I{self.sep}{chunk_type}"
                 else:
-                    tags[chunk_start] = 'B-' + chunk_type
+                    tags[chunk_start] = f"B{self.sep}{chunk_type}"
                 for k in range(chunk_start+1, chunk_end):
-                    tags[k] = 'I-' + chunk_type
-                if chunk_end < len(tags) and tags[chunk_end].startswith('I-'):
-                    tags[chunk_end] = tags[chunk_end].replace('I-', 'B-', 1)
+                    tags[k] = f"I{self.sep}{chunk_type}"
+                if chunk_end < len(tags) and tags[chunk_end].startswith(f"I{self.sep}"):
+                    tags[chunk_end] = tags[chunk_end].replace(f"I{self.sep}", f"B{self.sep}", 1)
                     
             elif self.scheme == 'BIO2':
-                tags[chunk_start] = 'B-' + chunk_type
+                tags[chunk_start] = f"B{self.sep}{chunk_type}"
                 for k in range(chunk_start+1, chunk_end):
-                    tags[k] = 'I-' + chunk_type
+                    tags[k] = f"I{self.sep}{chunk_type}"
                     
             elif self.scheme == 'BIOES':
                 if chunk_end - chunk_start == 1:
-                    tags[chunk_start] = 'S-' + chunk_type
+                    tags[chunk_start] = f"S{self.sep}{chunk_type}"
                 else:
-                    tags[chunk_start] = 'B-' + chunk_type
-                    tags[chunk_end-1] = 'E-' + chunk_type
+                    tags[chunk_start] = f"B{self.sep}{chunk_type}"
+                    tags[chunk_end-1] = f"E{self.sep}{chunk_type}"
                     for k in range(chunk_start+1, chunk_end-1):
-                        tags[k] = 'I-' + chunk_type
+                        tags[k] = f"I{self.sep}{chunk_type}"
             
             elif self.scheme == 'OntoNotes':
                 if chunk_end - chunk_start == 1:
-                    tags[chunk_start] = '(' + chunk_type + ')'
+                    tags[chunk_start] = f"({chunk_type})"
                 else:
-                    tags[chunk_start] = '(' + chunk_type + '*'
+                    tags[chunk_start] = f"({chunk_type}*"
                     tags[chunk_end-1] = '*)'
                     for k in range(chunk_start+1, chunk_end-1):
                         tags[k] = '*'
@@ -130,9 +124,9 @@ class ChunksTagsTranslator(object):
             
         return tags
         
-    
-    def _vote_in_types(self, chunk_types, breaking_for_types: bool=True):
-        if breaking_for_types:
+        
+    def _vote_in_types(self, chunk_types):
+        if self.breaking_for_types:
             # All elements must be the same. 
             return chunk_types[0]
         else:
@@ -140,8 +134,8 @@ class ChunksTagsTranslator(object):
             type_counter = Counter(chunk_types)
             type_counter[chunk_types[0]] += 0.5
             return type_counter.most_common(1)[0][0]
-    
-    def tags2chunks(self, tags: list, breaking_for_types: bool=True):
+        
+    def tags2chunks(self, tags: List[str]):
         if self.scheme == 'OntoNotes':
             return self.ontonotes_tags2chunks(tags)
         
@@ -153,8 +147,8 @@ class ChunksTagsTranslator(object):
             if tag in ('O', '<pad>'):
                 this_tag, this_type = 'O', 'O'
             else:
-                if '-' in tag:
-                    this_tag, this_type = tag.split('-', maxsplit=1)
+                if self.sep in tag:
+                    this_tag, this_type = tag.split(self.sep, maxsplit=1)
                 else:
                     # Typically cascade-tags without types
                     this_tag, this_type = tag, '<pseudo-type>'
@@ -166,12 +160,12 @@ class ChunksTagsTranslator(object):
             # In such case, the `prev_tag` must be `B` or `I` and 
             #               the `this_tag` must be `I` or `E`. 
             # The breaking operation is equivalent to treating `this_tag` as `B`. 
-            if is_in_chunk and breaking_for_types and (this_type != prev_type):
+            if is_in_chunk and self.breaking_for_types and (this_type != prev_type):
                 this_trans = self.trans[(prev_tag, 'B')]
                 is_in_chunk = False
                 
             if this_trans['end_of_chunk']:
-                chunks.append((self._vote_in_types(chunk_types, breaking_for_types), chunk_start, k))
+                chunks.append((self._vote_in_types(chunk_types), chunk_start, k))
                 chunk_types = []
                 
             if this_trans['start_of_chunk']:
@@ -185,11 +179,12 @@ class ChunksTagsTranslator(object):
             
             
         if prev_tag != 'O':
-            chunks.append((self._vote_in_types(chunk_types, breaking_for_types), chunk_start, len(tags)))
+            chunks.append((self._vote_in_types(chunk_types), chunk_start, len(tags)))
             
         return chunks
         
-    def ontonotes_tags2chunks(self, tags: list):
+        
+    def ontonotes_tags2chunks(self, tags: List[str]):
         chunks = []
         prev_tag = '*)'
         chunk_start, chunk_type = -1, None
@@ -215,77 +210,3 @@ class ChunksTagsTranslator(object):
             chunks.append((chunk_type, chunk_start, len(tags)))
             
         return chunks
-    
-        
-    def chunks2text_chunks(self, chunks: list, raw_text: str, tokens: TokenSequence):
-        text_starts, text_ends = tokens.start, tokens.end
-        
-        text_chunks = []
-        for chunk_type, chunk_start, chunk_end in chunks:
-            chunk_start_in_text = text_starts[chunk_start]
-            chunk_end_in_text = text_ends[chunk_end-1]
-            text_chunks.append((raw_text[chunk_start_in_text:chunk_end_in_text], 
-                                chunk_type, 
-                                chunk_start_in_text, 
-                                chunk_end_in_text))
-        return text_chunks
-    
-        
-    def text_chunks2chunks(self, text_chunks: list, raw_text: str, tokens: TokenSequence, mismatch_tol: int=2):
-        text_starts, text_ends = tokens.start, tokens.end
-        
-        chunks = []
-        errors, mismatches = [], []
-        for chunk_text, chunk_type, chunk_start_in_text, chunk_end_in_text in text_chunks:
-            # Error data
-            if chunk_text != raw_text[chunk_start_in_text:chunk_end_in_text]:
-                if re.sub('[-–]', '-', chunk_text) == re.sub('[-–]', '-', raw_text[chunk_start_in_text:chunk_end_in_text]):
-                    pass
-                elif re.sub('\s', ' ', chunk_text) == re.sub('\s', ' ', raw_text[chunk_start_in_text:chunk_end_in_text]):
-                    pass
-                elif chunk_text == raw_text[chunk_start_in_text:chunk_start_in_text+len(chunk_text)]:
-                    chunk_end_in_text = chunk_start_in_text + len(chunk_text)
-                elif chunk_text == raw_text[chunk_end_in_text-len(chunk_text):chunk_end_in_text]:
-                    chunk_start_in_text = chunk_end_in_text - len(chunk_text)
-                else:
-                    errors.append((chunk_text, raw_text[chunk_start_in_text:chunk_end_in_text]))
-                    continue
-                
-            find_start, chunk_start = find_ascending(text_starts, chunk_start_in_text)
-            find_end, chunk_end_m1 = find_ascending(text_ends, chunk_end_in_text)
-            
-            # Mis-matched data
-            if not find_start:
-                mismatches.append([raw_text[text_starts[chunk_start-1]:text_ends[chunk_start-1]], 
-                                   raw_text[text_starts[chunk_start-1]:chunk_start_in_text], 
-                                   raw_text[chunk_start_in_text:text_ends[chunk_start-1]]])
-            if not find_end:
-                mismatches.append([raw_text[text_starts[chunk_end_m1]:text_ends[chunk_end_m1]], 
-                                   raw_text[text_starts[chunk_end_m1]:chunk_end_in_text], 
-                                   raw_text[chunk_end_in_text:text_ends[chunk_end_m1]]])
-            
-            # If it is exactly found...
-            if find_start and find_end:
-                chunks.append((chunk_type, chunk_start, chunk_end_m1+1))
-                
-            # If it is almost found... 
-            if (not find_start) and find_end and (chunk_start_in_text - text_starts[chunk_start-1] <= mismatch_tol):
-                chunk_start = chunk_start - 1
-                chunks.append((chunk_type, chunk_start, chunk_end_m1+1))
-                
-            if find_start and (not find_end) and (text_ends[chunk_end_m1] - chunk_end_in_text <= mismatch_tol):
-                chunks.append((chunk_type, chunk_start, chunk_end_m1+1))
-        
-        return chunks, errors, mismatches
-    
-    
-    def tags2text_chunks(self, tags: list, raw_text: str, tokens: TokenSequence, **kwargs):
-        chunks = self.tags2chunks(tags, **kwargs)
-        return self.chunks2text_chunks(chunks, raw_text, tokens)
-        
-    
-    def text_chunks2tags(self, text_chunks: list, raw_text: str, tokens: TokenSequence, **kwargs):
-        chunks, errors, mismatches = self.text_chunks2chunks(text_chunks, raw_text, tokens, **kwargs)
-        return self.chunks2tags(chunks, len(tokens), **kwargs), errors, mismatches
-    
-    

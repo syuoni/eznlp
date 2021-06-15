@@ -15,8 +15,9 @@ from eznlp.dataset import Dataset
 from eznlp.config import ConfigDict
 from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig, CharConfig, SoftLexiconConfig
 from eznlp.model import ELMoConfig, BertLikeConfig, FlairConfig
-from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderConfig
+from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderConfig, BoundarySelectionDecoderConfig
 from eznlp.model import ModelConfig
+from eznlp.model.bert_like import segment_uniformly_for_bert_like
 from eznlp.training import Trainer
 from eznlp.training.utils import count_params
 from eznlp.training.evaluation import evaluate_entity_recognition
@@ -36,7 +37,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
     
     group_decoder = parser.add_argument_group('decoder configurations')
     group_decoder.add_argument('--ck_decoder', type=str, default='sequence_tagging', 
-                               help="chunk decoding method", choices=['sequence_tagging', 'span_classification'])
+                               help="chunk decoding method", choices=['sequence_tagging', 'span_classification', 'boundary_selection'])
     group_decoder.add_argument('--criterion', type=str, default='CRF', 
                                help="decoder loss criterion")
     group_decoder.add_argument('--focal_gamma', type=float, default=2.0, 
@@ -56,6 +57,11 @@ def parse_arguments(parser: argparse.ArgumentParser):
     group_span_classification.add_argument('--ck_size_emb_dim', type=int, default=25, 
                                            help="span size embedding dim")
     
+    group_boundary_selection = parser.add_argument_group('boundary selection')
+    group_boundary_selection.add_argument('--no_biaffine', dest='use_biaffine', default=True, action='store_false', 
+                                          help="whether to use biaffine")
+    group_boundary_selection.add_argument('--affine_arch', type=str, default='FFN', 
+                                          help="affine encoder architecture")
     return parse_to_args(parser)
 
 
@@ -131,7 +137,7 @@ def collect_IE_assembly_config(args: argparse.Namespace):
         # Cased tokenizer for NER task
         bert_like, tokenizer = load_pretrained(args.bert_arch, args, cased=True)
         bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert_like, arch=args.bert_arch, 
-                                          freeze=False, use_truecase=args.bert_arch.startswith('BERT'))
+                                          freeze=False, use_truecase='cased' in os.path.basename(bert_like.name_or_path).split('-'))
     else:
         raise Exception("No sub-command specified")
         
@@ -154,7 +160,7 @@ def build_ER_config(args: argparse.Namespace):
                                                       criterion=args.criterion, 
                                                       gamma=args.focal_gamma, 
                                                       in_drop_rates=drop_rates)
-    else:
+    elif args.ck_decoder == 'span_classification':
         decoder_config = SpanClassificationDecoderConfig(agg_mode=args.agg_mode, 
                                                          criterion=args.criterion, 
                                                          gamma=args.focal_gamma, 
@@ -162,6 +168,12 @@ def build_ER_config(args: argparse.Namespace):
                                                          max_span_size=args.max_span_size, 
                                                          size_emb_dim=args.ck_size_emb_dim, 
                                                          in_drop_rates=drop_rates)
+    elif args.ck_decoder == 'boundary_selection':
+        decoder_config = BoundarySelectionDecoderConfig(use_biaffine=args.use_biaffine, 
+                                                        affine=EncoderConfig(arch=args.affine_arch, hid_dim=150, num_layers=1, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2), 
+                                                        criterion=args.criterion, 
+                                                        gamma=args.focal_gamma, 
+                                                        hid_drop_rates=drop_rates)
     return ModelConfig(**collect_IE_assembly_config(args), decoder=decoder_config)
 
 
@@ -175,7 +187,7 @@ if __name__ == '__main__':
     if not os.path.exists(save_path):
         os.makedirs(save_path)
         
-    handlers=[logging.FileHandler(f"{save_path}/training.log")]
+    handlers = [logging.FileHandler(f"{save_path}/training.log")]
     if args.log_terminal:
         handlers.append(logging.StreamHandler(sys.stdout))
     logging.basicConfig(level=logging.INFO, 
@@ -193,10 +205,16 @@ if __name__ == '__main__':
     device = auto_device()
     if device.type.startswith('cuda'):
         torch.cuda.set_device(device)
+        temp = torch.randn(100).to(device)
         
     train_data, dev_data, test_data = load_data(args)
     args.language = dataset2language[args.dataset]
     config = build_ER_config(args)
+    
+    if args.command in ('finetune', 'ft') and args.dataset in ('SIGHAN2006', 'yidu_s4k'):
+        train_data = segment_uniformly_for_bert_like(train_data, config.bert_like.tokenizer, verbose=args.log_terminal)
+        dev_data   = segment_uniformly_for_bert_like(dev_data,   config.bert_like.tokenizer, verbose=args.log_terminal)
+        test_data  = segment_uniformly_for_bert_like(test_data,  config.bert_like.tokenizer, verbose=args.log_terminal)
     
     train_set = Dataset(train_data, config, training=True)
     train_set.build_vocabs_and_dims(dev_data, test_data)

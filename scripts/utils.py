@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import argparse
 import logging
+import re
 import spacy
 import jieba
 import random
@@ -13,7 +14,8 @@ import flair
 
 from eznlp.token import LexiconTokenizer
 from eznlp.vectors import Vectors
-from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO
+from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO, BratIO
+from eznlp.io import PostIO
 from eznlp.training import Trainer
 from eznlp.training.utils import LRLambda
 from eznlp.training.utils import collect_params, check_param_groups
@@ -119,6 +121,8 @@ dataset2language = {'conll2003': 'English',
                     'WeiboNER': 'Chinese', 
                     'SIGHAN2006': 'Chinese', 
                     'conll2012_zh': 'Chinese', 
+                    'yidu_s4k': 'Chinese', 
+                    'CLERD': 'Chinese', 
                     'yelp2013': 'English', 
                     'imdb': 'English', 
                     'yelp_full': 'English', 
@@ -169,21 +173,44 @@ def load_data(args: argparse.Namespace):
         test_data  = conll_io.read("data/WeiboNER/weiboNER_2nd_conll.test")
         
     elif args.dataset == 'SIGHAN2006':
-        # https://github.com/v-mipeng/LexiconAugmentedNER/issues/3
+        # https://github.com/v-mipeng/LexiconAugmentedNER/issues/3#issuecomment-634563407
         conll_io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BIO2', encoding='utf-8', token_sep="", pad_token="")
         train_data = conll_io.read("data/SIGHAN2006/train.txt")
         dev_data   = conll_io.read("data/SIGHAN2006/test.txt")
         test_data  = conll_io.read("data/SIGHAN2006/test.txt")
-        if args.command in ('finetune', 'ft'):
-            for data in [train_data, dev_data, test_data]:
-                for data_entry in data:
-                    data_entry['tokens'] = data_entry['tokens'][:510]
         
     elif args.dataset == 'conll2012_zh':
         conll_io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', line_sep_starts=["#begin", "#end", "pt/"], encoding='utf-8', token_sep="", pad_token="")
         train_data = conll_io.read("data/conll2012/train.chinese.v4_gold_conll")
         dev_data   = conll_io.read("data/conll2012/dev.chinese.v4_gold_conll")
         test_data  = conll_io.read("data/conll2012/test.chinese.v4_gold_conll")
+        train_data = conll_io.flatten_to_characters(train_data)
+        dev_data   = conll_io.flatten_to_characters(dev_data)
+        test_data  = conll_io.flatten_to_characters(test_data)
+        
+    elif args.dataset == 'yidu_s4k':
+        io = JsonIO(is_tokenized=False, tokenize_callback='char', 
+                    text_key='originalText', chunk_key='entities', chunk_type_key='label_type', chunk_start_key='start_pos', chunk_end_key='end_pos', 
+                    is_whole_piece=False, encoding='utf-8-sig', token_sep="", pad_token="")
+        train_data = io.read("data/yidu_s4k/subtask1_training_part1.txt") + io.read("data/yidu_s4k/subtask1_training_part2.txt")
+        test_data  = io.read("data/yidu_s4k/subtask1_test_set_with_answer.json")
+        train_data, dev_data = sklearn.model_selection.train_test_split(train_data, test_size=0.2, random_state=args.seed)
+        
+    elif args.dataset == 'CLERD':
+        io = BratIO(tokenize_callback='char', has_ins_space=False, parse_attrs=False, parse_relations=True, 
+                    max_len=500, line_sep="\n", allow_broken_chunk_text=True, consistency_mapping={'[・;é]': '、'}, 
+                    encoding='utf-8', token_sep="", pad_token="")
+        train_data = io.read_folder("data/CLERD/relation_extraction/Training")
+        dev_data   = io.read_folder("data/CLERD/relation_extraction/Validation")
+        test_data  = io.read_folder("data/CLERD/relation_extraction/Testing")
+        
+        post_io = PostIO(verbose=False)
+        kwargs = {'max_span_size': 20, 
+                  'chunk_type_mapping': lambda x: x.split('-')[0] if x not in ('Physical', 'Term') else None, 
+                  'relation_type_mapping': lambda x: x if x not in ('Coreference', ) else None}
+        train_data = post_io.map(train_data, **kwargs)
+        dev_data   = post_io.map(dev_data, **kwargs)
+        test_data  = post_io.map(test_data, **kwargs)
         
     elif args.dataset == 'yelp2013':
         tabular_io = TabularIO(text_col_id=3, label_col_id=2, sep="\t\t", mapping={"<sssss>": "\n"}, encoding='utf-8', verbose=args.log_terminal, 
@@ -194,7 +221,7 @@ def load_data(args: argparse.Namespace):
         
     elif args.dataset == 'imdb':
         folder_io = CategoryFolderIO(categories=["pos", "neg"], mapping={"<br />": "\n"}, tokenize_callback=spacy_nlp_en, encoding='utf-8', verbose=args.log_terminal, 
-                             case_mode='lower', number_mode='None')
+                                     case_mode='lower', number_mode='None')
         train_data = folder_io.read("data/imdb/train")
         test_data  = folder_io.read("data/imdb/test")
         train_data, dev_data = sklearn.model_selection.train_test_split(train_data, test_size=0.2, random_state=args.seed)
@@ -251,7 +278,9 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
                 flair.models.LanguageModel.load_language_model("assets/flair/news-backward-0.4.1.pt"))
     elif args.language.lower() == 'english':
         if pretrained_str.lower().startswith('bert'):
-            if 'base' in pretrained_str.lower():
+            if 'wwm' in pretrained_str.lower():
+                PATH = "assets/transformers/bert-large-cased-whole-word-masking" if cased else "assets/transformers/bert-large-uncased-whole-word-masking"
+            elif 'base' in pretrained_str.lower():
                 PATH = "assets/transformers/bert-base-cased" if cased else "assets/transformers/bert-base-uncased"
             elif 'large' in pretrained_str.lower():
                 PATH = "assets/transformers/bert-large-cased" if cased else "assets/transformers/bert-large-uncased"
@@ -266,16 +295,33 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
             return (transformers.RobertaModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.RobertaTokenizer.from_pretrained(PATH, add_prefix_space=True))
         
+        elif pretrained_str.lower().startswith('albert'):
+            size = re.search("x*(base|large)", pretrained_str.lower())
+            if size is not None:
+                PATH = f"assets/transformers/albert-{size.group()}-v2"
+            return (transformers.AlbertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
+                    transformers.AlbertTokenizer.from_pretrained(PATH))
+        
+        elif pretrained_str.lower().startswith('spanbert'):
+            if 'base' in pretrained_str.lower():
+                PATH = "assets/transformers/SpanBERT/spanbert-base-cased"
+            elif 'large' in pretrained_str.lower():
+                PATH = "assets/transformers/SpanBERT/spanbert-large-cased"
+            return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
+                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=False))
+            
     elif args.language.lower() == 'chinese':
         if pretrained_str.lower().startswith('bert'):
             PATH = "assets/transformers/hfl/chinese-bert-wwm-ext"
-            return (transformers.AutoModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
-                    transformers.AutoTokenizer.from_pretrained(PATH, model_max_length=512))
+            return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
+                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512))
         
         elif pretrained_str.lower().startswith('roberta'):
+            # RoBERTa-like BERT
+            # https://github.com/ymcui/Chinese-BERT-wwm#faq
             PATH = "assets/transformers/hfl/chinese-roberta-wwm-ext"
-            return (transformers.AutoModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
-                    transformers.AutoTokenizer.from_pretrained(PATH, model_max_length=512, add_prefix_space=True))
+            return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
+                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512))
 
 
 

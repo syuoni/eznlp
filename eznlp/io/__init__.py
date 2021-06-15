@@ -3,4 +3,6 @@ from .tabular import TabularIO
 from .category_folder import CategoryFolderIO
 from .conll import ConllIO
 from .brat import BratIO
-from .json import JsonIO
+from .json import JsonIO, SQuADIO
+from .chip import ChipIO
+from .processing import PostIO

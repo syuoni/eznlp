@@ -1,0 +1,113 @@
+T2	Test_Res_Abnorm 204 206	血尿
+T5	Test_Res 35 44	脉搏 75 次／分
+T7	Test_Res 47 58	呼吸 18.0 次／分
+T9	Test_Res 61 74	血压 184／63mmHg
+T11	Test_Res 77 81	神志 清
+T13	Test_Res 84 88	精神 可
+T15	Disease_Syndrome 146 164	2 型 糖尿病 伴有 肾 的 并发症
+T16	Disease_Syndrome 189 198	慢性 肾小球 肾炎
+A1	Unconfirmed T16
+T1	Test_Res_Abnorm 209 212	蛋白尿
+T17	Test_Res_Abnorm 215 217	水肿
+T18	Disease_Syndrome 220 223	高血压
+T21	Test 263 270	肾 穿刺 活检
+T22	Disease_Syndrome 287 295	高血压 肾 硬化
+A4	Unconfirmed T22
+T23	Disease_Syndrome 307 311	高血压病
+T24	Symptom 327 333	夜 尿 增多
+T25	Organ_Damage 336 345	肾小管 功能 损害
+T26	Test 353 357	尿 化验
+T27	Test_Res_Abnorm 360 366	少量 蛋白尿
+T28	Test_Res_Abnorm 369 375	尿 比重 低
+T29	Disease_Syndrome 400 406	继发性 肾病
+A5	Unconfirmed T29
+T30	Disease_Syndrome 410 421	系统性 红斑狼疮 肾炎
+T31	Disease_Syndrome 424 433	乙肝 相关性 肾病
+T32	Disease_Syndrome 436 443	多发性 骨髓瘤
+T34	Symptom 458 463	无 关节痛
+A10	Denied T34
+T35	Symptom 466 472	无 光 敏感
+A11	Denied T35
+T36	Disease_Syndrome 475 480	否认 乙肝
+A12	Denied T36
+T37	Symptom 483 486	无骨痛
+A13	Denied T37
+T38	Test 507 512	免疫 功能
+T39	Test 515 520	自身 抗体
+T40	Test 523 528	乙肝 三系
+T41	Test 531 538	尿 本周 蛋白
+T42	Test 584 589	三大 常规
+T43	Test 592 596	大 生化
+T44	Test 599 606	糖化 血红蛋白
+T45	Test 609 618	尿蛋白 肌酐 比值
+T46	Test 621 624	心电图
+T47	Test 627 638	腹部 + 泌尿系 B超
+T48	Drug 705 713	门冬 胰岛素 针
+T49	Drug_Dose 713 726	早 6iu   晚 6iu
+T50	Drug 729 737	甘精 胰岛素 针
+T51	Drug_Dose 739 742	5iu
+T52	Treat 744 747	降血糖
+T56	Treat 781 783	利尿
+T58	Treat 792 798	护 肾 治疗
+T53	Drug 751 756	缬沙坦 片
+T54	Drug 759 765	拜 新 同片
+T55	Drug 773 779	托拉 塞米片
+T57	Drug 787 790	开同片
+T19	Test_Res 236 240	无 血尿
+T20	Test_Res 243 247	无 水肿
+T3	Test_Res 21 30	体温 36.5 ℃
+A2	Analyzed T2
+A3	Analyzed T1
+A14	Analyzed T17
+A15	Analyzed T18
+A16	Analyzed T23
+A17	Analyzed T24
+A18	Analyzed T25
+A19	Analyzed T26
+A20	Analyzed T27
+A21	Analyzed T28
+A8	Analyzed T34
+A24	Analyzed T35
+A25	Analyzed T36
+A26	Analyzed T37
+T4	Test_Res 451 455	无 皮疹
+A7	Analyzed T4
+A9	Analyzed T38
+A27	Analyzed T39
+A28	Analyzed T40
+A29	Analyzed T41
+T6	Care 665 672	II 级 护理
+T8	Care 675 688	糖尿病 低盐 低蛋白 饮食
+T10	Test 694 696	血压
+T12	Treat 767 769	降压
+A22	Unconfirmed T30
+A23	Unconfirmed T31
+A6	Unconfirmed T32
+R1	Dis_Cause_DS Arg1:T16 Arg2:T2	
+R2	Group_DS Arg1:T2 Arg2:T1	
+R3	Group_DS Arg1:T1 Arg2:T17	
+R4	Group_DS Arg1:T17 Arg2:T18	
+R5	DS_RuleOut_Dis Arg1:T19 Arg2:T16	
+R6	Group_DS Arg1:T19 Arg2:T20	
+R7	DS_ReqInfo_Test Arg1:T16 Arg2:T21	
+R8	DS_Clue_Dis Arg1:T22 Arg2:T23	
+R9	Dis_Cause_DS Arg1:T22 Arg2:T24	
+R10	Group_DS Arg1:T24 Arg2:T25	
+R11	DS_ReqInfo_Test Arg1:T22 Arg2:T26	
+R12	Test_Clue_DS Arg1:T26 Arg2:T27	
+R13	Group_DS Arg1:T30 Arg2:T31	
+R14	Group_DS Arg1:T27 Arg2:T28	
+R15	Group_DS Arg1:T31 Arg2:T32	
+R16	DS_Clue_Dis Arg1:T29 Arg2:T30	
+R17	DS_RuleOut_Dis Arg1:T4 Arg2:T29	
+R18	DS_Clue_Dis Arg1:T34 Arg2:T29	
+R19	Group_DS Arg1:T34 Arg2:T35	
+R20	Group_DS Arg1:T35 Arg2:T36	
+R21	DS_ReqInfo_Test Arg1:T29 Arg2:T38	
+R22	Group_Test Arg1:T38 Arg2:T39	
+R23	Group_DS Arg1:T36 Arg2:T37	
+R24	Group_Test Arg1:T39 Arg2:T40	
+R25	Group_Test Arg1:T40 Arg2:T41	
+T14	Test 699 701	血糖
+R26	Syn_Treat Arg1:T57 Arg2:T58	
+R27	Syn_Treat Arg1:T55 Arg2:T56	

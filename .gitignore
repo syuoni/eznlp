@@ -125,6 +125,13 @@ dmypy.json
 .pyre/
 
 # Data
-assets/*
-cache/*
-data/*
+# Ref: https://riptutorial.com/git/example/911/exceptions-in-a--gitignore-file
+/assets/
+/cache/
+!/data/
+/data/*
+!/data/*/
+/data/*/*
+!/data/*/demo.*
+!/data/conlleval/*.txt
+!/data/*/fix_*.py

@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-from ..token import TokenSequence
+import numpy
+
 from ..utils import ChunksTagsTranslator
 from .base import IO
 
 
 class ConllIO(IO):
-    """
-    An IO interface of CoNLL-format files. 
+    """An IO interface of CoNLL-format files. 
     
     Parameters
     ----------
@@ -19,17 +19,18 @@ class ConllIO(IO):
                  tag_col_id=1, 
                  sep=None, 
                  scheme='BIO1', 
+                 tag_sep='-',
+                 breaking_for_types=True, 
                  additional_col_id2name=None, 
                  line_sep_starts=None, 
-                 breaking_for_types=True, 
                  encoding=None, 
                  verbose: bool=True, 
-                 **kwargs):
+                 **token_kwargs):
         self.text_col_id = text_col_id
         self.tag_col_id = tag_col_id
         self.sep = sep
         
-        self.translator = ChunksTagsTranslator(scheme=scheme)
+        self.tags_translator = ChunksTagsTranslator(scheme=scheme, sep=tag_sep, breaking_for_types=breaking_for_types)
         if additional_col_id2name is None:
             self.additional_col_id2name = {}
         else:
@@ -43,8 +44,7 @@ class ConllIO(IO):
             assert all(isinstance(start, str) for start in line_sep_starts)
             self.line_sep_starts = line_sep_starts
             
-        self.breaking_for_types = breaking_for_types
-        super().__init__(encoding=encoding, verbose=verbose, **kwargs)
+        super().__init__(is_tokenized=True, encoding=encoding, verbose=verbose, **token_kwargs)
         
         
     def read(self, file_path):
@@ -59,8 +59,8 @@ class ConllIO(IO):
                 if self._is_line_seperator(line):
                     if len(text) > 0:
                         additional_tags = {self.additional_col_id2name[col_id]: atags for col_id, atags in additional.items()}
-                        tokens = TokenSequence.from_tokenized_text(text, additional_tags, **self.kwargs)
-                        chunks = self.translator.tags2chunks(tags, self.breaking_for_types)
+                        tokens = self._build_tokens(text, additional_tags=additional_tags)
+                        chunks = self.tags_translator.tags2chunks(tags)
                         data.append({'tokens': tokens, 'chunks': chunks})
                         
                         text, tags = [], []
@@ -74,8 +74,8 @@ class ConllIO(IO):
                         
             if len(text) > 0:
                 additional_tags = {self.additional_col_id2name[col_id]: atags for col_id, atags in additional.items()}
-                tokens = TokenSequence.from_tokenized_text(text, additional_tags, **self.kwargs)
-                chunks = self.translator.tags2chunks(tags, self.breaking_for_types)
+                tokens = self._build_tokens(text, additional_tags=additional_tags)
+                chunks = self.tags_translator.tags2chunks(tags)
                 data.append({'tokens': tokens, 'chunks': chunks})
             
         return data
@@ -90,4 +90,23 @@ class ConllIO(IO):
                 return True
             
         return False
-
+    
+    
+    def flatten_to_characters(self, data: list):
+        additional_keys = [key for key in data[0]['tokens'][0].__dict__.keys() if key not in ('text', 'raw_text')]
+        
+        new_data = []
+        for entry in data:
+            tokenized_raw_text = entry['tokens'].raw_text
+            char_seq_lens = [len(tok) for tok in tokenized_raw_text]
+            cum_char_seq_lens = [0] + numpy.cumsum(char_seq_lens).tolist()
+            
+            flattened_tokenized_raw_text = [char for tok in tokenized_raw_text for char in tok]
+            # Repeat additional-tags for every character in a token
+            flattened_additional_tags = {key: [atag for atag, tok in zip(getattr(entry['tokens'], key), tokenized_raw_text) for char in tok] 
+                                             for key in additional_keys}
+            flattened_tokens = self._build_tokens(flattened_tokenized_raw_text, additional_tags=flattened_additional_tags)
+            flattened_chunks = [(label, cum_char_seq_lens[start], cum_char_seq_lens[end]) for label, start, end in entry['chunks']]
+            new_data.append({'tokens': flattened_tokens, 'chunks': flattened_chunks})
+            
+        return new_data

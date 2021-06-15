@@ -4,9 +4,10 @@ import re
 
 
 def segment_text_with_seps(text: str, seps: List[str], length: int=0):
-    """
-    Segment text with a list of separators. 
+    """Segment text with a list of separators. 
     
+    Notes
+    -----
     If `length` provided, the resulting spans will be as long as possible to be close to `length`. 
     A span may exceed `length`, if the corresponding distance between two successive separators exceeds it. 
     """
@@ -37,7 +38,10 @@ def segment_text_with_seps(text: str, seps: List[str], length: int=0):
 
 
 def segment_text_with_hierarchical_seps(text: str, hie_seps: List[List[str]], length: int=0):
-    """
+    """Segment text with hierarchical lists of separators. 
+    
+    Notes
+    -----
     Segment text first with seperators in `hie_seps[0]`. For the spans longer than `length`, 
     further segment the spans with separators in `hie_seps[1]`, and so on. 
     """
@@ -67,5 +71,4 @@ def segment_text_uniformly(text: str, num_spans: int=None, max_span_size: int=No
         start = int(span_size* i    + 0.5)
         end   = int(span_size*(i+1) + 0.5)
         yield (start, end)
-
 

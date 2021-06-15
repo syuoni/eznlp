@@ -3,8 +3,8 @@ import pytest
 import torch
 
 from eznlp.dataset import Dataset
-from eznlp.model import EncoderConfig, BertLikeConfig, JointDecoderConfig, ModelConfig
-from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderConfig, RelationClassificationDecoderConfig
+from eznlp.model import EncoderConfig, BertLikeConfig, BoundarySelectionDecoderConfig, ModelConfig
+from eznlp.model.decoder.boundary_selection import _generate_spans_from_upper_triangular
 from eznlp.training import Trainer
 
 
@@ -23,12 +23,11 @@ class TestModel(object):
         assert delta_hidden.abs().max().item() < 1e-4
         
         delta_losses = losses012[1:] - losses123[:-1]
-        assert delta_losses.abs().max().item() < 2e-4
+        assert delta_losses.abs().max().item() < 5e-4
         
-        chunks_pred012, relations_pred012 = self.model.decode(batch012)
-        chunks_pred123, relations_pred123 = self.model.decode(batch123)
-        assert chunks_pred012[1:] == chunks_pred123[:-1]
-        assert relations_pred012[1:] == relations_pred123[:-1]
+        pred012 = self.model.decode(batch012)
+        pred123 = self.model.decode(batch123)
+        assert pred012[1:] == pred123[:-1]
         
         
     def _assert_trainable(self):
@@ -50,18 +49,15 @@ class TestModel(object):
         assert isinstance(self.config.name, str) and len(self.config.name) > 0
         
         
-    @pytest.mark.parametrize("arch", ['Conv', 'LSTM'])
-    @pytest.mark.parametrize("ck_decoder", ['sequence_tagging', 'span_classification'])
-    @pytest.mark.parametrize("agg_mode", ['max_pooling'])
+    @pytest.mark.parametrize("use_biaffine", [True, False])
+    @pytest.mark.parametrize("affine_arch", ['FFN', 'LSTM'])
+    @pytest.mark.parametrize("size_emb_dim", [25, 0])
     @pytest.mark.parametrize("criterion", ['CE', 'FL'])
-    def test_model(self, arch, ck_decoder, agg_mode, criterion, conll2004_demo, device):
-        if ck_decoder.lower() == 'sequence_tagging':
-            ck_decoder_config = SequenceTaggingDecoderConfig(criterion='CRF')
-        else:
-            ck_decoder_config = SpanClassificationDecoderConfig(agg_mode=agg_mode, criterion=criterion)
-        self.config = ModelConfig(intermediate2=EncoderConfig(arch=arch), 
-                                  decoder=JointDecoderConfig(ck_decoder=ck_decoder_config, 
-                                                             rel_decoder=RelationClassificationDecoderConfig(agg_mode=agg_mode, criterion=criterion)))
+    def test_model(self, use_biaffine, affine_arch, size_emb_dim, criterion, conll2004_demo, device):
+        self.config = ModelConfig(decoder=BoundarySelectionDecoderConfig(use_biaffine=use_biaffine, 
+                                                                         affine=EncoderConfig(arch=affine_arch), 
+                                                                         size_emb_dim=size_emb_dim, 
+                                                                         criterion=criterion))
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
@@ -69,7 +65,7 @@ class TestModel(object):
         
     def test_model_with_bert_like(self, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
-        self.config = ModelConfig('joint', 
+        self.config = ModelConfig('boundary_selection', 
                                   ohots=None, 
                                   bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert), 
                                   intermediate2=None)
@@ -79,14 +75,36 @@ class TestModel(object):
         
         
     def test_prediction_without_gold(self, conll2004_demo, device):
-        self.config = ModelConfig('joint')
+        self.config = ModelConfig('boundary_selection')
         self._setup_case(conll2004_demo, device)
         
         data_wo_gold = [{'tokens': entry['tokens']} for entry in conll2004_demo]
         dataset_wo_gold = Dataset(data_wo_gold, self.config, training=False)
         
         trainer = Trainer(self.model, device=device)
-        set_chunks_pred, set_relations_pred = trainer.predict(dataset_wo_gold)
+        set_chunks_pred = trainer.predict(dataset_wo_gold)
         assert len(set_chunks_pred) == len(data_wo_gold)
-        assert len(set_relations_pred) == len(dataset_wo_gold)
 
+
+
+def test_boundaries_obj(re_data_demo):
+    entry = re_data_demo[0]
+    tokens, chunks = entry['tokens'], entry['chunks']
+    
+    config = ModelConfig('boundary_selection')
+    dataset = Dataset(re_data_demo, config)
+    dataset.build_vocabs_and_dims()
+    
+    boundaries_obj = dataset[0]['boundaries_obj']
+    assert boundaries_obj.chunks == chunks
+    assert all(boundaries_obj.boundary2label_id[start, end-1] == config.decoder.label2idx[label] for label, start, end in chunks)
+    
+    labels_retr = [config.decoder.idx2label[i] for i in boundaries_obj.boundary2label_id[torch.arange(len(tokens)) >= torch.arange(len(tokens)).unsqueeze(-1)].tolist()]
+    chunks_retr = [(label, start, end) for label, (start, end) in zip(labels_retr, _generate_spans_from_upper_triangular(len(tokens))) if label != config.decoder.none_label]
+    assert set(chunks_retr) == set(chunks)
+
+
+
+@pytest.mark.parametrize("seq_len", [1, 5, 10, 100])
+def test_generate_spans_from_upper_triangular(seq_len):
+    assert len(list(_generate_spans_from_upper_triangular(seq_len))) == (seq_len+1)*seq_len // 2

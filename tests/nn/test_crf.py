@@ -12,7 +12,7 @@ def test_crf():
     emissions = torch.randn(batch_size, step, tag_dim)
     tag_ids = torch.randint(0, tag_dim, (batch_size, step))
     seq_lens = torch.randint(1, step, (batch_size, ))
-    mask = (torch.arange(step).unsqueeze(0).repeat(batch_size, 1) >= seq_lens.unsqueeze(-1))
+    mask = (torch.arange(step).unsqueeze(0).expand(batch_size, -1) >= seq_lens.unsqueeze(-1))
     
     benchmark_crf = torchcrf.CRF(tag_dim, batch_first=True)
     benchmark_llh = benchmark_crf(emissions, tag_ids, (~mask).type(torch.uint8), reduction='none')

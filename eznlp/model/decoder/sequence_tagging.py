@@ -9,11 +9,78 @@ from ...nn.utils import unpad_seqs
 from ...nn.modules import CombinedDropout, CRF, SmoothLabelCrossEntropyLoss, FocalLoss
 from ...nn.init import reinit_layer_
 from ...metrics import precision_recall_f1_report
-from .base import DecoderConfig, Decoder
+from .base import DecoderMixin, DecoderConfig, Decoder
+
+
+class SequenceTaggingDecoderMixin(DecoderMixin):
+    @property
+    def scheme(self):
+        return self._scheme
+        
+    @scheme.setter
+    def scheme(self, scheme: str):
+        self._scheme = scheme
+        self.translator = ChunksTagsTranslator(scheme=scheme)
+        
+    @property
+    def idx2tag(self):
+        return self._idx2tag
+        
+    @idx2tag.setter
+    def idx2tag(self, idx2tag: List[str]):
+        self._idx2tag = idx2tag
+        self.tag2idx = {t: i for i, t in enumerate(self.idx2tag)} if idx2tag is not None else None
+        
+    @property
+    def voc_dim(self):
+        return len(self.tag2idx)
+        
+    @property
+    def pad_idx(self):
+        return self.tag2idx['<pad>']
+        
+    def exemplify(self, data_entry: dict, training: bool=True):
+        return {'tags_obj': Tags(data_entry, self, training=training)}
+        
+    def batchify(self, batch_examples: List[dict]):
+        return {'tags_objs': [ex['tags_obj'] for ex in batch_examples]}
+        
+    def retrieve(self, batch: Batch):
+        return [tags_obj.chunks for tags_obj in batch.tags_objs]
+        
+    def evaluate(self, y_gold: List[tuple], y_pred: List[tuple]):
+        """Micro-F1 for entity recognition. 
+        
+        References
+        ----------
+        https://www.clips.uantwerpen.be/conll2000/chunking/output.html
+        """
+        scores, ave_scores = precision_recall_f1_report(y_gold, y_pred)
+        return ave_scores['micro']['f1']
 
 
 
-class SequenceTaggingDecoderConfig(DecoderConfig):
+class Tags(TargetWrapper):
+    """
+    A wrapper of tags with underlying chunks. 
+    
+    Parameters
+    ----------
+    data_entry: dict
+        {'tokens': TokenSequence, 
+         'chunks': List[tuple]}
+    """
+    def __init__(self, data_entry: dict, config: SequenceTaggingDecoderMixin, training: bool=True):
+        super().__init__(training)
+        
+        self.chunks = data_entry.get('chunks', None)
+        if self.chunks is not None:
+            self.tags = config.translator.chunks2tags(data_entry['chunks'], len(data_entry['tokens']))
+            self.tag_ids = torch.tensor([config.tag2idx[t] for t in self.tags], dtype=torch.long)
+
+
+
+class SequenceTaggingDecoderConfig(DecoderConfig, SequenceTaggingDecoderMixin):
     def __init__(self, **kwargs):
         self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
         
@@ -37,32 +104,6 @@ class SequenceTaggingDecoderConfig(DecoderConfig):
         repr_attr_dict = {key: getattr(self, key) for key in ['in_dim', 'in_drop_rates', 'scheme', 'criterion']}
         return self._repr_non_config_attrs(repr_attr_dict)
         
-    @property
-    def scheme(self):
-        return self._scheme
-    
-    @scheme.setter
-    def scheme(self, scheme: str):
-        self._scheme = scheme
-        self.translator = ChunksTagsTranslator(scheme=scheme)
-        
-    @property
-    def idx2tag(self):
-        return self._idx2tag
-        
-    @idx2tag.setter
-    def idx2tag(self, idx2tag: List[str]):
-        self._idx2tag = idx2tag
-        self.tag2idx = {t: i for i, t in enumerate(self.idx2tag)} if idx2tag is not None else None
-        
-    @property
-    def voc_dim(self):
-        return len(self.tag2idx)
-        
-    @property
-    def pad_idx(self):
-        return self.tag2idx['<pad>']
-    
     def build_vocab(self, *partitions):
         counter = Counter()
         for data in partitions:
@@ -72,48 +113,20 @@ class SequenceTaggingDecoderConfig(DecoderConfig):
         self.idx2tag = ['<pad>'] + list(counter.keys())
         
         
-    def exemplify(self, data_entry: dict, training: bool=True):
-        return {'tags_obj': Tags(data_entry, self, training=training)}
-        
-    def batchify(self, batch_examples: List[dict]):
-        return {'tags_objs': [ex['tags_obj'] for ex in batch_examples]}
-        
     def instantiate(self):
         return SequenceTaggingDecoder(self)
 
 
 
-class Tags(TargetWrapper):
-    """
-    A wrapper of tags with underlying chunks. 
-    
-    Parameters
-    ----------
-    data_entry: dict
-        {'tokens': TokenSequence, 
-         'chunks': List[tuple]}
-    """
-    def __init__(self, data_entry: dict, config: SequenceTaggingDecoderConfig, training: bool=True):
-        super().__init__(training)
-        
-        self.chunks = data_entry.get('chunks', None)
-        if self.chunks is not None:
-            self.tags = config.translator.chunks2tags(data_entry['chunks'], len(data_entry['tokens']))
-            self.tag_ids = torch.tensor([config.tag2idx[t] for t in self.tags], dtype=torch.long)
-
-
-
-class SequenceTaggingDecoder(Decoder):
+class SequenceTaggingDecoder(Decoder, SequenceTaggingDecoderMixin):
     def __init__(self, config: SequenceTaggingDecoderConfig):
-        super().__init__(config)
+        super().__init__()
+        self.scheme = config.scheme
+        self.idx2tag = config.idx2tag
+        
         self.dropout = CombinedDropout(*config.in_drop_rates)
         self.hid2logit = torch.nn.Linear(config.in_dim, config.voc_dim)
         reinit_layer_(self.hid2logit, 'sigmoid')
-        
-        self.scheme = config.scheme
-        self.translator = config.translator
-        self.idx2tag = config.idx2tag
-        self.tag2idx = config.tag2idx
         
         if config.criterion.lower() == 'crf':
             self.criterion = CRF(tag_dim=config.voc_dim, pad_idx=config.pad_idx, batch_first=True)
@@ -162,17 +175,3 @@ class SequenceTaggingDecoder(Decoder):
         batch_tags = self.decode_tags(batch, full_hidden)
         return [self.translator.tags2chunks(tags) for tags in batch_tags]
     
-    def retrieve(self, batch: Batch):
-        return [tags_obj.chunks for tags_obj in batch.tags_objs]
-        
-        
-    def evaluate(self, y_gold: List[tuple], y_pred: List[tuple]):
-        """Micro-F1 for entity recognition. 
-        
-        References
-        ----------
-        https://www.clips.uantwerpen.be/conll2000/chunking/output.html
-        """
-        scores, ave_scores = precision_recall_f1_report(y_gold, y_pred)
-        return ave_scores['micro']['f1']
-
