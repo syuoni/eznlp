@@ -3,7 +3,7 @@ import pytest
 import torch
 
 from eznlp.dataset import Dataset
-from eznlp.model import EncoderConfig, BertLikeConfig, SpanAttrClassificationDecoderConfig, ModelConfig
+from eznlp.model import BertLikeConfig, SpanAttrClassificationDecoderConfig, JointExtractionDecoderConfig, ModelConfig
 from eznlp.training import Trainer
 
 
@@ -83,23 +83,36 @@ class TestModel(object):
 
 
 
-# TODO
+@pytest.mark.parametrize("training", [True, False])
 @pytest.mark.parametrize("building", [True, False])
-def test_chunks_obj(EAR_data_demo, building):
+def test_chunks_obj(EAR_data_demo, training, building):
     entry = EAR_data_demo[0]
     chunks, attributes = entry['chunks'], entry['attributes']
 
-    config = ModelConfig(decoder=SpanAttrClassificationDecoderConfig())
-    attr_decoder_config = config.decoder
+    if building:
+        config = ModelConfig(decoder=SpanAttrClassificationDecoderConfig())
+        attr_decoder_config = config.decoder
+    else:
+        config = ModelConfig(decoder=JointExtractionDecoderConfig(attr_decoder=SpanAttrClassificationDecoderConfig(), rel_decoder=None))
+        attr_decoder_config = config.decoder.attr_decoder
 
-    dataset = Dataset(EAR_data_demo, config, training=True)
+    dataset = Dataset(EAR_data_demo, config, training=training)
     dataset.build_vocabs_and_dims()
 
     chunks_obj = dataset[0]['chunks_obj']
     assert chunks_obj.attributes == attributes
 
-    assert chunks_obj.chunks == chunks
-    assert chunks_obj.is_built
+    if building:
+        assert chunks_obj.chunks == chunks
+        assert chunks_obj.is_built
+    else:
+        assert chunks_obj.chunks == chunks if training else len(chunks_obj.chunks) == 0
+        assert not chunks_obj.is_built
+        chunks_pred = [('EntA', 0, 1), ('EntB', 1, 2), ('EntA', 2, 3)]
+        chunks_obj.inject_chunks(chunks_pred)
+        chunks_obj.build(attr_decoder_config)
+        assert len(chunks_obj.chunks) == len(chunks) + len(chunks_pred) if training else len(chunks_obj.chunks) == len(chunks_pred)
+        assert chunks_obj.is_built
 
     assert (chunks_obj.span_size_ids+1).tolist() == [e-s for l, s, e in chunks_obj.chunks]
     assert chunks_obj.attr_label_ids.size(0) == len(chunks_obj.chunks)
@@ -109,4 +122,7 @@ def test_chunks_obj(EAR_data_demo, building):
         attr_labels = [attr_decoder_config.idx2attr_label[i] for i, l in enumerate(attr_label_ids.tolist()) if l > 0]
         if attr_decoder_config.attr_none_label not in attr_labels:
             attributes_retr.extend([(attr_label, chunk) for attr_label in attr_labels])
-    assert set(attributes_retr) == set(attributes)
+    if training or building:
+        assert set(attributes_retr) == set(attributes)
+    else:
+        assert len(attributes_retr) == 0

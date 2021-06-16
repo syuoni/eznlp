@@ -6,3 +6,4 @@ from .span_attr_classification import SpanAttrClassificationDecoderConfig
 from .span_rel_classification import SpanRelClassificationDecoderConfig
 from .boundary_selection import BoundarySelectionDecoderConfig
 from .joint_er_re import JointERREDecoderConfig
+from .joint_extraction import JointExtractionDecoderConfig

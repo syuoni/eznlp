@@ -40,7 +40,8 @@ from eznlp.model import (TextClassificationDecoderConfig,
                          SpanAttrClassificationDecoderConfig, 
                          SpanRelClassificationDecoderConfig, 
                          BoundarySelectionDecoderConfig, 
-                         JointERREDecoderConfig)
+                         JointERREDecoderConfig, 
+                         JointExtractionDecoderConfig)
 from eznlp.model import ModelConfig
 
 from eznlp.language_modeling import MaskedLMConfig
