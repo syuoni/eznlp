@@ -86,8 +86,8 @@ class TestModel(object):
 @pytest.mark.parametrize("num_neg_relations", [1, 100])
 @pytest.mark.parametrize("training", [True, False])
 @pytest.mark.parametrize("building", [True, False])
-def test_chunk_pairs_obj(re_data_demo, num_neg_relations, training, building):
-    entry = re_data_demo[0]
+def test_chunk_pairs_obj(EAR_data_demo, num_neg_relations, training, building):
+    entry = EAR_data_demo[0]
     chunks, relations = entry['chunks'], entry['relations']
     
     if building:
@@ -97,7 +97,7 @@ def test_chunk_pairs_obj(re_data_demo, num_neg_relations, training, building):
         config = ModelConfig(decoder=JointERREDecoderConfig(rel_decoder=SpanRelClassificationDecoderConfig(num_neg_relations=num_neg_relations)))
         rel_decoder_config = config.decoder.rel_decoder
         
-    dataset = Dataset(re_data_demo, config, training=training)
+    dataset = Dataset(EAR_data_demo, config, training=training)
     dataset.build_vocabs_and_dims()
     
     chunk_pairs_obj = dataset[0]['chunk_pairs_obj']

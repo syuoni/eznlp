@@ -87,12 +87,12 @@ class TestModel(object):
 
 
 
-def test_boundaries_obj(re_data_demo):
-    entry = re_data_demo[0]
+def test_boundaries_obj(EAR_data_demo):
+    entry = EAR_data_demo[0]
     tokens, chunks = entry['tokens'], entry['chunks']
     
     config = ModelConfig('boundary_selection')
-    dataset = Dataset(re_data_demo, config)
+    dataset = Dataset(EAR_data_demo, config)
     dataset.build_vocabs_and_dims()
     
     boundaries_obj = dataset[0]['boundaries_obj']

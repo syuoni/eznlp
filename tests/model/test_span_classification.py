@@ -85,13 +85,13 @@ class TestModel(object):
 @pytest.mark.parametrize("num_neg_chunks", [10, 100])
 @pytest.mark.parametrize("max_span_size", [2, 5, 50])
 @pytest.mark.parametrize("training", [True, False])
-def test_spans_obj(re_data_demo, num_neg_chunks, max_span_size, training):
-    entry = re_data_demo[0]
+def test_spans_obj(EAR_data_demo, num_neg_chunks, max_span_size, training):
+    entry = EAR_data_demo[0]
     tokens, chunks = entry['tokens'], entry['chunks']
     
     config = ModelConfig(decoder=SpanClassificationDecoderConfig(num_neg_chunks=num_neg_chunks, 
                                                                  max_span_size=max_span_size))
-    dataset = Dataset(re_data_demo, config, training=training)
+    dataset = Dataset(EAR_data_demo, config, training=training)
     dataset.build_vocabs_and_dims()
     
     spans_obj = dataset[0]['spans_obj']
