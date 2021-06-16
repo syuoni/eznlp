@@ -107,7 +107,7 @@ def EAR_data_demo():
     attributes = [('AttrA', chunks[0]), 
                   ('AttrB', chunks[1]), 
                   ('AttrA', chunks[2]), 
-                  ('AttrC', chunks[3])]
+                  ('AttrC', chunks[2])]
     relations = [('RelA', chunks[0], chunks[1]), 
                  ('RelA', chunks[0], chunks[2]), 
                  ('RelB', chunks[1], chunks[2]), 

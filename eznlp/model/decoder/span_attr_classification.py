@@ -261,9 +261,7 @@ class SpanAttrClassificationDecoder(Decoder, SpanAttrClassificationDecoderMixin)
             if len(batch.chunks_objs[k].chunks) > 0:
                 for chunk, ck_sigmoids in zip(batch.chunks_objs[k].chunks, batch_logits[k].sigmoid()):
                     attr_labels = [self.idx2attr_label[i] for i, s in enumerate(ck_sigmoids.cpu().tolist()) if s >= self.confidence_threshold]
-                    if self.attr_none_label in attr_labels:
-                        continue
-                    else:
+                    if self.attr_none_label not in attr_labels:
                         attributes.extend([(attr_label, chunk) for attr_label in attr_labels])
             batch_attributes.append(attributes)
             

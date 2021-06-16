@@ -82,7 +82,31 @@ class TestModel(object):
         assert len(set_attributes_pred) == len(data_wo_gold)
 
 
+
 # TODO
 @pytest.mark.parametrize("building", [True, False])
-def test_chunks_obj(re_data_demo, building):
-    pass
+def test_chunks_obj(EAR_data_demo, building):
+    entry = EAR_data_demo[0]
+    chunks, attributes = entry['chunks'], entry['attributes']
+
+    config = ModelConfig(decoder=SpanAttrClassificationDecoderConfig())
+    attr_decoder_config = config.decoder
+
+    dataset = Dataset(EAR_data_demo, config, training=True)
+    dataset.build_vocabs_and_dims()
+
+    chunks_obj = dataset[0]['chunks_obj']
+    assert chunks_obj.attributes == attributes
+
+    assert chunks_obj.chunks == chunks
+    assert chunks_obj.is_built
+
+    assert (chunks_obj.span_size_ids+1).tolist() == [e-s for l, s, e in chunks_obj.chunks]
+    assert chunks_obj.attr_label_ids.size(0) == len(chunks_obj.chunks)
+    
+    attributes_retr = []
+    for chunk, attr_label_ids in zip(chunks_obj.chunks, chunks_obj.attr_label_ids):
+        attr_labels = [attr_decoder_config.idx2attr_label[i] for i, l in enumerate(attr_label_ids.tolist()) if l > 0]
+        if attr_decoder_config.attr_none_label not in attr_labels:
+            attributes_retr.extend([(attr_label, chunk) for attr_label in attr_labels])
+    assert set(attributes_retr) == set(attributes)
