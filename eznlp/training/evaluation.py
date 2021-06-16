@@ -27,6 +27,16 @@ def evaluate_entity_recognition(trainer: Trainer, dataset: Dataset):
     logger.info(f"ER Macro F1-score: {macro_f1*100:2.3f}%")
 
 
+def evaluate_attribute_extraction(trainer: Trainer, dataset: Dataset):
+    set_attributes_pred = trainer.predict(dataset)
+    set_attributes_gold = [ex['attributes'] for ex in dataset.data]
+
+    scores, ave_scores = precision_recall_f1_report(set_attributes_gold, set_attributes_pred)
+    micro_f1, macro_f1 = ave_scores['micro']['f1'], ave_scores['macro']['f1']
+    logger.info(f"AE Micro F1-score: {micro_f1*100:2.3f}%")
+    logger.info(f"AE Macro F1-score: {macro_f1*100:2.3f}%")
+
+
 def evaluate_relation_extraction(trainer: Trainer, dataset: Dataset, eval_chunk_type_for_relation: bool=True):
     set_relations_pred = trainer.predict(dataset)
     set_relations_gold = [ex['relations'] for ex in dataset.data]
