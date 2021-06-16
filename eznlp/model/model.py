@@ -16,6 +16,7 @@ from .decoder.span_attr_classification import SpanAttrClassificationDecoderConfi
 from .decoder.span_rel_classification import SpanRelClassificationDecoderConfig
 from .decoder.boundary_selection import BoundarySelectionDecoderConfig
 from .decoder.joint_er_re import JointERREDecoderConfig
+from .decoder.joint_extraction import JointExtractionDecoderConfig
 
 
 class ModelConfig(Config):
@@ -68,6 +69,8 @@ class ModelConfig(Config):
                 self.decoder = BoundarySelectionDecoderConfig()
             elif decoder.lower().startswith('joint_er_re'):
                 self.decoder = JointERREDecoderConfig()
+            elif decoder.lower().startswith('joint_extraction'):
+                self.decoder = JointExtractionDecoderConfig()
             else:
                 raise ValueError(f"Invalid `decoder`: {decoder}")
         

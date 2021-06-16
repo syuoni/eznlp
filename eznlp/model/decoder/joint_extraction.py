@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from typing import List
+from typing import List, Union
 import torch
 
 from ...wrapper import Batch
@@ -8,6 +8,7 @@ from .sequence_tagging import SequenceTaggingDecoderConfig
 from .span_classification import SpanClassificationDecoderConfig
 from .span_attr_classification import SpanAttrClassificationDecoderConfig
 from .span_rel_classification import SpanRelClassificationDecoderConfig
+from .boundary_selection import BoundarySelectionDecoderConfig
 
 
 class JointExtractionDecoderMixin(DecoderMixin):
@@ -59,13 +60,33 @@ class JointExtractionDecoderMixin(DecoderMixin):
 
 
 class JointExtractionDecoderConfig(DecoderConfig, JointExtractionDecoderMixin):
-    def __init__(self, **kwargs):
+    def __init__(self, 
+                 ck_decoder: Union[DecoderConfig, str]='span_classification', 
+                 attr_decoder: Union[DecoderConfig, str]='span_attr_classification', 
+                 rel_decoder: Union[DecoderConfig, str]='span_rel_classification',
+                 **kwargs):
+        if isinstance(ck_decoder, DecoderConfig):
+            self.ck_decoder = ck_decoder
+        elif ck_decoder.lower().startswith('sequence_tagging'):
+            self.ck_decoder = SequenceTaggingDecoderConfig()
+        elif ck_decoder.lower().startswith('span_classification'):
+            self.ck_decoder = SpanClassificationDecoderConfig()
+        elif ck_decoder.lower().startswith('boundary'):
+            self.ck_decoder = BoundarySelectionDecoderConfig()
+
+        if isinstance(attr_decoder, DecoderConfig) or attr_decoder is None:
+            self.attr_decoder = attr_decoder
+        elif attr_decoder.lower().startswith('span_attr'):
+            self.attr_decoder = SpanAttrClassificationDecoderConfig()
+
+        if isinstance(rel_decoder, DecoderConfig) or rel_decoder is None:
+            self.rel_decoder = rel_decoder
+        elif rel_decoder.lower().startswith('span_rel'):
+            self.rel_decoder = SpanRelClassificationDecoderConfig()
+            
         # It seems that pytorch does not recommend to share weights outside two modules. 
         # See https://discuss.pytorch.org/t/how-to-create-model-with-sharing-weight/398/2
         self.share_embeddings = kwargs.pop('share_embeddings', False)
-        self.ck_decoder = kwargs.pop('ck_decoder', SpanClassificationDecoderConfig())
-        self.attr_decoder = kwargs.pop('attr_decoder', None)
-        self.rel_decoder = kwargs.pop('rel_decoder', SpanRelClassificationDecoderConfig())
         super().__init__(**kwargs)
         
     @property
