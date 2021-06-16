@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import pytest
 import spacy
+import jieba
 import torch
 import allennlp.modules
 import transformers
@@ -9,7 +10,7 @@ import flair
 from eznlp import auto_device
 from eznlp.token import TokenSequence
 from eznlp.vectors import Vectors, GloVe
-from eznlp.io import TabularIO, ConllIO, JsonIO
+from eznlp.io import TabularIO, ConllIO, JsonIO, BratIO
 
 
 def pytest_addoption(parser):
@@ -80,6 +81,20 @@ def conll2004_demo():
                   relation_head_key='head', 
                   relation_tail_key='tail', 
                   verbose=False).read("data/conll2004/demo.conll04_train.json")
+
+
+@pytest.fixture
+def HwaMei_demo():
+    return BratIO(tokenize_callback='char', 
+                  has_ins_space=True, 
+                  ins_space_tokenize_callback=jieba.cut, 
+                  parse_attrs=True, 
+                  parse_relations=True, 
+                  line_sep="\r\n", 
+                  max_len=200, 
+                  encoding='utf-8', 
+                  token_sep="", 
+                  pad_token="").read("data/HwaMei/demo.ChaFangJiLu.txt")
 
 
 @pytest.fixture
