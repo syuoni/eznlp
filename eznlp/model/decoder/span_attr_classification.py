@@ -122,6 +122,9 @@ class Chunks(TargetWrapper):
         assert not self.is_built
         self.is_built = True
         
+        if self.training:
+            assert all(ck in self.chunks for attr_label, ck in self.attributes)
+
         # span_size_ids / ck_label_ids: (num_chunks, )
         # Note: size_id = size - 1
         self.span_size_ids = torch.tensor([end-start-1 for ck_label, start, end in self.chunks], dtype=torch.long)
@@ -133,7 +136,10 @@ class Chunks(TargetWrapper):
             # Note: `torch.nn.BCEWithLogitsLoss` uses `float` tensor as target
             self.attr_label_ids = torch.zeros(len(self.chunks), config.attr_voc_dim, dtype=torch.float)
             for attr_label, chunk in self.attributes:
-                self.attr_label_ids[chunk2idx[chunk], config.attr_label2idx[attr_label]] = 1
+                # Note: `chunk` does not appear in `self.chunks` only if in evaluation (i.e., gold chunks missing). 
+                # In this case, `attr_label_ids` is only for forward to loss, but not for backward. 
+                if chunk in chunk2idx:
+                    self.attr_label_ids[chunk2idx[chunk], config.attr_label2idx[attr_label]] = 1
             self.attr_label_ids[:, 0] = (self.attr_label_ids == 0).all(dim=1)
 
 
