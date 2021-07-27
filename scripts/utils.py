@@ -323,6 +323,10 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512))
 
+        elif pretrained_str.lower().startswith('ernie'):
+            PATH = "assets/transformers/nghuyong/ernie-1.0"
+            return (transformers.AutoModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
+                    transformers.AutoTokenizer.from_pretrained(PATH, model_max_length=512))
 
 
 def header_format(content: str, sep='=', width=100):

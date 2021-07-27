@@ -104,7 +104,7 @@ if __name__ == '__main__':
                        ["ft"], 
                        ["--bert_drop_rate 0.2"], 
                        ["", "--use_interm2"], 
-                       ["--bert_arch BERT_base", "--bert_arch RoBERTa_base"]]
+                       ["--bert_arch BERT_base", "--bert_arch RoBERTa_base", "--bert_arch ERNIE"]]
     
     elif args.task == 'entity_recognition' and args.language.lower() == 'english':
         if args.command in ('fs', 'from_scratch'):
@@ -171,7 +171,7 @@ if __name__ == '__main__':
             #            ["ft"], 
             #            ["--bert_drop_rate 0.2"], 
             #            ["", "--use_interm2"], 
-            #            ["--bert_arch BERT_base", "--bert_arch RoBERTa_base"]]
+            #            ["--bert_arch BERT_base", "--bert_arch RoBERTa_base", "--bert_arch ERNIE"]]
             # options = [["--num_epochs 50"], 
             #            ["--optimizer AdamW --lr 1e-3 --finetune_lr 5e-5", 
             #             "--optimizer AdamW --lr 1e-3 --finetune_lr 1e-4", 
@@ -188,7 +188,7 @@ if __name__ == '__main__':
             #            ["ft"], 
             #            ["--bert_drop_rate 0.2"], 
             #            ["", "--use_interm2"], 
-            #            ["--bert_arch BERT_base", "--bert_arch RoBERTa_base"]]
+            #            ["--bert_arch BERT_base", "--bert_arch RoBERTa_base", "--bert_arch ERNIE"]]
             
     elif args.task == 'entity_recognition' and args.language.lower() == 'chinese':
         if args.command in ('fs', 'from_scratch'):
@@ -224,7 +224,7 @@ if __name__ == '__main__':
                        ["ft"], 
                        ["--bert_drop_rate 0.2"], 
                        ["", "--use_interm2"], 
-                       ["--bert_arch BERT_base", "--bert_arch RoBERTa_base"]]
+                       ["--bert_arch BERT_base", "--bert_arch RoBERTa_base", "--bert_arch ERNIE"]]
     
     elif args.task == 'relation_extraction':
         if args.command in ('fs', 'from_scratch'):
@@ -249,7 +249,7 @@ if __name__ == '__main__':
                        ["ft"], 
                        ["--bert_drop_rate 0.2"], 
                        ["", "--use_interm2"], 
-                       ["--bert_arch BERT_base", "--bert_arch RoBERTa_base"]]
+                       ["--bert_arch BERT_base", "--bert_arch RoBERTa_base", "--bert_arch ERNIE"]]
     
     elif args.task == 'joint_er_re':
         if args.command in ('fs', 'from_scratch'):
@@ -280,7 +280,7 @@ if __name__ == '__main__':
                        ["ft"], 
                        ["--bert_drop_rate 0.2"], 
                        ["", "--use_interm2"], 
-                       ["--bert_arch BERT_base", "--bert_arch RoBERTa_base"]]
+                       ["--bert_arch BERT_base", "--bert_arch RoBERTa_base", "--bert_arch ERNIE"]]
     
     
     if args.num_workers > 0:
