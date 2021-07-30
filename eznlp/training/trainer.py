@@ -306,7 +306,6 @@ class Trainer(object):
 
 
 
-
 def disp_running_info(eidx=None, sidx=None, lrs=None, elapsed_secs=None, loss=None, metric=None, partition='train'):
     disp_text = []
     if eidx is not None:
@@ -338,5 +337,3 @@ def disp_running_info(eidx=None, sidx=None, lrs=None, elapsed_secs=None, loss=No
         mins, secs = elapsed_secs // 60, elapsed_secs % 60
         disp_text.append(f"Elapsed Time: {mins}m {secs}s")
     logger.info(" | ".join(disp_text))
-    
-    
