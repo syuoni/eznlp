@@ -99,7 +99,9 @@ if __name__ == '__main__':
     if device.type.startswith('cuda'):
         torch.cuda.set_device(device)
         
-    if os.path.exists(f"{args.pipeline_path}/data-with-chunks-pred.pth"):
+    if len(args.pipline_path) > 0:
+        if not os.path.exists(f"{args.pipeline_path}/data-with-chunks-pred.pth"):
+            raise RuntimeError("`pipeline_path` is specified but not existing")
         logger.info(f"Loading data from {args.pipeline_path} for pipeline...")
         train_data, dev_data, test_data = torch.load(f"{args.pipeline_path}/data-with-chunks-pred.pth")
     else:
