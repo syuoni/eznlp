@@ -284,7 +284,7 @@ class TokenSequence(object):
         if hasattr(self.token_list[0], name):
             return [getattr(tok, name) for tok in self.token_list]
         else:
-            raise AttributeError(f"type object {self.__class__.__name__} has no attribute {name}")
+            raise AttributeError(f"{self.__class__.__name__} has no attribute {name}")
         
         
     def __eq__(self, other):
