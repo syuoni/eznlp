@@ -84,13 +84,12 @@ class Trainer(object):
         # Note gradient accumulation is equivalent to summing the loss 
         loss = loss / self.num_grad_acc_steps
 
-        # It is possible that the loss is calculated by tensors all with `requires_grad` being False;
+        # Notes: It is possible that the loss is calculated by tensors all with `requires_grad` being False;
         # e.g., in the span-based relation classification, all the examples in a batch have empty entity sets, 
         # then no negative pairs can be enumerated. 
-        if not loss.requires_grad:
-            loss.requires_grad_(True)
-        # Backward propagation
-        self.scaler.scale(loss).backward()
+        if loss.requires_grad:
+            # Backward propagation
+            self.scaler.scale(loss).backward()
         
         # `optimizer` follows the "real" steps
         self.num_steps += 1
