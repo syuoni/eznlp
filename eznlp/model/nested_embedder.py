@@ -158,6 +158,11 @@ class SoftLexiconConfig(NestedOneHotConfig):
         super().__init__(**kwargs)
         
         
+    def __repr__(self):
+        repr_attr_dict = {key: getattr(self, key) for key in self.__dict__.keys() if key != 'freqs'}
+        return self._repr_non_config_attrs(repr_attr_dict)
+
+
     def build_freqs(self, *partitions):
         """
         Ma et al. (2020): The statistical data set is constructed from a combination 
