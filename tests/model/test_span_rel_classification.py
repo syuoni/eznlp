@@ -3,7 +3,7 @@ import pytest
 import torch
 
 from eznlp.dataset import Dataset
-from eznlp.model import BertLikeConfig, SpanRelClassificationDecoderConfig, JointERREDecoderConfig, ModelConfig
+from eznlp.model import BertLikeConfig, SpanRelClassificationDecoderConfig, JointExtractionDecoderConfig, ModelConfig
 from eznlp.training import Trainer
 
 
@@ -94,7 +94,7 @@ def test_chunk_pairs_obj(EAR_data_demo, num_neg_relations, training, building):
         config = ModelConfig(decoder=SpanRelClassificationDecoderConfig(num_neg_relations=num_neg_relations))
         rel_decoder_config = config.decoder
     else:
-        config = ModelConfig(decoder=JointERREDecoderConfig(rel_decoder=SpanRelClassificationDecoderConfig(num_neg_relations=num_neg_relations)))
+        config = ModelConfig(decoder=JointExtractionDecoderConfig(rel_decoder=SpanRelClassificationDecoderConfig(num_neg_relations=num_neg_relations)))
         rel_decoder_config = config.decoder.rel_decoder
         
     dataset = Dataset(EAR_data_demo, config, training=training)
