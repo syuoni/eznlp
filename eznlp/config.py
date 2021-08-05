@@ -163,5 +163,3 @@ class ConfigDict(Config):
         
     def __repr__(self):
         return self._repr_config_attrs(self.config_dict)
-    
-    

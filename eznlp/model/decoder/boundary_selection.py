@@ -55,8 +55,7 @@ class BoundarySelectionDecoderMixin(DecoderMixin):
 
 
 class Boundaries(TargetWrapper):
-    """
-    A wrapper of boundaries with underlying chunks. 
+    """A wrapper of boundaries with underlying chunks. 
     
     Parameters
     ----------

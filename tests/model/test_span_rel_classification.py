@@ -3,7 +3,7 @@ import pytest
 import torch
 
 from eznlp.dataset import Dataset
-from eznlp.model import EncoderConfig, BertLikeConfig, PairClassificationDecoderConfig, JointERREDecoderConfig, ModelConfig
+from eznlp.model import BertLikeConfig, SpanRelClassificationDecoderConfig, JointExtractionDecoderConfig, ModelConfig
 from eznlp.training import Trainer
 
 
@@ -52,7 +52,7 @@ class TestModel(object):
     @pytest.mark.parametrize("ck_label_emb_dim", [25, 0])
     @pytest.mark.parametrize("criterion", ['CE', 'FL'])
     def test_model(self, agg_mode, ck_label_emb_dim, criterion, conll2004_demo, device):
-        self.config = ModelConfig(decoder=PairClassificationDecoderConfig(agg_mode=agg_mode, ck_label_emb_dim=ck_label_emb_dim, criterion=criterion))
+        self.config = ModelConfig(decoder=SpanRelClassificationDecoderConfig(agg_mode=agg_mode, ck_label_emb_dim=ck_label_emb_dim, criterion=criterion))
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
@@ -60,7 +60,7 @@ class TestModel(object):
         
     def test_model_with_bert_like(self, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
-        self.config = ModelConfig('pair_classification', 
+        self.config = ModelConfig('span_rel_classification', 
                                   ohots=None, 
                                   bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert), 
                                   intermediate2=None)
@@ -70,7 +70,7 @@ class TestModel(object):
         
         
     def test_prediction_without_gold(self, conll2004_demo, device):
-        self.config = ModelConfig('pair_classification')
+        self.config = ModelConfig('span_rel_classification')
         self._setup_case(conll2004_demo, device)
         
         data_wo_gold = [{'tokens': entry['tokens'], 
@@ -86,18 +86,18 @@ class TestModel(object):
 @pytest.mark.parametrize("num_neg_relations", [1, 100])
 @pytest.mark.parametrize("training", [True, False])
 @pytest.mark.parametrize("building", [True, False])
-def test_chunk_pairs_obj(re_data_demo, num_neg_relations, training, building):
-    entry = re_data_demo[0]
+def test_chunk_pairs_obj(EAR_data_demo, num_neg_relations, training, building):
+    entry = EAR_data_demo[0]
     chunks, relations = entry['chunks'], entry['relations']
     
     if building:
-        config = ModelConfig(decoder=PairClassificationDecoderConfig(num_neg_relations=num_neg_relations))
+        config = ModelConfig(decoder=SpanRelClassificationDecoderConfig(num_neg_relations=num_neg_relations))
         rel_decoder_config = config.decoder
     else:
-        config = ModelConfig(decoder=JointERREDecoderConfig(rel_decoder=PairClassificationDecoderConfig(num_neg_relations=num_neg_relations)))
+        config = ModelConfig(decoder=JointExtractionDecoderConfig(rel_decoder=SpanRelClassificationDecoderConfig(num_neg_relations=num_neg_relations)))
         rel_decoder_config = config.decoder.rel_decoder
         
-    dataset = Dataset(re_data_demo, config, training=training)
+    dataset = Dataset(EAR_data_demo, config, training=training)
     dataset.build_vocabs_and_dims()
     
     chunk_pairs_obj = dataset[0]['chunk_pairs_obj']

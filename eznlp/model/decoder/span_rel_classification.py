@@ -17,7 +17,7 @@ from .base import DecoderMixin, DecoderConfig, Decoder
 logger = logging.getLogger(__name__)
 
 
-class PairClassificationDecoderMixin(DecoderMixin):
+class SpanRelClassificationDecoderMixin(DecoderMixin):
     @property
     def idx2ck_label(self):
         return self._idx2ck_label
@@ -94,7 +94,7 @@ class ChunkPairs(TargetWrapper):
     (2) If `building` is `False`, `data_entry['chunks']` is known for training but not for evaluation (e.g., joint modeling).
         In this case, `inject_chunks` and `build` should be successively invoked, and the negative samples are generated from injected chunks. 
     """
-    def __init__(self, data_entry: dict, config: PairClassificationDecoderMixin, training: bool=True, building: bool=True):
+    def __init__(self, data_entry: dict, config: SpanRelClassificationDecoderMixin, training: bool=True, building: bool=True):
         super().__init__(training)
         
         self.chunks = data_entry['chunks'] if training or building else []
@@ -119,7 +119,7 @@ class ChunkPairs(TargetWrapper):
         self.chunks = self.chunks + [ck for ck in chunks if ck not in self.chunks]
         
         
-    def build(self, config: PairClassificationDecoderMixin):
+    def build(self, config: SpanRelClassificationDecoderMixin):
         """Generate negative samples from `self.chunks` and build up tensors. 
         """
         assert not self.is_built
@@ -161,7 +161,7 @@ class ChunkPairs(TargetWrapper):
 
 
 
-class PairClassificationDecoderConfig(DecoderConfig, PairClassificationDecoderMixin):
+class SpanRelClassificationDecoderConfig(DecoderConfig, SpanRelClassificationDecoderMixin):
     def __init__(self, **kwargs):
         self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
         
@@ -210,13 +210,13 @@ class PairClassificationDecoderConfig(DecoderConfig, PairClassificationDecoderMi
 
 
     def instantiate(self):
-        return PairClassificationDecoder(self)
+        return SpanRelClassificationDecoder(self)
 
 
 
 
-class PairClassificationDecoder(Decoder, PairClassificationDecoderMixin):
-    def __init__(self, config: PairClassificationDecoderConfig):
+class SpanRelClassificationDecoder(Decoder, SpanRelClassificationDecoderMixin):
+    def __init__(self, config: SpanRelClassificationDecoderConfig):
         super().__init__()
         self.num_neg_relations = config.num_neg_relations
         self.max_span_size = config.max_span_size

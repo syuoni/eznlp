@@ -11,11 +11,11 @@ import torch
 
 from eznlp import auto_device
 from eznlp.dataset import Dataset
-from eznlp.model import SpanRelClassificationDecoderConfig
+from eznlp.model import SpanAttrClassificationDecoderConfig
 from eznlp.model import ModelConfig
 from eznlp.training import Trainer
 from eznlp.training.utils import count_params
-from eznlp.training.evaluation import evaluate_relation_extraction
+from eznlp.training.evaluation import evaluate_attribute_extraction
 
 from utils import add_base_arguments, parse_to_args
 from utils import load_data, dataset2language, load_pretrained, build_trainer, header_format
@@ -31,40 +31,31 @@ def parse_arguments(parser: argparse.ArgumentParser):
     group_data.add_argument('--pipeline_path', type=str, default="", 
                             help="path to load predicted chunks for pipeline")
     
-    group_rel_classification = parser.add_argument_group('relation classification')
-    group_rel_classification.add_argument('--agg_mode', type=str, default='max_pooling', 
-                                          help="aggregating mode")
-    group_rel_classification.add_argument('--criterion', type=str, default='CE', 
-                                          help="decoder loss criterion")
-    group_rel_classification.add_argument('--focal_gamma', type=float, default=2.0, 
-                                          help="Focal Loss gamma")
-    group_rel_classification.add_argument('--num_neg_relations', type=int, default=100, 
-                                          help="number of sampling negative relations")
-    group_rel_classification.add_argument('--max_span_size', type=int, default=10, 
-                                          help="maximum span size")
-    group_rel_classification.add_argument('--max_pair_distance', type=int, default=100, 
-                                          help="maximum pair distance")
-    group_rel_classification.add_argument('--ck_size_emb_dim', type=int, default=25, 
-                                          help="chunk span size embedding dim")
-    group_rel_classification.add_argument('--ck_label_emb_dim', type=int, default=25, 
-                                          help="chunk label embedding dim")
+    group_attr_classification = parser.add_argument_group('attribute classification')
+    group_attr_classification.add_argument('--agg_mode', type=str, default='max_pooling', 
+                                           help="aggregating mode")
+    group_attr_classification.add_argument('--criterion', type=str, default='BCE', 
+                                           help="decoder loss criterion")
+    group_attr_classification.add_argument('--max_span_size', type=int, default=10, 
+                                           help="maximum span size")
+    group_attr_classification.add_argument('--ck_size_emb_dim', type=int, default=25, 
+                                           help="chunk span size embedding dim")
+    group_attr_classification.add_argument('--ck_label_emb_dim', type=int, default=25, 
+                                           help="chunk label embedding dim")
     
     return parse_to_args(parser)
 
 
 
-def build_RE_config(args: argparse.Namespace):
+def build_AE_config(args: argparse.Namespace):
     drop_rates = (0.0, 0.05, args.drop_rate) if args.use_locked_drop else (args.drop_rate, 0.0, 0.0)
     
-    decoder_config = SpanRelClassificationDecoderConfig(agg_mode=args.agg_mode, 
-                                                        criterion=args.criterion,
-                                                        gamma=args.focal_gamma, 
-                                                        num_neg_relations=args.num_neg_relations, 
-                                                        max_span_size=args.max_span_size, 
-                                                        max_pair_distance=args.max_pair_distance, 
-                                                        ck_size_emb_dim=args.ck_size_emb_dim, 
-                                                        ck_label_emb_dim=args.ck_label_emb_dim, 
-                                                        in_drop_rates=drop_rates)
+    decoder_config = SpanAttrClassificationDecoderConfig(agg_mode=args.agg_mode, 
+                                                         criterion=args.criterion,
+                                                         max_span_size=args.max_span_size, 
+                                                         ck_size_emb_dim=args.ck_size_emb_dim, 
+                                                         ck_label_emb_dim=args.ck_label_emb_dim, 
+                                                         in_drop_rates=drop_rates)
     
     return ModelConfig(**collect_IE_assembly_config(args), decoder=decoder_config)
 
@@ -76,7 +67,7 @@ if __name__ == '__main__':
     
     # Use micro-seconds to ensure different timestamps while adopting multiprocessing
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-    save_path =  f"cache/{args.dataset}-RE/{timestamp}"
+    save_path =  f"cache/{args.dataset}-AE/{timestamp}"
     if not os.path.exists(save_path):
         os.makedirs(save_path)
         
@@ -108,7 +99,7 @@ if __name__ == '__main__':
         logger.info(f"Loading original data {args.dataset}...")
         train_data, dev_data, test_data = load_data(args)
     args.language = dataset2language[args.dataset]
-    config = build_RE_config(args)
+    config = build_AE_config(args)
     
     train_set = Dataset(train_data, config, training=True)
     train_set.build_vocabs_and_dims(dev_data, test_data)
@@ -140,11 +131,10 @@ if __name__ == '__main__':
     trainer = Trainer(model, device=device)
     
     logger.info("Evaluating on dev-set")
-    evaluate_relation_extraction(trainer, dev_set)
+    evaluate_attribute_extraction(trainer, dev_set)
     logger.info("Evaluating on test-set")
-    evaluate_relation_extraction(trainer, test_set)
+    evaluate_attribute_extraction(trainer, test_set)
     
     logger.info(" ".join(sys.argv))
     logger.info(pprint.pformat(args.__dict__))
     logger.info(header_format("Ending", sep='='))
-    

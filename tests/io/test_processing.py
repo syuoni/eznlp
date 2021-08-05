@@ -1,20 +1,15 @@
 # -*- coding: utf-8 -*-
-import jieba
 import pytest
 
-from eznlp.io import BratIO, PostIO
+from eznlp.io import PostIO
 
 
 @pytest.mark.parametrize("absorb_attr_types", [[], 
                                                ['Analyzed'], 
                                                ['Analyzed', 'Denied'], 
                                                ['Unconfirmed', 'Analyzed', 'Denied']])
-def test_absorb_attributes(absorb_attr_types):
-    brat_io = BratIO(tokenize_callback='char', 
-                     has_ins_space=True, ins_space_tokenize_callback=jieba.cut, 
-                     parse_attrs=True, parse_relations=True, 
-                     line_sep="\r\n", max_len=500, encoding='utf-8', token_sep="", pad_token="")
-    data = brat_io.read("data/HwaMei/demo.ChaFangJiLu.txt")
+def test_absorb_attributes(absorb_attr_types, HwaMei_demo):
+    data = HwaMei_demo
     post_io = PostIO()
 
     data_abs = post_io.absorb_attributes(data, absorb_attr_types=absorb_attr_types)
@@ -34,12 +29,8 @@ def test_absorb_attributes(absorb_attr_types):
 @pytest.mark.parametrize("group_rel_types", [[], 
                                              ['Group_DS', 'Group_Test'], 
                                              ['Group_DS', 'Group_Test', 'Syn_Treat']])
-def test_infer_relations(group_rel_types):
-    brat_io = BratIO(tokenize_callback='char', 
-                     has_ins_space=True, ins_space_tokenize_callback=jieba.cut, 
-                     parse_attrs=True, parse_relations=True, 
-                     line_sep="\r\n", max_len=500, encoding='utf-8', token_sep="", pad_token="")
-    data = brat_io.read("data/HwaMei/demo.ChaFangJiLu.txt")
+def test_infer_relations(group_rel_types, HwaMei_demo):
+    data = HwaMei_demo
     post_io = PostIO()
 
     data_inf = post_io.infer_relations(data, group_rel_types=group_rel_types)
@@ -49,5 +40,3 @@ def test_infer_relations(group_rel_types):
     assert all(set(entry['relations']).issubset(set(entry_inf['relations'])) for entry, entry_inf in zip(data, data_inf))
     if len(group_rel_types) > 0:
         assert sum(len(entry_inf['relations']) - len(entry['relations']) for entry, entry_inf in zip(data, data_inf)) == 14
-    
-    brat_io.write(data_inf, "data/HwaMei/demo-inferred-rel.ChaFangJiLu.txt")

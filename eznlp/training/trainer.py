@@ -83,8 +83,13 @@ class Trainer(object):
         # Average loss over the "real" batch. 
         # Note gradient accumulation is equivalent to summing the loss 
         loss = loss / self.num_grad_acc_steps
-        # Backward propagation
-        self.scaler.scale(loss).backward()
+
+        # Notes: It is possible that the loss is calculated by tensors all with `requires_grad` being False;
+        # e.g., in the span-based relation classification, all the examples in a batch have empty entity sets, 
+        # then no negative pairs can be enumerated. 
+        if loss.requires_grad:
+            # Backward propagation
+            self.scaler.scale(loss).backward()
         
         # `optimizer` follows the "real" steps
         self.num_steps += 1
@@ -306,7 +311,6 @@ class Trainer(object):
 
 
 
-
 def disp_running_info(eidx=None, sidx=None, lrs=None, elapsed_secs=None, loss=None, metric=None, partition='train'):
     disp_text = []
     if eidx is not None:
@@ -338,5 +342,3 @@ def disp_running_info(eidx=None, sidx=None, lrs=None, elapsed_secs=None, loss=No
         mins, secs = elapsed_secs // 60, elapsed_secs % 60
         disp_text.append(f"Elapsed Time: {mins}m {secs}s")
     logger.info(" | ".join(disp_text))
-    
-    

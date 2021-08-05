@@ -180,7 +180,6 @@ class SpanClassificationDecoder(Decoder, SpanClassificationDecoderMixin):
         batch_logits = []
         for k in range(batch.size):
             # span_hidden: (num_spans, span_size, hid_dim) -> (num_spans, hid_dim)
-            # span_hidden = torch.stack([full_hidden[k, start:end].max(dim=0).values for start, end in batch.spans_objs[k].spans])
             span_hidden = [full_hidden[k, start:end] for start, end in batch.spans_objs[k].spans]
             span_mask = seq_lens2mask(torch.tensor([h.size(0) for h in span_hidden], dtype=torch.long, device=full_hidden.device))
             span_hidden = torch.nn.utils.rnn.pad_sequence(span_hidden, batch_first=True, padding_value=0.0)

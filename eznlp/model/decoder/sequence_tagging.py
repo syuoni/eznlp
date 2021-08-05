@@ -61,8 +61,7 @@ class SequenceTaggingDecoderMixin(DecoderMixin):
 
 
 class Tags(TargetWrapper):
-    """
-    A wrapper of tags with underlying chunks. 
+    """A wrapper of tags with underlying chunks. 
     
     Parameters
     ----------

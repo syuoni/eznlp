@@ -6,7 +6,7 @@ from ...wrapper import Batch
 from .base import DecoderMixin, DecoderConfig, Decoder
 from .sequence_tagging import SequenceTaggingDecoderConfig
 from .span_classification import SpanClassificationDecoderConfig
-from .pair_classification import PairClassificationDecoderConfig
+from .span_rel_classification import SpanRelClassificationDecoderConfig
 
 
 class JointERREDecoderMixin(DecoderMixin):
@@ -37,7 +37,7 @@ class JointERREDecoderConfig(DecoderConfig, JointERREDecoderMixin):
         # See https://discuss.pytorch.org/t/how-to-create-model-with-sharing-weight/398/2
         self.share_embeddings = kwargs.pop('share_embeddings', False)
         self.ck_decoder = kwargs.pop('ck_decoder', SpanClassificationDecoderConfig())
-        self.rel_decoder = kwargs.pop('rel_decoder', PairClassificationDecoderConfig())
+        self.rel_decoder = kwargs.pop('rel_decoder', SpanRelClassificationDecoderConfig())
         super().__init__(**kwargs)
         
     @property

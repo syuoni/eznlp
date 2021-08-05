@@ -120,6 +120,8 @@ Configurations of our implementation:
 | BERT + LSTM + CRF           | Ma et al. (2020)      | 94.83 | 96.18 |
 | FLAT + BERT + CRF           | Li et al. (2019)      | 96.09 |
 | SoftLexicon + BERT + CRF    | Ma et al. (2020)      | 95.42 |
+| ERNIEv1 + CRF               | Sun et al. (2019)     | 93.8* | 95.87 |
+| ERNIEv1 + LSTM + CRF        | Sun et al. (2019)     | -     | 96.24 |
 
 ### WeiboNER v2 
 | Model | Paper | Reported F1 | Our Imp. F1 | Notes |
@@ -133,6 +135,8 @@ Configurations of our implementation:
 | BERT + LSTM + CRF           | Ma et al. (2020)      | 67.33 | 70.48 |
 | FLAT + BERT + CRF           | Li et al. (2019)      | 68.55 |
 | SoftLexicon + BERT + CRF    | Ma et al. (2020)      | 70.50 |
+| ERNIEv1 + CRF               | Sun et al. (2019)     | -     | 66.59 |
+| ERNIEv1 + LSTM + CRF        | Sun et al. (2019)     | -     | 70.81 |
 
 ### ResumeNER 
 | Model | Paper | Reported F1 | Our Imp. F1 | Notes |
@@ -146,6 +150,8 @@ Configurations of our implementation:
 | BERT + LSTM + CRF           | Ma et al. (2020)      | 95.51 | 95.97 |
 | FLAT + BERT + CRF           | Li et al. (2019)      | 95.86 |
 | SoftLexicon + BERT + CRF    | Ma et al. (2020)      | 96.11 |
+| ERNIEv1 + CRF               | Sun et al. (2019)     | -     | 95.95 |
+| ERNIEv1 + LSTM + CRF        | Sun et al. (2019)     | -     | 96.25 |
 
 ### OntoNotes v4 
 | Model | Paper | Reported F1 | Our Imp. F1 | Notes |
@@ -193,6 +199,7 @@ Configurations of our implementation:
 * Lan, Z., Chen, M., Goodman, S., Gimpel, K., Sharma, P., and Soricut, R. (2019). ALBERT: A Lite BERT for Self-supervised Learning of Language Representations. arXiv preprint arXiv:1909.11942. 
 * Jie, Z., and Lu, W. (2019). Dependency-Guided LSTM-CRF for Named Entity Recognition. *EMNLP 2019*.
 * Eberts, M., and Ulges, A. (2019). Span-based Joint Entity and Relation Extraction with Transformer Pre-training. *ECAI 2020*.
+* Sun, Y., Wang, S., Li, Y., Feng, S., Chen, X., Zhang, H., ... and Wu, H. (2019). ERNIE: Enhanced Representation through Knowledge Integration. arXiv preprint arXiv:1904.09223.
 * Cui, Y., Che, W., Liu, T., Qin, B., Yang, Z., Wang, S., and Hu, G. (2019). Pre-training with Whole Word Masking for Chinese BERT. *EMNLP 2020*. 
 * Joshi, M., Chen, D., Liu, Y., Weld, D. S., Zettlemoyer, L., and Levy, O. (2020). SpanBERT: Improving Pre-training by Representing and Predicting Spans. *TACL*, 8:64-77.
 * Yu, J., Bohnet, B., and Poesio, M. (2020). Named Entity Recognition as Dependency Parsing. *ACL 2020*. 

@@ -4,8 +4,9 @@ import torch
 
 from eznlp.dataset import Dataset
 from eznlp.model import EncoderConfig, BertLikeConfig, ModelConfig
-from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderConfig, BoundarySelectionDecoderConfig
-from eznlp.model import SpanRelClassificationDecoderConfig, JointERREDecoderConfig
+from eznlp.model import SequenceTaggingDecoderConfig, BoundarySelectionDecoderConfig
+from eznlp.model import SpanClassificationDecoderConfig, SpanAttrClassificationDecoderConfig, SpanRelClassificationDecoderConfig
+from eznlp.model import JointExtractionDecoderConfig
 from eznlp.training import Trainer
 
 
@@ -21,15 +22,14 @@ class TestModel(object):
         
         min_step = min(hidden012.size(1), hidden123.size(1))
         delta_hidden = hidden012[1:, :min_step] - hidden123[:-1, :min_step]
-        assert delta_hidden.abs().max().item() < 1e-4
+        assert delta_hidden.abs().max().item() < 2e-4
         
         delta_losses = losses012[1:] - losses123[:-1]
-        assert delta_losses.abs().max().item() < 5e-4
+        assert delta_losses.abs().max().item() < 1e-3
         
-        chunks_pred012, relations_pred012 = self.model.decode(batch012)
-        chunks_pred123, relations_pred123 = self.model.decode(batch123)
-        assert chunks_pred012[1:] == chunks_pred123[:-1]
-        assert relations_pred012[1:] == relations_pred123[:-1]
+        y_pred012 = self.model.decode(batch012)
+        y_pred123 = self.model.decode(batch123)
+        assert all(tuples_pred012[1:] == tuples_pred123[:-1] for tuples_pred012, tuples_pred123 in zip(y_pred012, y_pred123))
         
         
     def _assert_trainable(self):
@@ -54,39 +54,38 @@ class TestModel(object):
     @pytest.mark.parametrize("ck_decoder", ['sequence_tagging', 'span_classification', 'boundary_selection'])
     @pytest.mark.parametrize("agg_mode", ['max_pooling'])
     @pytest.mark.parametrize("criterion", ['CE', 'FL'])
-    def test_model(self, ck_decoder, agg_mode, criterion, conll2004_demo, device):
+    def test_model(self, ck_decoder, agg_mode, criterion, HwaMei_demo, device):
         if ck_decoder.lower() == 'sequence_tagging':
             ck_decoder_config = SequenceTaggingDecoderConfig(criterion='CRF')
         elif ck_decoder.lower() == 'span_classification':
             ck_decoder_config = SpanClassificationDecoderConfig(agg_mode=agg_mode, criterion=criterion)
         elif ck_decoder.lower() == 'boundary_selection':
             ck_decoder_config = BoundarySelectionDecoderConfig(criterion=criterion)
-        self.config = ModelConfig(decoder=JointERREDecoderConfig(ck_decoder=ck_decoder_config, 
-                                                                 rel_decoder=SpanRelClassificationDecoderConfig(agg_mode=agg_mode, criterion=criterion)))
-        self._setup_case(conll2004_demo, device)
+        self.config = ModelConfig(decoder=JointExtractionDecoderConfig(ck_decoder=ck_decoder_config, 
+                                                                       attr_decoder=SpanAttrClassificationDecoderConfig(agg_mode=agg_mode, criterion='BCE'), 
+                                                                       rel_decoder=SpanRelClassificationDecoderConfig(agg_mode=agg_mode, criterion=criterion)))
+        self._setup_case(HwaMei_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
         
         
-    def test_model_with_bert_like(self, conll2004_demo, bert_with_tokenizer, device):
+    def test_model_with_bert_like(self, HwaMei_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
-        self.config = ModelConfig('joint_er_re', 
+        self.config = ModelConfig('joint_extraction', 
                                   ohots=None, 
                                   bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert), 
                                   intermediate2=None)
-        self._setup_case(conll2004_demo, device)
+        self._setup_case(HwaMei_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
         
         
-    def test_prediction_without_gold(self, conll2004_demo, device):
-        self.config = ModelConfig('joint_er_re')
-        self._setup_case(conll2004_demo, device)
+    def test_prediction_without_gold(self, HwaMei_demo, device):
+        self.config = ModelConfig('joint_extraction')
+        self._setup_case(HwaMei_demo, device)
         
-        data_wo_gold = [{'tokens': entry['tokens']} for entry in conll2004_demo]
+        data_wo_gold = [{'tokens': entry['tokens']} for entry in HwaMei_demo]
         dataset_wo_gold = Dataset(data_wo_gold, self.config, training=False)
         
         trainer = Trainer(self.model, device=device)
-        set_chunks_pred, set_relations_pred = trainer.predict(dataset_wo_gold)
-        assert len(set_chunks_pred) == len(data_wo_gold)
-        assert len(set_relations_pred) == len(data_wo_gold)
+        assert all(len(set_tuples_pred) == len(data_wo_gold) for set_tuples_pred in trainer.predict(dataset_wo_gold))

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import pytest
 import spacy
+import jieba
 import torch
 import allennlp.modules
 import transformers
@@ -9,7 +10,7 @@ import flair
 from eznlp import auto_device
 from eznlp.token import TokenSequence
 from eznlp.vectors import Vectors, GloVe
-from eznlp.io import TabularIO, ConllIO, JsonIO
+from eznlp.io import TabularIO, ConllIO, JsonIO, BratIO
 
 
 def pytest_addoption(parser):
@@ -83,17 +84,35 @@ def conll2004_demo():
 
 
 @pytest.fixture
-def re_data_demo():
+def HwaMei_demo():
+    return BratIO(tokenize_callback='char', 
+                  has_ins_space=True, 
+                  ins_space_tokenize_callback=jieba.cut, 
+                  parse_attrs=True, 
+                  parse_relations=True, 
+                  line_sep="\r\n", 
+                  max_len=200, 
+                  encoding='utf-8', 
+                  token_sep="", 
+                  pad_token="").read("data/HwaMei/demo.ChaFangJiLu.txt")
+
+
+@pytest.fixture
+def EAR_data_demo():
     tokenized_raw_text = ["This", "is", "a", "-3.14", "demo", ".", 
                           "Those", "are", "an", "APPLE", "and", "some", "glass", "bottles", ".", 
                           "This", "is", "a", "very", "very", "very", "very", "very", "long", "entity", "?"]
     tokens = TokenSequence.from_tokenized_text(tokenized_raw_text)
     chunks = [('EntA', 4, 5), ('EntA', 9, 10), ('EntB', 12, 14), ('EntC', 18, 25)]
+    attributes = [('AttrA', chunks[0]), 
+                  ('AttrB', chunks[1]), 
+                  ('AttrA', chunks[2]), 
+                  ('AttrC', chunks[2])]
     relations = [('RelA', chunks[0], chunks[1]), 
                  ('RelA', chunks[0], chunks[2]), 
                  ('RelB', chunks[1], chunks[2]), 
                  ('RelB', chunks[2], chunks[1])]
-    return [{'tokens': tokens, 'chunks': chunks, 'relations': relations}]
+    return [{'tokens': tokens, 'chunks': chunks, 'attributes': attributes, 'relations': relations}]
 
 
 @pytest.fixture
