@@ -12,7 +12,7 @@
 
 ## Experiment Results
 ### Text Classification 
-| Dataset      | Language | Best Our Imp. Acc. | Model Specification |
+| Dataset      | Language | Our Best Imp. Acc. | Model Specification |
 |:------------:|:--------:|:------------------:|:-------------------:|
 | IMDb         | English  | 95.78         | RoBERTa-base + Attention |
 | Yelp Full    | English  | 71.55         | RoBERTa-base + Attention |
@@ -24,7 +24,7 @@ See [Text Classification](docs/text_classification.md) for more details.
 
 
 ### Named Entity Recognition
-| Dataset      | Language | Best Our Imp. F1 | Model Specification |
+| Dataset      | Language | Our Best Imp. F1 | Model Specification |
 |:------------:|:--------:|:----------------:|:-------------------:|
 | CoNLL 2003   | English  | 93.26     | RoBERTa-large + LSTM + CRF |
 | OntoNotes v5 | English  | 91.05     | RoBERTa-base + LSTM + CRF  |
@@ -37,12 +37,53 @@ See [Named Entity Recognition](docs/entity_recognition.md) for more details.
 
 
 ### Relation Extraction
-| Dataset      | Language | Best Our Imp. F1 | Model Specification |
+| Dataset      | Language | Our Best Imp. F1 | Model Specification |
 |:------------:|:--------:|:----------------:|:-------------------:|
 | CoNLL 2004   | English  | 89.17 / 75.03    | SpERT (with RoBERTa-base + LSTM) |
 | SciERC       | English  | 69.29 / 36.65    | SpERT (with RoBERTa-base)        |
 
 See [Relation Extraction](docs/relation_extraction.md) for more details. 
+
+
+## Running the Code
+* Install the `eznlp` package
+```bash
+$ python setup.py bdist_wheel
+$ pip install dist/eznlp-<version>-py3-none-any.whl
+```
+
+* Text classification
+```bash
+$ python scripts/text_classification.py --dataset <dataset> [options]
+```
+
+* Entity recognition
+```bash
+$ python scripts/entity_recognition.py --dataset <dataset> [options]
+```
+
+* Relation extraction
+```bash
+$ python scripts/relation_extraction.py --dataset <dataset> [options]
+```
+
+* Attribute extraction
+```bash
+$ python scripts/attribute_extraction.py --dataset <dataset> [options]
+```
+
+
+## Citation
+If you find our code useful, please cite the following paper: 
+
+```
+@article{zhu2021framework,
+  title={A Unified Framework of Medical Information Annotation and Extraction for {Chinese} Clinical Text},
+  author={Zhu, Enwei and Sheng, Qilin and Yang, Huanwan and Li, Jinpeng},
+  journal={Working Paper},
+  year={2021}
+}
+```
 
 
 ## Future Plans
