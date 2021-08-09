@@ -160,8 +160,7 @@ if __name__ == '__main__':
     # model(batch)
     # model.decode(batch)
     
-    # for model_name in ["hfl/chinese-bert-wwm-ext", 
-    #                     "hfl/chinese-roberta-wwm-ext"]:
+    # for model_name in ["hfl/chinese-macbert-base", "hfl/chinese-macbert-large"]:
     #     logging.info(f"Start downloading {model_name}...")
     #     tokenizer = transformers.AutoTokenizer.from_pretrained(model_name)
     #     model = transformers.AutoModelForPreTraining.from_pretrained(model_name)
