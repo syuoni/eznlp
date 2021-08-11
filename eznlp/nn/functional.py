@@ -186,9 +186,9 @@ def smooth_label_cross_entropy(logits: torch.Tensor, target: torch.LongTensor,
     
     log_prob = torch.nn.functional.log_softmax(logits, dim=-1)
     target_wo_ignore_index = target.masked_fill(target==ignore_index, 0)
-    smooth_target = torch.where(torch.nn.functional.one_hot(target_wo_ignore_index, num_classes=logits.size(dim=-1)).type(torch.bool), 
-                                1 - epsilon, 
-                                epsilon / (logits.size(dim=-1) - 1))
+    
+    num_classes = logits.size(dim=-1)
+    smooth_target = torch.nn.functional.one_hot(target_wo_ignore_index, num_classes=num_classes) * (1 - epsilon) + epsilon / num_classes
     losses = -(log_prob * smooth_target).sum(dim=-1)
     
     losses = losses * sample_weight
