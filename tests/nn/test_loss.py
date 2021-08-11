@@ -95,13 +95,16 @@ class TestSmoothLabel(object):
         
         
     @pytest.mark.parametrize("epsilon", [0.1, 0.2, 0.3])
-    def test_loss_value_against_CE(self, epsilon):
+    @pytest.mark.parametrize("onehot", [False, True])
+    def test_loss_value_against_CE(self, epsilon, onehot):
         logits = torch.zeros(5, 5, dtype=torch.float)
         target = torch.arange(5, dtype=torch.long)
         
         cross_entropy = torch.nn.CrossEntropyLoss(reduction='none')
         CE_losses = cross_entropy(logits, target)
         
+        if onehot:
+            target = torch.nn.functional.one_hot(target, num_classes=5).type(torch.float)
         smooth = SmoothLabelCrossEntropyLoss(epsilon=epsilon, reduction='none')
         SL_losses = smooth(logits, target)
         
