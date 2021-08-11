@@ -23,8 +23,7 @@ class DecoderMixin(object):
             return self.retrieve(batch)
         
     def evaluate(self, y_gold: Union[list, List[list]], y_pred: Union[list, List[list]]):
-        """
-        Calculate the metric (i.e., accuracy or F1) evaluating the predicted results against the gold results. 
+        """Calculate the metric (i.e., accuracy or F1) evaluating the predicted results against the gold results. 
         This method should typically evaluate over a full dataset, although it also compatibly evaluates over a batch. 
         """
         raise NotImplementedError("Not Implemented `evaluate`")
@@ -52,8 +51,7 @@ class DecoderConfig(Config):
 
 class Decoder(torch.nn.Module):
     def __init__(self):
-        """
-        `Decoder` forward from hidden states to outputs. 
+        """`Decoder` forwards from hidden states to outputs. 
         """
         super().__init__()
         
