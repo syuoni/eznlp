@@ -4,6 +4,7 @@ import torch
 
 from ...wrapper import Batch
 from ...config import Config
+from ...nn.modules import SmoothLabelCrossEntropyLoss, FocalLoss
 
 
 class DecoderMixin(object):
@@ -45,7 +46,34 @@ class DecoderMixin(object):
 class DecoderConfig(Config):
     def __init__(self, **kwargs):
         self.in_dim = kwargs.pop('in_dim', None)
+        
+        # gamma set as 0 for cross entropy loss, 2.0 for focal loss by default
+        self.fl_gamma = kwargs.pop('fl_gamma', 0.0) 
+        # epsilon set as 0 for cross entropy loss, 0.1 for label smoothing loss by default
+        self.sl_epsilon = kwargs.pop('sl_epsilon', 0.0)
         super().__init__(**kwargs)
+        
+    @property
+    def criterion(self):
+        if getattr(self, 'multihot', False):
+            return "BCE"
+        
+        elif self.fl_gamma > 0:
+            return f"FL({self.fl_gamma:.2f})"
+        elif self.sl_epsilon > 0:
+            return f"SL({self.sl_epsilon:.2f})"
+        else:
+            return "CE"
+        
+    def instantiate_criterion(self, **kwargs):
+        if self.criterion.lower().startswith('bce'):
+            return torch.nn.BCEWithLogitsLoss(**kwargs)
+        elif self.criterion.lower().startswith('fl'):
+            return FocalLoss(gamma=self.fl_gamma, **kwargs)
+        elif self.criterion.lower().startswith('sl'):
+            return SmoothLabelCrossEntropyLoss(epsilon=self.sl_epsilon, **kwargs)
+        else:
+            return torch.nn.CrossEntropyLoss(**kwargs)
 
 
 

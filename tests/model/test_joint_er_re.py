@@ -53,16 +53,16 @@ class TestModel(object):
         
     @pytest.mark.parametrize("ck_decoder", ['sequence_tagging', 'span_classification', 'boundary_selection'])
     @pytest.mark.parametrize("agg_mode", ['max_pooling'])
-    @pytest.mark.parametrize("criterion", ['CE', 'FL'])
-    def test_model(self, ck_decoder, agg_mode, criterion, conll2004_demo, device):
+    @pytest.mark.parametrize("fl_gamma", [0.0, 2.0])
+    def test_model(self, ck_decoder, agg_mode, fl_gamma, conll2004_demo, device):
         if ck_decoder.lower() == 'sequence_tagging':
-            ck_decoder_config = SequenceTaggingDecoderConfig(criterion='CRF')
+            ck_decoder_config = SequenceTaggingDecoderConfig(use_crf=True)
         elif ck_decoder.lower() == 'span_classification':
-            ck_decoder_config = SpanClassificationDecoderConfig(agg_mode=agg_mode, criterion=criterion)
+            ck_decoder_config = SpanClassificationDecoderConfig(agg_mode=agg_mode, fl_gamma=fl_gamma)
         elif ck_decoder.lower() == 'boundary_selection':
-            ck_decoder_config = BoundarySelectionDecoderConfig(criterion=criterion)
+            ck_decoder_config = BoundarySelectionDecoderConfig(fl_gamma=fl_gamma)
         self.config = ModelConfig(decoder=JointERREDecoderConfig(ck_decoder=ck_decoder_config, 
-                                                                 rel_decoder=SpanRelClassificationDecoderConfig(agg_mode=agg_mode, criterion=criterion)))
+                                                                 rel_decoder=SpanRelClassificationDecoderConfig(agg_mode=agg_mode, fl_gamma=fl_gamma)))
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()

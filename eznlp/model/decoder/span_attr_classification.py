@@ -154,14 +154,14 @@ class SpanAttrClassificationDecoderConfig(DecoderConfig, SpanAttrClassificationD
         self.ck_label_emb_dim = kwargs.pop('ck_label_emb_dim', 25)
         
         self.agg_mode = kwargs.pop('agg_mode', 'max_pooling')
-        self.criterion = kwargs.pop('criterion', 'BCE')
-        assert self.criterion.lower() in ('bce', )
-        self.confidence_threshold = kwargs.pop('confidence_threshold', 0.5)
         
         self.ck_none_label = kwargs.pop('ck_none_label', '<none>')
         self.idx2ck_label = kwargs.pop('idx2ck_label', None)
         self.attr_none_label = kwargs.pop('attr_none_label', '<none>')
         self.idx2attr_label = kwargs.pop('idx2attr_label', None)
+        
+        self.multihot = True
+        self.confidence_threshold = kwargs.pop('confidence_threshold', 0.5)
         super().__init__(**kwargs)
         
         
@@ -213,7 +213,7 @@ class SpanAttrClassificationDecoder(Decoder, SpanAttrClassificationDecoderMixin)
         self.hid2logit = torch.nn.Linear(config.in_dim+config.ck_size_emb_dim+config.ck_label_emb_dim, config.attr_voc_dim)
         reinit_layer_(self.hid2logit, 'sigmoid')
         
-        self.criterion = torch.nn.BCEWithLogitsLoss(reduction='sum')
+        self.criterion = config.instantiate_criterion(reduction='sum')
         self.confidence_threshold = config.confidence_threshold
         
         

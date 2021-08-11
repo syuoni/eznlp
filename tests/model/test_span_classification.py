@@ -50,9 +50,9 @@ class TestModel(object):
         
     @pytest.mark.parametrize("agg_mode", ['max_pooling', 'multiplicative_attention'])
     @pytest.mark.parametrize("size_emb_dim", [25, 0])
-    @pytest.mark.parametrize("criterion", ['CE', 'FL'])
-    def test_model(self, agg_mode, size_emb_dim, criterion, conll2004_demo, device):
-        self.config = ModelConfig(decoder=SpanClassificationDecoderConfig(agg_mode=agg_mode, size_emb_dim=size_emb_dim, criterion=criterion))
+    @pytest.mark.parametrize("fl_gamma", [0.0, 2.0])
+    def test_model(self, agg_mode, size_emb_dim, fl_gamma, conll2004_demo, device):
+        self.config = ModelConfig(decoder=SpanClassificationDecoderConfig(agg_mode=agg_mode, size_emb_dim=size_emb_dim, fl_gamma=fl_gamma))
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()

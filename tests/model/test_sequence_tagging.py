@@ -56,10 +56,12 @@ class TestModel(object):
         
     @pytest.mark.parametrize("arch", ['FFN', 'Conv', 'Gehring', 'LSTM', 'GRU', 'Transformer'])
     @pytest.mark.parametrize("shortcut", [False, True])
-    @pytest.mark.parametrize("criterion", ['CRF', 'CE', 'FL'])
-    def test_model(self, arch, shortcut, criterion, conll2003_demo, device):
+    @pytest.mark.parametrize("use_crf, fl_gamma, sl_epsilon", [(True,  0.0, 0.0), 
+                                                               (False, 2.0, 0.0),
+                                                               (False, 0.0, 0.1)])
+    def test_model(self, arch, shortcut, use_crf, fl_gamma, sl_epsilon, conll2003_demo, device):
         self.config = ModelConfig(intermediate2=EncoderConfig(arch=arch, shortcut=shortcut), 
-                                  decoder=SequenceTaggingDecoderConfig(criterion=criterion))
+                                  decoder=SequenceTaggingDecoderConfig(use_crf=use_crf, fl_gamma=fl_gamma, sl_epsilon=sl_epsilon))
         self._setup_case(conll2003_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()

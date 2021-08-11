@@ -46,13 +46,6 @@ class TextClassificationDecoderConfig(DecoderConfig, TextClassificationDecoderMi
         self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
         
         self.agg_mode = kwargs.pop('agg_mode', 'multiplicative_attention')
-        self.criterion = kwargs.pop('criterion', 'CE')
-        assert self.criterion.lower() in ('ce', 'fl', 'sl')
-        if self.criterion.lower() == 'fl':
-            self.gamma = kwargs.pop('gamma', 2.0)
-        elif self.criterion.lower() == 'sl':
-            self.epsilon = kwargs.pop('epsilon', 0.1)
-            
         self.idx2label = kwargs.pop('idx2label', None)
         super().__init__(**kwargs)
         
@@ -89,12 +82,7 @@ class TextClassificationDecoder(Decoder, TextClassificationDecoderMixin):
         elif config.agg_mode.lower().endswith('_attention'):
             self.aggregating = SequenceAttention(config.in_dim, scoring=config.agg_mode.replace('_attention', ''))
             
-        if config.criterion.lower() == 'fl':
-            self.criterion = FocalLoss(gamma=config.gamma, reduction='none')
-        elif config.criterion.lower() == 'sl':
-            self.criterion = SmoothLabelCrossEntropyLoss(epsilon=config.epsilon, reduction='none')
-        else:
-            self.criterion = torch.nn.CrossEntropyLoss(reduction='none')
+        self.criterion = config.instantiate_criterion(reduction='none')
         
         
     def forward(self, batch: Batch, full_hidden: torch.Tensor):

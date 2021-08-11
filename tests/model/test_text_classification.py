@@ -51,10 +51,10 @@ class TestModel(object):
     @pytest.mark.parametrize("arch", ['Conv', 'LSTM'])
     @pytest.mark.parametrize("agg_mode", ['min_pooling', 'max_pooling', 'mean_pooling', 
                                           'dot_attention', 'multiplicative_attention', 'additive_attention'])
-    @pytest.mark.parametrize("criterion", ['CE', 'FL', 'SL'])
-    def test_model(self, arch, agg_mode, criterion, yelp_full_demo, device):
+    @pytest.mark.parametrize("fl_gamma, sl_epsilon", [(0.0, 0.0), (2.0, 0.0), (0.0, 0.1)])
+    def test_model(self, arch, agg_mode, fl_gamma, sl_epsilon, yelp_full_demo, device):
         self.config = ModelConfig(intermediate2=EncoderConfig(arch=arch), 
-                                  decoder=TextClassificationDecoderConfig(agg_mode=agg_mode, criterion=criterion))
+                                  decoder=TextClassificationDecoderConfig(agg_mode=agg_mode, fl_gamma=fl_gamma, sl_epsilon=sl_epsilon))
         self._setup_case(yelp_full_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()

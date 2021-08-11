@@ -103,12 +103,6 @@ class SpanClassificationDecoderConfig(DecoderConfig, SpanClassificationDecoderMi
         self.size_emb_dim = kwargs.pop('size_emb_dim', 25)
         
         self.agg_mode = kwargs.pop('agg_mode', 'max_pooling')
-        self.criterion = kwargs.pop('criterion', 'CE')
-        assert self.criterion.lower() in ('ce', 'fl', 'sl')
-        if self.criterion.lower() == 'fl':
-            self.gamma = kwargs.pop('gamma', 2.0)
-        elif self.criterion.lower() == 'sl':
-            self.epsilon = kwargs.pop('epsilon', 0.1)
         
         self.none_label = kwargs.pop('none_label', '<none>')
         self.idx2label = kwargs.pop('idx2label', None)
@@ -167,12 +161,7 @@ class SpanClassificationDecoder(Decoder, SpanClassificationDecoderMixin):
         self.hid2logit = torch.nn.Linear(config.in_dim+config.size_emb_dim, config.voc_dim)
         reinit_layer_(self.hid2logit, 'sigmoid')
         
-        if config.criterion.lower() == 'fl':
-            self.criterion = FocalLoss(gamma=config.gamma, reduction='sum')
-        elif config.criterion.lower() == 'sl':
-            self.criterion = SmoothLabelCrossEntropyLoss(epsilon=config.epsilon, reduction='sum')
-        else:
-            self.criterion = torch.nn.CrossEntropyLoss(reduction='sum')
+        self.criterion = config.instantiate_criterion(reduction='sum')
         
         
     def get_logits(self, batch: Batch, full_hidden: torch.Tensor):

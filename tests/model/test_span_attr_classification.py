@@ -50,9 +50,8 @@ class TestModel(object):
         
     @pytest.mark.parametrize("agg_mode", ['max_pooling', 'multiplicative_attention'])
     @pytest.mark.parametrize("ck_label_emb_dim", [25, 0])
-    @pytest.mark.parametrize("criterion", ['BCE'])
-    def test_model(self, agg_mode, ck_label_emb_dim, criterion, HwaMei_demo, device):
-        self.config = ModelConfig(decoder=SpanAttrClassificationDecoderConfig(agg_mode=agg_mode, ck_label_emb_dim=ck_label_emb_dim, criterion=criterion))
+    def test_model(self, agg_mode, ck_label_emb_dim, HwaMei_demo, device):
+        self.config = ModelConfig(decoder=SpanAttrClassificationDecoderConfig(agg_mode=agg_mode, ck_label_emb_dim=ck_label_emb_dim))
         self._setup_case(HwaMei_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()

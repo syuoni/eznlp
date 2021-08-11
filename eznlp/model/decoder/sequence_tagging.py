@@ -84,14 +84,9 @@ class SequenceTaggingDecoderConfig(DecoderConfig, SequenceTaggingDecoderMixin):
         self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
         
         self.scheme = kwargs.pop('scheme', 'BIOES')
-        self.criterion = kwargs.pop('criterion', 'CRF')
-        assert self.criterion.lower() in ('crf', 'ce', 'fl', 'sl')
-        if self.criterion.lower() == 'fl':
-            self.gamma = kwargs.pop('gamma', 2.0)
-        elif self.criterion.lower() == 'sl':
-            self.epsilon = kwargs.pop('epsilon', 0.1)
-            
         self.idx2tag = kwargs.pop('idx2tag', None)
+        
+        self.use_crf = kwargs.pop('use_crf', True)
         super().__init__(**kwargs)
         
         
@@ -102,6 +97,20 @@ class SequenceTaggingDecoderConfig(DecoderConfig, SequenceTaggingDecoderMixin):
     def __repr__(self):
         repr_attr_dict = {key: getattr(self, key) for key in ['in_dim', 'in_drop_rates', 'scheme', 'criterion']}
         return self._repr_non_config_attrs(repr_attr_dict)
+        
+    @property
+    def criterion(self):
+        if self.use_crf:
+            return "CRF"
+        else:
+            return super().criterion
+        
+    def instantiate_criterion(self, **kwargs):
+        if self.criterion.lower().startswith('crf'):
+            return CRF(tag_dim=self.voc_dim, pad_idx=self.pad_idx, batch_first=True)
+        else:
+            return super().instantiate_criterion(**kwargs)
+        
         
     def build_vocab(self, *partitions):
         counter = Counter()
@@ -127,14 +136,7 @@ class SequenceTaggingDecoder(Decoder, SequenceTaggingDecoderMixin):
         self.hid2logit = torch.nn.Linear(config.in_dim, config.voc_dim)
         reinit_layer_(self.hid2logit, 'sigmoid')
         
-        if config.criterion.lower() == 'crf':
-            self.criterion = CRF(tag_dim=config.voc_dim, pad_idx=config.pad_idx, batch_first=True)
-        elif config.criterion.lower() == 'fl':
-            self.criterion = FocalLoss(gamma=config.gamma, ignore_index=config.pad_idx, reduction='sum')
-        elif config.criterion.lower() == 'sl':
-            self.criterion = SmoothLabelCrossEntropyLoss(epsilon=config.epsilon, ignore_index=config.pad_idx, reduction='sum')
-        else:
-            self.criterion = torch.nn.CrossEntropyLoss(ignore_index=config.pad_idx, reduction='sum')
+        self.criterion = config.instantiate_criterion(ignore_index=config.pad_idx, reduction='sum')
         
         
     def forward(self, batch: Batch, full_hidden: torch.Tensor):

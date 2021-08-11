@@ -50,9 +50,9 @@ class TestModel(object):
         
     @pytest.mark.parametrize("agg_mode", ['max_pooling', 'multiplicative_attention'])
     @pytest.mark.parametrize("ck_label_emb_dim", [25, 0])
-    @pytest.mark.parametrize("criterion", ['CE', 'FL'])
-    def test_model(self, agg_mode, ck_label_emb_dim, criterion, conll2004_demo, device):
-        self.config = ModelConfig(decoder=SpanRelClassificationDecoderConfig(agg_mode=agg_mode, ck_label_emb_dim=ck_label_emb_dim, criterion=criterion))
+    @pytest.mark.parametrize("fl_gamma", [0.0, 2.0])
+    def test_model(self, agg_mode, ck_label_emb_dim, fl_gamma, conll2004_demo, device):
+        self.config = ModelConfig(decoder=SpanRelClassificationDecoderConfig(agg_mode=agg_mode, ck_label_emb_dim=ck_label_emb_dim, fl_gamma=fl_gamma))
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
@@ -94,7 +94,7 @@ def test_chunk_pairs_obj(EAR_data_demo, num_neg_relations, training, building):
         config = ModelConfig(decoder=SpanRelClassificationDecoderConfig(num_neg_relations=num_neg_relations))
         rel_decoder_config = config.decoder
     else:
-        config = ModelConfig(decoder=JointExtractionDecoderConfig(rel_decoder=SpanRelClassificationDecoderConfig(num_neg_relations=num_neg_relations)))
+        config = ModelConfig(decoder=JointExtractionDecoderConfig(attr_decoder=None, rel_decoder=SpanRelClassificationDecoderConfig(num_neg_relations=num_neg_relations)))
         rel_decoder_config = config.decoder.rel_decoder
         
     dataset = Dataset(EAR_data_demo, config, training=training)
