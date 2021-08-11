@@ -6,7 +6,7 @@ import torch
 from ...wrapper import TargetWrapper, Batch
 from ...utils import ChunksTagsTranslator
 from ...nn.utils import unpad_seqs
-from ...nn.modules import CombinedDropout, CRF, SmoothLabelCrossEntropyLoss, FocalLoss
+from ...nn.modules import CombinedDropout, CRF
 from ...nn.init import reinit_layer_
 from ...metrics import precision_recall_f1_report
 from .base import DecoderMixin, DecoderConfig, Decoder

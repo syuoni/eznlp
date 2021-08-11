@@ -8,7 +8,6 @@ import torch
 from ...wrapper import TargetWrapper, Batch
 from ...utils.chunk import chunk_pair_distance
 from ...nn.modules import SequencePooling, SequenceAttention, CombinedDropout
-from ...nn.modules import SmoothLabelCrossEntropyLoss, FocalLoss
 from ...nn.functional import seq_lens2mask
 from ...nn.init import reinit_embedding_, reinit_layer_
 from ...metrics import precision_recall_f1_report
