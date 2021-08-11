@@ -52,12 +52,16 @@ class TestModel(object):
     @pytest.mark.parametrize("use_biaffine", [True, False])
     @pytest.mark.parametrize("affine_arch", ['FFN', 'LSTM'])
     @pytest.mark.parametrize("size_emb_dim", [25, 0])
-    @pytest.mark.parametrize("criterion", ['CE', 'FL'])
-    def test_model(self, use_biaffine, affine_arch, size_emb_dim, criterion, conll2004_demo, device):
+    @pytest.mark.parametrize("fl_gamma, sl_epsilon, sb_epsilon", [(0.0, 0.0, 0.0), 
+                                                                  (2.0, 0.0, 0.0), 
+                                                                  (0.0, 0.1, 0.0), 
+                                                                  (0.0, 0.0, 0.1), 
+                                                                  (0.0, 0.1, 0.1)])
+    def test_model(self, use_biaffine, affine_arch, size_emb_dim, fl_gamma, sl_epsilon, sb_epsilon, conll2004_demo, device):
         self.config = ModelConfig(decoder=BoundarySelectionDecoderConfig(use_biaffine=use_biaffine, 
                                                                          affine=EncoderConfig(arch=affine_arch), 
                                                                          size_emb_dim=size_emb_dim, 
-                                                                         criterion=criterion))
+                                                                         fl_gamma=fl_gamma, sl_epsilon=sl_epsilon, sb_epsilon=sb_epsilon))
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()

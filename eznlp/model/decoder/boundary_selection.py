@@ -6,7 +6,7 @@ import torch
 
 from ...wrapper import TargetWrapper, Batch
 from ...utils.chunk import detect_nested, filter_clashed_by_priority
-from ...nn.modules import CombinedDropout, SmoothLabelCrossEntropyLoss, FocalLoss
+from ...nn.modules import CombinedDropout, SmoothLabelCrossEntropyLoss, SoftLabelCrossEntropyLoss
 from ...nn.init import reinit_embedding_, reinit_layer_
 from ...metrics import precision_recall_f1_report
 from ..encoder import EncoderConfig
@@ -68,9 +68,21 @@ class Boundaries(TargetWrapper):
         
         self.chunks = data_entry.get('chunks', None)
         if self.chunks is not None:
-            self.boundary2label_id = torch.full((len(data_entry['tokens']), len(data_entry['tokens'])), config.none_idx, dtype=torch.long)
-            for label, start, end in self.chunks:
-                self.boundary2label_id[start, end-1] = config.label2idx[label]
+            num_tokens = len(data_entry['tokens'])
+            if config.sb_epsilon <= 0:
+                self.boundary2label_id = torch.full((num_tokens, num_tokens), config.none_idx, dtype=torch.long)
+                for label, start, end in self.chunks:
+                    self.boundary2label_id[start, end-1] = config.label2idx[label]
+            else:
+                self.boundary2label_id = torch.zeros(num_tokens, num_tokens, config.voc_dim, dtype=torch.float)
+                for label, start, end in self.chunks:
+                    label_id = config.label2idx[label]
+                    self.boundary2label_id[start, end-1, label_id] += (1 - config.sb_epsilon)
+                    self.boundary2label_id[max(start-1, 0),     end-1, label_id] += config.sb_epsilon / 4
+                    self.boundary2label_id[min(start+1, end-1), end-1, label_id] += config.sb_epsilon / 4
+                    self.boundary2label_id[start, max(end-2, start),      label_id] += config.sb_epsilon / 4
+                    self.boundary2label_id[start, min(end, num_tokens-1), label_id] += config.sb_epsilon / 4
+                self.boundary2label_id[:, :, config.none_idx] = 1 - self.boundary2label_id.sum(dim=-1)
 
 
 
@@ -84,17 +96,13 @@ class BoundarySelectionDecoderConfig(DecoderConfig, BoundarySelectionDecoderMixi
         self.size_emb_dim = kwargs.pop('size_emb_dim', 25)
         self.hid_drop_rates = kwargs.pop('hid_drop_rates', (0.2, 0.0, 0.0))
         
-        self.criterion = kwargs.pop('criterion', 'CE')
-        assert self.criterion.lower() in ('ce', 'fl', 'sl')
-        if self.criterion.lower() == 'fl':
-            self.gamma = kwargs.pop('gamma', 2.0)
-        elif self.criterion.lower() == 'sl':
-            self.epsilon = kwargs.pop('epsilon', 0.1)
-        
         self.none_label = kwargs.pop('none_label', '<none>')
         self.idx2label = kwargs.pop('idx2label', None)
         # Note: non-nested overlapping chunks are never allowed
         self.allow_nested = kwargs.pop('allow_nested', None)
+        
+        # Boundary smoothing epsilon
+        self.sb_epsilon = kwargs.pop('sb_epsilon', 0.0)
         super().__init__(**kwargs)
         
         
@@ -113,6 +121,23 @@ class BoundarySelectionDecoderConfig(DecoderConfig, BoundarySelectionDecoderMixi
     @in_dim.setter
     def in_dim(self, dim: int):
         self.affine.in_dim = dim
+        
+    @property
+    def criterion(self):
+        if self.sb_epsilon > 0:
+            return f"SB({self.sb_epsilon:.2f}, {self.sl_epsilon:.2f})"
+        else:
+            return super().criterion
+        
+    def instantiate_criterion(self, **kwargs):
+        if self.criterion.lower().startswith('sb'):
+            if self.sl_epsilon > 0:
+                return SmoothLabelCrossEntropyLoss(epsilon=self.sl_epsilon, **kwargs)
+            else:
+                return SoftLabelCrossEntropyLoss(**kwargs)
+        else:
+            return super().instantiate_criterion(**kwargs)
+        
         
     def build_vocab(self, *partitions):
         counter = Counter(label for data in partitions for entry in data for label, start, end in entry['chunks'])
@@ -166,12 +191,7 @@ class BoundarySelectionDecoder(Decoder, BoundarySelectionDecoderMixin):
         torch.nn.init.orthogonal_(self.W.data)
         torch.nn.init.zeros_(self.b.data)
         
-        if config.criterion.lower() == 'fl':
-            self.criterion = FocalLoss(gamma=config.gamma, reduction='sum')
-        elif config.criterion.lower() == 'sl':
-            self.criterion = SmoothLabelCrossEntropyLoss(epsilon=config.epsilon, reduction='sum')
-        else:
-            self.criterion = torch.nn.CrossEntropyLoss(reduction='sum')
+        self.criterion = config.instantiate_criterion(reduction='sum')
         
         
     def compute_scores(self, batch: Batch, full_hidden: torch.Tensor):
