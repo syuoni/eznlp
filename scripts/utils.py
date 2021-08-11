@@ -322,6 +322,14 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
             PATH = "assets/transformers/hfl/chinese-roberta-wwm-ext"
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512))
+            
+        elif pretrained_str.lower().startswith('macbert'):
+            if 'base' in pretrained_str.lower():
+                PATH = "assets/transformers/hfl/chinese-macbert-base"
+            elif 'large' in pretrained_str.lower():
+                PATH = "assets/transformers/hfl/chinese-macbert-large"
+            return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
+                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512))
 
         elif pretrained_str.lower().startswith('ernie'):
             PATH = "assets/transformers/nghuyong/ernie-1.0"

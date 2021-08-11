@@ -7,7 +7,7 @@
     * Span classification
     * Boundary Selection
 * Relation extraction
-    * Relation classification
+* Attribute extraction
 
 
 ## Experiment Results
@@ -45,29 +45,36 @@ See [Named Entity Recognition](docs/entity_recognition.md) for more details.
 See [Relation Extraction](docs/relation_extraction.md) for more details. 
 
 
-## Running the Code
-* Install the `eznlp` package
+## Installation
+### With `pip`
 ```bash
-$ python setup.py bdist_wheel
-$ pip install dist/eznlp-<version>-py3-none-any.whl
+$ pip install eznlp
 ```
 
-* Text classification
+### From source
+```bash
+$ python setup.py sdist
+$ pip install dist/eznlp-<version>.tar.gz
+```
+
+
+## Running the Code
+### Text classification
 ```bash
 $ python scripts/text_classification.py --dataset <dataset> [options]
 ```
 
-* Entity recognition
+### Entity recognition
 ```bash
 $ python scripts/entity_recognition.py --dataset <dataset> [options]
 ```
 
-* Relation extraction
+### Relation extraction
 ```bash
 $ python scripts/relation_extraction.py --dataset <dataset> [options]
 ```
 
-* Attribute extraction
+### Attribute extraction
 ```bash
 $ python scripts/attribute_extraction.py --dataset <dataset> [options]
 ```
