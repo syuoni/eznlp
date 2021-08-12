@@ -34,10 +34,10 @@ def parse_arguments(parser: argparse.ArgumentParser):
     group_rel_classification = parser.add_argument_group('relation classification')
     group_rel_classification.add_argument('--agg_mode', type=str, default='max_pooling', 
                                           help="aggregating mode")
-    group_rel_classification.add_argument('--criterion', type=str, default='CE', 
-                                          help="decoder loss criterion")
-    group_rel_classification.add_argument('--focal_gamma', type=float, default=2.0, 
+    group_rel_classification.add_argument('--fl_gamma', type=float, default=0.0, 
                                           help="Focal Loss gamma")
+    group_rel_classification.add_argument('--sl_epsilon', type=float, default=0.0, 
+                                          help="Label smoothing loss epsilon")
     group_rel_classification.add_argument('--num_neg_relations', type=int, default=100, 
                                           help="number of sampling negative relations")
     group_rel_classification.add_argument('--max_span_size', type=int, default=10, 
@@ -57,8 +57,8 @@ def build_RE_config(args: argparse.Namespace):
     drop_rates = (0.0, 0.05, args.drop_rate) if args.use_locked_drop else (args.drop_rate, 0.0, 0.0)
     
     decoder_config = SpanRelClassificationDecoderConfig(agg_mode=args.agg_mode, 
-                                                        criterion=args.criterion,
-                                                        gamma=args.focal_gamma, 
+                                                        fl_gamma=args.fl_gamma,
+                                                        sl_epsilon=args.sl_epsilon, 
                                                         num_neg_relations=args.num_neg_relations, 
                                                         max_span_size=args.max_span_size, 
                                                         max_pair_distance=args.max_pair_distance, 
@@ -99,7 +99,7 @@ if __name__ == '__main__':
     if device.type.startswith('cuda'):
         torch.cuda.set_device(device)
         
-    if len(args.pipline_path) > 0:
+    if len(args.pipeline_path) > 0:
         if not os.path.exists(f"{args.pipeline_path}/data-with-chunks-pred.pth"):
             raise RuntimeError("`pipeline_path` is specified but not existing")
         logger.info(f"Loading data from {args.pipeline_path} for pipeline...")

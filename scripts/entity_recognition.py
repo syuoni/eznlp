@@ -38,11 +38,15 @@ def parse_arguments(parser: argparse.ArgumentParser):
     group_decoder = parser.add_argument_group('decoder configurations')
     group_decoder.add_argument('--ck_decoder', type=str, default='sequence_tagging', 
                                help="chunk decoding method", choices=['sequence_tagging', 'span_classification', 'boundary_selection'])
-    group_decoder.add_argument('--criterion', type=str, default='CRF', 
-                               help="decoder loss criterion")
-    group_decoder.add_argument('--focal_gamma', type=float, default=2.0, 
+    group_decoder.add_argument('--no_crf', dest='use_crf', default=True, action='store_false', 
+                               help="whether to use CRF")
+    group_decoder.add_argument('--fl_gamma', type=float, default=0.0, 
                                help="Focal Loss gamma")
-    
+    group_decoder.add_argument('--sl_epsilon', type=float, default=0.0, 
+                               help="Label smoothing loss epsilon")
+    group_decoder.add_argument('--sb_epsilon', type=float, default=0.0, 
+                               help="Boundary smoothing loss epsilon")
+
     group_sequence_tagging = parser.add_argument_group('sequence tagging')
     group_sequence_tagging.add_argument('--scheme', type=str, default='BIOES', 
                                         help="sequence tagging scheme", choices=['BIOES', 'BIO2'])
@@ -157,13 +161,14 @@ def build_ER_config(args: argparse.Namespace):
     
     if args.ck_decoder == 'sequence_tagging':
         decoder_config = SequenceTaggingDecoderConfig(scheme=args.scheme, 
-                                                      criterion=args.criterion, 
-                                                      gamma=args.focal_gamma, 
+                                                      use_crf=args.use_crf, 
+                                                      fl_gamma=args.fl_gamma,
+                                                      sl_epsilon=args.sl_epsilon, 
                                                       in_drop_rates=drop_rates)
     elif args.ck_decoder == 'span_classification':
         decoder_config = SpanClassificationDecoderConfig(agg_mode=args.agg_mode, 
-                                                         criterion=args.criterion, 
-                                                         gamma=args.focal_gamma, 
+                                                         fl_gamma=args.fl_gamma,
+                                                         sl_epsilon=args.sl_epsilon, 
                                                          num_neg_chunks=args.num_neg_chunks, 
                                                          max_span_size=args.max_span_size, 
                                                          size_emb_dim=args.ck_size_emb_dim, 
@@ -171,8 +176,9 @@ def build_ER_config(args: argparse.Namespace):
     elif args.ck_decoder == 'boundary_selection':
         decoder_config = BoundarySelectionDecoderConfig(use_biaffine=args.use_biaffine, 
                                                         affine=EncoderConfig(arch=args.affine_arch, hid_dim=150, num_layers=1, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2), 
-                                                        criterion=args.criterion, 
-                                                        gamma=args.focal_gamma, 
+                                                        fl_gamma=args.fl_gamma,
+                                                        sl_epsilon=args.sl_epsilon, 
+                                                        sb_epsilon=args.sb_epsilon,
                                                         hid_drop_rates=drop_rates)
     return ModelConfig(**collect_IE_assembly_config(args), decoder=decoder_config)
 
