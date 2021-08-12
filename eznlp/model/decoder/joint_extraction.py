@@ -122,9 +122,9 @@ class JointExtractionDecoder(Decoder, JointExtractionDecoderMixin):
     def __init__(self, config: JointExtractionDecoderConfig):
         super().__init__()
         self.ck_decoder = config.ck_decoder.instantiate()
-        if self.has_attr_decoder:
+        if config.has_attr_decoder:
             self.attr_decoder = config.attr_decoder.instantiate()
-        if self.has_rel_decoder:
+        if config.has_rel_decoder:
             self.rel_decoder = config.rel_decoder.instantiate()
         
         
