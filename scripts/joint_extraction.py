@@ -11,7 +11,11 @@ import torch
 
 from eznlp import auto_device
 from eznlp.dataset import Dataset
-from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderConfig, SpanRelClassificationDecoderConfig, JointERREDecoderConfig
+from eznlp.model import EncoderConfig
+from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderConfig, BoundarySelectionDecoderConfig
+from eznlp.model import SpanAttrClassificationDecoderConfig
+from eznlp.model import SpanRelClassificationDecoderConfig
+from eznlp.model import JointExtractionDecoderConfig
 from eznlp.model import ModelConfig
 from eznlp.training import Trainer
 from eznlp.training.utils import count_params
@@ -30,35 +34,48 @@ def parse_arguments(parser: argparse.ArgumentParser):
                             help="dataset name")
     
     group_decoder = parser.add_argument_group('decoder configurations')
-    group_decoder.add_argument('--ck_decoder', type=str, default='span_classification', 
-                               help="chunk decoding method", choices=['sequence_tagging', 'span_classification'])
-    group_decoder.add_argument('--criterion', type=str, default='CE', 
-                               help="decoder loss criterion")
-    group_decoder.add_argument('--focal_gamma', type=float, default=2.0, 
+    group_decoder.add_argument('--ck_decoder', type=str, default='sequence_tagging', 
+                               help="chunk decoding method", choices=['sequence_tagging', 'span_classification', 'boundary_selection'])
+    group_decoder.add_argument('--attr_decoder', type=str, default='None', 
+                               help="attribute decoding method", choices=['None', 'span_attr_classification'])
+    group_decoder.add_argument('--rel_decoder', type=str, default='span_rel_classification', 
+                               help="relation decoding method", choices=['None', 'span_rel_classification'])
+
+    # Loss
+    group_decoder.add_argument('--fl_gamma', type=float, default=0.0, 
                                help="Focal Loss gamma")
+    group_decoder.add_argument('--sl_epsilon', type=float, default=0.0, 
+                               help="Label smoothing loss epsilon")
     
-    group_sequence_tagging = parser.add_argument_group('sequence tagging')
-    group_sequence_tagging.add_argument('--scheme', type=str, default='BIOES', 
-                                        help="sequence tagging scheme", choices=['BIOES', 'BIO2'])
+    # Sequence tagging
+    group_decoder.add_argument('--scheme', type=str, default='BIOES', 
+                               help="sequence tagging scheme", choices=['BIOES', 'BIO2'])
+    group_decoder.add_argument('--no_crf', dest='use_crf', default=True, action='store_false', 
+                               help="whether to use CRF")
     
-    group_span_classification = parser.add_argument_group('span classification')
-    group_span_classification.add_argument('--agg_mode', type=str, default='max_pooling', 
-                                           help="aggregating mode")
-    group_span_classification.add_argument('--num_neg_chunks', type=int, default=100, 
-                                           help="number of sampling negative chunks")
-    group_span_classification.add_argument('--max_span_size', type=int, default=10, 
-                                           help="maximum span size")
-    group_span_classification.add_argument('--ck_size_emb_dim', type=int, default=25, 
-                                           help="span size embedding dim")
-    
-    group_rel_classification = parser.add_argument_group('relation classification')
-    group_rel_classification.add_argument('--num_neg_relations', type=int, default=100, 
-                                          help="number of sampling negative relations")
-    group_rel_classification.add_argument('--max_pair_distance', type=int, default=100, 
-                                          help="maximum pair distance")
-    group_rel_classification.add_argument('--ck_label_emb_dim', type=int, default=25, 
-                                          help="chunk label embedding dim")
-    
+    # Span-based
+    group_decoder.add_argument('--agg_mode', type=str, default='max_pooling', 
+                               help="aggregating mode")
+    group_decoder.add_argument('--num_neg_chunks', type=int, default=100, 
+                               help="number of sampling negative chunks")
+    group_decoder.add_argument('--max_span_size', type=int, default=10, 
+                               help="maximum span size")
+    group_decoder.add_argument('--ck_size_emb_dim', type=int, default=25, 
+                               help="span size embedding dim")
+    group_decoder.add_argument('--ck_label_emb_dim', type=int, default=25, 
+                               help="chunk label embedding dim")
+    group_decoder.add_argument('--num_neg_relations', type=int, default=100, 
+                               help="number of sampling negative relations")
+    group_decoder.add_argument('--max_pair_distance', type=int, default=100, 
+                               help="maximum pair distance")
+
+    # Boundary selection
+    group_decoder.add_argument('--no_biaffine', dest='use_biaffine', default=True, action='store_false', 
+                               help="whether to use biaffine")
+    group_decoder.add_argument('--affine_arch', type=str, default='FFN', 
+                               help="affine encoder architecture")
+    group_decoder.add_argument('--sb_epsilon', type=float, default=0.0, 
+                               help="Boundary smoothing loss epsilon")
     return parse_to_args(parser)
 
 
@@ -68,28 +85,51 @@ def build_JERRE_config(args: argparse.Namespace):
     
     if args.ck_decoder == 'sequence_tagging':
         ck_decoder_config = SequenceTaggingDecoderConfig(scheme=args.scheme, 
-                                                         criterion=args.criterion, 
-                                                         gamma=args.focal_gamma, 
+                                                         use_crf=args.use_crf, 
+                                                         fl_gamma=args.fl_gamma,
+                                                         sl_epsilon=args.sl_epsilon, 
                                                          in_drop_rates=drop_rates)
-    else:
+    elif args.ck_decoder == 'span_classification':
         ck_decoder_config = SpanClassificationDecoderConfig(agg_mode=args.agg_mode, 
-                                                            criterion=args.criterion, 
-                                                            gamma=args.focal_gamma, 
+                                                            fl_gamma=args.fl_gamma,
+                                                            sl_epsilon=args.sl_epsilon, 
                                                             num_neg_chunks=args.num_neg_chunks, 
                                                             max_span_size=args.max_span_size, 
                                                             size_emb_dim=args.ck_size_emb_dim, 
                                                             in_drop_rates=drop_rates)
-        
-    rel_decoder_config = SpanRelClassificationDecoderConfig(agg_mode=args.agg_mode, 
-                                                            criterion=args.criterion, 
-                                                            gamma=args.focal_gamma, 
-                                                            num_neg_relations=args.num_neg_relations, 
-                                                            max_span_size=args.max_span_size, 
-                                                            max_pair_distance=args.max_pair_distance, 
-                                                            ck_size_emb_dim=args.ck_size_emb_dim, 
-                                                            ck_label_emb_dim=args.ck_label_emb_dim, 
-                                                            in_drop_rates=drop_rates)
-    decoder_config = JointERREDecoderConfig(ck_decoder=ck_decoder_config, rel_decoder=rel_decoder_config)
+    elif args.ck_decoder == 'boundary_selection':
+        ck_decoder_config = BoundarySelectionDecoderConfig(use_biaffine=args.use_biaffine, 
+                                                           affine=EncoderConfig(arch=args.affine_arch, hid_dim=150, num_layers=1, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2), 
+                                                           fl_gamma=args.fl_gamma,
+                                                           sl_epsilon=args.sl_epsilon, 
+                                                           sb_epsilon=args.sb_epsilon,
+                                                           hid_drop_rates=drop_rates)
+    
+    if args.attr_decoder == 'None':
+        attr_decoder_config = None
+    elif args.attr_decoder == 'span_attr_classification':
+        attr_decoder_config = SpanAttrClassificationDecoderConfig(agg_mode=args.agg_mode, 
+                                                                  max_span_size=args.max_span_size, 
+                                                                  ck_size_emb_dim=args.ck_size_emb_dim, 
+                                                                  ck_label_emb_dim=args.ck_label_emb_dim, 
+                                                                  in_drop_rates=drop_rates)
+
+    if args.rel_decoder == 'None':
+        rel_decoder_config = None
+    elif args.rel_decoder == 'span_rel_classification':
+        rel_decoder_config = SpanRelClassificationDecoderConfig(agg_mode=args.agg_mode, 
+                                                                fl_gamma=args.fl_gamma,
+                                                                sl_epsilon=args.sl_epsilon, 
+                                                                num_neg_relations=args.num_neg_relations, 
+                                                                max_span_size=args.max_span_size, 
+                                                                max_pair_distance=args.max_pair_distance, 
+                                                                ck_size_emb_dim=args.ck_size_emb_dim, 
+                                                                ck_label_emb_dim=args.ck_label_emb_dim, 
+                                                                in_drop_rates=drop_rates)
+
+    decoder_config = JointExtractionDecoderConfig(ck_decoder=ck_decoder_config, 
+                                                  attr_decoder = attr_decoder_config,
+                                                  rel_decoder=rel_decoder_config)
     return ModelConfig(**collect_IE_assembly_config(args) , decoder=decoder_config)
 
 
