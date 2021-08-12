@@ -91,7 +91,7 @@ def HwaMei_demo():
                   parse_attrs=True, 
                   parse_relations=True, 
                   line_sep="\r\n", 
-                  max_len=200, 
+                  max_len=100, 
                   encoding='utf-8', 
                   token_sep="", 
                   pad_token="").read("data/HwaMei/demo.ChaFangJiLu.txt")
