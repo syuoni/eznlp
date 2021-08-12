@@ -16,7 +16,7 @@ Configurations of our implementation:
 ♠️ do not consider entity type correctness when evaluating relation extraction.  
 
 ### CoNLL 2004 
-| Model | Paper | Reported F1 | Our Imp. F1 (Pipline) | Our Imp. F1 (Joint) | Notes |
+| Model | Paper | Reported F1 | Our Imp. F1 (Pipeline) | Our Imp. F1 (Joint) | Notes |
 |:-----:|:-----:|:-----------:|:---------------------:|:-------------------:|:-----:|
 | SpERT (with CharLSTM + LSTM)| -                     | -               |  -            | 86.57 / 66.01 | num_layers=2 |
 | SpERT (with BERT-base)    | Eberts and Ulges (2019) | 88.94♦ / 71.47♦ | 88.80 / 69.78 | 88.93 / 70.82 | 
