@@ -3,7 +3,8 @@ from typing import List, Union
 import torch
 
 from ...wrapper import Batch
-from .base import DecoderMixin, DecoderConfig, Decoder
+from ...config import Config
+from .base import DecoderMixin, SingleDecoderConfig, Decoder
 from .sequence_tagging import SequenceTaggingDecoderConfig
 from .span_classification import SpanClassificationDecoderConfig
 from .span_attr_classification import SpanAttrClassificationDecoderConfig
@@ -59,13 +60,13 @@ class JointExtractionDecoderMixin(DecoderMixin):
 
 
 
-class JointExtractionDecoderConfig(DecoderConfig, JointExtractionDecoderMixin):
+class JointExtractionDecoderConfig(Config, JointExtractionDecoderMixin):
     def __init__(self, 
-                 ck_decoder: Union[DecoderConfig, str]='span_classification', 
-                 attr_decoder: Union[DecoderConfig, str]='span_attr_classification', 
-                 rel_decoder: Union[DecoderConfig, str]='span_rel_classification',
+                 ck_decoder: Union[SingleDecoderConfig, str]='span_classification', 
+                 attr_decoder: Union[SingleDecoderConfig, str]='span_attr_classification', 
+                 rel_decoder: Union[SingleDecoderConfig, str]='span_rel_classification',
                  **kwargs):
-        if isinstance(ck_decoder, DecoderConfig):
+        if isinstance(ck_decoder, SingleDecoderConfig):
             self.ck_decoder = ck_decoder
         elif ck_decoder.lower().startswith('sequence_tagging'):
             self.ck_decoder = SequenceTaggingDecoderConfig()
@@ -74,12 +75,12 @@ class JointExtractionDecoderConfig(DecoderConfig, JointExtractionDecoderMixin):
         elif ck_decoder.lower().startswith('boundary'):
             self.ck_decoder = BoundarySelectionDecoderConfig()
 
-        if isinstance(attr_decoder, DecoderConfig) or attr_decoder is None:
+        if isinstance(attr_decoder, SingleDecoderConfig) or attr_decoder is None:
             self.attr_decoder = attr_decoder
         elif attr_decoder.lower().startswith('span_attr'):
             self.attr_decoder = SpanAttrClassificationDecoderConfig()
 
-        if isinstance(rel_decoder, DecoderConfig) or rel_decoder is None:
+        if isinstance(rel_decoder, SingleDecoderConfig) or rel_decoder is None:
             self.rel_decoder = rel_decoder
         elif rel_decoder.lower().startswith('span_rel'):
             self.rel_decoder = SpanRelClassificationDecoderConfig()

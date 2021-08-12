@@ -8,14 +8,13 @@ from ..config import Config, ConfigDict
 from .embedder import OneHotConfig
 from .encoder import EncoderConfig
 from .nested_embedder import SoftLexiconConfig
-from .decoder.base import DecoderConfig
+from .decoder.base import SingleDecoderConfig
 from .decoder.text_classification import TextClassificationDecoderConfig
 from .decoder.sequence_tagging import SequenceTaggingDecoderConfig
 from .decoder.span_classification import SpanClassificationDecoderConfig
 from .decoder.span_attr_classification import SpanAttrClassificationDecoderConfig
 from .decoder.span_rel_classification import SpanRelClassificationDecoderConfig
 from .decoder.boundary_selection import BoundarySelectionDecoderConfig
-from .decoder.joint_er_re import JointERREDecoderConfig
 from .decoder.joint_extraction import JointExtractionDecoderConfig
 
 
@@ -40,7 +39,7 @@ class ModelConfig(Config):
     _pretrained_names = ['elmo', 'bert_like', 'flair_fw', 'flair_bw']
     _all_names = _embedder_names + ['intermediate1'] + _pretrained_names + ['intermediate2'] + ['decoder']
     
-    def __init__(self, decoder: Union[DecoderConfig, str]='text_classification', **kwargs):
+    def __init__(self, decoder: Union[SingleDecoderConfig, JointExtractionDecoderConfig, str]='text_classification', **kwargs):
         self.ohots = kwargs.pop('ohots', ConfigDict({'text': OneHotConfig(field='text')}))
         self.mhots = kwargs.pop('mhots', None)
         self.nested_ohots = kwargs.pop('nested_ohots', None)
@@ -52,7 +51,7 @@ class ModelConfig(Config):
         self.flair_bw = kwargs.pop('flair_bw', None)
         self.intermediate2 = kwargs.pop('intermediate2', EncoderConfig(arch='LSTM'))
         
-        if isinstance(decoder, DecoderConfig):
+        if isinstance(decoder, (SingleDecoderConfig, JointExtractionDecoderConfig)):
             self.decoder = decoder
         elif isinstance(decoder, str):
             if decoder.lower().startswith('text'):
@@ -67,8 +66,6 @@ class ModelConfig(Config):
                 self.decoder = SpanRelClassificationDecoderConfig()
             elif decoder.lower().startswith('boundary'):
                 self.decoder = BoundarySelectionDecoderConfig()
-            elif decoder.lower().startswith('joint_er_re'):
-                self.decoder = JointERREDecoderConfig()
             elif decoder.lower().startswith('joint_extraction'):
                 self.decoder = JointExtractionDecoderConfig()
             else:

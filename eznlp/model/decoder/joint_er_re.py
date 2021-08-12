@@ -3,7 +3,7 @@ from typing import List
 import torch
 
 from ...wrapper import Batch
-from .base import DecoderMixin, DecoderConfig, Decoder
+from .base import DecoderMixin, SingleDecoderConfig, Decoder
 from .sequence_tagging import SequenceTaggingDecoderConfig
 from .span_classification import SpanClassificationDecoderConfig
 from .span_rel_classification import SpanRelClassificationDecoderConfig
@@ -31,7 +31,7 @@ class JointERREDecoderMixin(DecoderMixin):
 
 
 
-class JointERREDecoderConfig(DecoderConfig, JointERREDecoderMixin):
+class JointERREDecoderConfig(SingleDecoderConfig, JointERREDecoderMixin):
     def __init__(self, **kwargs):
         # It seems that pytorch does not recommend to share weights outside two modules. 
         # See https://discuss.pytorch.org/t/how-to-create-model-with-sharing-weight/398/2

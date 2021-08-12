@@ -6,7 +6,7 @@ import torch
 from ...wrapper import Batch
 from ...nn.modules import SequencePooling, SequenceAttention, CombinedDropout
 from ...nn.init import reinit_layer_
-from .base import DecoderMixin, DecoderConfig, Decoder
+from .base import DecoderMixin, SingleDecoderConfig, Decoder
 
 
 class TextClassificationDecoderMixin(DecoderMixin):
@@ -40,7 +40,7 @@ class TextClassificationDecoderMixin(DecoderMixin):
 
 
 
-class TextClassificationDecoderConfig(DecoderConfig, TextClassificationDecoderMixin):
+class TextClassificationDecoderConfig(SingleDecoderConfig, TextClassificationDecoderMixin):
     def __init__(self, **kwargs):
         self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
         

@@ -10,7 +10,7 @@ from ...nn.modules import CombinedDropout, SmoothLabelCrossEntropyLoss, SoftLabe
 from ...nn.init import reinit_embedding_, reinit_layer_
 from ...metrics import precision_recall_f1_report
 from ..encoder import EncoderConfig
-from .base import DecoderMixin, DecoderConfig, Decoder
+from .base import DecoderMixin, SingleDecoderConfig, Decoder
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +66,8 @@ class Boundaries(TargetWrapper):
     def __init__(self, data_entry: dict, config: BoundarySelectionDecoderMixin, training: bool=True):
         super().__init__(training)
         
+        # TODO: negative sampling?
+        # more smoothing range?
         self.chunks = data_entry.get('chunks', None)
         if self.chunks is not None:
             num_tokens = len(data_entry['tokens'])
@@ -86,7 +88,7 @@ class Boundaries(TargetWrapper):
 
 
 
-class BoundarySelectionDecoderConfig(DecoderConfig, BoundarySelectionDecoderMixin):
+class BoundarySelectionDecoderConfig(SingleDecoderConfig, BoundarySelectionDecoderMixin):
     def __init__(self, **kwargs):
         self.use_biaffine = kwargs.pop('use_biaffine', True)
         self.affine = kwargs.pop('affine', EncoderConfig(arch='FFN', hid_dim=150, num_layers=1, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2))

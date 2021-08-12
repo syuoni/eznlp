@@ -9,7 +9,7 @@ from ...nn.modules import SequencePooling, SequenceAttention, CombinedDropout
 from ...nn.functional import seq_lens2mask
 from ...nn.init import reinit_embedding_, reinit_layer_
 from ...metrics import precision_recall_f1_report
-from .base import DecoderMixin, DecoderConfig, Decoder
+from .base import DecoderMixin, SingleDecoderConfig, Decoder
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +145,7 @@ class Chunks(TargetWrapper):
 
 
 
-class SpanAttrClassificationDecoderConfig(DecoderConfig, SpanAttrClassificationDecoderMixin):
+class SpanAttrClassificationDecoderConfig(SingleDecoderConfig, SpanAttrClassificationDecoderMixin):
     def __init__(self, **kwargs):
         self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
         

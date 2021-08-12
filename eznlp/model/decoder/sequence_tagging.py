@@ -9,7 +9,7 @@ from ...nn.utils import unpad_seqs
 from ...nn.modules import CombinedDropout, CRF
 from ...nn.init import reinit_layer_
 from ...metrics import precision_recall_f1_report
-from .base import DecoderMixin, DecoderConfig, Decoder
+from .base import DecoderMixin, SingleDecoderConfig, Decoder
 
 
 class SequenceTaggingDecoderMixin(DecoderMixin):
@@ -79,7 +79,7 @@ class Tags(TargetWrapper):
 
 
 
-class SequenceTaggingDecoderConfig(DecoderConfig, SequenceTaggingDecoderMixin):
+class SequenceTaggingDecoderConfig(SingleDecoderConfig, SequenceTaggingDecoderMixin):
     def __init__(self, **kwargs):
         self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
         

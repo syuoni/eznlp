@@ -43,7 +43,7 @@ class DecoderMixin(object):
 
 
 
-class DecoderConfig(Config):
+class SingleDecoderConfig(Config):
     def __init__(self, **kwargs):
         self.in_dim = kwargs.pop('in_dim', None)
         
