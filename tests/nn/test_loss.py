@@ -41,10 +41,12 @@ class TestFocalLoss(object):
         focal = FocalLoss(gamma=gamma, reduction='none')
         FL_losses = focal(logits, target)
         
-        # Cross entropy loss is always larger than focal loss
-        # The ratio of CE/FL would be larger if the entry is better-classified
-        loss_ratios = (CE_losses / FL_losses).tolist()
-        assert all(bad_loss_ratio < well_loss_ratio for bad_loss_ratio, well_loss_ratio in zip(loss_ratios[:-1], loss_ratios[1:]))
+        # Focal loss is always smaller than cross entropy loss
+        assert (FL_losses < CE_losses).all().item()
+
+        # The ratio of FL/CE would be smaller if the entry is better-classified
+        loss_ratios = (FL_losses / CE_losses).tolist()
+        assert all(bad_loss_ratio > good_loss_ratio for bad_loss_ratio, good_loss_ratio in zip(loss_ratios[:-1], loss_ratios[1:]))
         
         
     @pytest.mark.parametrize("weight", [None, torch.tensor([0.1, 0.2, 0.3, 0.4, 0.5])])
@@ -93,19 +95,41 @@ class TestSmoothLabel(object):
             SL_loss.backward()
             assert (SL_logits.grad - CE_logits.grad).abs().max().item() < 1e-6
         
-        
+
     @pytest.mark.parametrize("epsilon", [0.1, 0.2, 0.3])
-    @pytest.mark.parametrize("onehot", [False, True])
-    def test_loss_value_against_CE(self, epsilon, onehot):
+    def test_loss_value_against_CE(self, epsilon):
+        # From badly-classified to well-classified
+        logits = torch.stack([torch.arange(-5, 6), -torch.arange(-5, 6)]).T.type(torch.float)
+        target = torch.zeros(logits.size(0), dtype=torch.long)
+        
+        cross_entropy = torch.nn.CrossEntropyLoss(reduction='none')
+        CE_losses = cross_entropy(logits, target)
+        
+        smooth = SmoothLabelCrossEntropyLoss(epsilon=epsilon, reduction='none')
+        SL_losses = smooth(logits, target)
+        
+        # Smoothing loss is smaller for badly-classified entries, but larger for well-classified entries
+        assert (SL_losses[:5] < CE_losses[:5]).all().item()
+        assert (SL_losses[5] == CE_losses[5]).item()
+        assert (SL_losses[6:] > CE_losses[6:]).all().item()
+
+        # The ratio of SL/CE would be larger if the entry is better-classified
+        loss_ratios = (SL_losses / CE_losses).tolist()
+        assert all(bad_loss_ratio < good_loss_ratio for bad_loss_ratio, good_loss_ratio in zip(loss_ratios[:-1], loss_ratios[1:]))
+
+
+    @pytest.mark.parametrize("epsilon", [0.1, 0.2, 0.3])
+    def test_with_logits0(self, epsilon):
         logits = torch.zeros(5, 5, dtype=torch.float)
         target = torch.arange(5, dtype=torch.long)
         
         cross_entropy = torch.nn.CrossEntropyLoss(reduction='none')
         CE_losses = cross_entropy(logits, target)
         
-        if onehot:
-            target = torch.nn.functional.one_hot(target, num_classes=5).type(torch.float)
         smooth = SmoothLabelCrossEntropyLoss(epsilon=epsilon, reduction='none')
         SL_losses = smooth(logits, target)
-        
+        assert (SL_losses - CE_losses).abs().max().item() < 1e-6
+
+        # Covert target to onehot encoding
+        SL_losses = smooth(logits, torch.nn.functional.one_hot(target, num_classes=5).type(torch.float))
         assert (SL_losses - CE_losses).abs().max().item() < 1e-6
