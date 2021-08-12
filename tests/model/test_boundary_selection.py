@@ -91,22 +91,43 @@ class TestModel(object):
 
 
 
-def test_boundaries_obj(EAR_data_demo):
+@pytest.mark.parametrize("sb_epsilon", [0.0, 0.1])
+def test_boundaries_obj(sb_epsilon, EAR_data_demo):
     entry = EAR_data_demo[0]
     tokens, chunks = entry['tokens'], entry['chunks']
     
-    config = ModelConfig('boundary_selection')
+    config = ModelConfig(decoder=BoundarySelectionDecoderConfig(sb_epsilon=sb_epsilon))
     dataset = Dataset(EAR_data_demo, config)
     dataset.build_vocabs_and_dims()
     
     boundaries_obj = dataset[0]['boundaries_obj']
     assert boundaries_obj.chunks == chunks
-    assert all(boundaries_obj.boundary2label_id[start, end-1] == config.decoder.label2idx[label] for label, start, end in chunks)
-    
-    labels_retr = [config.decoder.idx2label[i] for i in boundaries_obj.boundary2label_id[torch.arange(len(tokens)) >= torch.arange(len(tokens)).unsqueeze(-1)].tolist()]
+    if sb_epsilon == 0:
+        assert all(boundaries_obj.boundary2label_id[start, end-1] == config.decoder.label2idx[label] for label, start, end in chunks)
+        labels_retr = [config.decoder.idx2label[i] for i in boundaries_obj.boundary2label_id[torch.arange(len(tokens)) >= torch.arange(len(tokens)).unsqueeze(-1)].tolist()]
+        
+    else:
+        assert all(boundaries_obj.boundary2label_id[start, end-1].argmax() == config.decoder.label2idx[label] for label, start, end in chunks)
+        labels_retr = [config.decoder.idx2label[i] for i in boundaries_obj.boundary2label_id[torch.arange(len(tokens)) >= torch.arange(len(tokens)).unsqueeze(-1)].argmax(dim=-1).tolist()]
+
     chunks_retr = [(label, start, end) for label, (start, end) in zip(labels_retr, _generate_spans_from_upper_triangular(len(tokens))) if label != config.decoder.none_label]
     assert set(chunks_retr) == set(chunks)
 
+
+def test_boundaries_obj_for_boundary_smoothing():
+    entry = {'tokens': ['a', 'b', 'c', 'd', 'e'], 
+             'chunks': [('EntA', 0, 1), ('EntA', 0, 4), ('EntB', 0, 5), ('EntA', 2, 4), ('EntA', 3, 4)]}
+    config = BoundarySelectionDecoderConfig(sb_epsilon=0.1)
+    config.build_vocab([entry])
+
+    boundaries_obj = config.exemplify(entry)['boundaries_obj']
+    assert (boundaries_obj.boundary2label_id[0, 0] - torch.tensor([0.025, 0.975, 0.0])).abs().max().item() < 1e-6
+    assert (boundaries_obj.boundary2label_id[0, 1] - torch.tensor([0.975, 0.025, 0.0])).abs().max().item() < 1e-6
+    assert (boundaries_obj.boundary2label_id[0, 2] - torch.tensor([0.975, 0.025, 0.0])).abs().max().item() < 1e-6
+    assert (boundaries_obj.boundary2label_id[0, 3] - torch.tensor([0.050, 0.925, 0.025])).abs().max().item() < 1e-6
+    assert (boundaries_obj.boundary2label_id[0, 4] - torch.tensor([0.025, 0.025, 0.950])).abs().max().item() < 1e-6
+    assert (boundaries_obj.boundary2label_id[2, 3] - torch.tensor([0.075, 0.925, 0.0])).abs().max().item() < 1e-6
+    assert (boundaries_obj.boundary2label_id[3, 3] - torch.tensor([0.025, 0.975, 0.0])).abs().max().item() < 1e-6
 
 
 @pytest.mark.parametrize("seq_len", [1, 5, 10, 100])
