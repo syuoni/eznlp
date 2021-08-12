@@ -124,6 +124,10 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+
+# VS Code configurations
+.vscode/
+
 # Data
 # Ref: https://riptutorial.com/git/example/911/exceptions-in-a--gitignore-file
 /assets/
