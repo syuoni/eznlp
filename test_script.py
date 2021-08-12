@@ -40,7 +40,6 @@ from eznlp.model import (TextClassificationDecoderConfig,
                          SpanAttrClassificationDecoderConfig, 
                          SpanRelClassificationDecoderConfig, 
                          BoundarySelectionDecoderConfig, 
-                         JointERREDecoderConfig, 
                          JointExtractionDecoderConfig)
 from eznlp.model import ModelConfig
 

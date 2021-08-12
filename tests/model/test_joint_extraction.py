@@ -50,38 +50,54 @@ class TestModel(object):
         self.model = self.config.instantiate().to(self.device)
         assert isinstance(self.config.name, str) and len(self.config.name) > 0
         
-        
+
     @pytest.mark.parametrize("ck_decoder", ['sequence_tagging', 'span_classification', 'boundary_selection'])
     @pytest.mark.parametrize("agg_mode", ['max_pooling'])
-    @pytest.mark.parametrize("fl_gamma", [0.0, 2.0])
-    def test_model(self, ck_decoder, agg_mode, fl_gamma, HwaMei_demo, device):
+    def test_model(self, ck_decoder, agg_mode, conll2004_demo, device):
         if ck_decoder.lower() == 'sequence_tagging':
             ck_decoder_config = SequenceTaggingDecoderConfig(use_crf=True)
         elif ck_decoder.lower() == 'span_classification':
-            ck_decoder_config = SpanClassificationDecoderConfig(agg_mode=agg_mode, fl_gamma=fl_gamma)
+            ck_decoder_config = SpanClassificationDecoderConfig(agg_mode=agg_mode)
         elif ck_decoder.lower() == 'boundary_selection':
-            ck_decoder_config = BoundarySelectionDecoderConfig(fl_gamma=fl_gamma)
+            ck_decoder_config = BoundarySelectionDecoderConfig()
+        self.config = ModelConfig(decoder=JointExtractionDecoderConfig(ck_decoder=ck_decoder_config, 
+                                                                       attr_decoder=None,
+                                                                       rel_decoder=SpanRelClassificationDecoderConfig(agg_mode=agg_mode)))
+        self._setup_case(conll2004_demo, device)
+        self._assert_batch_consistency()
+        self._assert_trainable()
+
+
+    @pytest.mark.parametrize("ck_decoder", ['sequence_tagging', 'span_classification', 'boundary_selection'])
+    @pytest.mark.parametrize("agg_mode", ['max_pooling'])
+    def test_model_with_attributes(self, ck_decoder, agg_mode, HwaMei_demo, device):
+        if ck_decoder.lower() == 'sequence_tagging':
+            ck_decoder_config = SequenceTaggingDecoderConfig(use_crf=True)
+        elif ck_decoder.lower() == 'span_classification':
+            ck_decoder_config = SpanClassificationDecoderConfig(agg_mode=agg_mode)
+        elif ck_decoder.lower() == 'boundary_selection':
+            ck_decoder_config = BoundarySelectionDecoderConfig()
         self.config = ModelConfig(decoder=JointExtractionDecoderConfig(ck_decoder=ck_decoder_config, 
                                                                        attr_decoder=SpanAttrClassificationDecoderConfig(agg_mode=agg_mode), 
-                                                                       rel_decoder=SpanRelClassificationDecoderConfig(agg_mode=agg_mode, fl_gamma=fl_gamma)))
+                                                                       rel_decoder=SpanRelClassificationDecoderConfig(agg_mode=agg_mode)))
         self._setup_case(HwaMei_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
         
         
-    def test_model_with_bert_like(self, HwaMei_demo, bert_with_tokenizer, device):
+    def test_model_with_bert_like(self, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
-        self.config = ModelConfig('joint_extraction', 
-                                  ohots=None, 
+        self.config = ModelConfig(ohots=None, 
                                   bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert), 
-                                  intermediate2=None)
-        self._setup_case(HwaMei_demo, device)
+                                  intermediate2=None, 
+                                  decoder=JointExtractionDecoderConfig(attr_decoder=None))
+        self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
         
         
     def test_prediction_without_gold(self, HwaMei_demo, device):
-        self.config = ModelConfig('joint_extraction')
+        self.config = ModelConfig(decoder=JointExtractionDecoderConfig(attr_decoder='span_attr'))
         self._setup_case(HwaMei_demo, device)
         
         data_wo_gold = [{'tokens': entry['tokens']} for entry in HwaMei_demo]
