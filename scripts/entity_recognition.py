@@ -38,34 +38,35 @@ def parse_arguments(parser: argparse.ArgumentParser):
     group_decoder = parser.add_argument_group('decoder configurations')
     group_decoder.add_argument('--ck_decoder', type=str, default='sequence_tagging', 
                                help="chunk decoding method", choices=['sequence_tagging', 'span_classification', 'boundary_selection'])
-    group_decoder.add_argument('--no_crf', dest='use_crf', default=True, action='store_false', 
-                               help="whether to use CRF")
+    # Loss
     group_decoder.add_argument('--fl_gamma', type=float, default=0.0, 
                                help="Focal Loss gamma")
     group_decoder.add_argument('--sl_epsilon', type=float, default=0.0, 
                                help="Label smoothing loss epsilon")
+    
+    # Sequence tagging
+    group_decoder.add_argument('--scheme', type=str, default='BIOES', 
+                               help="sequence tagging scheme", choices=['BIOES', 'BIO2'])
+    group_decoder.add_argument('--no_crf', dest='use_crf', default=True, action='store_false', 
+                               help="whether to use CRF")
+    
+    # Span-based
+    group_decoder.add_argument('--agg_mode', type=str, default='max_pooling', 
+                               help="aggregating mode")
+    group_decoder.add_argument('--num_neg_chunks', type=int, default=100, 
+                               help="number of sampling negative chunks")
+    group_decoder.add_argument('--max_span_size', type=int, default=10, 
+                               help="maximum span size")
+    group_decoder.add_argument('--ck_size_emb_dim', type=int, default=25, 
+                               help="span size embedding dim")
+    
+    # Boundary selection
+    group_decoder.add_argument('--no_biaffine', dest='use_biaffine', default=True, action='store_false', 
+                               help="whether to use biaffine")
+    group_decoder.add_argument('--affine_arch', type=str, default='FFN', 
+                               help="affine encoder architecture")
     group_decoder.add_argument('--sb_epsilon', type=float, default=0.0, 
                                help="Boundary smoothing loss epsilon")
-
-    group_sequence_tagging = parser.add_argument_group('sequence tagging')
-    group_sequence_tagging.add_argument('--scheme', type=str, default='BIOES', 
-                                        help="sequence tagging scheme", choices=['BIOES', 'BIO2'])
-    
-    group_span_classification = parser.add_argument_group('span classification')
-    group_span_classification.add_argument('--agg_mode', type=str, default='max_pooling', 
-                                           help="aggregating mode")
-    group_span_classification.add_argument('--num_neg_chunks', type=int, default=100, 
-                                           help="number of sampling negative chunks")
-    group_span_classification.add_argument('--max_span_size', type=int, default=10, 
-                                           help="maximum span size")
-    group_span_classification.add_argument('--ck_size_emb_dim', type=int, default=25, 
-                                           help="span size embedding dim")
-    
-    group_boundary_selection = parser.add_argument_group('boundary selection')
-    group_boundary_selection.add_argument('--no_biaffine', dest='use_biaffine', default=True, action='store_false', 
-                                          help="whether to use biaffine")
-    group_boundary_selection.add_argument('--affine_arch', type=str, default='FFN', 
-                                          help="affine encoder architecture")
     return parse_to_args(parser)
 
 

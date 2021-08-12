@@ -31,16 +31,19 @@ def parse_arguments(parser: argparse.ArgumentParser):
     group_data.add_argument('--pipeline_path', type=str, default="", 
                             help="path to load predicted chunks for pipeline")
     
-    group_attr_classification = parser.add_argument_group('attribute classification')
-    group_attr_classification.add_argument('--agg_mode', type=str, default='max_pooling', 
-                                           help="aggregating mode")
-    group_attr_classification.add_argument('--max_span_size', type=int, default=10, 
-                                           help="maximum span size")
-    group_attr_classification.add_argument('--ck_size_emb_dim', type=int, default=25, 
-                                           help="chunk span size embedding dim")
-    group_attr_classification.add_argument('--ck_label_emb_dim', type=int, default=25, 
-                                           help="chunk label embedding dim")
-    
+    group_decoder = parser.add_argument_group('decoder configurations')
+    group_decoder.add_argument('--attr_decoder', type=str, default='span_attr_classification', 
+                               help="attribute decoding method", choices=['span_attr_classification'])
+
+    # Span-based
+    group_decoder.add_argument('--agg_mode', type=str, default='max_pooling', 
+                               help="aggregating mode")
+    group_decoder.add_argument('--max_span_size', type=int, default=10, 
+                               help="maximum span size")
+    group_decoder.add_argument('--ck_size_emb_dim', type=int, default=25, 
+                               help="span size embedding dim")
+    group_decoder.add_argument('--ck_label_emb_dim', type=int, default=25, 
+                               help="chunk label embedding dim")
     return parse_to_args(parser)
 
 

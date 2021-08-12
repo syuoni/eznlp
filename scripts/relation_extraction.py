@@ -31,23 +31,29 @@ def parse_arguments(parser: argparse.ArgumentParser):
     group_data.add_argument('--pipeline_path', type=str, default="", 
                             help="path to load predicted chunks for pipeline")
     
-    group_rel_classification = parser.add_argument_group('relation classification')
-    group_rel_classification.add_argument('--agg_mode', type=str, default='max_pooling', 
-                                          help="aggregating mode")
-    group_rel_classification.add_argument('--fl_gamma', type=float, default=0.0, 
-                                          help="Focal Loss gamma")
-    group_rel_classification.add_argument('--sl_epsilon', type=float, default=0.0, 
-                                          help="Label smoothing loss epsilon")
-    group_rel_classification.add_argument('--num_neg_relations', type=int, default=100, 
-                                          help="number of sampling negative relations")
-    group_rel_classification.add_argument('--max_span_size', type=int, default=10, 
-                                          help="maximum span size")
-    group_rel_classification.add_argument('--max_pair_distance', type=int, default=100, 
-                                          help="maximum pair distance")
-    group_rel_classification.add_argument('--ck_size_emb_dim', type=int, default=25, 
-                                          help="chunk span size embedding dim")
-    group_rel_classification.add_argument('--ck_label_emb_dim', type=int, default=25, 
-                                          help="chunk label embedding dim")
+    group_decoder = parser.add_argument_group('decoder configurations')
+    group_decoder.add_argument('--rel_decoder', type=str, default='span_rel_classification', 
+                               help="relation decoding method", choices=['span_rel_classification'])
+    
+    # Loss
+    group_decoder.add_argument('--fl_gamma', type=float, default=0.0, 
+                               help="Focal Loss gamma")
+    group_decoder.add_argument('--sl_epsilon', type=float, default=0.0, 
+                               help="Label smoothing loss epsilon")
+
+    # Span-based
+    group_decoder.add_argument('--agg_mode', type=str, default='max_pooling', 
+                               help="aggregating mode")
+    group_decoder.add_argument('--max_span_size', type=int, default=10, 
+                               help="maximum span size")
+    group_decoder.add_argument('--ck_size_emb_dim', type=int, default=25, 
+                               help="span size embedding dim")
+    group_decoder.add_argument('--ck_label_emb_dim', type=int, default=25, 
+                               help="chunk label embedding dim")
+    group_decoder.add_argument('--num_neg_relations', type=int, default=100, 
+                               help="number of sampling negative relations")
+    group_decoder.add_argument('--max_pair_distance', type=int, default=100, 
+                               help="maximum pair distance")
     
     return parse_to_args(parser)
 
