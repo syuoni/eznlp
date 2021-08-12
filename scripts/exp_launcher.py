@@ -219,7 +219,7 @@ if __name__ == '__main__':
                         "--bert_arch MacBERT_base", "--bert_arch MacBERT_large",  
                         "--bert_arch ERNIE"]]
     
-    elif args.task == 'joint_er_re':
+    elif args.task == 'joint_extraction':
         if args.command in ('fs', 'from_scratch'):
             options = [["--num_epochs 100"], 
                        ["--optimizer Adadelta --lr 1.0", 

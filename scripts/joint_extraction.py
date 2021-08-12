@@ -19,7 +19,7 @@ from eznlp.model import JointExtractionDecoderConfig
 from eznlp.model import ModelConfig
 from eznlp.training import Trainer
 from eznlp.training.utils import count_params
-from eznlp.training.evaluation import evaluate_joint_er_re
+from eznlp.training.evaluation import evaluate_joint_extraction
 
 from utils import add_base_arguments, parse_to_args
 from utils import load_data, dataset2language, load_pretrained, build_trainer, header_format
@@ -80,7 +80,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
 
 
 
-def build_JERRE_config(args: argparse.Namespace):
+def build_joint_config(args: argparse.Namespace):
     drop_rates = (0.0, 0.05, args.drop_rate) if args.use_locked_drop else (args.drop_rate, 0.0, 0.0)
     
     if args.ck_decoder == 'sequence_tagging':
@@ -140,7 +140,7 @@ if __name__ == '__main__':
     
     # Use micro-seconds to ensure different timestamps while adopting multiprocessing
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-    save_path =  f"cache/{args.dataset}-JERRE/{timestamp}"
+    save_path =  f"cache/{args.dataset}-Joint/{timestamp}"
     if not os.path.exists(save_path):
         os.makedirs(save_path)
         
@@ -165,7 +165,7 @@ if __name__ == '__main__':
         
     train_data, dev_data, test_data = load_data(args)
     args.language = dataset2language[args.dataset]
-    config = build_JERRE_config(args)
+    config = build_joint_config(args)
     
     train_set = Dataset(train_data, config, training=True)
     train_set.build_vocabs_and_dims(dev_data, test_data)
@@ -199,11 +199,11 @@ if __name__ == '__main__':
     trainer = Trainer(model, device=device)
     
     logger.info("Evaluating on dev-set")
-    evaluate_joint_er_re(trainer, dev_set, eval_chunk_type_for_relation=True)
-    evaluate_joint_er_re(trainer, dev_set, eval_chunk_type_for_relation=False)
+    evaluate_joint_extraction(trainer, dev_set, has_attr=(args.attr_decoder!='None'), has_rel=(args.rel_decoder!='None'), eval_chunk_type_for_relation=True)
+    # evaluate_joint_extraction(trainer, dev_set, has_attr=(args.attr_decoder!='None'), has_rel=(args.rel_decoder!='None'), eval_chunk_type_for_relation=False)
     logger.info("Evaluating on test-set")
-    evaluate_joint_er_re(trainer, test_set, eval_chunk_type_for_relation=True)
-    evaluate_joint_er_re(trainer, test_set, eval_chunk_type_for_relation=False)
+    evaluate_joint_extraction(trainer, test_set, has_attr=(args.attr_decoder!='None'), has_rel=(args.rel_decoder!='None'), eval_chunk_type_for_relation=True)
+    # evaluate_joint_extraction(trainer, test_set, has_attr=(args.attr_decoder!='None'), has_rel=(args.rel_decoder!='None'), eval_chunk_type_for_relation=False)
     
     logger.info(" ".join(sys.argv))
     logger.info(pprint.pformat(args.__dict__))

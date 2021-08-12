@@ -52,17 +52,25 @@ def evaluate_relation_extraction(trainer: Trainer, dataset: Dataset, eval_chunk_
     disp_prf(ave_scores, task='RE')
 
 
-def evaluate_joint_er_re(trainer: Trainer, dataset: Dataset, eval_chunk_type_for_relation: bool=True):
-    set_chunks_pred, set_relations_pred = trainer.predict(dataset)
+def evaluate_joint_extraction(trainer: Trainer, dataset: Dataset, has_attr: bool=False, has_rel: bool=True, eval_chunk_type_for_relation: bool=True):
+    sets_pred = trainer.predict(dataset)
     set_chunks_gold = [ex['chunks'] for ex in dataset.data]
-    set_relations_gold = [ex['relations'] for ex in dataset.data]
-    
-    if not eval_chunk_type_for_relation:
-        set_relations_gold = [[(rel_type, head[1:], tail[1:]) for rel_type, head, tail in relations] for relations in set_relations_gold]
-        set_relations_pred = [[(rel_type, head[1:], tail[1:]) for rel_type, head, tail in relations] for relations in set_relations_pred]
-    
-    scores, ave_scores = precision_recall_f1_report(set_chunks_gold, set_chunks_pred)
+
+    scores, ave_scores = precision_recall_f1_report(set_chunks_gold, sets_pred[0])
     disp_prf(ave_scores, task='ER')
-    
-    scores, ave_scores = precision_recall_f1_report(set_relations_gold, set_relations_pred)
-    disp_prf(ave_scores, task='RE')
+
+    if has_attr:
+        set_attributes_gold = [ex['attributes'] for ex in dataset.data]
+        scores, ave_scores = precision_recall_f1_report(set_attributes_gold, sets_pred[1])
+        disp_prf(ave_scores, task='AE')
+
+    if has_rel:
+        set_relations_gold = [ex['relations'] for ex in dataset.data]
+        set_relations_pred = sets_pred[2] if has_attr else sets_pred[1]
+
+        if not eval_chunk_type_for_relation:
+            set_relations_gold = [[(rel_type, head[1:], tail[1:]) for rel_type, head, tail in relations] for relations in set_relations_gold]
+            set_relations_pred = [[(rel_type, head[1:], tail[1:]) for rel_type, head, tail in relations] for relations in set_relations_pred]
+
+        scores, ave_scores = precision_recall_f1_report(set_relations_gold, set_relations_pred)
+        disp_prf(ave_scores, task='RE')
