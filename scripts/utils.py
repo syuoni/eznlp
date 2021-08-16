@@ -35,6 +35,8 @@ def add_base_arguments(parser: argparse.ArgumentParser):
                              help="random seed")
     group_train.add_argument('--use_amp', default=False, action='store_true', 
                              help="whether to use amp")
+    group_train.add_argument('--train_with_dev', default=False, action='store_true', 
+                             help="whether to train with development set")
     group_train.add_argument('--num_epochs', type=int, default=100, 
                              help="number of epochs")
     group_train.add_argument('--batch_size', type=int, default=64, 

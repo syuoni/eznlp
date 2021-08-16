@@ -101,15 +101,24 @@ if __name__ == '__main__':
     args.language = dataset2language[args.dataset]
     config = build_AE_config(args)
     
-    train_set = Dataset(train_data, config, training=True)
-    train_set.build_vocabs_and_dims(dev_data, test_data)
-    dev_set   = Dataset(dev_data,  train_set.config, training=False)
-    test_set  = Dataset(test_data, train_set.config, training=False)
+    if not args.train_with_dev:
+        train_set = Dataset(train_data, config, training=True)
+        train_set.build_vocabs_and_dims(dev_data, test_data)
+        dev_set   = Dataset(dev_data,  train_set.config, training=False)
+        test_set  = Dataset(test_data, train_set.config, training=False)
+
+        train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
+        dev_loader   = torch.utils.data.DataLoader(dev_set,   batch_size=args.batch_size, shuffle=False, collate_fn=dev_set.collate)
+    else:
+        train_set = Dataset(train_data + dev_data, config, training=True)
+        train_set.build_vocabs_and_dims(test_data)
+        dev_set   = Dataset([],        train_set.config, training=False)
+        test_set  = Dataset(test_data, train_set.config, training=False)
+
+        train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
+        dev_loader   = None
     
     logger.info(train_set.summary)
-    train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
-    dev_loader   = torch.utils.data.DataLoader(dev_set,   batch_size=args.batch_size, shuffle=False, collate_fn=dev_set.collate)
-    
     
     logger.info(header_format("Building", sep='-'))
     model = config.instantiate().to(device)

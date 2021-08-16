@@ -223,15 +223,24 @@ if __name__ == '__main__':
         dev_data   = segment_uniformly_for_bert_like(dev_data,   config.bert_like.tokenizer, verbose=args.log_terminal)
         test_data  = segment_uniformly_for_bert_like(test_data,  config.bert_like.tokenizer, verbose=args.log_terminal)
     
-    train_set = Dataset(train_data, config, training=True)
-    train_set.build_vocabs_and_dims(dev_data, test_data)
-    dev_set   = Dataset(dev_data,  train_set.config, training=False)
-    test_set  = Dataset(test_data, train_set.config, training=False)
-    
+    if not args.train_with_dev:
+        train_set = Dataset(train_data, config, training=True)
+        train_set.build_vocabs_and_dims(dev_data, test_data)
+        dev_set   = Dataset(dev_data,  train_set.config, training=False)
+        test_set  = Dataset(test_data, train_set.config, training=False)
+
+        train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
+        dev_loader   = torch.utils.data.DataLoader(dev_set,   batch_size=args.batch_size, shuffle=False, collate_fn=dev_set.collate)
+    else:
+        train_set = Dataset(train_data + dev_data, config, training=True)
+        train_set.build_vocabs_and_dims(test_data)
+        dev_set   = Dataset([],        train_set.config, training=False)
+        test_set  = Dataset(test_data, train_set.config, training=False)
+
+        train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
+        dev_loader   = None
+
     logger.info(train_set.summary)
-    train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
-    dev_loader   = torch.utils.data.DataLoader(dev_set,   batch_size=args.batch_size, shuffle=False, collate_fn=dev_set.collate)
-    
     
     logger.info(header_format("Building", sep='-'))
     model = config.instantiate().to(device)
@@ -262,6 +271,11 @@ if __name__ == '__main__':
     
     if args.pipeline:
         # Replace gold chunks with predicted chunks for pipeline
+        if args.train_with_dev:
+            # Retrieve the original splits
+            train_set = Dataset(train_data, train_set.config, training=True)
+            dev_set   = Dataset(dev_data,   train_set.config, training=False)
+
         train_set_chunks_pred = trainer.predict(train_set)
         for ex, chunks_pred in zip(train_data, train_set_chunks_pred):
             ex['chunks'] = ex['chunks'] + [ck for ck in chunks_pred if ck not in ex['chunks']]
