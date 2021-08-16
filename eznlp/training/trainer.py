@@ -204,20 +204,37 @@ class Trainer(object):
                     disp_every_steps: int=None, 
                     eval_every_steps: int=None, 
                     save_callback=None, 
-                    save_by_loss: bool=True, 
-                    save_every_steps: int=None):
-        
+                    save_by_loss: bool=True):
+        """Train model by steps with optionally early-stop. 
+
+        Parameters
+        ----------
+        train_loader: torch.utils.data.DataLoader
+            The loader of training data.
+        dev_loader: torch.utils.data.DataLoader
+            The loader of development data.
+        num_epochs: int
+            The number of epochs.
+        max_steps: int
+            The maximum number of steps.
+        disp_every_steps: int
+            Display running information by every `disp_every_steps` steps.
+        eval_every_steps: int
+            Evaluate and save the model by every `eval_every_steps` steps.
+        save_callback
+            The callback function to save model.
+        save_by_loss: bool
+            Whether to save by loss or other metrics. The metric must hold that it is better if higher, e.g., accuracy or F1. 
+        """
         max_steps = numpy.inf if max_steps is None else max_steps
         disp_every_steps = len(train_loader) if disp_every_steps is None else disp_every_steps
         eval_every_steps = len(train_loader) if eval_every_steps is None else eval_every_steps
-        save_every_steps = numpy.inf if save_every_steps is None else save_every_steps
         if eval_every_steps % disp_every_steps != 0:
             raise ValueError(f"`eval_every_steps` {eval_every_steps} should be multiples of `disp_every_steps` {disp_every_steps}")
             
         self.model.train()
         
         best_dev_loss = numpy.inf
-        # The `metric` must hold that it is better if higher, e.g., accuracy or F1. 
         best_dev_metric = -numpy.inf
         
         train_losses = []
@@ -296,7 +313,7 @@ class Trainer(object):
                     self.model.train()
                     t0 = time.time()
                     
-                if (sidx+1) % save_every_steps == 0:
+                if (sidx+1) % eval_every_steps == 0 and dev_loader is None:
                     if save_callback is not None:
                         save_callback(self.model)
                     
