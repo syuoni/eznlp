@@ -192,7 +192,7 @@ def load_data(args: argparse.Namespace):
         test_data  = conll_io.flatten_to_characters(test_data)
         
     elif args.dataset == 'ontonotesv4_zh':
-        io = ConllIO(text_col_id=2, tag_col_id=3, scheme='OntoNotes', line_sep_starts=["#begin", "#end"], encoding='utf-8')
+        io = ConllIO(text_col_id=2, tag_col_id=3, scheme='OntoNotes', line_sep_starts=["#begin", "#end"], encoding='utf-8', token_sep="", pad_token="")
         train_data = io.read("data/ontonotesv4/train.chinese.vz_gold_conll")
         dev_data   = io.read("data/ontonotesv4/dev.chinese.vz_gold_conll")
         test_data  = io.read("data/ontonotesv4/test.chinese.vz_gold_conll")
