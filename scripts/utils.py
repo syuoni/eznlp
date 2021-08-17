@@ -123,6 +123,7 @@ dataset2language = {'conll2003': 'English',
                     'WeiboNER': 'Chinese', 
                     'SIGHAN2006': 'Chinese', 
                     'conll2012_zh': 'Chinese', 
+                    'ontonotesv4_zh': 'Chinese',
                     'yidu_s4k': 'Chinese', 
                     'CLERD': 'Chinese', 
                     'yelp2013': 'English', 
@@ -182,7 +183,7 @@ def load_data(args: argparse.Namespace):
         test_data  = conll_io.read("data/SIGHAN2006/test.txt")
         
     elif args.dataset == 'conll2012_zh':
-        conll_io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', line_sep_starts=["#begin", "#end", "pt/"], encoding='utf-8', token_sep="", pad_token="")
+        conll_io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', line_sep_starts=["#begin", "#end"], encoding='utf-8', token_sep="", pad_token="")
         train_data = conll_io.read("data/conll2012/train.chinese.v4_gold_conll")
         dev_data   = conll_io.read("data/conll2012/dev.chinese.v4_gold_conll")
         test_data  = conll_io.read("data/conll2012/test.chinese.v4_gold_conll")
@@ -190,6 +191,21 @@ def load_data(args: argparse.Namespace):
         dev_data   = conll_io.flatten_to_characters(dev_data)
         test_data  = conll_io.flatten_to_characters(test_data)
         
+    elif args.dataset == 'ontonotesv4_zh':
+        io = ConllIO(text_col_id=2, tag_col_id=3, scheme='OntoNotes', line_sep_starts=["#begin", "#end"], encoding='utf-8')
+        train_data = io.read("data/ontonotesv4/train.chinese.vz_gold_conll")
+        dev_data   = io.read("data/ontonotesv4/dev.chinese.vz_gold_conll")
+        test_data  = io.read("data/ontonotesv4/test.chinese.vz_gold_conll")
+        train_data = io.flatten_to_characters(train_data)
+        dev_data   = io.flatten_to_characters(dev_data)
+        test_data  = io.flatten_to_characters(test_data)
+        # Che et al. (2013)
+        # we selected the four most common named entity types, i.e., 
+        # PER (Person), LOC (Location), ORG (Organization) and GPE (Geo-Political Entities), and discarded the others.
+        for data in [train_data, dev_data, test_data]:
+            for entry in data:
+                entry['chunks'] = [ck for ck in entry['chunks'] if ck[0] in ('PERSON', 'LOC', 'ORG', 'GPE')]
+
     elif args.dataset == 'yidu_s4k':
         io = JsonIO(is_tokenized=False, tokenize_callback='char', 
                     text_key='originalText', chunk_key='entities', chunk_type_key='label_type', chunk_start_key='start_pos', chunk_end_key='end_pos', 
