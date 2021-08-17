@@ -139,3 +139,4 @@ dmypy.json
 !/data/*/demo.*
 !/data/conlleval/*.txt
 !/data/*/fix_*.py
+!/data/ontonotesv4/*.py
