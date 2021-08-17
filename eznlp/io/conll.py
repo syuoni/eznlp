@@ -12,7 +12,7 @@ class ConllIO(IO):
     ----------
     line_sep_starts: list of str
         For Conll2003, `line_sep_starts` should be `["-DOCSTART-"]`
-        For OntoNotes5 (i.e., Conll2012), `line_sep_starts` should be `["#begin", "#end", "pt/"]`
+        For OntoNotes (i.e., Conll2011, Conll2012), `line_sep_starts` should be `["#begin", "#end", "pt/"]`
     """
     def __init__(self, 
                  text_col_id=0, 
