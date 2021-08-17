@@ -140,7 +140,7 @@ def load_data(args: argparse.Namespace):
         test_data  = conll_io.read("data/conll2003/eng.testb")
         
     elif args.dataset == 'conll2012':
-        conll_io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', line_sep_starts=["#begin", "#end", "pt/"], encoding='utf-8', case_mode='None', number_mode='Zeros')
+        conll_io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end", "pt/"], document_sep_starts=["#begin"], encoding='utf-8', case_mode='None', number_mode='Zeros')
         train_data = conll_io.read("data/conll2012/train.english.v4_gold_conll")
         dev_data   = conll_io.read("data/conll2012/dev.english.v4_gold_conll")
         test_data  = conll_io.read("data/conll2012/test.english.v4_gold_conll")
@@ -183,7 +183,7 @@ def load_data(args: argparse.Namespace):
         test_data  = conll_io.read("data/SIGHAN2006/test.txt")
         
     elif args.dataset == 'conll2012_zh':
-        conll_io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', line_sep_starts=["#begin", "#end"], encoding='utf-8', token_sep="", pad_token="")
+        conll_io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end"], document_sep_starts=["#begin"], encoding='utf-8', token_sep="", pad_token="")
         train_data = conll_io.read("data/conll2012/train.chinese.v4_gold_conll")
         dev_data   = conll_io.read("data/conll2012/dev.chinese.v4_gold_conll")
         test_data  = conll_io.read("data/conll2012/test.chinese.v4_gold_conll")
@@ -192,7 +192,7 @@ def load_data(args: argparse.Namespace):
         test_data  = conll_io.flatten_to_characters(test_data)
         
     elif args.dataset == 'ontonotesv4_zh':
-        io = ConllIO(text_col_id=2, tag_col_id=3, scheme='OntoNotes', line_sep_starts=["#begin", "#end"], encoding='utf-8', token_sep="", pad_token="")
+        io = ConllIO(text_col_id=2, tag_col_id=3, scheme='OntoNotes', sentence_sep_starts=["#end"], document_sep_starts=["#begin"], encoding='utf-8', token_sep="", pad_token="")
         train_data = io.read("data/ontonotesv4/train.chinese.vz_gold_conll")
         dev_data   = io.read("data/ontonotesv4/dev.chinese.vz_gold_conll")
         test_data  = io.read("data/ontonotesv4/test.chinese.vz_gold_conll")
