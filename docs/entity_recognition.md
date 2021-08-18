@@ -164,17 +164,23 @@ Configurations of our implementation:
 | MacBERT-large + LSTM + CRF  | Cui et al. (2020)     | -     | 95.63 |
 
 ### OntoNotes v4 
+* Data split following Che et al. (2013) and Zhang and Yang (2018).
+
 | Model | Paper | Reported F1 | Our Imp. F1 | Notes |
 |:-----:|:-----:|:-----------:|:-----------:|:-----:|
-| LSTM + CRF                  | Zhang and Yang (2018) | 64.30 |  |  |
-| Bichar + LSTM + CRF         | Zhang and Yang (2018) | 71.89 |  |  |
+| LSTM + CRF                  | Zhang and Yang (2018) | 64.30 | 65.92 | num_layers=2 |
+| Bichar + LSTM + CRF         | Zhang and Yang (2018) | 71.89 | 70.40 | num_layers=2 |
 | Lattice-LSTM + CRF          | Zhang and Yang (2018) | 73.88 |
 | FLAT + CRF                  | Li et al. (2019)      | 76.45 |
-| SoftLexicon + LSTM + CRF    | Ma et al. (2020)      | 75.64 |  |  | 
-| BERT + CRF                  | Ma et al. (2020)      | 77.93 |  |
-| BERT + LSTM + CRF           | Ma et al. (2020)      | 81.82 |  |
+| SoftLexicon + LSTM + CRF    | Ma et al. (2020)      | 75.64 | 74.43 | num_layers=2; Adamax (lr=1e-3) | 
+| BERT + CRF                  | Ma et al. (2020)      | 77.93 | 82.43 |
+| BERT + LSTM + CRF           | Ma et al. (2020)      | 81.82 | 82.29 |
 | FLAT + BERT + CRF           | Li et al. (2019)      | 81.82 |
 | SoftLexicon + BERT + CRF    | Ma et al. (2020)      | 82.81 |
+| ERNIEv1 + CRF               | Sun et al. (2019)     | -     | 81.63 |
+| ERNIEv1 + LSTM + CRF        | Sun et al. (2019)     | -     | 82.04 |
+| MacBERT-base + CRF          | Cui et al. (2020)     | -     | 82.04 |
+| MacBERT-base + LSTM + CRF   | Cui et al. (2020)     | -     | 82.31 |
 
 ### OntoNotes v5 
 | Model | Paper | Reported F1 | Our Imp. F1 | Notes |
@@ -186,7 +192,7 @@ Configurations of our implementation:
 | BERT + CRF                  |                   | -     | 80.34 |
 | BERT + LSTM + CRF           |                   | -     | 80.31 |
 
-# Yidu S4K (CCKS 2019)
+### Yidu S4K (CCKS 2019)
 | Model | Paper | Reported F1 | Our Imp. F1 | Notes |
 |:-----:|:-----:|:-----------:|:-----------:|:-----:|
 | LSTM + CRF                  |                                                | -     | 80.43 | num_layers=2 |
@@ -197,6 +203,7 @@ Configurations of our implementation:
 
 
 ## References
+* Che, W., Wang, M., Manning, C. D., and Liu, T. (2013). Named Entity Recognition with Bilingual Constraints. *NAACL-HLT 2013*.
 * Lample, G., Ballesteros, M., Subramanian, S., Kawakami, K., and Dyer, C. (2016). Neural Architectures for Named Entity Recognition. *NAACL-HLT 2016*.
 * Ma, X., and Hovy, E. (2016). End-to-end Sequence Labeling via Bi-directional LSTM-CNNs-CRF. *ACL 2016*.
 * Chiu, J. P., and Nichols, E. (2016). Named Entity Recognition with Bidirectional LSTM-CNNs. *TACL*, 4:357-370.

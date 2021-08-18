@@ -31,6 +31,7 @@ See [Text Classification](docs/text_classification.md) for more details.
 | MSRA         | Chinese  | 96.18     | BERT + LSTM + CRF          |
 | WeiboNER v2  | Chinese  | 70.48     | BERT + LSTM + CRF          |
 | ResumeNER    | Chinese  | 95.97     | BERT + LSTM + CRF          |
+| OntoNotes v4 | Chinese  | 82.29     | BERT + LSTM + CRF          |
 | OntoNotes v5 | Chinese  | 80.31     | BERT + LSTM + CRF          |
 
 See [Named Entity Recognition](docs/entity_recognition.md) for more details. 
