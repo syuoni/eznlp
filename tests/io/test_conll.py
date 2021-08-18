@@ -55,7 +55,7 @@ class TestConllIO(object):
         self._assert_flatten_consistency(test_data)
         
 
-    def test_conll2003_doc_level(self):
+    def test_conll2003_at_doc_level(self):
         self.io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', document_sep_starts=["-DOCSTART-"], document_level=True)
         train_data = self.io.read("data/conll2003/eng.train")
         dev_data   = self.io.read("data/conll2003/eng.testa")
@@ -91,8 +91,26 @@ class TestConllIO(object):
         assert sum(len(ex['chunks']) for ex in test_data) == 11_257
         assert sum(len(ex['tokens']) for ex in test_data) == 152_728
         
+
+    @pytest.mark.slow
+    def test_ontonotesv5_at_doc_level(self):
+        self.io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end", "pt/"], document_sep_starts=["#begin"], document_level=True, encoding='utf-8')
+        train_data = self.io.read("data/conll2012/train.english.v4_gold_conll")
+        dev_data   = self.io.read("data/conll2012/dev.english.v4_gold_conll")
+        test_data  = self.io.read("data/conll2012/test.english.v4_gold_conll")
         
-    # @pytest.mark.slow
+        assert len(train_data) == 2_483
+        assert sum(len(ex['chunks']) for ex in train_data) == 81_828
+        assert sum(len(ex['tokens']) for ex in train_data) == 1_088_503
+        assert len(dev_data) == 319
+        assert sum(len(ex['chunks']) for ex in dev_data) == 11_066
+        assert sum(len(ex['tokens']) for ex in dev_data) == 147_724
+        assert len(test_data) == 322
+        assert sum(len(ex['chunks']) for ex in test_data) == 11_257
+        assert sum(len(ex['tokens']) for ex in test_data) == 152_728
+        
+
+    @pytest.mark.slow
     def test_ontonotesv5_chinese(self):
         self.io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end"], document_sep_starts=["#begin"], encoding='utf-8')
         train_data = self.io.read("data/conll2012/train.chinese.v4_gold_conll")
