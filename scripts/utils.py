@@ -134,16 +134,22 @@ dataset2language = {'conll2003': 'English',
 
 def load_data(args: argparse.Namespace):
     if args.dataset == 'conll2003':
-        conll_io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', case_mode='None', number_mode='Zeros')
-        train_data = conll_io.read("data/conll2003/eng.train")
-        dev_data   = conll_io.read("data/conll2003/eng.testa")
-        test_data  = conll_io.read("data/conll2003/eng.testb")
+        if getattr(args, 'doc_level', False):
+            io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', document_sep_starts=["-DOCSTART-"], document_level=True, case_mode='None', number_mode='Zeros')
+        else:
+            io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', case_mode='None', number_mode='Zeros')
+        train_data = io.read("data/conll2003/eng.train")
+        dev_data   = io.read("data/conll2003/eng.testa")
+        test_data  = io.read("data/conll2003/eng.testb")
         
     elif args.dataset == 'conll2012':
-        conll_io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end", "pt/"], document_sep_starts=["#begin"], encoding='utf-8', case_mode='None', number_mode='Zeros')
-        train_data = conll_io.read("data/conll2012/train.english.v4_gold_conll")
-        dev_data   = conll_io.read("data/conll2012/dev.english.v4_gold_conll")
-        test_data  = conll_io.read("data/conll2012/test.english.v4_gold_conll")
+        if getattr(args, 'doc_level', False):
+            io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end", "pt/"], document_sep_starts=["#begin"], document_level=True, encoding='utf-8', case_mode='None', number_mode='Zeros')
+        else:
+            io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end", "pt/"], document_sep_starts=["#begin"], encoding='utf-8', case_mode='None', number_mode='Zeros')
+        train_data = io.read("data/conll2012/train.english.v4_gold_conll")
+        dev_data   = io.read("data/conll2012/dev.english.v4_gold_conll")
+        test_data  = io.read("data/conll2012/test.english.v4_gold_conll")
         
     elif args.dataset == 'conll2004':
         json_io = JsonIO(text_key='tokens', 
