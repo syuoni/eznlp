@@ -56,6 +56,16 @@ class SequenceAttention(torch.nn.Module):
             uniform_range = (3 / atten_dim) ** 0.5
             torch.nn.init.uniform_(self.w2.data, -uniform_range, uniform_range)
             
+        elif self.scoring.lower() == 'biaffine':
+            self.query_proj_layer = torch.nn.Linear(query_dim, atten_dim)
+            self.key_proj_layer = torch.nn.Linear(key_dim, atten_dim)
+            reinit_layer_(self.query_proj_layer, 'linear')
+            reinit_layer_(self.key_proj_layer, 'linear')
+            
+            self.w2 = torch.nn.Parameter(torch.empty(atten_dim))
+            uniform_range = (3 / atten_dim) ** 0.5
+            torch.nn.init.uniform_(self.w2.data, -uniform_range, uniform_range)
+
         else:
             raise ValueError(f"Invalid attention scoring mode {scoring}")
         
@@ -81,6 +91,10 @@ class SequenceAttention(torch.nn.Module):
                                  query.unsqueeze(2).expand(-1, -1, x.size(1), -1)], dim=-1)
             x_query_projed = self.proj_layer(x_query)
             return x_query_projed.matmul(self.w2)
+        elif self.scoring.lower() == 'biaffine':
+            # x_query: (batch, query_step, key_step, atten_dim)
+            x_query = self.key_proj_layer(x).unsqueeze(1) + self.query_proj_layer(query).unsqueeze(2)
+            return torch.nn.functional.relu(x_query).matmul(self.w2)
         
         
     def forward(self, x: torch.FloatTensor, mask: torch.BoolTensor=None, query: torch.FloatTensor=None, return_atten_weight: bool=False):
