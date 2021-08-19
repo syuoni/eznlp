@@ -18,7 +18,8 @@ Configurations of our implementation:
     * BERT/RoBERTa models are loaded with dropout rate of 0.2
     * BERT-uncased models inputs are converted to "truecase"
     
-♦ use both training and development splits for training ([Biaffine](https://github.com/juntaoy/biaffine-ner/issues/16#issuecomment-716492521)).  
+♦ use both training and development splits for training ([Biaffine](https://github.com/juntaoy/biaffine-ner/issues/16#issuecomment-716492521)). 
+♣️ use document-level (cross-sentence) context. 
 
 ### CoNLL 2003 
 | Model | Paper | Reported F1 | Our Imp. F1 | Notes |
@@ -26,7 +27,7 @@ Configurations of our implementation:
 | CharLSTM + LSTM + CRF       | Lample et al. (2016)  | 90.94         | 91.28 | num_layers=1 |
 | CharCNN + LSTM + CRF        | Ma and Hovy (2016)    | 91.21         | 90.70 | num_layers=1 |
 | ELMo + Char + LSTM + CRF    | Peters et al. (2018)  | 92.22 (0.10)  | 92.60 | num_layers=1 |
-| Flair + Char + LSTM + CRF   | Akbik et al. (2018)   | 93.09♦ (0.12) | 92.60 | num_layers=1 |
+| Flair + Char + LSTM + CRF   | Akbik et al. (2018)   | 93.09<sup>♦</sup> (0.12) | 92.60 | num_layers=1 |
 | ELMo + Flair + Char + LSTM + CRF | -                | -             | 92.67 | num_layers=1 |
 | BERT-base + Softmax         | Devlin et al. (2018)  | 92.4          | 92.02 | 
 | BERT-base + CRF             | -                     | -             | 92.38 | 
@@ -35,8 +36,8 @@ Configurations of our implementation:
 | BERT-large + CRF            | -                     | -             | 92.64 | 
 | BERT-large + LSTM + CRF     | -                     | -             | 92.80 | 
 | RoBERTa-base + Softmax      | Liu et al. (2019)     | -             | 92.39 | 
-| RoBERTa-base + CRF          | -                     | -             | 92.59 | 
-| RoBERTa-base + LSTM + CRF   | -                     | -             | 92.71 | 
+| RoBERTa-base + CRF          | -                     | -             | 92.59 (93.31<sup>♣️</sup>) | 
+| RoBERTa-base + LSTM + CRF   | -                     | -             | 92.71 (93.39<sup>♣️</sup>) | 
 | RoBERTa-large + Softmax     | Liu et al. (2019)     | -             | 92.81 | 
 | RoBERTa-large + CRF         | -                     | -             | 93.20 | 
 | RoBERTa-large + LSTM + CRF  | -                     | -             | 93.26 | 
@@ -67,7 +68,7 @@ Configurations of our implementation:
 | Biaffine (with CharLSTM + LSTM)     | -                | -          | 91.05 | num_layers=2 |
 | Biaffine (with BERT-base)           | -                | -          | 92.47 | 
 | Biaffine (with BERT-base + LSTM)    | -                | -          | 92.74 | 
-| Biaffine (with BERT-large)          | Yu et al. (2020) | 93.5♦      | 92.67 |
+| Biaffine (with BERT-large)          | Yu et al. (2020) | 93.5<sup>♦♣️</sup> | 92.67 |
 | Biaffine (with RoBERTa-base)        | -                | -          | 92.56 | 
 | Biaffine (with RoBERTa-base + LSTM) | -                | -          | 92.77 | 
 | Biaffine (with RoBERTa-large)       | -                | -          | 93.26 |
@@ -78,12 +79,12 @@ Configurations of our implementation:
 | CharLSTM + LSTM + CRF       | Lample et al. (2016)    | -            | 87.68 | num_layers=2 |
 | CharCNN + LSTM + CRF        | Chiu and Nichols (2016) | 86.17 (0.22) | 87.43 | num_layers=2 |
 | ELMo + Char + LSTM + CRF    | Peters et al. (2018)    | -            | 89.71 | num_layers=2 |
-| Flair + Char + LSTM + CRF   | Akbik et al. (2018)     | 89.3♦        | 89.02 | num_layers=2 |
+| Flair + Char + LSTM + CRF   | Akbik et al. (2018)     | 89.3<sup>♦</sup> | 89.02 | num_layers=2 |
 | ELMo + Flair + Char + LSTM + CRF | -                  | -            | 89.55 | num_layers=2 |
 | BERT-base + Softmax         | Devlin et al. (2018)    | -            | 89.35 | 
 | BERT-base + CRF             | -                       | -            | 90.14 | 
 | BERT-base + LSTM + CRF      | -                       | -            | 89.89 | 
-| Biaffine (with BERT-large)  | Yu et al. (2020)        | 91.3♦        | -     |
+| Biaffine (with BERT-large)  | Yu et al. (2020)        | 91.3<sup>♦♣️</sup> | -     |
 | RoBERTa-base + Softmax      | Liu et al. (2019)       | -            | 90.22 | 
 | RoBERTa-base + CRF          | -                       | -            | 90.83 | 
 | RoBERTa-base + LSTM + CRF   | -                       | -            | 91.05 | 

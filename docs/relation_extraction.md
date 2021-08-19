@@ -19,7 +19,7 @@ Configurations of our implementation:
 | Model | Paper | Reported F1 | Our Imp. F1 (Pipeline) | Our Imp. F1 (Joint) | Notes |
 |:-----:|:-----:|:-----------:|:---------------------:|:-------------------:|:-----:|
 | SpERT (with CharLSTM + LSTM)| -                     | -               |  -            | 86.57 / 66.01 | num_layers=2 |
-| SpERT (with BERT-base)    | Eberts and Ulges (2019) | 88.94♦ / 71.47♦ | 88.80 / 69.78 | 88.93 / 70.82 | 
+| SpERT (with BERT-base)    | Eberts and Ulges (2019) | 88.94<sup>♦</sup> / 71.47<sup>♦</sup> | 88.80 / 69.78 | 88.93 / 70.82 | 
 | SpERT (with BERT-base + LSTM) | -                   | -               | 89.89 / 69.68 | 89.86 / 72.51 | 
 | SpERT (with RoBERTa-base)        | -                | -               | 90.30 / 72.18 | 90.18 / 72.64 | 
 | SpERT (with RoBERTa-base + LSTM) | -                | -               | 90.10 / 73.46 | 89.17 / 75.03 | 
@@ -27,11 +27,11 @@ Configurations of our implementation:
 ### SciERC
 | Model | Paper | Reported F1 | Our Imp. F1 (Joint) | Notes |
 |:-----:|:-----:|:-----------:|:-------------------:|:-----:|
-| SpERT (with CharLSTM + LSTM)| -                     | -                | 59.63 / 23.04 / 34.25♠️ | num_layers=2 |
-| SpERT (with BERT-base)    | Eberts and Ulges (2019) | 67.62♦ / 46.44♦♠️ | 66.71 / 33.94 / 46.07♠️ | 
-| SpERT (with BERT-base + LSTM) | -                   | -                | 67.47 / 33.67 / 45.82♠️ | 
-| SpERT (with RoBERTa-base)        | -                | -                | 69.29 / 36.65 / 48.93♠️ | 
-| SpERT (with RoBERTa-base + LSTM) | -                | -                | 68.89 / 34.65 / 47.52♠️ | 
+| SpERT (with CharLSTM + LSTM)| -                     | -                | 59.63 / 23.04 (34.25<sup>♠️</sup>) | num_layers=2 |
+| SpERT (with BERT-base)    | Eberts and Ulges (2019) | 67.62<sup>♦</sup> / 46.44<sup>♦♠️</sup> | 66.71 / 33.94 (46.07<sup>♠️</sup>) | 
+| SpERT (with BERT-base + LSTM) | -                   | -                | 67.47 / 33.67 (45.82<sup>♠️</sup>) | 
+| SpERT (with RoBERTa-base)        | -                | -                | 69.29 / 36.65 (48.93<sup>♠️</sup>) | 
+| SpERT (with RoBERTa-base + LSTM) | -                | -                | 68.89 / 34.65 (47.52<sup>♠️</sup>) | 
 
 
 ## References
