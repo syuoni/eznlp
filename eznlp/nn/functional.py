@@ -3,8 +3,7 @@ import torch
 
 
 def seq_lens2mask(seq_lens: torch.LongTensor, max_len: int=None):
-    """
-    Convert `seq_lens` to `mask`. 
+    """Convert `seq_lens` to `mask`. 
     
     Parameters
     ----------
@@ -23,19 +22,17 @@ def seq_lens2mask(seq_lens: torch.LongTensor, max_len: int=None):
 
 
 def mask2seq_lens(mask: torch.BoolTensor):
-    """
-    Convert `mask` to `seq_lens`. 
+    """Convert `mask` to `seq_lens`. 
     """
     return mask.size(1) - mask.sum(dim=1)
 
 
 
 def sequence_pooling(x: torch.FloatTensor, 
-                     mask: torch.BoolTensor, 
+                     mask: torch.BoolTensor=None, 
                      weight: torch.FloatTensor=None, 
                      mode: str='mean'):
-    """
-    Pooling values over steps. 
+    """Pooling values over steps. 
     
     Parameters
     ----------
@@ -46,30 +43,44 @@ def sequence_pooling(x: torch.FloatTensor,
         'mean', 'max', 'min', 'wtd_mean'
     """
     if mode.lower() == 'mean':
-        x_masked = x.masked_fill(mask.unsqueeze(-1), 0)
-        seq_lens = mask2seq_lens(mask)
-        return x_masked.sum(dim=1) / seq_lens.unsqueeze(1)
+        if mask is None:
+            return x.mean(dim=1)
+        else:
+            x_masked = x.masked_fill(mask.unsqueeze(-1), 0)
+            seq_lens = mask2seq_lens(mask)
+            return x_masked.sum(dim=1) / seq_lens.unsqueeze(1)
+    
     elif mode.lower() == 'max':
-        x_masked = x.masked_fill(mask.unsqueeze(-1), float('-inf'))
-        return x_masked.max(dim=1).values
+        if mask is None:
+            return x.max(dim=1).values
+        else:
+            x_masked = x.masked_fill(mask.unsqueeze(-1), float('-inf'))
+            return x_masked.max(dim=1).values
+    
     elif mode.lower() == 'min':
-        x_masked = x.masked_fill(mask.unsqueeze(-1), float('inf'))
-        return x_masked.min(dim=1).values
-        
+        if mask is None:
+            return x.min(dim=1).values
+        else:
+            x_masked = x.masked_fill(mask.unsqueeze(-1), float('inf'))
+            return x_masked.min(dim=1).values
+    
     elif mode.lower() == 'wtd_mean':
-        weight_masked = weight.masked_fill(mask, 0)
-        weight_masked_norm = torch.nn.functional.normalize(weight_masked.type(torch.float), p=1, dim=1)
-        # x_wtd_mean: (batch, hid_dim)
-        return weight_masked_norm.unsqueeze(1).bmm(x).squeeze(1)
-        
+        if mask is None:
+            weight_norm = torch.nn.functional.normalize(weight.type(torch.float), p=1, dim=1)
+            return weight_norm.unsqueeze(1).bmm(x).squeeze(1)
+        else:
+            weight_masked = weight.masked_fill(mask, 0)
+            weight_masked_norm = torch.nn.functional.normalize(weight_masked.type(torch.float), p=1, dim=1)
+            # x_wtd_mean: (batch, hid_dim)
+            return weight_masked_norm.unsqueeze(1).bmm(x).squeeze(1)
+    
     else:
         raise ValueError(f"Invalid pooling mode {mode}")
-        
-        
-        
+
+
+
 def sequence_group_aggregating(x: torch.FloatTensor, group_by: torch.LongTensor, agg_mode: str='mean', agg_step: int=None):
-    """
-    Aggregating values over steps by groups. 
+    """Aggregating values over steps by groups. 
     
     Parameters
     ----------

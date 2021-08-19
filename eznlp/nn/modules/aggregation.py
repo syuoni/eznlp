@@ -65,11 +65,13 @@ class SequenceAttention(torch.nn.Module):
             return x_query_projed.matmul(self.w2)
             
         
-    def forward(self, x: torch.FloatTensor, mask: torch.BoolTensor, return_atten_weight: bool=False):
+    def forward(self, x: torch.FloatTensor, mask: torch.BoolTensor=None, return_atten_weight: bool=False):
         # scores/atten_weight: (batch, step)
         scores = self.compute_scores(x)
-        scores_masked = scores.masked_fill(mask, float('-inf'))
-        atten_weight = torch.nn.functional.softmax(scores_masked, dim=-1)
+        if mask is None:
+            atten_weight = torch.nn.functional.softmax(scores, dim=-1)
+        else:
+            atten_weight = torch.nn.functional.softmax(scores.masked_fill(mask, float('-inf')), dim=-1)
         
         # atten_values: (batch, hid_dim)
         atten_values = atten_weight.unsqueeze(1).bmm(x).squeeze(1)
@@ -100,7 +102,7 @@ class SequencePooling(torch.nn.Module):
             raise ValueError(f"Invalid pooling mode {mode}")
         self.mode = mode
         
-    def forward(self, x: torch.FloatTensor, mask: torch.BoolTensor, weight: torch.FloatTensor=None):
+    def forward(self, x: torch.FloatTensor, mask: torch.BoolTensor=None, weight: torch.FloatTensor=None):
         return sequence_pooling(x, mask, weight=weight, mode=self.mode)
     
     def extra_repr(self):
