@@ -50,7 +50,7 @@ class TestModel(object):
         
     @pytest.mark.parametrize("arch", ['Conv', 'LSTM'])
     @pytest.mark.parametrize("agg_mode", ['min_pooling', 'max_pooling', 'mean_pooling', 
-                                          'dot_attention', 'multiplicative_attention', 'additive_attention'])
+                                          'dot_attention', 'multiplicative_attention', 'additive_attention', 'biaffine_attention'])
     @pytest.mark.parametrize("fl_gamma, sl_epsilon", [(0.0, 0.0), (2.0, 0.0), (0.0, 0.1)])
     def test_model(self, arch, agg_mode, fl_gamma, sl_epsilon, yelp_full_demo, device):
         self.config = ModelConfig(intermediate2=EncoderConfig(arch=arch), 
