@@ -7,8 +7,8 @@ __version__ = '0.2.1'
 
 from .training.utils import auto_device
 
-import eznlp.io
-import eznlp.nn
-import eznlp.model
-import eznlp.training
-import eznlp.utils
+from eznlp import io
+from eznlp import nn
+from eznlp import model
+from eznlp import training
+from eznlp import utils
