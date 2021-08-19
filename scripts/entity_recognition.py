@@ -268,9 +268,9 @@ if __name__ == '__main__':
     trainer = Trainer(model, device=device)
     
     logger.info("Evaluating on dev-set")
-    evaluate_entity_recognition(trainer, dev_set)
+    evaluate_entity_recognition(trainer, dev_set, batch_size=args.batch_size)
     logger.info("Evaluating on test-set")
-    evaluate_entity_recognition(trainer, test_set)
+    evaluate_entity_recognition(trainer, test_set, batch_size=args.batch_size)
     
     
     if args.pipeline:
@@ -280,15 +280,15 @@ if __name__ == '__main__':
             train_set = Dataset(train_data, train_set.config, training=True)
             dev_set   = Dataset(dev_data,   train_set.config, training=False)
 
-        train_set_chunks_pred = trainer.predict(train_set)
+        train_set_chunks_pred = trainer.predict(train_set, batch_size=args.batch_size)
         for ex, chunks_pred in zip(train_data, train_set_chunks_pred):
             ex['chunks'] = ex['chunks'] + [ck for ck in chunks_pred if ck not in ex['chunks']]
         
-        dev_set_chunks_pred = trainer.predict(dev_set)
+        dev_set_chunks_pred = trainer.predict(dev_set, batch_size=args.batch_size)
         for ex, chunks_pred in zip(dev_data, dev_set_chunks_pred):
             ex['chunks'] = chunks_pred
         
-        test_set_chunks_pred = trainer.predict(test_set)
+        test_set_chunks_pred = trainer.predict(test_set, batch_size=args.batch_size)
         for ex, chunks_pred in zip(test_data, test_set_chunks_pred):
             ex['chunks'] = chunks_pred
             
@@ -298,5 +298,3 @@ if __name__ == '__main__':
     logger.info(" ".join(sys.argv))
     logger.info(pprint.pformat(args.__dict__))
     logger.info(header_format("Ending", sep='='))
-    
-    

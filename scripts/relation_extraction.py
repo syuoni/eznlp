@@ -155,11 +155,10 @@ if __name__ == '__main__':
     trainer = Trainer(model, device=device)
     
     logger.info("Evaluating on dev-set")
-    evaluate_relation_extraction(trainer, dev_set)
+    evaluate_relation_extraction(trainer, dev_set, batch_size=args.batch_size)
     logger.info("Evaluating on test-set")
-    evaluate_relation_extraction(trainer, test_set)
+    evaluate_relation_extraction(trainer, test_set, batch_size=args.batch_size)
     
     logger.info(" ".join(sys.argv))
     logger.info(pprint.pformat(args.__dict__))
     logger.info(header_format("Ending", sep='='))
-    

@@ -9,8 +9,8 @@ from .trainer import Trainer
 logger = logging.getLogger(__name__)
 
 
-def evaluate_text_classification(trainer: Trainer, dataset: Dataset):
-    set_labels_pred = trainer.predict(dataset)
+def evaluate_text_classification(trainer: Trainer, dataset: Dataset, batch_size: int=32):
+    set_labels_pred = trainer.predict(dataset, batch_size=batch_size)
     set_labels_gold = [ex['label'] for ex in dataset.data]
     
     acc = trainer.model.decoder.evaluate(set_labels_gold, set_labels_pred)
@@ -24,24 +24,24 @@ def disp_prf(ave_scores: dict, task: str='ER'):
         logger.info(f"{task} Macro {key_text}: {ave_scores['macro'][key]*100:2.3f}%")
 
 
-def evaluate_entity_recognition(trainer: Trainer, dataset: Dataset):
-    set_chunks_pred = trainer.predict(dataset)
+def evaluate_entity_recognition(trainer: Trainer, dataset: Dataset, batch_size: int=32):
+    set_chunks_pred = trainer.predict(dataset, batch_size=batch_size)
     set_chunks_gold = [ex['chunks'] for ex in dataset.data]
     
     scores, ave_scores = precision_recall_f1_report(set_chunks_gold, set_chunks_pred)
     disp_prf(ave_scores, task='ER')
 
 
-def evaluate_attribute_extraction(trainer: Trainer, dataset: Dataset):
-    set_attributes_pred = trainer.predict(dataset)
+def evaluate_attribute_extraction(trainer: Trainer, dataset: Dataset, batch_size: int=32):
+    set_attributes_pred = trainer.predict(dataset, batch_size=batch_size)
     set_attributes_gold = [ex['attributes'] for ex in dataset.data]
 
     scores, ave_scores = precision_recall_f1_report(set_attributes_gold, set_attributes_pred)
     disp_prf(ave_scores, task='AE')
 
 
-def evaluate_relation_extraction(trainer: Trainer, dataset: Dataset, eval_chunk_type_for_relation: bool=True):
-    set_relations_pred = trainer.predict(dataset)
+def evaluate_relation_extraction(trainer: Trainer, dataset: Dataset, eval_chunk_type_for_relation: bool=True, batch_size: int=32):
+    set_relations_pred = trainer.predict(dataset, batch_size=batch_size)
     set_relations_gold = [ex['relations'] for ex in dataset.data]
     
     if not eval_chunk_type_for_relation:
@@ -52,8 +52,8 @@ def evaluate_relation_extraction(trainer: Trainer, dataset: Dataset, eval_chunk_
     disp_prf(ave_scores, task='RE')
 
 
-def evaluate_joint_extraction(trainer: Trainer, dataset: Dataset, has_attr: bool=False, has_rel: bool=True, eval_chunk_type_for_relation: bool=True):
-    sets_pred = trainer.predict(dataset)
+def evaluate_joint_extraction(trainer: Trainer, dataset: Dataset, has_attr: bool=False, has_rel: bool=True, eval_chunk_type_for_relation: bool=True, batch_size: int=32):
+    sets_pred = trainer.predict(dataset, batch_size=batch_size)
     set_chunks_gold = [ex['chunks'] for ex in dataset.data]
 
     scores, ave_scores = precision_recall_f1_report(set_chunks_gold, sets_pred[0])
