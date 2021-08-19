@@ -297,9 +297,11 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
         return allennlp.modules.Elmo(options_file="assets/allennlp/elmo_2x4096_512_2048cnn_2xhighway_options.json", 
                                      weight_file="assets/allennlp/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5", 
                                      num_output_representations=1)
+    
     elif pretrained_str.lower() == 'flair':
         return (flair.models.LanguageModel.load_language_model("assets/flair/news-forward-0.4.1.pt"), 
                 flair.models.LanguageModel.load_language_model("assets/flair/news-backward-0.4.1.pt"))
+    
     elif args.language.lower() == 'english':
         if pretrained_str.lower().startswith('bert'):
             if 'wwm' in pretrained_str.lower():
