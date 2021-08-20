@@ -21,9 +21,9 @@ class MaskedLMDataset(Dataset):
         super().__init__(data, config, training=training)
         
     def __getitem__(self, i):
-        data_entry = self.data[i]
+        entry = self.data[i]
         
-        nested_sub_tokens = _tokenized2nested(data_entry['tokens'].raw_text, self.config.tokenizer)
+        nested_sub_tokens = _tokenized2nested(entry['tokens'].raw_text, self.config.tokenizer)
         sub_tokens = [sub_tok for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
         return self.config.exemplify(sub_tokens)
         
