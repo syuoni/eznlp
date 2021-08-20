@@ -18,8 +18,8 @@ Configurations of our implementation:
     * BERT/RoBERTa models are loaded with dropout rate of 0.2
     * BERT-uncased models inputs are converted to "truecase"
     
-♦ use both training and development splits for training ([Biaffine](https://github.com/juntaoy/biaffine-ner/issues/16#issuecomment-716492521)). 
-♣️ use document-level (cross-sentence) context. 
+♦ use both training and development splits for training ([Biaffine](https://github.com/juntaoy/biaffine-ner/issues/16#issuecomment-716492521)).  
+♣️ use document-level (cross-sentence) context.  
 
 ### CoNLL 2003 
 | Model | Paper | Reported F1 | Our Imp. F1 | Notes |
@@ -39,8 +39,8 @@ Configurations of our implementation:
 | RoBERTa-base + CRF          | -                     | -             | 92.59 (93.31<sup>♣️</sup>) | 
 | RoBERTa-base + LSTM + CRF   | -                     | -             | 92.71 (93.39<sup>♣️</sup>) | 
 | RoBERTa-large + Softmax     | Liu et al. (2019)     | -             | 92.81 | 
-| RoBERTa-large + CRF         | -                     | -             | 93.20 | 
-| RoBERTa-large + LSTM + CRF  | -                     | -             | 93.26 | 
+| RoBERTa-large + CRF         | -                     | -             | 93.20 (93.37<sup>♣️</sup>) | 
+| RoBERTa-large + LSTM + CRF  | -                     | -             | 93.26 (93.31<sup>♣️</sup>) | 
 
 | Model | Paper | Reported F1 | Our Imp. F1 | Notes |
 |:-----:|:-----:|:-----------:|:-----------:|:-----:|
