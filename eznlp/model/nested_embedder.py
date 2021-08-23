@@ -12,12 +12,13 @@ from .encoder import EncoderConfig, RNNEncoder
 
 
 class NestedOneHotConfig(OneHotConfig):
-    """Config for an embedder, designed for features with the structure: `step * channel * inner_step`.
+    """Config of an embedder, designed for features with the structure: `step * channel * inner_step`.
     At each position exists one (or multiple) sequence. 
     
     If multiple sequences exist, they share a common vocabulary and corresponding embedding layer.
     """
     def __init__(self, **kwargs):
+        self.entry_key = kwargs.pop('entry_key', 'tokens')
         self.num_channels = kwargs.pop('num_channels', 1)
         self.squeeze = kwargs.pop('squeeze', True)
         if self.squeeze:
@@ -37,7 +38,7 @@ class NestedOneHotConfig(OneHotConfig):
             return False
         return all(attr is not None for name, attr in self.__dict__.items() if name not in ('vectors', 'encoder'))
         
-    
+        
     @property
     def out_dim(self):
         if self.encoder is not None:
@@ -51,13 +52,13 @@ class NestedOneHotConfig(OneHotConfig):
                 yield tok_field
             else:
                 yield from tok_field
-                
-                
+        
+        
     def build_vocab(self, *partitions):
         counter = Counter()
         for data in partitions:
             for data_entry in data:
-                for inner_seq in self._inner_sequences(data_entry['tokens']):
+                for inner_seq in self._inner_sequences(data_entry[self.entry_key]):
                     counter.update(inner_seq)
         self.vocab = torchtext.vocab.Vocab(counter, 
                                            min_freq=self.min_freq, 
@@ -86,22 +87,22 @@ class NestedOneHotConfig(OneHotConfig):
         
     def instantiate(self):
         return NestedOneHotEmbedder(self)
-    
-    
-    
+
+
+
 class NestedOneHotEmbedder(OneHotEmbedder):
     def __init__(self, config: NestedOneHotConfig):
         super().__init__(config)
         self.num_channels = config.num_channels
         if config.encoder is not None:
             self.encoder = config.encoder.instantiate()
-            
+        
         self.agg_mode = config.agg_mode
         if self.agg_mode.lower() == 'rnn_last':
             assert isinstance(self.encoder, RNNEncoder)
         elif self.agg_mode.lower().endswith('_pooling'):
             self.aggregating = SequencePooling(mode=self.agg_mode.replace('_pooling', ''))
-            
+        
         
     def _restore_outer_shapes(self, x: torch.Tensor, seq_lens: torch.LongTensor):
         offsets = [0] + (seq_lens * self.num_channels).cumsum(dim=0).cpu().tolist()
@@ -138,11 +139,12 @@ class NestedOneHotEmbedder(OneHotEmbedder):
             
         # Restore outer shapes (token-level steps)
         return self._restore_outer_shapes(agg_hidden, seq_lens)
-        
-    
-    
+
+
+
 class SoftLexiconConfig(NestedOneHotConfig):
-    """
+    """Config of a soft lexicon embedder.
+    
     References
     ----------
     Ma et al. (2020). Simplify the usage of lexicon in Chinese NER. ACL 2020.
@@ -154,18 +156,16 @@ class SoftLexiconConfig(NestedOneHotConfig):
         
         kwargs['emb_dim'] = kwargs.pop('emb_dim', 50)
         kwargs['agg_mode'] = kwargs.pop('agg_mode', 'wtd_mean_pooling')
-        
         super().__init__(**kwargs)
         
         
     def __repr__(self):
         repr_attr_dict = {key: getattr(self, key) for key in self.__dict__.keys() if key != 'freqs'}
         return self._repr_non_config_attrs(repr_attr_dict)
-
-
+        
+        
     def build_freqs(self, *partitions):
-        """
-        Ma et al. (2020): The statistical data set is constructed from a combination 
+        """Ma et al. (2020): The statistical data set is constructed from a combination 
         of *training* and *developing* data of the task. 
         In addition, note that the frequency of `w` does not increase if `w` is 
         covered by another sub-sequence that matches the lexicon
@@ -173,7 +173,7 @@ class SoftLexiconConfig(NestedOneHotConfig):
         counter = Counter()
         for data in partitions:
             for data_entry in data:
-                for inner_seq in self._inner_sequences(data_entry['tokens']):
+                for inner_seq in self._inner_sequences(data_entry[self.entry_key]):
                     counter.update(inner_seq)
         
         # NOTE: Set the minimum frequecy as 1, to avoid OOV tokens being ignored
@@ -191,8 +191,8 @@ class SoftLexiconConfig(NestedOneHotConfig):
             
         example['inner_freqs'] = inner_freqs_list
         return example
-    
-    
+        
+        
     def batchify(self, batch_ex: List[dict]):
         batch = super().batchify(batch_ex)
         
@@ -200,11 +200,12 @@ class SoftLexiconConfig(NestedOneHotConfig):
         batch_inner_freqs = torch.nn.utils.rnn.pad_sequence(batch_inner_freqs, batch_first=True, padding_value=0)
         batch['inner_weight'] = batch_inner_freqs
         return batch
-        
-        
-        
-        
+
+
+
 class CharConfig(NestedOneHotConfig):
+    """Config of a character embedder.
+    """
     def __init__(self, **kwargs):
         kwargs['field'] = kwargs.pop('field', 'raw_text')
         kwargs['num_channels'] = kwargs.pop('num_channels', 1)
@@ -219,11 +220,8 @@ class CharConfig(NestedOneHotConfig):
             kwargs['agg_mode'] = kwargs.pop('agg_mode', 'rnn_last')
         elif kwargs['encoder'].arch.lower() in ('conv', 'gehring'):
             kwargs['agg_mode'] = kwargs.pop('agg_mode', 'max_pooling')
-            
         super().__init__(**kwargs)
-        
-        
+    
     @property
     def name(self):
         return f"Char{self.encoder.arch}"
-    

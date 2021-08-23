@@ -14,7 +14,10 @@ logger = logging.getLogger(__name__)
 
 
 class OneHotConfig(Config):
+    """Config of an one-hot embedder.
+    """
     def __init__(self, **kwargs):
+        self.entry_key = kwargs.pop('entry_key', 'tokens')
         self.field = kwargs.pop('field')
         self.vocab = kwargs.pop('vocab', None)
         self.has_sos = kwargs.pop('has_sos', False)
@@ -61,15 +64,15 @@ class OneHotConfig(Config):
     @property
     def unk_idx(self):
         return self.vocab['<unk>']
-
+        
     @property
     def sos_idx(self):
         return self.vocab['<sos>']
-
+        
     @property
     def eos_idx(self):
         return self.vocab['<eos>']
-
+        
     def __getstate__(self):
         state = self.__dict__.copy()
         state['vectors'] = None
@@ -82,12 +85,12 @@ class OneHotConfig(Config):
         if self.has_eos:
             x_list = x_list + ['<eos>']
         return x_list
-
+        
     def build_vocab(self, *partitions):
         counter = Counter()
         for data in partitions:
             for entry in data:
-                counter.update(self._get_field(entry['tokens']))
+                counter.update(self._get_field(entry[self.entry_key]))
         self.vocab = torchtext.vocab.Vocab(counter, 
                                            min_freq=self.min_freq, 
                                            specials=self.specials, 
@@ -103,9 +106,9 @@ class OneHotConfig(Config):
         
     def instantiate(self):
         return OneHotEmbedder(self)
-    
-    
-    
+
+
+
 class OneHotEmbedder(torch.nn.Module):
     def __init__(self, config: OneHotConfig):
         super().__init__()
@@ -124,10 +127,12 @@ class OneHotEmbedder(torch.nn.Module):
         
     def forward(self, x_ids: torch.LongTensor):
         return self.embedding(x_ids)
-    
-    
-    
+
+
+
 class MultiHotConfig(Config):
+    """Config of a multi-hot embedder.
+    """
     def __init__(self, **kwargs):
         self.field = kwargs.pop('field')
         self.in_dim = kwargs.pop('in_dim', None)
@@ -157,8 +162,8 @@ class MultiHotConfig(Config):
     
     def instantiate(self):
         return MultiHotEmbedder(self)
-    
-    
+
+
 class MultiHotEmbedder(torch.nn.Module):
     def __init__(self, config: MultiHotConfig):
         super().__init__()
@@ -174,5 +179,3 @@ class MultiHotEmbedder(torch.nn.Module):
             return self.embedding(x_values)
         else:
             return x_values
-    
-    
