@@ -83,16 +83,16 @@ class Decoder(torch.nn.Module):
         """
         super().__init__()
         
-    def forward(self, batch: Batch, full_hidden: torch.Tensor):
+    def forward(self, batch: Batch, **states):
         raise NotImplementedError("Not Implemented `forward`")
         
-    def decode(self, batch: Batch, full_hidden: torch.Tensor):
+    def decode(self, batch: Batch, **states):
         raise NotImplementedError("Not Implemented `decode`")
         
-    def _unsqueezed_decode(self, batch: Batch, full_hidden: torch.Tensor):
+    def _unsqueezed_decode(self, batch: Batch, **states):
         if self.num_metrics == 0:
             raise RuntimeError("`_unsqueezed` method does not applies if `num_metrics` is 0")
         elif self.num_metrics == 1:
-            return (self.decode(batch, full_hidden), )
+            return (self.decode(batch, **states), )
         else:
-            return self.decode(batch, full_hidden)
+            return self.decode(batch, **states)

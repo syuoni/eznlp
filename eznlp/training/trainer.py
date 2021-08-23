@@ -62,13 +62,13 @@ class Trainer(object):
         A scalar Tensor of loss, or
         A Tuple of (loss, y_pred_1, y_pred_2, ...)
         """
-        losses, hidden = self.model(batch, return_hidden=True)
+        losses, states = self.model(batch, return_states=True)
         loss = losses.mean()
         
         if self.num_metrics == 0:
             return loss
         else:
-            return loss, *self.model.decoder._unsqueezed_decode(batch, hidden)
+            return loss, *self.model.decoder._unsqueezed_decode(batch, **states)
         
         
     def backward_batch(self, loss: torch.Tensor):
@@ -117,10 +117,10 @@ class Trainer(object):
         set_y_pred = [[] for k in range(self.num_metrics)]
         with torch.no_grad():
             for batch in dataloader:
-                batch.to(self.device)
+                batch = batch.to(self.device)
                 # `dataset` may not have ground-truths, so avoid computing loss here 
-                hidden = self.model.get_full_hidden(batch)
-                batch_y_pred = self.model.decoder._unsqueezed_decode(batch, hidden)
+                states = self.model.forward2states(batch)
+                batch_y_pred = self.model.decoder._unsqueezed_decode(batch, **states)
                 for k in range(self.num_metrics):
                     set_y_pred[k].extend(batch_y_pred[k])
                     

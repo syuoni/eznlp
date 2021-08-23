@@ -17,9 +17,10 @@ class TestModel(object):
         batch = [self.dataset[i] for i in range(4)]
         batch012 = self.dataset.collate(batch[:3]).to(self.device)
         batch123 = self.dataset.collate(batch[1:]).to(self.device)
-        losses012, hidden012 = self.model(batch012, return_hidden=True)
-        losses123, hidden123 = self.model(batch123, return_hidden=True)
+        losses012, states012 = self.model(batch012, return_states=True)
+        losses123, states123 = self.model(batch123, return_states=True)
         
+        hidden012, hidden123 = states012['full_hidden'], states123['full_hidden']
         min_step = min(hidden012.size(1), hidden123.size(1))
         delta_hidden = hidden012[1:, :min_step] - hidden123[:-1, :min_step]
         assert delta_hidden.abs().max().item() < 2e-4
@@ -27,8 +28,8 @@ class TestModel(object):
         delta_losses = losses012[1:] - losses123[:-1]
         assert delta_losses.abs().max().item() < 1e-3
         
-        y_pred012 = self.model.decode(batch012)
-        y_pred123 = self.model.decode(batch123)
+        y_pred012 = self.model.decode(batch012, **states012)
+        y_pred123 = self.model.decode(batch123, **states123)
         assert all(tuples_pred012[1:] == tuples_pred123[:-1] for tuples_pred012, tuples_pred123 in zip(y_pred012, y_pred123))
         
         
