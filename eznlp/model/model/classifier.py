@@ -8,20 +8,14 @@ from ...config import Config, ConfigDict
 from ..embedder import OneHotConfig
 from ..encoder import EncoderConfig
 from ..nested_embedder import SoftLexiconConfig
-from ..decoder import (SingleDecoderConfigBase, 
-                       SequenceTaggingDecoderConfig, 
-                       SpanClassificationDecoderConfig, 
-                       SpanAttrClassificationDecoderConfig,
-                       SpanRelClassificationDecoderConfig,
-                       BoundarySelectionDecoderConfig,
-                       JointExtractionDecoderConfig)
+from ..decoder import TextClassificationDecoderConfig
 from .base import ModelConfigBase, ModelBase
 
 
-class ExtractorConfig(ModelConfigBase):
-    """Configurations of an extractor. 
+class ClassifierConfig(ModelConfigBase):
+    """Configurations of a classifier. 
     
-    extractor
+    classifier
       ├─decoder(*)
       └─intermediate2
           ├─intermediate1
@@ -39,7 +33,7 @@ class ExtractorConfig(ModelConfigBase):
     _pretrained_names = ['elmo', 'bert_like', 'flair_fw', 'flair_bw']
     _all_names = _embedder_names + ['intermediate1'] + _pretrained_names + ['intermediate2'] + ['decoder']
     
-    def __init__(self, decoder: Union[SingleDecoderConfigBase, JointExtractionDecoderConfig, str]='sequence_tagging', **kwargs):
+    def __init__(self, **kwargs):
         self.ohots = kwargs.pop('ohots', ConfigDict({'text': OneHotConfig(field='text')}))
         self.mhots = kwargs.pop('mhots', None)
         self.nested_ohots = kwargs.pop('nested_ohots', None)
@@ -51,30 +45,17 @@ class ExtractorConfig(ModelConfigBase):
         self.flair_bw = kwargs.pop('flair_bw', None)
         self.intermediate2 = kwargs.pop('intermediate2', EncoderConfig(arch='LSTM'))
         
-        if isinstance(decoder, (SingleDecoderConfigBase, JointExtractionDecoderConfig)):
-            self.decoder = decoder
-        elif isinstance(decoder, str):
-            if decoder.lower().startswith('sequence_tagging'):
-                self.decoder = SequenceTaggingDecoderConfig()
-            elif decoder.lower().startswith('span_classification'):
-                self.decoder = SpanClassificationDecoderConfig()
-            elif decoder.lower().startswith('span_attr'):
-                self.decoder = SpanAttrClassificationDecoderConfig()
-            elif decoder.lower().startswith('span_rel'):
-                self.decoder = SpanRelClassificationDecoderConfig()
-            elif decoder.lower().startswith('boundary'):
-                self.decoder = BoundarySelectionDecoderConfig()
-            elif decoder.lower().startswith('joint_extraction'):
-                self.decoder = JointExtractionDecoderConfig()
-            else:
-                raise ValueError(f"Invalid `decoder`: {decoder}")
-        
+        self.decoder = kwargs.pop('decoder', TextClassificationDecoderConfig())
         super().__init__(**kwargs)
         
         
     @property
+    def _is_re_tokenized(self):
+        return self.bert_like is not None and not self.bert_like.from_tokenized
+        
+    @property
     def valid(self):
-        return super().valid and (self.bert_like is None or self.bert_like.from_tokenized)
+        return super().valid and (not self._is_re_tokenized or (self.full_emb_dim == 0 and self.full_hid_dim == self.bert_like.out_dim))
         
     @property
     def full_emb_dim(self):
@@ -153,6 +134,11 @@ class ExtractorConfig(ModelConfigBase):
             if getattr(self, name) is not None:
                 batch[name] = getattr(self, name).batchify([ex[name] for ex in batch_examples])
         
+        # Replace mask/seq_lens if re-tokenization
+        if self._is_re_tokenized:
+            batch['mask'] = batch['bert_like']['sub_mask'][:, 2:]
+            batch['seq_lens'] = mask2seq_lens(batch['mask'])
+        
         batch.update(self.decoder.batchify(batch_examples))
         return batch
         
@@ -160,12 +146,12 @@ class ExtractorConfig(ModelConfigBase):
     def instantiate(self):
         # Only check validity at the most outside level
         assert self.valid
-        return Extractor(self)
+        return Classifier(self)
 
 
 
-class Extractor(ModelBase):
-    def __init__(self, config: ExtractorConfig):
+class Classifier(ModelBase):
+    def __init__(self, config: ClassifierConfig):
         super().__init__(config)
         
         
@@ -190,14 +176,14 @@ class Extractor(ModelBase):
     def _get_full_hidden(self, batch: Batch):
         full_hidden = []
         
-        if any([hasattr(self, name) for name in ExtractorConfig._embedder_names]):
+        if any([hasattr(self, name) for name in ClassifierConfig._embedder_names]):
             embedded = self._get_full_embedded(batch)
             if hasattr(self, 'intermediate1'):
                 full_hidden.append(self.intermediate1(embedded, batch.mask))
             else:
                 full_hidden.append(embedded)
         
-        for name in ExtractorConfig._pretrained_names:
+        for name in ClassifierConfig._pretrained_names:
             if hasattr(self, name):
                 full_hidden.append(getattr(self, name)(**getattr(batch, name)))
         

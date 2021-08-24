@@ -16,7 +16,7 @@ from eznlp.config import ConfigDict
 from eznlp.model import OneHotConfig, EncoderConfig
 from eznlp.model import ELMoConfig, BertLikeConfig, FlairConfig
 from eznlp.model import TextClassificationDecoderConfig
-from eznlp.model import ExtractorConfig
+from eznlp.model import ClassifierConfig
 from eznlp.model.bert_like import truncate_for_bert_like
 from eznlp.training import Trainer
 from eznlp.training.utils import count_params
@@ -107,7 +107,7 @@ def collect_TC_assembly_config(args: argparse.Namespace):
 def build_TC_config(args: argparse.Namespace):
     drop_rates = (0.0, 0.05, args.drop_rate) if args.use_locked_drop else (args.drop_rate, 0.0, 0.0)
     decoder_config = TextClassificationDecoderConfig(agg_mode=args.agg_mode, in_drop_rates=drop_rates)
-    return ExtractorConfig(**collect_TC_assembly_config(args), decoder=decoder_config)
+    return ClassifierConfig(**collect_TC_assembly_config(args), decoder=decoder_config)
 
 
 if __name__ == '__main__':
