@@ -7,7 +7,7 @@ from ...config import Config
 from ...nn.modules import SmoothLabelCrossEntropyLoss, FocalLoss
 
 
-class DecoderMixin(object):
+class DecoderMixinBase(object):
     @property
     def num_metrics(self):
         return 1
@@ -43,7 +43,7 @@ class DecoderMixin(object):
 
 
 
-class SingleDecoderConfig(Config):
+class SingleDecoderConfigBase(Config):
     def __init__(self, **kwargs):
         self.in_dim = kwargs.pop('in_dim', None)
         
@@ -77,7 +77,7 @@ class SingleDecoderConfig(Config):
 
 
 
-class Decoder(torch.nn.Module):
+class DecoderBase(torch.nn.Module):
     def __init__(self):
         """`Decoder` forwards from hidden states to outputs. 
         """

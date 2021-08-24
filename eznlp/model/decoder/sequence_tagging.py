@@ -9,10 +9,10 @@ from ...nn.utils import unpad_seqs
 from ...nn.modules import CombinedDropout, CRF
 from ...nn.init import reinit_layer_
 from ...metrics import precision_recall_f1_report
-from .base import DecoderMixin, SingleDecoderConfig, Decoder
+from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
 
 
-class SequenceTaggingDecoderMixin(DecoderMixin):
+class SequenceTaggingDecoderMixin(DecoderMixinBase):
     @property
     def scheme(self):
         return self._scheme
@@ -79,7 +79,7 @@ class Tags(TargetWrapper):
 
 
 
-class SequenceTaggingDecoderConfig(SingleDecoderConfig, SequenceTaggingDecoderMixin):
+class SequenceTaggingDecoderConfig(SingleDecoderConfigBase, SequenceTaggingDecoderMixin):
     def __init__(self, **kwargs):
         self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
         
@@ -126,7 +126,7 @@ class SequenceTaggingDecoderConfig(SingleDecoderConfig, SequenceTaggingDecoderMi
 
 
 
-class SequenceTaggingDecoder(Decoder, SequenceTaggingDecoderMixin):
+class SequenceTaggingDecoder(DecoderBase, SequenceTaggingDecoderMixin):
     def __init__(self, config: SequenceTaggingDecoderConfig):
         super().__init__()
         self.scheme = config.scheme
@@ -153,7 +153,7 @@ class SequenceTaggingDecoder(Decoder, SequenceTaggingDecoderMixin):
             losses = [self.criterion(lg[:slen], tags_obj.tag_ids) for lg, tags_obj, slen in zip(logits, batch.tags_objs, batch.seq_lens.cpu().tolist())]
             # `torch.stack`: Concatenates sequence of tensors along a new dimension. 
             losses = torch.stack(losses, dim=0)
-            
+        
         return losses
         
         
@@ -168,11 +168,10 @@ class SequenceTaggingDecoder(Decoder, SequenceTaggingDecoderMixin):
         else:
             best_paths = logits.argmax(dim=-1)
             batch_tag_ids = unpad_seqs(best_paths, batch.seq_lens)
-            
+        
         return [[self.idx2tag[i] for i in tag_ids] for tag_ids in batch_tag_ids]
         
         
     def decode(self, batch: Batch, full_hidden: torch.Tensor):
         batch_tags = self.decode_tags(batch, full_hidden)
         return [self.translator.tags2chunks(tags) for tags in batch_tags]
-    

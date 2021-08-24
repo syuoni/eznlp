@@ -11,12 +11,12 @@ from ...nn.modules import SequencePooling, SequenceAttention, CombinedDropout
 from ...nn.functional import seq_lens2mask
 from ...nn.init import reinit_embedding_, reinit_layer_
 from ...metrics import precision_recall_f1_report
-from .base import DecoderMixin, SingleDecoderConfig, Decoder
+from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
 
 logger = logging.getLogger(__name__)
 
 
-class SpanClassificationDecoderMixin(DecoderMixin):
+class SpanClassificationDecoderMixin(DecoderMixinBase):
     @property
     def idx2label(self):
         return self._idx2label
@@ -93,7 +93,7 @@ class Spans(TargetWrapper):
 
 
 
-class SpanClassificationDecoderConfig(SingleDecoderConfig, SpanClassificationDecoderMixin):
+class SpanClassificationDecoderConfig(SingleDecoderConfigBase, SpanClassificationDecoderMixin):
     def __init__(self, **kwargs):
         self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
         
@@ -140,7 +140,7 @@ class SpanClassificationDecoderConfig(SingleDecoderConfig, SpanClassificationDec
 
 
 
-class SpanClassificationDecoder(Decoder, SpanClassificationDecoderMixin):
+class SpanClassificationDecoder(DecoderBase, SpanClassificationDecoderMixin):
     def __init__(self, config: SpanClassificationDecoderConfig):
         super().__init__()
         self.none_label = config.none_label
@@ -151,7 +151,7 @@ class SpanClassificationDecoder(Decoder, SpanClassificationDecoderMixin):
             self.aggregating = SequencePooling(mode=config.agg_mode.replace('_pooling', ''))
         elif config.agg_mode.lower().endswith('_attention'):
             self.aggregating = SequenceAttention(config.in_dim, scoring=config.agg_mode.replace('_attention', ''))
-
+        
         if config.size_emb_dim > 0:
             self.size_embedding = torch.nn.Embedding(config.max_span_size, config.size_emb_dim)
             reinit_embedding_(self.size_embedding)
@@ -172,7 +172,7 @@ class SpanClassificationDecoder(Decoder, SpanClassificationDecoderMixin):
             span_mask = seq_lens2mask(torch.tensor([h.size(0) for h in span_hidden], dtype=torch.long, device=full_hidden.device))
             span_hidden = torch.nn.utils.rnn.pad_sequence(span_hidden, batch_first=True, padding_value=0.0)
             span_hidden = self.aggregating(self.dropout(span_hidden), mask=span_mask)
-
+            
             if hasattr(self, 'size_embedding'):
                 # size_embedded: (num_spans, emb_dim)
                 size_embedded = self.size_embedding(batch.spans_objs[k].span_size_ids)

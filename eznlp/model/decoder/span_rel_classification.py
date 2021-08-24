@@ -11,12 +11,12 @@ from ...nn.modules import SequencePooling, SequenceAttention, CombinedDropout
 from ...nn.functional import seq_lens2mask
 from ...nn.init import reinit_embedding_, reinit_layer_
 from ...metrics import precision_recall_f1_report
-from .base import DecoderMixin, SingleDecoderConfig, Decoder
+from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
 
 logger = logging.getLogger(__name__)
 
 
-class SpanRelClassificationDecoderMixin(DecoderMixin):
+class SpanRelClassificationDecoderMixin(DecoderMixinBase):
     @property
     def idx2ck_label(self):
         return self._idx2ck_label
@@ -160,7 +160,7 @@ class ChunkPairs(TargetWrapper):
 
 
 
-class SpanRelClassificationDecoderConfig(SingleDecoderConfig, SpanRelClassificationDecoderMixin):
+class SpanRelClassificationDecoderConfig(SingleDecoderConfigBase, SpanRelClassificationDecoderMixin):
     def __init__(self, **kwargs):
         self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
         
@@ -194,21 +194,21 @@ class SpanRelClassificationDecoderConfig(SingleDecoderConfig, SpanRelClassificat
         self.idx2rel_label = [self.rel_none_label] + list(rel_counter.keys())
         ht_counter = Counter((head[0], tail[0]) for data in partitions for entry in data for label, head, tail in entry['relations'])
         self.legal_head_tail_types = set(list(ht_counter.keys()))
-
+        
         dist_counter = Counter(chunk_pair_distance(head, tail) for data in partitions for entry in data for label, head, tail in entry['relations'])
         num_pairs = sum(dist_counter.values())
         num_oov_pairs = sum(num for dist, num in dist_counter.items() if dist > self.max_pair_distance)
         if num_oov_pairs > 0:
             logger.warning(f"OOV positive pairs: {num_oov_pairs} ({num_oov_pairs/num_pairs*100:.2f}%)")
-
-
+        
+        
     def instantiate(self):
         return SpanRelClassificationDecoder(self)
 
 
 
 
-class SpanRelClassificationDecoder(Decoder, SpanRelClassificationDecoderMixin):
+class SpanRelClassificationDecoder(DecoderBase, SpanRelClassificationDecoderMixin):
     def __init__(self, config: SpanRelClassificationDecoderConfig):
         super().__init__()
         self.num_neg_relations = config.num_neg_relations
@@ -226,7 +226,7 @@ class SpanRelClassificationDecoder(Decoder, SpanRelClassificationDecoderMixin):
             self.aggregating = SequenceAttention(config.in_dim, scoring=config.agg_mode.replace('_attention', ''))
         # Trainable context vector for overlapping chunks
         self.zero_context = torch.nn.Parameter(torch.zeros(config.in_dim))
-
+        
         if config.ck_size_emb_dim > 0:
             self.ck_size_embedding = torch.nn.Embedding(config.max_span_size, config.ck_size_emb_dim)
             reinit_embedding_(self.ck_size_embedding)
@@ -265,12 +265,12 @@ class SpanRelClassificationDecoder(Decoder, SpanRelClassificationDecoderMixin):
                 head_mask = seq_lens2mask(torch.tensor([h.size(0) for h in head_hidden], dtype=torch.long, device=full_hidden.device))
                 head_hidden = torch.nn.utils.rnn.pad_sequence(head_hidden, batch_first=True, padding_value=0.0)
                 head_hidden = self.aggregating(self.dropout(head_hidden), mask=head_mask)
-
+                
                 # tail_hidden: (num_pairs, span_size, hid_dim) -> (num_pairs, hid_dim)
                 tail_mask = seq_lens2mask(torch.tensor([h.size(0) for h in tail_hidden], dtype=torch.long, device=full_hidden.device))
                 tail_hidden = torch.nn.utils.rnn.pad_sequence(tail_hidden, batch_first=True, padding_value=0.0)
                 tail_hidden = self.aggregating(self.dropout(tail_hidden), mask=tail_mask)
-
+                
                 # contexts: (num_pairs, span_size, hid_dim) -> (num_pairs, hid_dim)
                 ctx_mask = seq_lens2mask(torch.tensor([c.size(0) for c in contexts], dtype=torch.long, device=full_hidden.device))
                 contexts = torch.nn.utils.rnn.pad_sequence(contexts, batch_first=True, padding_value=0.0)
@@ -278,24 +278,24 @@ class SpanRelClassificationDecoder(Decoder, SpanRelClassificationDecoderMixin):
                 
                 # pair_hidden: (num_pairs, hid_dim*3)
                 pair_hidden = torch.cat([head_hidden, tail_hidden, contexts], dim=-1)
-
+                
                 if hasattr(self, 'ck_size_embedding'):
                     # ck_size_embedded: (num_pairs, 2, emb_dim) -> (num_pairs, emb_dim*2)
                     ck_size_embedded = self.ck_size_embedding(batch.chunk_pairs_objs[k].span_size_ids).flatten(start_dim=1)
                     pair_hidden = torch.cat([pair_hidden, self.dropout(ck_size_embedded)], dim=-1)
-
+                
                 if hasattr(self, 'ck_label_embedding'):
                     # ck_label_embedded: (num_pairs, 2, emb_dim) -> (num_pairs, emb_dim*2)
                     ck_label_embedded = self.ck_label_embedding(batch.chunk_pairs_objs[k].ck_label_ids).flatten(start_dim=1)
                     pair_hidden = torch.cat([pair_hidden, self.dropout(ck_label_embedded)], dim=-1)
-
+                
                 logits = self.hid2logit(pair_hidden)
             
             batch_logits.append(logits)
-            
+        
         return batch_logits
-    
-    
+        
+        
     def forward(self, batch: Batch, full_hidden: torch.Tensor):
         batch_logits = self.get_logits(batch, full_hidden)
         
@@ -320,5 +320,5 @@ class SpanRelClassificationDecoder(Decoder, SpanRelClassificationDecoderMixin):
             else:
                 relations = []
             batch_relations.append(relations)
-            
+        
         return batch_relations

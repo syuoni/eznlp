@@ -4,7 +4,7 @@ import torch
 
 from ...wrapper import Batch
 from ...config import Config
-from .base import DecoderMixin, SingleDecoderConfig, Decoder
+from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
 from .sequence_tagging import SequenceTaggingDecoderConfig
 from .span_classification import SpanClassificationDecoderConfig
 from .span_attr_classification import SpanAttrClassificationDecoderConfig
@@ -12,19 +12,19 @@ from .span_rel_classification import SpanRelClassificationDecoderConfig
 from .boundary_selection import BoundarySelectionDecoderConfig
 
 
-class JointExtractionDecoderMixin(DecoderMixin):
+class JointExtractionDecoderMixin(DecoderMixinBase):
     @property
     def has_attr_decoder(self):
         return hasattr(self, 'attr_decoder') and self.attr_decoder is not None
-
+        
     @property
     def has_rel_decoder(self):
         return hasattr(self, 'rel_decoder') and self.rel_decoder is not None
-
+        
     @property
     def num_metrics(self):
         return 1 + int(self.has_attr_decoder) + int(self.has_rel_decoder)
-
+        
     @property
     def decoders(self):
         yield self.ck_decoder
@@ -32,8 +32,8 @@ class JointExtractionDecoderMixin(DecoderMixin):
             yield self.attr_decoder
         if self.has_rel_decoder:
             yield self.rel_decoder
-
-
+        
+        
     def exemplify(self, data_entry: dict, training: bool=True):
         example = self.ck_decoder.exemplify(data_entry, training=training)
         if self.has_attr_decoder:
@@ -62,11 +62,11 @@ class JointExtractionDecoderMixin(DecoderMixin):
 
 class JointExtractionDecoderConfig(Config, JointExtractionDecoderMixin):
     def __init__(self, 
-                 ck_decoder: Union[SingleDecoderConfig, str]='span_classification', 
-                 attr_decoder: Union[SingleDecoderConfig, str]='span_attr_classification', 
-                 rel_decoder: Union[SingleDecoderConfig, str]='span_rel_classification',
+                 ck_decoder: Union[SingleDecoderConfigBase, str]='span_classification', 
+                 attr_decoder: Union[SingleDecoderConfigBase, str]='span_attr_classification', 
+                 rel_decoder: Union[SingleDecoderConfigBase, str]='span_rel_classification',
                  **kwargs):
-        if isinstance(ck_decoder, SingleDecoderConfig):
+        if isinstance(ck_decoder, SingleDecoderConfigBase):
             self.ck_decoder = ck_decoder
         elif ck_decoder.lower().startswith('sequence_tagging'):
             self.ck_decoder = SequenceTaggingDecoderConfig()
@@ -74,17 +74,17 @@ class JointExtractionDecoderConfig(Config, JointExtractionDecoderMixin):
             self.ck_decoder = SpanClassificationDecoderConfig()
         elif ck_decoder.lower().startswith('boundary'):
             self.ck_decoder = BoundarySelectionDecoderConfig()
-
-        if isinstance(attr_decoder, SingleDecoderConfig) or attr_decoder is None:
+        
+        if isinstance(attr_decoder, SingleDecoderConfigBase) or attr_decoder is None:
             self.attr_decoder = attr_decoder
         elif attr_decoder.lower().startswith('span_attr'):
             self.attr_decoder = SpanAttrClassificationDecoderConfig()
-
-        if isinstance(rel_decoder, SingleDecoderConfig) or rel_decoder is None:
+        
+        if isinstance(rel_decoder, SingleDecoderConfigBase) or rel_decoder is None:
             self.rel_decoder = rel_decoder
         elif rel_decoder.lower().startswith('span_rel'):
             self.rel_decoder = SpanRelClassificationDecoderConfig()
-            
+        
         # It seems that pytorch does not recommend to share weights outside two modules. 
         # See https://discuss.pytorch.org/t/how-to-create-model-with-sharing-weight/398/2
         self.share_embeddings = kwargs.pop('share_embeddings', False)
@@ -119,7 +119,7 @@ class JointExtractionDecoderConfig(Config, JointExtractionDecoderMixin):
 
 
 
-class JointExtractionDecoder(Decoder, JointExtractionDecoderMixin):
+class JointExtractionDecoder(DecoderBase, JointExtractionDecoderMixin):
     def __init__(self, config: JointExtractionDecoderConfig):
         super().__init__()
         self.ck_decoder = config.ck_decoder.instantiate()
@@ -136,11 +136,11 @@ class JointExtractionDecoder(Decoder, JointExtractionDecoderMixin):
         if self.has_attr_decoder:
             self.attr_decoder.inject_chunks_and_build(batch, batch_chunks_pred, full_hidden.device)
             losses += self.attr_decoder(batch, full_hidden)
-
+        
         if self.has_rel_decoder:
             self.rel_decoder.inject_chunks_and_build(batch, batch_chunks_pred, full_hidden.device)
             losses += self.rel_decoder(batch, full_hidden)
-
+        
         return losses
         
         
@@ -151,9 +151,9 @@ class JointExtractionDecoder(Decoder, JointExtractionDecoderMixin):
         if self.has_attr_decoder:
             self.attr_decoder.inject_chunks_and_build(batch, batch_chunks_pred, full_hidden.device)
             y_pred = (*y_pred, self.attr_decoder.decode(batch, full_hidden))
-
+        
         if self.has_rel_decoder:
             self.rel_decoder.inject_chunks_and_build(batch, batch_chunks_pred, full_hidden.device)
             y_pred = (*y_pred, self.rel_decoder.decode(batch, full_hidden))
-            
+        
         return y_pred

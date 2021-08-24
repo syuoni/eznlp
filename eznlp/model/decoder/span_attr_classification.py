@@ -9,12 +9,12 @@ from ...nn.modules import SequencePooling, SequenceAttention, CombinedDropout
 from ...nn.functional import seq_lens2mask
 from ...nn.init import reinit_embedding_, reinit_layer_
 from ...metrics import precision_recall_f1_report
-from .base import DecoderMixin, SingleDecoderConfig, Decoder
+from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
 
 logger = logging.getLogger(__name__)
 
 
-class SpanAttrClassificationDecoderMixin(DecoderMixin):
+class SpanAttrClassificationDecoderMixin(DecoderMixinBase):
     @property
     def idx2ck_label(self):
         return self._idx2ck_label
@@ -124,7 +124,7 @@ class Chunks(TargetWrapper):
         
         if self.training:
             assert all(ck in self.chunks for attr_label, ck in self.attributes)
-
+        
         # span_size_ids / ck_label_ids: (num_chunks, )
         # Note: size_id = size - 1
         self.span_size_ids = torch.tensor([end-start-1 for ck_label, start, end in self.chunks], dtype=torch.long)
@@ -145,7 +145,7 @@ class Chunks(TargetWrapper):
 
 
 
-class SpanAttrClassificationDecoderConfig(SingleDecoderConfig, SpanAttrClassificationDecoderMixin):
+class SpanAttrClassificationDecoderConfig(SingleDecoderConfigBase, SpanAttrClassificationDecoderMixin):
     def __init__(self, **kwargs):
         self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
         
@@ -168,7 +168,7 @@ class SpanAttrClassificationDecoderConfig(SingleDecoderConfig, SpanAttrClassific
     @property
     def name(self):
         return self._name_sep.join([self.agg_mode, self.criterion])
-    
+        
     def __repr__(self):
         repr_attr_dict = {key: getattr(self, key) for key in ['in_dim', 'in_drop_rates', 'agg_mode', 'criterion']}
         return self._repr_non_config_attrs(repr_attr_dict)
@@ -180,14 +180,14 @@ class SpanAttrClassificationDecoderConfig(SingleDecoderConfig, SpanAttrClassific
         self.idx2attr_label = [self.attr_none_label] + list(attr_counter.keys())
         legal_ck_counter = Counter(chunk[0] for data in partitions for entry in data for label, chunk in entry['attributes'])
         self.legal_chunk_types = set(list(legal_ck_counter.keys()))
-
+        
     def instantiate(self):
         return SpanAttrClassificationDecoder(self)
 
 
 
 
-class SpanAttrClassificationDecoder(Decoder, SpanAttrClassificationDecoderMixin):
+class SpanAttrClassificationDecoder(DecoderBase, SpanAttrClassificationDecoderMixin):
     def __init__(self, config: SpanAttrClassificationDecoderConfig):
         super().__init__()
         self.max_span_size = config.max_span_size
@@ -230,24 +230,24 @@ class SpanAttrClassificationDecoder(Decoder, SpanAttrClassificationDecoderMixin)
                 span_mask = seq_lens2mask(torch.tensor([h.size(0) for h in span_hidden], dtype=torch.long, device=full_hidden.device))
                 span_hidden = torch.nn.utils.rnn.pad_sequence(span_hidden, batch_first=True, padding_value=0.0)
                 span_hidden = self.aggregating(self.dropout(span_hidden), mask=span_mask)
-
+                
                 if hasattr(self, 'ck_size_embedding'):
                     # ck_size_embedded: (num_spans, emb_dim)
                     ck_size_embedded = self.ck_size_embedding(batch.chunks_objs[k].span_size_ids)
                     span_hidden = torch.cat([span_hidden, self.dropout(ck_size_embedded)], dim=-1)
-
+                
                 if hasattr(self, 'ck_label_embedding'):
                     # ck_label_embedded: (num_spans, emb_dim)
                     ck_label_embedded = self.ck_label_embedding(batch.chunks_objs[k].ck_label_ids)
                     span_hidden = torch.cat([span_hidden, self.dropout(ck_label_embedded)], dim=-1)
-
+                
                 logits = self.hid2logit(span_hidden)
             
             batch_logits.append(logits)
-            
+        
         return batch_logits
-    
-    
+        
+        
     def forward(self, batch: Batch, full_hidden: torch.Tensor):
         batch_logits = self.get_logits(batch, full_hidden)
         
@@ -256,8 +256,8 @@ class SpanAttrClassificationDecoder(Decoder, SpanAttrClassificationDecoderMixin)
                       else torch.tensor(0.0, device=full_hidden.device)
                       for k in range(batch.size)]
         return torch.stack(losses)
-    
-    
+        
+        
     def decode(self, batch: Batch, full_hidden: torch.Tensor):
         batch_logits = self.get_logits(batch, full_hidden)
         
@@ -270,5 +270,5 @@ class SpanAttrClassificationDecoder(Decoder, SpanAttrClassificationDecoderMixin)
                     if self.attr_none_label not in attr_labels:
                         attributes.extend([(attr_label, chunk) for attr_label in attr_labels])
             batch_attributes.append(attributes)
-            
+        
         return batch_attributes

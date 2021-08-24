@@ -10,12 +10,12 @@ from ...nn.modules import CombinedDropout, SmoothLabelCrossEntropyLoss, SoftLabe
 from ...nn.init import reinit_embedding_, reinit_layer_
 from ...metrics import precision_recall_f1_report
 from ..encoder import EncoderConfig
-from .base import DecoderMixin, SingleDecoderConfig, Decoder
+from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
 
 logger = logging.getLogger(__name__)
 
 
-class BoundarySelectionDecoderMixin(DecoderMixin):
+class BoundarySelectionDecoderMixin(DecoderMixinBase):
     @property
     def idx2label(self):
         return self._idx2label
@@ -88,7 +88,7 @@ class Boundaries(TargetWrapper):
 
 
 
-class BoundarySelectionDecoderConfig(SingleDecoderConfig, BoundarySelectionDecoderMixin):
+class BoundarySelectionDecoderConfig(SingleDecoderConfigBase, BoundarySelectionDecoderMixin):
     def __init__(self, **kwargs):
         self.use_biaffine = kwargs.pop('use_biaffine', True)
         self.affine = kwargs.pop('affine', EncoderConfig(arch='FFN', hid_dim=150, num_layers=1, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2))
@@ -160,7 +160,7 @@ class BoundarySelectionDecoderConfig(SingleDecoderConfig, BoundarySelectionDecod
 
 
 
-class BoundarySelectionDecoder(Decoder, BoundarySelectionDecoderMixin):
+class BoundarySelectionDecoder(DecoderBase, BoundarySelectionDecoderMixin):
     def __init__(self, config: BoundarySelectionDecoderConfig):
         super().__init__()
         self.none_label = config.none_label

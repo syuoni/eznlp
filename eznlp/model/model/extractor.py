@@ -8,7 +8,7 @@ from ...config import Config, ConfigDict
 from ..embedder import OneHotConfig
 from ..encoder import EncoderConfig
 from ..nested_embedder import SoftLexiconConfig
-from ..decoder import (SingleDecoderConfig, 
+from ..decoder import (SingleDecoderConfigBase, 
                        TextClassificationDecoderConfig,
                        SequenceTaggingDecoderConfig, 
                        SpanClassificationDecoderConfig, 
@@ -40,7 +40,7 @@ class ExtractorConfig(ModelConfigBase):
     _pretrained_names = ['elmo', 'bert_like', 'flair_fw', 'flair_bw']
     _all_names = _embedder_names + ['intermediate1'] + _pretrained_names + ['intermediate2'] + ['decoder']
     
-    def __init__(self, decoder: Union[SingleDecoderConfig, JointExtractionDecoderConfig, str]='text_classification', **kwargs):
+    def __init__(self, decoder: Union[SingleDecoderConfigBase, JointExtractionDecoderConfig, str]='text_classification', **kwargs):
         self.ohots = kwargs.pop('ohots', ConfigDict({'text': OneHotConfig(field='text')}))
         self.mhots = kwargs.pop('mhots', None)
         self.nested_ohots = kwargs.pop('nested_ohots', None)
@@ -52,7 +52,7 @@ class ExtractorConfig(ModelConfigBase):
         self.flair_bw = kwargs.pop('flair_bw', None)
         self.intermediate2 = kwargs.pop('intermediate2', EncoderConfig(arch='LSTM'))
         
-        if isinstance(decoder, (SingleDecoderConfig, JointExtractionDecoderConfig)):
+        if isinstance(decoder, (SingleDecoderConfigBase, JointExtractionDecoderConfig)):
             self.decoder = decoder
         elif isinstance(decoder, str):
             if decoder.lower().startswith('text'):

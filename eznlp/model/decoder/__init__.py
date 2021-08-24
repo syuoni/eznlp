@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from .base import DecoderMixin, SingleDecoderConfig, Decoder
+from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
 from .text_classification import TextClassificationDecoderConfig
 from .sequence_tagging import SequenceTaggingDecoderConfig
 from .span_classification import SpanClassificationDecoderConfig

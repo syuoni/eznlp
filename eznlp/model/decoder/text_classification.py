@@ -6,10 +6,10 @@ import torch
 from ...wrapper import Batch
 from ...nn.modules import SequencePooling, SequenceAttention, CombinedDropout
 from ...nn.init import reinit_layer_
-from .base import DecoderMixin, SingleDecoderConfig, Decoder
+from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
 
 
-class TextClassificationDecoderMixin(DecoderMixin):
+class TextClassificationDecoderMixin(DecoderMixinBase):
     @property
     def idx2label(self):
         return self._idx2label
@@ -40,7 +40,7 @@ class TextClassificationDecoderMixin(DecoderMixin):
 
 
 
-class TextClassificationDecoderConfig(SingleDecoderConfig, TextClassificationDecoderMixin):
+class TextClassificationDecoderConfig(SingleDecoderConfigBase, TextClassificationDecoderMixin):
     def __init__(self, **kwargs):
         self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
         
@@ -67,7 +67,7 @@ class TextClassificationDecoderConfig(SingleDecoderConfig, TextClassificationDec
 
 
 
-class TextClassificationDecoder(Decoder, TextClassificationDecoderMixin):
+class TextClassificationDecoder(DecoderBase, TextClassificationDecoderMixin):
     def __init__(self, config: TextClassificationDecoderConfig):
         super().__init__()
         self.idx2label = config.idx2label
@@ -80,7 +80,7 @@ class TextClassificationDecoder(Decoder, TextClassificationDecoderMixin):
             self.aggregating = SequencePooling(mode=config.agg_mode.replace('_pooling', ''))
         elif config.agg_mode.lower().endswith('_attention'):
             self.aggregating = SequenceAttention(config.in_dim, scoring=config.agg_mode.replace('_attention', ''))
-            
+        
         self.criterion = config.instantiate_criterion(reduction='none')
         
         
