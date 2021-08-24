@@ -12,7 +12,7 @@ import torch
 from eznlp import auto_device
 from eznlp.dataset import Dataset
 from eznlp.model import SpanRelClassificationDecoderConfig
-from eznlp.model import ModelConfig
+from eznlp.model import ExtractorConfig
 from eznlp.training import Trainer
 from eznlp.training.utils import count_params
 from eznlp.training.evaluation import evaluate_relation_extraction
@@ -72,7 +72,7 @@ def build_RE_config(args: argparse.Namespace):
                                                         ck_label_emb_dim=args.ck_label_emb_dim, 
                                                         in_drop_rates=drop_rates)
     
-    return ModelConfig(**collect_IE_assembly_config(args), decoder=decoder_config)
+    return ExtractorConfig(**collect_IE_assembly_config(args), decoder=decoder_config)
 
 
 

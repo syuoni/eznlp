@@ -6,7 +6,7 @@ import torch
 
 from ..wrapper import Batch
 from ..dataset import Dataset
-from ..model.model import Model
+from ..model.model import ModelBase
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ class Trainer(object):
     [1] https://pytorch.org/tutorials/recipes/recipes/amp_recipe.html
     """
     def __init__(self, 
-                 model: Model, 
+                 model: ModelBase, 
                  optimizer: torch.optim.Optimizer=None, 
                  scheduler: torch.optim.lr_scheduler._LRScheduler=None, 
                  schedule_by_step: bool=False, 

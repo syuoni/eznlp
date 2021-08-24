@@ -4,11 +4,11 @@ import torch
 
 from .nn.functional import seq_lens2mask
 from .wrapper import Batch
-from .model.model import ModelConfig
+from .model.model import ModelConfigBase
 
 
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self, data: List[dict], config: ModelConfig=None, training: bool=True):
+    def __init__(self, data: List[dict], config: ModelConfigBase=None, training: bool=True):
         """
         Parameters
         ----------

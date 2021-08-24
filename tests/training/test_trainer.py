@@ -4,7 +4,7 @@ import random
 import torch
 
 from eznlp.dataset import Dataset
-from eznlp.model import EncoderConfig, SequenceTaggingDecoderConfig, ModelConfig
+from eznlp.model import EncoderConfig, SequenceTaggingDecoderConfig, ExtractorConfig
 from eznlp.training import Trainer
 
 
@@ -13,7 +13,7 @@ def test_train_steps(use_amp, conll2003_demo, device):
     if use_amp and device.type.startswith('cpu'):
         pytest.skip("test requires cuda, while current session runs on cpu")
     
-    config = ModelConfig('sequence_tagging')
+    config = ExtractorConfig('sequence_tagging')
     dataset = Dataset(conll2003_demo, config)
     dataset.build_vocabs_and_dims()
     model = config.instantiate().to(device)
@@ -31,8 +31,8 @@ def test_train_steps(use_amp, conll2003_demo, device):
 
 def test_gradient_accumulation(conll2003_demo, device):
     # Note: set dropout rate as 0 for consistency
-    config = ModelConfig(intermediate2=EncoderConfig(in_drop_rates=(0.0, 0.0, 0.0), hid_drop_rate=0.0), 
-                         decoder=SequenceTaggingDecoderConfig(in_drop_rates=(0.0, 0.0, 0.0)))
+    config = ExtractorConfig(intermediate2=EncoderConfig(in_drop_rates=(0.0, 0.0, 0.0), hid_drop_rate=0.0), 
+                             decoder=SequenceTaggingDecoderConfig(in_drop_rates=(0.0, 0.0, 0.0)))
     dataset = Dataset(conll2003_demo[:8], config)
     dataset.build_vocabs_and_dims()
     

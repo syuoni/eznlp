@@ -16,7 +16,7 @@ from eznlp.config import ConfigDict
 from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig, CharConfig, SoftLexiconConfig
 from eznlp.model import ELMoConfig, BertLikeConfig, FlairConfig
 from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderConfig, BoundarySelectionDecoderConfig
-from eznlp.model import ModelConfig
+from eznlp.model import ExtractorConfig
 from eznlp.model.bert_like import segment_uniformly_for_bert_like
 from eznlp.training import Trainer
 from eznlp.training.utils import count_params
@@ -183,7 +183,7 @@ def build_ER_config(args: argparse.Namespace):
                                                         sl_epsilon=args.sl_epsilon, 
                                                         sb_epsilon=args.sb_epsilon,
                                                         hid_drop_rates=drop_rates)
-    return ModelConfig(**collect_IE_assembly_config(args), decoder=decoder_config)
+    return ExtractorConfig(**collect_IE_assembly_config(args), decoder=decoder_config)
 
 
 if __name__ == '__main__':

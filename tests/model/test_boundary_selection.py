@@ -3,7 +3,7 @@ import pytest
 import torch
 
 from eznlp.dataset import Dataset
-from eznlp.model import EncoderConfig, BertLikeConfig, BoundarySelectionDecoderConfig, ModelConfig
+from eznlp.model import EncoderConfig, BertLikeConfig, BoundarySelectionDecoderConfig, ExtractorConfig
 from eznlp.model.decoder.boundary_selection import _generate_spans_from_upper_triangular
 from eznlp.training import Trainer
 
@@ -59,10 +59,10 @@ class TestModel(object):
                                                                   (0.0, 0.0, 0.1), 
                                                                   (0.0, 0.1, 0.1)])
     def test_model(self, use_biaffine, affine_arch, size_emb_dim, fl_gamma, sl_epsilon, sb_epsilon, conll2004_demo, device):
-        self.config = ModelConfig(decoder=BoundarySelectionDecoderConfig(use_biaffine=use_biaffine, 
-                                                                         affine=EncoderConfig(arch=affine_arch), 
-                                                                         size_emb_dim=size_emb_dim, 
-                                                                         fl_gamma=fl_gamma, sl_epsilon=sl_epsilon, sb_epsilon=sb_epsilon))
+        self.config = ExtractorConfig(decoder=BoundarySelectionDecoderConfig(use_biaffine=use_biaffine, 
+                                                                             affine=EncoderConfig(arch=affine_arch), 
+                                                                             size_emb_dim=size_emb_dim, 
+                                                                             fl_gamma=fl_gamma, sl_epsilon=sl_epsilon, sb_epsilon=sb_epsilon))
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
@@ -70,17 +70,17 @@ class TestModel(object):
         
     def test_model_with_bert_like(self, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
-        self.config = ModelConfig('boundary_selection', 
-                                  ohots=None, 
-                                  bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert), 
-                                  intermediate2=None)
+        self.config = ExtractorConfig('boundary_selection', 
+                                      ohots=None, 
+                                      bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert), 
+                                      intermediate2=None)
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
         
         
     def test_prediction_without_gold(self, conll2004_demo, device):
-        self.config = ModelConfig('boundary_selection')
+        self.config = ExtractorConfig('boundary_selection')
         self._setup_case(conll2004_demo, device)
         
         data_wo_gold = [{'tokens': entry['tokens']} for entry in conll2004_demo]
@@ -97,7 +97,7 @@ def test_boundaries_obj(sb_epsilon, EAR_data_demo):
     entry = EAR_data_demo[0]
     tokens, chunks = entry['tokens'], entry['chunks']
     
-    config = ModelConfig(decoder=BoundarySelectionDecoderConfig(sb_epsilon=sb_epsilon))
+    config = ExtractorConfig(decoder=BoundarySelectionDecoderConfig(sb_epsilon=sb_epsilon))
     dataset = Dataset(EAR_data_demo, config)
     dataset.build_vocabs_and_dims()
     

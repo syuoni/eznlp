@@ -3,7 +3,7 @@ import pytest
 import torch
 
 from eznlp.dataset import Dataset
-from eznlp.model import EncoderConfig, BertLikeConfig, SpanClassificationDecoderConfig, ModelConfig
+from eznlp.model import EncoderConfig, BertLikeConfig, SpanClassificationDecoderConfig, ExtractorConfig
 from eznlp.training import Trainer
 
 
@@ -53,7 +53,7 @@ class TestModel(object):
     @pytest.mark.parametrize("size_emb_dim", [25, 0])
     @pytest.mark.parametrize("fl_gamma", [0.0, 2.0])
     def test_model(self, agg_mode, size_emb_dim, fl_gamma, conll2004_demo, device):
-        self.config = ModelConfig(decoder=SpanClassificationDecoderConfig(agg_mode=agg_mode, size_emb_dim=size_emb_dim, fl_gamma=fl_gamma))
+        self.config = ExtractorConfig(decoder=SpanClassificationDecoderConfig(agg_mode=agg_mode, size_emb_dim=size_emb_dim, fl_gamma=fl_gamma))
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
@@ -61,17 +61,16 @@ class TestModel(object):
         
     def test_model_with_bert_like(self, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
-        self.config = ModelConfig('span_classification', 
-                                  ohots=None, 
-                                  bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert), 
-                                  intermediate2=None)
+        self.config = ExtractorConfig('span_classification', ohots=None, 
+                                      bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert), 
+                                      intermediate2=None)
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
         
         
     def test_prediction_without_gold(self, conll2004_demo, device):
-        self.config = ModelConfig('span_classification')
+        self.config = ExtractorConfig('span_classification')
         self._setup_case(conll2004_demo, device)
         
         data_wo_gold = [{'tokens': entry['tokens']} for entry in conll2004_demo]
@@ -90,8 +89,7 @@ def test_spans_obj(EAR_data_demo, num_neg_chunks, max_span_size, training):
     entry = EAR_data_demo[0]
     tokens, chunks = entry['tokens'], entry['chunks']
     
-    config = ModelConfig(decoder=SpanClassificationDecoderConfig(num_neg_chunks=num_neg_chunks, 
-                                                                 max_span_size=max_span_size))
+    config = ExtractorConfig(decoder=SpanClassificationDecoderConfig(num_neg_chunks=num_neg_chunks, max_span_size=max_span_size))
     dataset = Dataset(EAR_data_demo, config, training=training)
     dataset.build_vocabs_and_dims()
     
@@ -102,7 +100,7 @@ def test_spans_obj(EAR_data_demo, num_neg_chunks, max_span_size, training):
         num_candidate_spans = (len(tokens) - max_span_size)*max_span_size + (max_span_size+1)*max_span_size/2
     else:
         num_candidate_spans = (len(tokens) + 1) * len(tokens) / 2
-        
+    
     chunk_spans = [(s, e) for l, s, e in chunks]
     oov_spans = [(s, e) for l, s, e in chunks if e-s > max_span_size]
     if training:
@@ -111,11 +109,10 @@ def test_spans_obj(EAR_data_demo, num_neg_chunks, max_span_size, training):
     else:
         assert set(chunk_spans) - set(spans_obj.spans) == set(oov_spans)
         assert len(spans_obj.spans) == num_candidate_spans
-        
+    
     assert (spans_obj.span_size_ids+1).tolist() == [min(e-s, max_span_size) for s, e in spans_obj.spans]
     
     span2label = {(s, e): l for l, s, e in chunks}
     assert all(span2label.get(span, config.decoder.none_label) == config.decoder.idx2label[label_id] 
                    for span, label_id 
                    in zip(spans_obj.spans, spans_obj.label_ids.tolist()))
-    

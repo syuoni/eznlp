@@ -2,26 +2,27 @@
 from typing import List, Union
 import torch
 
-from ..wrapper import Batch
-from ..nn.functional import mask2seq_lens
-from ..config import Config, ConfigDict
-from .embedder import OneHotConfig
-from .encoder import EncoderConfig
-from .nested_embedder import SoftLexiconConfig
-from .decoder.base import SingleDecoderConfig
-from .decoder.text_classification import TextClassificationDecoderConfig
-from .decoder.sequence_tagging import SequenceTaggingDecoderConfig
-from .decoder.span_classification import SpanClassificationDecoderConfig
-from .decoder.span_attr_classification import SpanAttrClassificationDecoderConfig
-from .decoder.span_rel_classification import SpanRelClassificationDecoderConfig
-from .decoder.boundary_selection import BoundarySelectionDecoderConfig
-from .decoder.joint_extraction import JointExtractionDecoderConfig
+from ...wrapper import Batch
+from ...nn.functional import mask2seq_lens
+from ...config import Config, ConfigDict
+from ..embedder import OneHotConfig
+from ..encoder import EncoderConfig
+from ..nested_embedder import SoftLexiconConfig
+from ..decoder import (SingleDecoderConfig, 
+                       TextClassificationDecoderConfig,
+                       SequenceTaggingDecoderConfig, 
+                       SpanClassificationDecoderConfig, 
+                       SpanAttrClassificationDecoderConfig,
+                       SpanRelClassificationDecoderConfig,
+                       BoundarySelectionDecoderConfig,
+                       JointExtractionDecoderConfig)
+from .base import ModelConfigBase, ModelBase
 
 
-class ModelConfig(Config):
-    """Configurations of a model. 
+class ExtractorConfig(ModelConfigBase):
+    """Configurations of an extractor. 
     
-    model
+    extractor
       ├─decoder(*)
       └─intermediate2
           ├─intermediate1
@@ -79,14 +80,7 @@ class ModelConfig(Config):
         if self.bert_like is not None and not self.bert_like.from_tokenized:
             if self.full_emb_dim != 0 or self.full_hid_dim != self.bert_like.out_dim:
                 return False
-        return all(getattr(self, name) is None or getattr(self, name).valid for name in self._all_names)
-        
-    @property
-    def name(self):
-        return self._name_sep.join(getattr(self, name).name for name in self._all_names if getattr(self, name) is not None)
-        
-    def __repr__(self):
-        return self._repr_config_attrs(self.__dict__)
+        return super().valid
         
     @property
     def full_emb_dim(self):
@@ -177,18 +171,15 @@ class ModelConfig(Config):
     def instantiate(self):
         # Only check validity at the most outside level
         assert self.valid
-        return Model(self)
+        return Extractor(self)
 
 
 
-class Model(torch.nn.Module):
-    def __init__(self, config: ModelConfig):
-        super().__init__()
-        for name, c in config.__dict__.items():
-            if c is not None:
-                setattr(self, name, c.instantiate())
-    
-    
+class Extractor(ModelBase):
+    def __init__(self, config: ExtractorConfig):
+        super().__init__(config)
+        
+        
     def _get_full_embedded(self, batch: Batch):
         embedded = []
         
@@ -210,14 +201,14 @@ class Model(torch.nn.Module):
     def _get_full_hidden(self, batch: Batch):
         full_hidden = []
         
-        if any([hasattr(self, name) for name in self._embedder_names]):
+        if any([hasattr(self, name) for name in ExtractorConfig._embedder_names]):
             embedded = self._get_full_embedded(batch)
             if hasattr(self, 'intermediate1'):
                 full_hidden.append(self.intermediate1(embedded, batch.mask))
             else:
                 full_hidden.append(embedded)
         
-        for name in self._pretrained_names:
+        for name in ExtractorConfig._pretrained_names:
             if hasattr(self, name):
                 full_hidden.append(getattr(self, name)(**getattr(batch, name)))
         
@@ -248,21 +239,3 @@ class Model(torch.nn.Module):
         
     def forward2states(self, batch: Batch):
         return {'full_hidden': self._get_full_hidden(batch)}
-        
-        
-    def forward(self, batch: Batch, return_states: bool=False):
-        states = self.forward2states(batch)
-        losses = self.decoder(batch, **states)
-        
-        # Return `states` for the `decode` method, to avoid duplicated computation. 
-        if return_states:
-            return losses, states
-        else:
-            return losses
-        
-        
-    def decode(self, batch: Batch, **states):
-        if len(states) == 0:
-            states = self.forward2states(batch)
-        
-        return self.decoder.decode(batch, **states)

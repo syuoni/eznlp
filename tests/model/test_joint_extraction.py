@@ -3,7 +3,7 @@ import pytest
 import torch
 
 from eznlp.dataset import Dataset
-from eznlp.model import EncoderConfig, BertLikeConfig, ModelConfig
+from eznlp.model import EncoderConfig, BertLikeConfig, ExtractorConfig
 from eznlp.model import SequenceTaggingDecoderConfig, BoundarySelectionDecoderConfig
 from eznlp.model import SpanClassificationDecoderConfig, SpanAttrClassificationDecoderConfig, SpanRelClassificationDecoderConfig
 from eznlp.model import JointExtractionDecoderConfig
@@ -61,9 +61,9 @@ class TestModel(object):
             ck_decoder_config = SpanClassificationDecoderConfig(agg_mode=agg_mode)
         elif ck_decoder.lower() == 'boundary_selection':
             ck_decoder_config = BoundarySelectionDecoderConfig()
-        self.config = ModelConfig(decoder=JointExtractionDecoderConfig(ck_decoder=ck_decoder_config, 
-                                                                       attr_decoder=None,
-                                                                       rel_decoder=SpanRelClassificationDecoderConfig(agg_mode=agg_mode)))
+        self.config = ExtractorConfig(decoder=JointExtractionDecoderConfig(ck_decoder=ck_decoder_config, 
+                                                                           attr_decoder=None,
+                                                                           rel_decoder=SpanRelClassificationDecoderConfig(agg_mode=agg_mode)))
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
@@ -78,9 +78,9 @@ class TestModel(object):
             ck_decoder_config = SpanClassificationDecoderConfig(agg_mode=agg_mode)
         elif ck_decoder.lower() == 'boundary_selection':
             ck_decoder_config = BoundarySelectionDecoderConfig()
-        self.config = ModelConfig(decoder=JointExtractionDecoderConfig(ck_decoder=ck_decoder_config, 
-                                                                       attr_decoder=SpanAttrClassificationDecoderConfig(agg_mode=agg_mode), 
-                                                                       rel_decoder=SpanRelClassificationDecoderConfig(agg_mode=agg_mode)))
+        self.config = ExtractorConfig(decoder=JointExtractionDecoderConfig(ck_decoder=ck_decoder_config, 
+                                                                           attr_decoder=SpanAttrClassificationDecoderConfig(agg_mode=agg_mode), 
+                                                                           rel_decoder=SpanRelClassificationDecoderConfig(agg_mode=agg_mode)))
         self._setup_case(HwaMei_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
@@ -88,17 +88,17 @@ class TestModel(object):
         
     def test_model_with_bert_like(self, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
-        self.config = ModelConfig(ohots=None, 
-                                  bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert), 
-                                  intermediate2=None, 
-                                  decoder=JointExtractionDecoderConfig(attr_decoder=None))
+        self.config = ExtractorConfig(ohots=None, 
+                                      bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert), 
+                                      intermediate2=None, 
+                                      decoder=JointExtractionDecoderConfig(attr_decoder=None))
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
         
         
     def test_prediction_without_gold(self, HwaMei_demo, device):
-        self.config = ModelConfig(decoder=JointExtractionDecoderConfig(attr_decoder='span_attr'))
+        self.config = ExtractorConfig(decoder=JointExtractionDecoderConfig(attr_decoder='span_attr'))
         self._setup_case(HwaMei_demo, device)
         
         data_wo_gold = [{'tokens': entry['tokens']} for entry in HwaMei_demo]

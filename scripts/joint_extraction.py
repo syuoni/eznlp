@@ -16,7 +16,7 @@ from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderC
 from eznlp.model import SpanAttrClassificationDecoderConfig
 from eznlp.model import SpanRelClassificationDecoderConfig
 from eznlp.model import JointExtractionDecoderConfig
-from eznlp.model import ModelConfig
+from eznlp.model import ExtractorConfig
 from eznlp.training import Trainer
 from eznlp.training.utils import count_params
 from eznlp.training.evaluation import evaluate_joint_extraction
@@ -130,7 +130,7 @@ def build_joint_config(args: argparse.Namespace):
     decoder_config = JointExtractionDecoderConfig(ck_decoder=ck_decoder_config, 
                                                   attr_decoder = attr_decoder_config,
                                                   rel_decoder=rel_decoder_config)
-    return ModelConfig(**collect_IE_assembly_config(args) , decoder=decoder_config)
+    return ExtractorConfig(**collect_IE_assembly_config(args) , decoder=decoder_config)
 
 
 

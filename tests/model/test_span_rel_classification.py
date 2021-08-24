@@ -3,7 +3,7 @@ import pytest
 import torch
 
 from eznlp.dataset import Dataset
-from eznlp.model import BertLikeConfig, SpanRelClassificationDecoderConfig, JointExtractionDecoderConfig, ModelConfig
+from eznlp.model import BertLikeConfig, SpanRelClassificationDecoderConfig, JointExtractionDecoderConfig, ExtractorConfig
 from eznlp.training import Trainer
 
 
@@ -53,7 +53,7 @@ class TestModel(object):
     @pytest.mark.parametrize("ck_label_emb_dim", [25, 0])
     @pytest.mark.parametrize("fl_gamma", [0.0, 2.0])
     def test_model(self, agg_mode, ck_label_emb_dim, fl_gamma, conll2004_demo, device):
-        self.config = ModelConfig(decoder=SpanRelClassificationDecoderConfig(agg_mode=agg_mode, ck_label_emb_dim=ck_label_emb_dim, fl_gamma=fl_gamma))
+        self.config = ExtractorConfig(decoder=SpanRelClassificationDecoderConfig(agg_mode=agg_mode, ck_label_emb_dim=ck_label_emb_dim, fl_gamma=fl_gamma))
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
@@ -61,17 +61,16 @@ class TestModel(object):
         
     def test_model_with_bert_like(self, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
-        self.config = ModelConfig('span_rel_classification', 
-                                  ohots=None, 
-                                  bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert), 
-                                  intermediate2=None)
+        self.config = ExtractorConfig('span_rel_classification', ohots=None, 
+                                      bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert), 
+                                      intermediate2=None)
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
         
         
     def test_prediction_without_gold(self, conll2004_demo, device):
-        self.config = ModelConfig('span_rel_classification')
+        self.config = ExtractorConfig('span_rel_classification')
         self._setup_case(conll2004_demo, device)
         
         data_wo_gold = [{'tokens': entry['tokens'], 
@@ -92,12 +91,12 @@ def test_chunk_pairs_obj(EAR_data_demo, num_neg_relations, training, building):
     chunks, relations = entry['chunks'], entry['relations']
     
     if building:
-        config = ModelConfig(decoder=SpanRelClassificationDecoderConfig(num_neg_relations=num_neg_relations))
+        config = ExtractorConfig(decoder=SpanRelClassificationDecoderConfig(num_neg_relations=num_neg_relations))
         rel_decoder_config = config.decoder
     else:
-        config = ModelConfig(decoder=JointExtractionDecoderConfig(attr_decoder=None, rel_decoder=SpanRelClassificationDecoderConfig(num_neg_relations=num_neg_relations)))
+        config = ExtractorConfig(decoder=JointExtractionDecoderConfig(attr_decoder=None, rel_decoder=SpanRelClassificationDecoderConfig(num_neg_relations=num_neg_relations)))
         rel_decoder_config = config.decoder.rel_decoder
-        
+    
     dataset = Dataset(EAR_data_demo, config, training=training)
     dataset.build_vocabs_and_dims()
     
@@ -115,7 +114,7 @@ def test_chunk_pairs_obj(EAR_data_demo, num_neg_relations, training, building):
         chunk_pairs_obj.build(rel_decoder_config)
         assert len(chunk_pairs_obj.chunks) == len(chunks) + len(chunks_pred) if training else len(chunk_pairs_obj.chunks) == len(chunks_pred)
         assert chunk_pairs_obj.is_built
-        
+    
     # num_candidate_chunk_pairs = len(chunk_pairs_obj.chunks) * (len(chunk_pairs_obj.chunks) - 1)
     num_candidate_chunk_pairs = len([(head, tail) for head in chunk_pairs_obj.chunks for tail in chunk_pairs_obj.chunks 
                                          if head[1:] != tail[1:]
@@ -130,7 +129,7 @@ def test_chunk_pairs_obj(EAR_data_demo, num_neg_relations, training, building):
     else:
         assert set(rel_chunk_pairs) - set(chunk_pairs_obj.chunk_pairs) == set(oov_chunk_pairs)
         assert len(chunk_pairs_obj.chunk_pairs) == num_candidate_chunk_pairs
-        
+    
     assert (chunk_pairs_obj.span_size_ids+1).tolist() == [[he-hs, te-ts] for (hl, hs, he), (tl, ts, te) in chunk_pairs_obj.chunk_pairs]
     
     chunk_pair2rel_label = {(head, tail): rel_label for rel_label, head, tail in relations}
