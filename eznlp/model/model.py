@@ -210,14 +210,14 @@ class Model(torch.nn.Module):
     def _get_full_hidden(self, batch: Batch):
         full_hidden = []
         
-        if any([hasattr(self, name) for name in ModelConfig._embedder_names]):
+        if any([hasattr(self, name) for name in self._embedder_names]):
             embedded = self._get_full_embedded(batch)
             if hasattr(self, 'intermediate1'):
                 full_hidden.append(self.intermediate1(embedded, batch.mask))
             else:
                 full_hidden.append(embedded)
         
-        for name in ModelConfig._pretrained_names:
+        for name in self._pretrained_names:
             if hasattr(self, name):
                 full_hidden.append(getattr(self, name)(**getattr(batch, name)))
         
