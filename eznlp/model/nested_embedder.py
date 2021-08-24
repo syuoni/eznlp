@@ -18,7 +18,7 @@ class NestedOneHotConfig(OneHotConfig):
     If multiple sequences exist, they share a common vocabulary and corresponding embedding layer.
     """
     def __init__(self, **kwargs):
-        self.entry_key = kwargs.pop('entry_key', 'tokens')
+        self.tokens_key = kwargs.pop('tokens_key', 'tokens')
         self.num_channels = kwargs.pop('num_channels', 1)
         self.squeeze = kwargs.pop('squeeze', True)
         if self.squeeze:
@@ -58,7 +58,7 @@ class NestedOneHotConfig(OneHotConfig):
         counter = Counter()
         for data in partitions:
             for data_entry in data:
-                for inner_seq in self._inner_sequences(data_entry[self.entry_key]):
+                for inner_seq in self._inner_sequences(data_entry[self.tokens_key]):
                     counter.update(inner_seq)
         self.vocab = torchtext.vocab.Vocab(counter, 
                                            min_freq=self.min_freq, 
@@ -173,7 +173,7 @@ class SoftLexiconConfig(NestedOneHotConfig):
         counter = Counter()
         for data in partitions:
             for data_entry in data:
-                for inner_seq in self._inner_sequences(data_entry[self.entry_key]):
+                for inner_seq in self._inner_sequences(data_entry[self.tokens_key]):
                     counter.update(inner_seq)
         
         # NOTE: Set the minimum frequecy as 1, to avoid OOV tokens being ignored

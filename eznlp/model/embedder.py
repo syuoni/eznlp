@@ -17,7 +17,7 @@ class OneHotConfig(Config):
     """Config of an one-hot embedder.
     """
     def __init__(self, **kwargs):
-        self.entry_key = kwargs.pop('entry_key', 'tokens')
+        self.tokens_key = kwargs.pop('tokens_key', 'tokens')
         self.field = kwargs.pop('field')
         self.vocab = kwargs.pop('vocab', None)
         self.has_sos = kwargs.pop('has_sos', False)
@@ -90,7 +90,7 @@ class OneHotConfig(Config):
         counter = Counter()
         for data in partitions:
             for entry in data:
-                counter.update(self._get_field(entry[self.entry_key]))
+                counter.update(self._get_field(entry[self.tokens_key]))
         self.vocab = torchtext.vocab.Vocab(counter, 
                                            min_freq=self.min_freq, 
                                            specials=self.specials, 
