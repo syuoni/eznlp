@@ -43,7 +43,7 @@ class SpanClassificationDecoderMixin(DecoderMixin):
     def retrieve(self, batch: Batch):
         return [spans_obj.chunks for spans_obj in batch.spans_objs]
         
-    def evaluate(self, y_gold: List[tuple], y_pred: List[tuple]):
+    def evaluate(self, y_gold: List[List[tuple]], y_pred: List[List[tuple]]):
         """Micro-F1 for entity recognition. 
         
         References

@@ -48,7 +48,7 @@ class SequenceTaggingDecoderMixin(DecoderMixin):
     def retrieve(self, batch: Batch):
         return [tags_obj.chunks for tags_obj in batch.tags_objs]
         
-    def evaluate(self, y_gold: List[tuple], y_pred: List[tuple]):
+    def evaluate(self, y_gold: List[List[tuple]], y_pred: List[List[tuple]]):
         """Micro-F1 for entity recognition. 
         
         References

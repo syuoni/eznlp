@@ -60,7 +60,7 @@ class SpanRelClassificationDecoderMixin(DecoderMixin):
     def retrieve(self, batch: Batch):
         return [chunk_pairs_obj.relations for chunk_pairs_obj in batch.chunk_pairs_objs]
         
-    def evaluate(self, y_gold: List[tuple], y_pred: List[tuple]):
+    def evaluate(self, y_gold: List[List[tuple]], y_pred: List[List[tuple]]):
         scores, ave_scores = precision_recall_f1_report(y_gold, y_pred)
         return ave_scores['micro']['f1']
         

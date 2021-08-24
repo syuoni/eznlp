@@ -42,7 +42,7 @@ class BoundarySelectionDecoderMixin(DecoderMixin):
     def retrieve(self, batch: Batch):
         return [boundaries_obj.chunks for boundaries_obj in batch.boundaries_objs]
         
-    def evaluate(self, y_gold: List[tuple], y_pred: List[tuple]):
+    def evaluate(self, y_gold: List[List[tuple]], y_pred: List[List[tuple]]):
         """Micro-F1 for entity recognition. 
         
         References
