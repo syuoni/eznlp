@@ -46,21 +46,30 @@ class OptionSampler(object):
         
         
     def evenly_sample(self, num_options):
-        zip_options = [[self._parse_argument(arg_name, arg_value) for arg_value in self._evenly_sample_values(arg_range, num_options)] 
+        assert num_options < self.num_possible_options
+        # Sample redundant options, and remove duplicate option combinations later
+        redundant_num_options = num_options + max(int(num_options*0.1), 5)
+        zip_options = [[self._parse_argument(arg_name, arg_value) for arg_value in self._evenly_sample_values(arg_range, redundant_num_options)] 
                             for arg_name, arg_range in self.__dict__.items()]
-        return list(zip(*zip_options))
+        options = list(set(zip(*zip_options)))
+        if len(options) <= num_options:
+            return options
+        else:
+            return random.sample(options, num_options)
+        
         
     def fully_sample(self):
         option_space = [[self._parse_argument(arg_name, arg_value) for arg_value in arg_range] 
                              for arg_name, arg_range in self.__dict__.items()]
-        full_options = list(itertools.product(*option_space))
-        assert len(full_options) == self.num_possible_options
-        return full_options
+        return list(itertools.product(*option_space))
+        
         
     def randomly_sample(self, num_options):
+        assert num_options < self.num_possible_options
         # Chooses k unique random elements from a population
         # All sub-slices will also be valid random samples
         return random.sample(self.fully_sample(), num_options)
+        
         
     def sample(self, num_options=None):
         if num_options is None or num_options >= self.num_possible_options:
@@ -74,17 +83,3 @@ class OptionSampler(object):
             # `num_options` is much smaller than `num_possible_options`, avoid unbalanced sampling for a specific argument
             logger.info(f"Sampling evenly {num_options}/{self.num_possible_options} options...")
             return self.evenly_sample(num_options)
-
-
-
-if __name__ == '__main__':
-    import numpy
-    logging.basicConfig(level=logging.INFO)
-    sampler = OptionSampler(num_epochs=[50, 100], 
-                            batch_size=32,
-                            lr=numpy.logspace(-3, -5, num=9, base=10).tolist(), 
-                            arch=['LSTM', 'CNN'],
-                            fs=None, 
-                            no_bert=[True, False])
-    for option in sampler.sample(100):
-        print(option)
