@@ -16,9 +16,7 @@ from eznlp.token import LexiconTokenizer
 from eznlp.vectors import Vectors
 from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO, BratIO
 from eznlp.io import PostIO
-from eznlp.training import Trainer
-from eznlp.training.utils import LRLambda
-from eznlp.training.utils import collect_params, check_param_groups
+from eznlp.training import Trainer, LRLambda, collect_params, check_param_groups
 
 logger = logging.getLogger(__name__)
 

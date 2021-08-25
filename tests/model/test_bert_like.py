@@ -10,7 +10,7 @@ import torch
 from eznlp.token import TokenSequence
 from eznlp.model import BertLikeConfig
 from eznlp.model.bert_like import truncate_for_bert_like, segment_uniformly_for_bert_like, _tokenized2nested
-from eznlp.training.utils import count_params
+from eznlp.training import count_params
 from eznlp.io import TabularIO
 
 

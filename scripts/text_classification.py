@@ -18,9 +18,7 @@ from eznlp.model import ELMoConfig, BertLikeConfig, FlairConfig
 from eznlp.model import TextClassificationDecoderConfig
 from eznlp.model import ClassifierConfig
 from eznlp.model.bert_like import truncate_for_bert_like
-from eznlp.training import Trainer
-from eznlp.training.utils import count_params
-from eznlp.training.evaluation import evaluate_text_classification
+from eznlp.training import Trainer, count_params, evaluate_text_classification
 
 from utils import add_base_arguments, parse_to_args
 from utils import load_data, dataset2language, load_pretrained, build_trainer, header_format

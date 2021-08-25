@@ -4,7 +4,7 @@ import os
 import torch
 
 from eznlp.model import ELMoConfig
-from eznlp.training.utils import count_params
+from eznlp.training import count_params
 
 
 @pytest.mark.parametrize("mix_layers", ['trainable', 'top', 'average'])

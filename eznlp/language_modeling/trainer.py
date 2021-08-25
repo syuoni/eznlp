@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import torch
-from ..training.trainer import Trainer
+from ..training import Trainer
 
 
 class MaskedLMTrainer(Trainer):

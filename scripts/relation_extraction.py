@@ -13,9 +13,7 @@ from eznlp import auto_device
 from eznlp.dataset import Dataset
 from eznlp.model import SpanRelClassificationDecoderConfig
 from eznlp.model import ExtractorConfig
-from eznlp.training import Trainer
-from eznlp.training.utils import count_params
-from eznlp.training.evaluation import evaluate_relation_extraction
+from eznlp.training import Trainer, count_params, evaluate_relation_extraction
 
 from utils import add_base_arguments, parse_to_args
 from utils import load_data, dataset2language, load_pretrained, build_trainer, header_format

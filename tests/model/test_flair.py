@@ -6,7 +6,7 @@ import flair
 
 from eznlp.token import TokenSequence
 from eznlp.model import FlairConfig
-from eznlp.training.utils import count_params
+from eznlp.training import count_params
 
 
 @pytest.mark.parametrize("agg_mode", ['last', 'mean'])
