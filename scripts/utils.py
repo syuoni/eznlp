@@ -95,7 +95,6 @@ def add_base_arguments(parser: argparse.ArgumentParser):
                            help="dropout rate for BERT")
     parser_ft.add_argument('--use_interm2', default=False, action='store_true', 
                            help="whether to use intermediate2")
-    
     return parser
 
 
@@ -128,7 +127,9 @@ dataset2language = {'conll2003': 'English',
                     'imdb': 'English', 
                     'yelp_full': 'English', 
                     'ChnSentiCorp': 'Chinese', 
-                    'THUCNews_10': 'Chinese'}
+                    'THUCNews_10': 'Chinese', 
+                    'flickr8k': 'English', 
+                    'flickr30k': 'English'}
 
 def load_data(args: argparse.Namespace):
     if args.dataset == 'conll2003':
@@ -268,6 +269,24 @@ def load_data(args: argparse.Namespace):
         train_data = tabular_io.read("data/THUCNews-10/cnews.train.txt")
         dev_data   = tabular_io.read("data/THUCNews-10/cnews.val.txt")
         test_data  = tabular_io.read("data/THUCNews-10/cnews.test.txt")
+        
+    elif args.dataset == 'flickr8k':
+        io = TabularIO(text_col_id=1, label_col_id=0, sep='\t', verbose=args.log_terminal, case_mode='None', number_mode='None')
+        data = io.read("data/flickr8k/Flickr8k.token.txt")
+        for entry in data:
+            entry['trg_tokens'] = entry.pop('tokens')
+            entry['img_fn'], entry['cap_no'] = entry.pop('label').split('#')
+        
+        with open("data/flickr8k/Flickr_8k.trainImages.txt") as f:
+            train_fns = set([line.strip() for line in f])
+        with open("data/flickr8k/Flickr_8k.devImages.txt") as f:
+            dev_fns = set([line.strip() for line in f])
+        with open("data/flickr8k/Flickr_8k.testImages.txt") as f:
+            test_fns = set([line.strip() for line in f])
+            
+        train_data = [entry for entry in data if entry['img_fn'] in train_fns]
+        dev_data   = [entry for entry in data if entry['img_fn'] in dev_fns]
+        test_data  = [entry for entry in data if entry['img_fn'] in test_fns]
         
     else:
         raise Exception("Dataset does NOT exist", args.dataset)
