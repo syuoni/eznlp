@@ -47,7 +47,7 @@ from eznlp.language_modeling import MaskedLMConfig
 from eznlp.language_modeling import MaskedLMDataset, FolderLikeMaskedLMDataset, MaskedLMTrainer
 
 from eznlp.training import Trainer
-from eznlp.training.utils import collect_params, check_param_groups
+from eznlp.training import collect_params, check_param_groups
 
 
 

@@ -68,7 +68,9 @@ if __name__ == '__main__':
         
     elif args.task == 'entity_recognition' and args.language.lower() == 'english':
         if args.command in ('fs', 'from_scratch'):
-            sampler = OptionSampler(num_epochs=100, 
+            sampler = OptionSampler(doc_level=True, 
+                                    train_with_dev=False, 
+                                    num_epochs=100, 
                                     optimizer=['SGD'], lr=[0.1], 
                                     batch_size=32, 
                                     num_layers=[1, 2], 
