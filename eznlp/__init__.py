@@ -3,6 +3,12 @@ import torch
 import flair
 flair.device = torch.device('cpu')
 
-__version__ = '0.2.1rc1'
+__version__ = '0.2.1'
 
-from .training.utils import auto_device
+from .training import auto_device
+
+from eznlp import io
+from eznlp import nn
+from eznlp import model
+from eznlp import training
+from eznlp import utils

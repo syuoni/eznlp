@@ -152,13 +152,13 @@ _number_normalizers = {'none': lambda x: x,
                        'zeros': lambda x: digit_re.sub('0', x)}
 
 
-def _pipline(*normalizers):
-    def pipline_normalizer(x):
+def _pipeline(*normalizers):
+    def pipeline_normalizer(x):
         for f in normalizers:
             x = f(x)
         return x
     
-    return pipline_normalizer
+    return pipeline_normalizer
 
 
 class Token(object):
@@ -181,11 +181,11 @@ class Token(object):
         if callable(pre_text_normalizer):
             self.raw_text = pre_text_normalizer(self.raw_text)
             
-        pipline_normalizer = _pipline(_case_normalizers[case_mode.lower()], 
-                                      _number_normalizers[number_mode.lower()], 
-                                      lambda x: Full2Half.full2half(x) if to_half else x, 
-                                      lambda x: hanziconv.HanziConv.toSimplified(x) if to_zh_simplified else x)
-        self.text = pipline_normalizer(self.raw_text)
+        pipeline_normalizer = _pipeline(_case_normalizers[case_mode.lower()], 
+                                        _number_normalizers[number_mode.lower()], 
+                                        lambda x: Full2Half.full2half(x) if to_half else x, 
+                                        lambda x: hanziconv.HanziConv.toSimplified(x) if to_zh_simplified else x)
+        self.text = pipeline_normalizer(self.raw_text)
         if callable(post_text_normalizer):
             self.text = post_text_normalizer(self.text)
         

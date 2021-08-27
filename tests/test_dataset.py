@@ -5,7 +5,7 @@ import torch
 from eznlp.token import Token
 from eznlp.dataset import Dataset
 from eznlp.config import ConfigDict
-from eznlp.model import OneHotConfig, MultiHotConfig, ModelConfig
+from eznlp.model import OneHotConfig, MultiHotConfig, ExtractorConfig
 
 
 def test_batch_to_cuda(conll2003_demo, device):
@@ -13,9 +13,9 @@ def test_batch_to_cuda(conll2003_demo, device):
         pytest.skip("test requires cuda, while current session runs on cpu")
         
     torch.cuda.set_device(device)
-    config = ModelConfig('sequence_tagging', 
-                         ohots=ConfigDict({f: OneHotConfig(field=f, emb_dim=20) for f in Token._basic_ohot_fields}), 
-                         mhots=ConfigDict({f: MultiHotConfig(field=f, emb_dim=20) for f in Token._basic_mhot_fields}))
+    config = ExtractorConfig('sequence_tagging', 
+                             ohots=ConfigDict({f: OneHotConfig(field=f, emb_dim=20) for f in Token._basic_ohot_fields}), 
+                             mhots=ConfigDict({f: MultiHotConfig(field=f, emb_dim=20) for f in Token._basic_mhot_fields}))
     dataset = Dataset(conll2003_demo, config)
     dataset.build_vocabs_and_dims()
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=4, shuffle=True, collate_fn=dataset.collate, pin_memory=True)
@@ -36,7 +36,7 @@ def test_batch_to_cuda(conll2003_demo, device):
 
 
 def test_batches(conll2003_demo, device):
-    dataset = Dataset(conll2003_demo, ModelConfig('sequence_tagging'))
+    dataset = Dataset(conll2003_demo, ExtractorConfig('sequence_tagging'))
     dataset.build_vocabs_and_dims()
     
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=4, shuffle=True, collate_fn=dataset.collate)

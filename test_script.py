@@ -40,15 +40,14 @@ from eznlp.model import (TextClassificationDecoderConfig,
                          SpanAttrClassificationDecoderConfig, 
                          SpanRelClassificationDecoderConfig, 
                          BoundarySelectionDecoderConfig, 
-                         JointERREDecoderConfig, 
                          JointExtractionDecoderConfig)
-from eznlp.model import ModelConfig
+from eznlp.model import ExtractorConfig
 
 from eznlp.language_modeling import MaskedLMConfig
 from eznlp.language_modeling import MaskedLMDataset, FolderLikeMaskedLMDataset, MaskedLMTrainer
 
 from eznlp.training import Trainer
-from eznlp.training.utils import collect_params, check_param_groups
+from eznlp.training import collect_params, check_param_groups
 
 
 
@@ -56,6 +55,10 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     device = auto_device()
     
+    with open("data/multi30k/train.de", encoding='utf-8') as f:
+        txt = f.readlines()
+        print(len(txt))
+
     # batch_tokenized_raw_text = [["I", "like", "it", "."], 
     #                             ["Do", "you", "love", "me", "?"], 
     #                             ["Sure", "!"], 
@@ -86,79 +89,25 @@ if __name__ == '__main__':
     # dev_data   = conll_io.read("data/conll2003/demo.eng.testa")
     # test_data  = conll_io.read("data/conll2003/demo.eng.testb")
     
-    # config = ModelConfig('sequence_tagging', 
-    #                       ohots=ConfigDict({'text': OneHotConfig(field='text', vectors=glove)}), 
-    #                       nested_ohots=ConfigDict({'char': CharConfig()}), 
-    #                       elmo=ELMoConfig(elmo=elmo), 
-    #                       bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert), 
-    #                       flair_fw=FlairConfig(flair_lm=flair_fw_lm), 
-    #                       flair_bw=FlairConfig(flair_lm=flair_bw_lm))
+    # config = ExtractorConfig('sequence_tagging', 
+    #                          ohots=ConfigDict({'text': OneHotConfig(field='text', vectors=glove)}), 
+    #                          nested_ohots=ConfigDict({'char': CharConfig()}), 
+    #                          elmo=ELMoConfig(elmo=elmo), 
+    #                          bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert), 
+    #                          flair_fw=FlairConfig(flair_lm=flair_fw_lm), 
+    #                          flair_bw=FlairConfig(flair_lm=flair_bw_lm))
     
     # train_set = Dataset(train_data, config)
     # train_set.build_vocabs_and_dims(dev_data, test_data)
     # model = config.instantiate()
     
     # batch = train_set.collate([train_set[i] for i in range(0, 4)])
-    # losses, hidden = model(batch, return_hidden=True)
+    # losses, states = model(batch, return_states=True)
     
     # optimizer = torch.optim.AdamW(model.parameters())
     # trainer = Trainer(model, optimizer=optimizer, device=device)
     # res = trainer.train_epoch([batch])
     
-    
-    
-    # brat_io = BratIO(attr_names=['Denied', 'Analyzed'], tokenize_callback=jieba.cut, max_len=50, encoding='utf-8')
-    # brat_data = brat_io.read("data/HwaMei/demo.txt")
-    # brat_io.write(brat_data, "data/HwaMei/demo-write.txt")
-    
-    # brat_set = Dataset(brat_data, ModelConfig('sequence_tagging'))
-    # brat_set.build_vocabs_and_dims()
-    # batch = brat_set.collate([brat_set[i] for i in range(0, 4)])
-    
-    # model = brat_set.config.instantiate()
-    # losses, hidden = model(batch, return_hidden=True)
-    
-    
-    
-    # tabular_io = TabularIO(text_col_id=3, label_col_id=2, sep="\t\t", mapping={"<sssss>": "\n"}, encoding='utf-8')
-    # train_data = tabular_io.read("data/Tang2015/demo.yelp-2013-seg-20-20.train.ss")
-    
-    # config = ModelConfig('text_classification', 
-    #                       ohots=None, 
-    #                       intermediate2=None,
-    #                       bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert))
-    
-    # train_set = Dataset(train_data, config)
-    # train_set.build_vocabs_and_dims()
-    # model = config.instantiate()
-    
-    # batch = train_set.collate([train_set[i] for i in range(0, 4)])
-    # losses, hidden = model(batch, return_hidden=True)
-    
-    # optimizer = torch.optim.AdamW(model.parameters())
-    # trainer = Trainer(model, optimizer=optimizer, device=device)
-    # trainer.train_epoch([batch])
-    
-    # json_io = JsonIO(text_key='tokens', 
-    #                  chunk_key='entities', 
-    #                  chunk_type_key='type', 
-    #                  chunk_start_key='start', 
-    #                  chunk_end_key='end', 
-    #                  relation_key='relations', 
-    #                  relation_type_key='type', 
-    #                  relation_head_key='head', 
-    #                  relation_tail_key='tail')
-    # train_data = json_io.read("data/conll2004/conll04_train.json")
-    
-    # config = ModelConfig('joint')
-    # train_set = Dataset(train_data, config)
-    # train_set.build_vocabs_and_dims()
-    
-    # model = config.instantiate()
-    
-    # batch = train_set.collate([train_set[i] for i in range(4)])
-    # model(batch)
-    # model.decode(batch)
     
     # for model_name in ["hfl/chinese-macbert-base", "hfl/chinese-macbert-large"]:
     #     logging.info(f"Start downloading {model_name}...")

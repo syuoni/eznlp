@@ -8,16 +8,15 @@ import torch
 from ...wrapper import TargetWrapper, Batch
 from ...utils.chunk import detect_nested, filter_clashed_by_priority
 from ...nn.modules import SequencePooling, SequenceAttention, CombinedDropout
-from ...nn.modules import SmoothLabelCrossEntropyLoss, FocalLoss
 from ...nn.functional import seq_lens2mask
 from ...nn.init import reinit_embedding_, reinit_layer_
 from ...metrics import precision_recall_f1_report
-from .base import DecoderMixin, DecoderConfig, Decoder
+from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
 
 logger = logging.getLogger(__name__)
 
 
-class SpanClassificationDecoderMixin(DecoderMixin):
+class SpanClassificationDecoderMixin(DecoderMixinBase):
     @property
     def idx2label(self):
         return self._idx2label
@@ -44,7 +43,7 @@ class SpanClassificationDecoderMixin(DecoderMixin):
     def retrieve(self, batch: Batch):
         return [spans_obj.chunks for spans_obj in batch.spans_objs]
         
-    def evaluate(self, y_gold: List[tuple], y_pred: List[tuple]):
+    def evaluate(self, y_gold: List[List[tuple]], y_pred: List[List[tuple]]):
         """Micro-F1 for entity recognition. 
         
         References
@@ -94,7 +93,7 @@ class Spans(TargetWrapper):
 
 
 
-class SpanClassificationDecoderConfig(DecoderConfig, SpanClassificationDecoderMixin):
+class SpanClassificationDecoderConfig(SingleDecoderConfigBase, SpanClassificationDecoderMixin):
     def __init__(self, **kwargs):
         self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
         
@@ -103,12 +102,6 @@ class SpanClassificationDecoderConfig(DecoderConfig, SpanClassificationDecoderMi
         self.size_emb_dim = kwargs.pop('size_emb_dim', 25)
         
         self.agg_mode = kwargs.pop('agg_mode', 'max_pooling')
-        self.criterion = kwargs.pop('criterion', 'CE')
-        assert self.criterion.lower() in ('ce', 'fl', 'sl')
-        if self.criterion.lower() == 'fl':
-            self.gamma = kwargs.pop('gamma', 2.0)
-        elif self.criterion.lower() == 'sl':
-            self.epsilon = kwargs.pop('epsilon', 0.1)
         
         self.none_label = kwargs.pop('none_label', '<none>')
         self.idx2label = kwargs.pop('idx2label', None)
@@ -147,7 +140,7 @@ class SpanClassificationDecoderConfig(DecoderConfig, SpanClassificationDecoderMi
 
 
 
-class SpanClassificationDecoder(Decoder, SpanClassificationDecoderMixin):
+class SpanClassificationDecoder(DecoderBase, SpanClassificationDecoderMixin):
     def __init__(self, config: SpanClassificationDecoderConfig):
         super().__init__()
         self.none_label = config.none_label
@@ -158,7 +151,7 @@ class SpanClassificationDecoder(Decoder, SpanClassificationDecoderMixin):
             self.aggregating = SequencePooling(mode=config.agg_mode.replace('_pooling', ''))
         elif config.agg_mode.lower().endswith('_attention'):
             self.aggregating = SequenceAttention(config.in_dim, scoring=config.agg_mode.replace('_attention', ''))
-
+        
         if config.size_emb_dim > 0:
             self.size_embedding = torch.nn.Embedding(config.max_span_size, config.size_emb_dim)
             reinit_embedding_(self.size_embedding)
@@ -167,12 +160,7 @@ class SpanClassificationDecoder(Decoder, SpanClassificationDecoderMixin):
         self.hid2logit = torch.nn.Linear(config.in_dim+config.size_emb_dim, config.voc_dim)
         reinit_layer_(self.hid2logit, 'sigmoid')
         
-        if config.criterion.lower() == 'fl':
-            self.criterion = FocalLoss(gamma=config.gamma, reduction='sum')
-        elif config.criterion.lower() == 'sl':
-            self.criterion = SmoothLabelCrossEntropyLoss(epsilon=config.epsilon, reduction='sum')
-        else:
-            self.criterion = torch.nn.CrossEntropyLoss(reduction='sum')
+        self.criterion = config.instantiate_criterion(reduction='sum')
         
         
     def get_logits(self, batch: Batch, full_hidden: torch.Tensor):
@@ -184,7 +172,7 @@ class SpanClassificationDecoder(Decoder, SpanClassificationDecoderMixin):
             span_mask = seq_lens2mask(torch.tensor([h.size(0) for h in span_hidden], dtype=torch.long, device=full_hidden.device))
             span_hidden = torch.nn.utils.rnn.pad_sequence(span_hidden, batch_first=True, padding_value=0.0)
             span_hidden = self.aggregating(self.dropout(span_hidden), mask=span_mask)
-
+            
             if hasattr(self, 'size_embedding'):
                 # size_embedded: (num_spans, emb_dim)
                 size_embedded = self.size_embedding(batch.spans_objs[k].span_size_ids)

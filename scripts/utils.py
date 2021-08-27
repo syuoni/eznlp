@@ -16,9 +16,7 @@ from eznlp.token import LexiconTokenizer
 from eznlp.vectors import Vectors
 from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO, BratIO
 from eznlp.io import PostIO
-from eznlp.training import Trainer
-from eznlp.training.utils import LRLambda
-from eznlp.training.utils import collect_params, check_param_groups
+from eznlp.training import Trainer, LRLambda, collect_params, check_param_groups
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +33,8 @@ def add_base_arguments(parser: argparse.ArgumentParser):
                              help="random seed")
     group_train.add_argument('--use_amp', default=False, action='store_true', 
                              help="whether to use amp")
+    group_train.add_argument('--train_with_dev', default=False, action='store_true', 
+                             help="whether to train with development set")
     group_train.add_argument('--num_epochs', type=int, default=100, 
                              help="number of epochs")
     group_train.add_argument('--batch_size', type=int, default=64, 
@@ -121,6 +121,7 @@ dataset2language = {'conll2003': 'English',
                     'WeiboNER': 'Chinese', 
                     'SIGHAN2006': 'Chinese', 
                     'conll2012_zh': 'Chinese', 
+                    'ontonotesv4_zh': 'Chinese',
                     'yidu_s4k': 'Chinese', 
                     'CLERD': 'Chinese', 
                     'yelp2013': 'English', 
@@ -131,16 +132,22 @@ dataset2language = {'conll2003': 'English',
 
 def load_data(args: argparse.Namespace):
     if args.dataset == 'conll2003':
-        conll_io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', case_mode='None', number_mode='Zeros')
-        train_data = conll_io.read("data/conll2003/eng.train")
-        dev_data   = conll_io.read("data/conll2003/eng.testa")
-        test_data  = conll_io.read("data/conll2003/eng.testb")
+        if getattr(args, 'doc_level', False):
+            io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', document_sep_starts=["-DOCSTART-"], document_level=True, case_mode='None', number_mode='Zeros')
+        else:
+            io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', case_mode='None', number_mode='Zeros')
+        train_data = io.read("data/conll2003/eng.train")
+        dev_data   = io.read("data/conll2003/eng.testa")
+        test_data  = io.read("data/conll2003/eng.testb")
         
     elif args.dataset == 'conll2012':
-        conll_io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', line_sep_starts=["#begin", "#end", "pt/"], encoding='utf-8', case_mode='None', number_mode='Zeros')
-        train_data = conll_io.read("data/conll2012/train.english.v4_gold_conll")
-        dev_data   = conll_io.read("data/conll2012/dev.english.v4_gold_conll")
-        test_data  = conll_io.read("data/conll2012/test.english.v4_gold_conll")
+        if getattr(args, 'doc_level', False):
+            io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end", "pt/"], document_sep_starts=["#begin"], document_level=True, encoding='utf-8', case_mode='None', number_mode='Zeros')
+        else:
+            io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end", "pt/"], document_sep_starts=["#begin"], encoding='utf-8', case_mode='None', number_mode='Zeros')
+        train_data = io.read("data/conll2012/train.english.v4_gold_conll")
+        dev_data   = io.read("data/conll2012/dev.english.v4_gold_conll")
+        test_data  = io.read("data/conll2012/test.english.v4_gold_conll")
         
     elif args.dataset == 'conll2004':
         json_io = JsonIO(text_key='tokens', 
@@ -180,7 +187,7 @@ def load_data(args: argparse.Namespace):
         test_data  = conll_io.read("data/SIGHAN2006/test.txt")
         
     elif args.dataset == 'conll2012_zh':
-        conll_io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', line_sep_starts=["#begin", "#end", "pt/"], encoding='utf-8', token_sep="", pad_token="")
+        conll_io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end"], document_sep_starts=["#begin"], encoding='utf-8', token_sep="", pad_token="")
         train_data = conll_io.read("data/conll2012/train.chinese.v4_gold_conll")
         dev_data   = conll_io.read("data/conll2012/dev.chinese.v4_gold_conll")
         test_data  = conll_io.read("data/conll2012/test.chinese.v4_gold_conll")
@@ -188,6 +195,21 @@ def load_data(args: argparse.Namespace):
         dev_data   = conll_io.flatten_to_characters(dev_data)
         test_data  = conll_io.flatten_to_characters(test_data)
         
+    elif args.dataset == 'ontonotesv4_zh':
+        io = ConllIO(text_col_id=2, tag_col_id=3, scheme='OntoNotes', sentence_sep_starts=["#end"], document_sep_starts=["#begin"], encoding='utf-8', token_sep="", pad_token="")
+        train_data = io.read("data/ontonotesv4/train.chinese.vz_gold_conll")
+        dev_data   = io.read("data/ontonotesv4/dev.chinese.vz_gold_conll")
+        test_data  = io.read("data/ontonotesv4/test.chinese.vz_gold_conll")
+        train_data = io.flatten_to_characters(train_data)
+        dev_data   = io.flatten_to_characters(dev_data)
+        test_data  = io.flatten_to_characters(test_data)
+        # Che et al. (2013)
+        # we selected the four most common named entity types, i.e., 
+        # PER (Person), LOC (Location), ORG (Organization) and GPE (Geo-Political Entities), and discarded the others.
+        for data in [train_data, dev_data, test_data]:
+            for entry in data:
+                entry['chunks'] = [ck for ck in entry['chunks'] if ck[0] in ('PERSON', 'LOC', 'ORG', 'GPE')]
+
     elif args.dataset == 'yidu_s4k':
         io = JsonIO(is_tokenized=False, tokenize_callback='char', 
                     text_key='originalText', chunk_key='entities', chunk_type_key='label_type', chunk_start_key='start_pos', chunk_end_key='end_pos', 
@@ -273,9 +295,11 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
         return allennlp.modules.Elmo(options_file="assets/allennlp/elmo_2x4096_512_2048cnn_2xhighway_options.json", 
                                      weight_file="assets/allennlp/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5", 
                                      num_output_representations=1)
+    
     elif pretrained_str.lower() == 'flair':
         return (flair.models.LanguageModel.load_language_model("assets/flair/news-forward-0.4.1.pt"), 
                 flair.models.LanguageModel.load_language_model("assets/flair/news-backward-0.4.1.pt"))
+    
     elif args.language.lower() == 'english':
         if pretrained_str.lower().startswith('bert'):
             if 'wwm' in pretrained_str.lower():

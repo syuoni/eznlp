@@ -86,8 +86,7 @@ class EncoderConfig(Config):
 
 
 class Encoder(torch.nn.Module):
-    """
-    `Encoder` forwards from embeddings to hidden states. 
+    """`Encoder` forwards from embeddings to hidden states. 
     """
     def __init__(self, config: EncoderConfig):
         super().__init__()

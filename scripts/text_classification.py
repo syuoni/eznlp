@@ -16,11 +16,9 @@ from eznlp.config import ConfigDict
 from eznlp.model import OneHotConfig, EncoderConfig
 from eznlp.model import ELMoConfig, BertLikeConfig, FlairConfig
 from eznlp.model import TextClassificationDecoderConfig
-from eznlp.model import ModelConfig
+from eznlp.model import ClassifierConfig
 from eznlp.model.bert_like import truncate_for_bert_like
-from eznlp.training import Trainer
-from eznlp.training.utils import count_params
-from eznlp.training.evaluation import evaluate_text_classification
+from eznlp.training import Trainer, count_params, evaluate_text_classification
 
 from utils import add_base_arguments, parse_to_args
 from utils import load_data, dataset2language, load_pretrained, build_trainer, header_format
@@ -107,7 +105,7 @@ def collect_TC_assembly_config(args: argparse.Namespace):
 def build_TC_config(args: argparse.Namespace):
     drop_rates = (0.0, 0.05, args.drop_rate) if args.use_locked_drop else (args.drop_rate, 0.0, 0.0)
     decoder_config = TextClassificationDecoderConfig(agg_mode=args.agg_mode, in_drop_rates=drop_rates)
-    return ModelConfig(**collect_TC_assembly_config(args), decoder=decoder_config)
+    return ClassifierConfig(**collect_TC_assembly_config(args), decoder=decoder_config)
 
 
 if __name__ == '__main__':
@@ -180,12 +178,10 @@ if __name__ == '__main__':
     trainer = Trainer(model, device=device)
     
     logger.info("Evaluating on dev-set")
-    evaluate_text_classification(trainer, dev_set)
+    evaluate_text_classification(trainer, dev_set, batch_size=args.batch_size)
     logger.info("Evaluating on test-set")
-    evaluate_text_classification(trainer, test_set)
+    evaluate_text_classification(trainer, test_set, batch_size=args.batch_size)
     
     logger.info(" ".join(sys.argv))
     logger.info(pprint.pformat(args.__dict__))
     logger.info(header_format("Ending", sep='='))
-    
-    

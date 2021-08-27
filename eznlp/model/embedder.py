@@ -14,9 +14,14 @@ logger = logging.getLogger(__name__)
 
 
 class OneHotConfig(Config):
+    """Config of an one-hot embedder.
+    """
     def __init__(self, **kwargs):
+        self.tokens_key = kwargs.pop('tokens_key', 'tokens')
         self.field = kwargs.pop('field')
         self.vocab = kwargs.pop('vocab', None)
+        self.has_sos = kwargs.pop('has_sos', False)
+        self.has_eos = kwargs.pop('has_eos', False)
         self.min_freq = kwargs.pop('min_freq', 1)
         
         self.emb_dim = kwargs.pop('emb_dim', 100)
@@ -49,42 +54,61 @@ class OneHotConfig(Config):
         return len(self.vocab)
         
     @property
+    def specials(self):
+        return tuple(tok for tok, has_tok in zip(['<unk>', '<pad>', '<sos>', '<eos>'], [True, True, self.has_sos, self.has_eos]) if has_tok)
+        
+    @property
     def pad_idx(self):
         return self.vocab['<pad>']
         
     @property
     def unk_idx(self):
         return self.vocab['<unk>']
-    
+        
+    @property
+    def sos_idx(self):
+        return self.vocab['<sos>']
+        
+    @property
+    def eos_idx(self):
+        return self.vocab['<eos>']
+        
     def __getstate__(self):
         state = self.__dict__.copy()
         state['vectors'] = None
         return state
         
-    
+    def _get_field(self, tokens: TokenSequence):
+        x_list = getattr(tokens, self.field)
+        if self.has_sos:
+            x_list = ['<sos>'] + x_list
+        if self.has_eos:
+            x_list = x_list + ['<eos>']
+        return x_list
+        
     def build_vocab(self, *partitions):
         counter = Counter()
         for data in partitions:
-            for data_entry in data:
-                counter.update(getattr(data_entry['tokens'], self.field))
+            for entry in data:
+                counter.update(self._get_field(entry[self.tokens_key]))
         self.vocab = torchtext.vocab.Vocab(counter, 
                                            min_freq=self.min_freq, 
-                                           specials=('<unk>', '<pad>'), 
+                                           specials=self.specials, 
                                            specials_first=True)
         
     def exemplify(self, tokens: TokenSequence):
         # It is generally recommended to return cpu tensors in multi-process loading. 
         # See https://pytorch.org/docs/stable/data.html#single-and-multi-process-data-loading
-        return torch.tensor([self.vocab[x] for x in getattr(tokens, self.field)], dtype=torch.long)
+        return torch.tensor([self.vocab[x] for x in self._get_field(tokens)], dtype=torch.long)
     
     def batchify(self, batch_ids: List[torch.LongTensor]):
         return torch.nn.utils.rnn.pad_sequence(batch_ids, batch_first=True, padding_value=self.pad_idx)
         
     def instantiate(self):
         return OneHotEmbedder(self)
-    
-    
-    
+
+
+
 class OneHotEmbedder(torch.nn.Module):
     def __init__(self, config: OneHotConfig):
         super().__init__()
@@ -103,10 +127,12 @@ class OneHotEmbedder(torch.nn.Module):
         
     def forward(self, x_ids: torch.LongTensor):
         return self.embedding(x_ids)
-    
-    
-    
+
+
+
 class MultiHotConfig(Config):
+    """Config of a multi-hot embedder.
+    """
     def __init__(self, **kwargs):
         self.field = kwargs.pop('field')
         self.in_dim = kwargs.pop('in_dim', None)
@@ -136,8 +162,8 @@ class MultiHotConfig(Config):
     
     def instantiate(self):
         return MultiHotEmbedder(self)
-    
-    
+
+
 class MultiHotEmbedder(torch.nn.Module):
     def __init__(self, config: MultiHotConfig):
         super().__init__()
@@ -153,5 +179,3 @@ class MultiHotEmbedder(torch.nn.Module):
             return self.embedding(x_values)
         else:
             return x_values
-    
-    

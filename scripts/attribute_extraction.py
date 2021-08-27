@@ -12,10 +12,8 @@ import torch
 from eznlp import auto_device
 from eznlp.dataset import Dataset
 from eznlp.model import SpanAttrClassificationDecoderConfig
-from eznlp.model import ModelConfig
-from eznlp.training import Trainer
-from eznlp.training.utils import count_params
-from eznlp.training.evaluation import evaluate_attribute_extraction
+from eznlp.model import ExtractorConfig
+from eznlp.training import Trainer, count_params, evaluate_attribute_extraction
 
 from utils import add_base_arguments, parse_to_args
 from utils import load_data, dataset2language, load_pretrained, build_trainer, header_format
@@ -31,18 +29,19 @@ def parse_arguments(parser: argparse.ArgumentParser):
     group_data.add_argument('--pipeline_path', type=str, default="", 
                             help="path to load predicted chunks for pipeline")
     
-    group_attr_classification = parser.add_argument_group('attribute classification')
-    group_attr_classification.add_argument('--agg_mode', type=str, default='max_pooling', 
-                                           help="aggregating mode")
-    group_attr_classification.add_argument('--criterion', type=str, default='BCE', 
-                                           help="decoder loss criterion")
-    group_attr_classification.add_argument('--max_span_size', type=int, default=10, 
-                                           help="maximum span size")
-    group_attr_classification.add_argument('--ck_size_emb_dim', type=int, default=25, 
-                                           help="chunk span size embedding dim")
-    group_attr_classification.add_argument('--ck_label_emb_dim', type=int, default=25, 
-                                           help="chunk label embedding dim")
-    
+    group_decoder = parser.add_argument_group('decoder configurations')
+    group_decoder.add_argument('--attr_decoder', type=str, default='span_attr_classification', 
+                               help="attribute decoding method", choices=['span_attr_classification'])
+
+    # Span-based
+    group_decoder.add_argument('--agg_mode', type=str, default='max_pooling', 
+                               help="aggregating mode")
+    group_decoder.add_argument('--max_span_size', type=int, default=10, 
+                               help="maximum span size")
+    group_decoder.add_argument('--ck_size_emb_dim', type=int, default=25, 
+                               help="span size embedding dim")
+    group_decoder.add_argument('--ck_label_emb_dim', type=int, default=25, 
+                               help="chunk label embedding dim")
     return parse_to_args(parser)
 
 
@@ -51,13 +50,12 @@ def build_AE_config(args: argparse.Namespace):
     drop_rates = (0.0, 0.05, args.drop_rate) if args.use_locked_drop else (args.drop_rate, 0.0, 0.0)
     
     decoder_config = SpanAttrClassificationDecoderConfig(agg_mode=args.agg_mode, 
-                                                         criterion=args.criterion,
                                                          max_span_size=args.max_span_size, 
                                                          ck_size_emb_dim=args.ck_size_emb_dim, 
                                                          ck_label_emb_dim=args.ck_label_emb_dim, 
                                                          in_drop_rates=drop_rates)
     
-    return ModelConfig(**collect_IE_assembly_config(args), decoder=decoder_config)
+    return ExtractorConfig(**collect_IE_assembly_config(args), decoder=decoder_config)
 
 
 
@@ -90,7 +88,7 @@ if __name__ == '__main__':
     if device.type.startswith('cuda'):
         torch.cuda.set_device(device)
         
-    if len(args.pipline_path) > 0:
+    if len(args.pipeline_path) > 0:
         if not os.path.exists(f"{args.pipeline_path}/data-with-chunks-pred.pth"):
             raise RuntimeError("`pipeline_path` is specified but not existing")
         logger.info(f"Loading data from {args.pipeline_path} for pipeline...")
@@ -101,15 +99,24 @@ if __name__ == '__main__':
     args.language = dataset2language[args.dataset]
     config = build_AE_config(args)
     
-    train_set = Dataset(train_data, config, training=True)
-    train_set.build_vocabs_and_dims(dev_data, test_data)
-    dev_set   = Dataset(dev_data,  train_set.config, training=False)
-    test_set  = Dataset(test_data, train_set.config, training=False)
+    if not args.train_with_dev:
+        train_set = Dataset(train_data, config, training=True)
+        train_set.build_vocabs_and_dims(dev_data, test_data)
+        dev_set   = Dataset(dev_data,  train_set.config, training=False)
+        test_set  = Dataset(test_data, train_set.config, training=False)
+
+        train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
+        dev_loader   = torch.utils.data.DataLoader(dev_set,   batch_size=args.batch_size, shuffle=False, collate_fn=dev_set.collate)
+    else:
+        train_set = Dataset(train_data + dev_data, config, training=True)
+        train_set.build_vocabs_and_dims(test_data)
+        dev_set   = Dataset([],        train_set.config, training=False)
+        test_set  = Dataset(test_data, train_set.config, training=False)
+
+        train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
+        dev_loader   = None
     
     logger.info(train_set.summary)
-    train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
-    dev_loader   = torch.utils.data.DataLoader(dev_set,   batch_size=args.batch_size, shuffle=False, collate_fn=dev_set.collate)
-    
     
     logger.info(header_format("Building", sep='-'))
     model = config.instantiate().to(device)
@@ -131,9 +138,9 @@ if __name__ == '__main__':
     trainer = Trainer(model, device=device)
     
     logger.info("Evaluating on dev-set")
-    evaluate_attribute_extraction(trainer, dev_set)
+    evaluate_attribute_extraction(trainer, dev_set, batch_size=args.batch_size)
     logger.info("Evaluating on test-set")
-    evaluate_attribute_extraction(trainer, test_set)
+    evaluate_attribute_extraction(trainer, test_set, batch_size=args.batch_size)
     
     logger.info(" ".join(sys.argv))
     logger.info(pprint.pformat(args.__dict__))

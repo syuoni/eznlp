@@ -54,10 +54,29 @@ class TestConllIO(object):
         
         self._assert_flatten_consistency(test_data)
         
+
+    def test_conll2003_at_doc_level(self):
+        self.io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', document_sep_starts=["-DOCSTART-"], document_level=True)
+        train_data = self.io.read("data/conll2003/eng.train")
+        dev_data   = self.io.read("data/conll2003/eng.testa")
+        test_data  = self.io.read("data/conll2003/eng.testb")
         
+        assert len(train_data) == 946
+        assert sum(len(ex['chunks']) for ex in train_data) == 23_499
+        assert sum(len(ex['tokens']) for ex in train_data) == 204_567 - 946
+        assert len(dev_data) == 216
+        assert sum(len(ex['chunks']) for ex in dev_data) == 5_942
+        assert sum(len(ex['tokens']) for ex in dev_data) == 51_578 - 216
+        assert len(test_data) == 231
+        assert sum(len(ex['chunks']) for ex in test_data) == 5_648
+        assert sum(len(ex['tokens']) for ex in test_data) == 46_666 - 231
+        
+        self._assert_flatten_consistency(test_data)
+        
+
     @pytest.mark.slow
-    def test_ontonotes5(self):
-        self.io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', line_sep_starts=["#begin", "#end", "pt/"], encoding='utf-8')
+    def test_ontonotesv5(self):
+        self.io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end", "pt/"], document_sep_starts=["#begin"], encoding='utf-8')
         train_data = self.io.read("data/conll2012/train.english.v4_gold_conll")
         dev_data   = self.io.read("data/conll2012/dev.english.v4_gold_conll")
         test_data  = self.io.read("data/conll2012/test.english.v4_gold_conll")
@@ -72,10 +91,28 @@ class TestConllIO(object):
         assert sum(len(ex['chunks']) for ex in test_data) == 11_257
         assert sum(len(ex['tokens']) for ex in test_data) == 152_728
         
-        
+
     @pytest.mark.slow
-    def test_ontonotes5_chinese(self):
-        self.io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', line_sep_starts=["#begin", "#end", "pt/"], encoding='utf-8')
+    def test_ontonotesv5_at_doc_level(self):
+        self.io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end", "pt/"], document_sep_starts=["#begin"], document_level=True, encoding='utf-8')
+        train_data = self.io.read("data/conll2012/train.english.v4_gold_conll")
+        dev_data   = self.io.read("data/conll2012/dev.english.v4_gold_conll")
+        test_data  = self.io.read("data/conll2012/test.english.v4_gold_conll")
+        
+        assert len(train_data) == 2_483
+        assert sum(len(ex['chunks']) for ex in train_data) == 81_828
+        assert sum(len(ex['tokens']) for ex in train_data) == 1_088_503
+        assert len(dev_data) == 319
+        assert sum(len(ex['chunks']) for ex in dev_data) == 11_066
+        assert sum(len(ex['tokens']) for ex in dev_data) == 147_724
+        assert len(test_data) == 322
+        assert sum(len(ex['chunks']) for ex in test_data) == 11_257
+        assert sum(len(ex['tokens']) for ex in test_data) == 152_728
+        
+
+    @pytest.mark.slow
+    def test_ontonotesv5_chinese(self):
+        self.io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end"], document_sep_starts=["#begin"], encoding='utf-8')
         train_data = self.io.read("data/conll2012/train.chinese.v4_gold_conll")
         dev_data   = self.io.read("data/conll2012/dev.chinese.v4_gold_conll")
         test_data  = self.io.read("data/conll2012/test.chinese.v4_gold_conll")
@@ -92,6 +129,26 @@ class TestConllIO(object):
         
         self._assert_flatten_consistency(test_data)
         
+
+    @pytest.mark.slow
+    def test_ontonotesv4_chinese(self):
+        self.io = ConllIO(text_col_id=2, tag_col_id=3, scheme='OntoNotes', sentence_sep_starts=["#end"], document_sep_starts=["#begin"], encoding='utf-8')
+        train_data = self.io.read("data/ontonotesv4/train.chinese.vz_gold_conll")
+        dev_data   = self.io.read("data/ontonotesv4/dev.chinese.vz_gold_conll")
+        test_data  = self.io.read("data/ontonotesv4/test.chinese.vz_gold_conll")
+        
+        assert len(train_data) == 15_724
+        assert sum(len(ex['chunks']) for ex in train_data) == 24_166
+        assert sum(len(ex['tokens']) for ex in train_data) == 313_648
+        assert len(dev_data) == 4_442
+        assert sum(len(ex['chunks']) for ex in dev_data) == 12_287
+        assert sum(len(ex['tokens']) for ex in dev_data) == 124_116
+        assert len(test_data) == 4_487
+        assert sum(len(ex['chunks']) for ex in test_data) == 12_967
+        assert sum(len(ex['tokens']) for ex in test_data) == 128_277
+        
+        self._assert_flatten_consistency(test_data)
+
         
     @pytest.mark.slow
     def test_sighan2006(self):

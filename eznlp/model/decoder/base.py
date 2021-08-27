@@ -4,9 +4,10 @@ import torch
 
 from ...wrapper import Batch
 from ...config import Config
+from ...nn.modules import SmoothLabelCrossEntropyLoss, FocalLoss
 
 
-class DecoderMixin(object):
+class DecoderMixinBase(object):
     @property
     def num_metrics(self):
         return 1
@@ -23,8 +24,7 @@ class DecoderMixin(object):
             return self.retrieve(batch)
         
     def evaluate(self, y_gold: Union[list, List[list]], y_pred: Union[list, List[list]]):
-        """
-        Calculate the metric (i.e., accuracy or F1) evaluating the predicted results against the gold results. 
+        """Calculate the metric (i.e., accuracy or F1) evaluating the predicted results against the gold results. 
         This method should typically evaluate over a full dataset, although it also compatibly evaluates over a batch. 
         """
         raise NotImplementedError("Not Implemented `evaluate`")
@@ -43,30 +43,56 @@ class DecoderMixin(object):
 
 
 
-class DecoderConfig(Config):
+class SingleDecoderConfigBase(Config):
     def __init__(self, **kwargs):
         self.in_dim = kwargs.pop('in_dim', None)
+        
+        # gamma set as 0 for cross entropy loss, 2.0 for focal loss by default
+        self.fl_gamma = kwargs.pop('fl_gamma', 0.0) 
+        # epsilon set as 0 for cross entropy loss, 0.1 for label smoothing loss by default
+        self.sl_epsilon = kwargs.pop('sl_epsilon', 0.0)
         super().__init__(**kwargs)
+        
+    @property
+    def criterion(self):
+        if getattr(self, 'multihot', False):
+            return "BCE"
+        
+        elif self.fl_gamma > 0:
+            return f"FL({self.fl_gamma:.2f})"
+        elif self.sl_epsilon > 0:
+            return f"SL({self.sl_epsilon:.2f})"
+        else:
+            return "CE"
+        
+    def instantiate_criterion(self, **kwargs):
+        if self.criterion.lower().startswith('bce'):
+            return torch.nn.BCEWithLogitsLoss(**kwargs)
+        elif self.criterion.lower().startswith('fl'):
+            return FocalLoss(gamma=self.fl_gamma, **kwargs)
+        elif self.criterion.lower().startswith('sl'):
+            return SmoothLabelCrossEntropyLoss(epsilon=self.sl_epsilon, **kwargs)
+        else:
+            return torch.nn.CrossEntropyLoss(**kwargs)
 
 
 
-class Decoder(torch.nn.Module):
+class DecoderBase(torch.nn.Module):
     def __init__(self):
-        """
-        `Decoder` forward from hidden states to outputs. 
+        """`Decoder` forwards from hidden states to outputs. 
         """
         super().__init__()
         
-    def forward(self, batch: Batch, full_hidden: torch.Tensor):
+    def forward(self, batch: Batch, **states):
         raise NotImplementedError("Not Implemented `forward`")
         
-    def decode(self, batch: Batch, full_hidden: torch.Tensor):
+    def decode(self, batch: Batch, **states):
         raise NotImplementedError("Not Implemented `decode`")
         
-    def _unsqueezed_decode(self, batch: Batch, full_hidden: torch.Tensor):
+    def _unsqueezed_decode(self, batch: Batch, **states):
         if self.num_metrics == 0:
             raise RuntimeError("`_unsqueezed` method does not applies if `num_metrics` is 0")
         elif self.num_metrics == 1:
-            return (self.decode(batch, full_hidden), )
+            return (self.decode(batch, **states), )
         else:
-            return self.decode(batch, full_hidden)
+            return self.decode(batch, **states)

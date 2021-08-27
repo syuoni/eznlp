@@ -18,6 +18,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--dataset', type=str, default='conll2003', 
                         help="dataset name")
+    parser.add_argument('--from_date', type=str, default='None', 
+                        help="from date (yyyymmdd)")
+    parser.add_argument('--to_date', type=str, default='None', 
+                        help="to date (yyyymmdd)")
     parser.add_argument('--format', type=str, default='xlsx', 
                         help="output format", choices=['xlsx', 'zip'])
     args = parser.parse_args()
@@ -29,6 +33,11 @@ if __name__ == '__main__':
     logger = logging.getLogger(__name__)
     
     logging_fns = glob.glob(f"cache/{args.dataset}/*/training.log")
+    if args.from_date != 'None':
+        logging_fns = [fn for fn in logging_fns if int(fn.split('/')[2].split('-')[0]) >= int(args.from_date)]
+    if args.to_date != 'None':
+        logging_fns = [fn for fn in logging_fns if int(fn.split('/')[2].split('-')[0]) <= int(args.to_date)]
+    
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     
     if args.format == 'xlsx':

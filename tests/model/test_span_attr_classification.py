@@ -3,7 +3,7 @@ import pytest
 import torch
 
 from eznlp.dataset import Dataset
-from eznlp.model import BertLikeConfig, SpanAttrClassificationDecoderConfig, JointExtractionDecoderConfig, ModelConfig
+from eznlp.model import BertLikeConfig, SpanAttrClassificationDecoderConfig, JointExtractionDecoderConfig, ExtractorConfig
 from eznlp.training import Trainer
 
 
@@ -14,9 +14,10 @@ class TestModel(object):
         batch = [self.dataset[i] for i in range(4)]
         batch012 = self.dataset.collate(batch[:3]).to(self.device)
         batch123 = self.dataset.collate(batch[1:]).to(self.device)
-        losses012, hidden012 = self.model(batch012, return_hidden=True)
-        losses123, hidden123 = self.model(batch123, return_hidden=True)
+        losses012, states012 = self.model(batch012, return_states=True)
+        losses123, states123 = self.model(batch123, return_states=True)
         
+        hidden012, hidden123 = states012['full_hidden'], states123['full_hidden']
         min_step = min(hidden012.size(1), hidden123.size(1))
         delta_hidden = hidden012[1:, :min_step] - hidden123[:-1, :min_step]
         assert delta_hidden.abs().max().item() < 1e-4
@@ -24,8 +25,8 @@ class TestModel(object):
         delta_losses = losses012[1:] - losses123[:-1]
         assert delta_losses.abs().max().item() < 2e-4
         
-        pred012 = self.model.decode(batch012)
-        pred123 = self.model.decode(batch123)
+        pred012 = self.model.decode(batch012, **states012)
+        pred123 = self.model.decode(batch123, **states123)
         assert pred012[1:] == pred123[:-1]
         
         
@@ -50,9 +51,8 @@ class TestModel(object):
         
     @pytest.mark.parametrize("agg_mode", ['max_pooling', 'multiplicative_attention'])
     @pytest.mark.parametrize("ck_label_emb_dim", [25, 0])
-    @pytest.mark.parametrize("criterion", ['BCE'])
-    def test_model(self, agg_mode, ck_label_emb_dim, criterion, HwaMei_demo, device):
-        self.config = ModelConfig(decoder=SpanAttrClassificationDecoderConfig(agg_mode=agg_mode, ck_label_emb_dim=ck_label_emb_dim, criterion=criterion))
+    def test_model(self, agg_mode, ck_label_emb_dim, HwaMei_demo, device):
+        self.config = ExtractorConfig(decoder=SpanAttrClassificationDecoderConfig(agg_mode=agg_mode, ck_label_emb_dim=ck_label_emb_dim))
         self._setup_case(HwaMei_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
@@ -60,17 +60,16 @@ class TestModel(object):
         
     def test_model_with_bert_like(self, HwaMei_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
-        self.config = ModelConfig('span_attr_classification', 
-                                  ohots=None, 
-                                  bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert), 
-                                  intermediate2=None)
+        self.config = ExtractorConfig('span_attr_classification', ohots=None, 
+                                      bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert), 
+                                      intermediate2=None)
         self._setup_case(HwaMei_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
         
         
     def test_prediction_without_gold(self, HwaMei_demo, device):
-        self.config = ModelConfig('span_attr_classification')
+        self.config = ExtractorConfig('span_attr_classification')
         self._setup_case(HwaMei_demo, device)
         
         data_wo_gold = [{'tokens': entry['tokens'], 
@@ -88,20 +87,20 @@ class TestModel(object):
 def test_chunks_obj(EAR_data_demo, training, building):
     entry = EAR_data_demo[0]
     chunks, attributes = entry['chunks'], entry['attributes']
-
+    
     if building:
-        config = ModelConfig(decoder=SpanAttrClassificationDecoderConfig())
+        config = ExtractorConfig(decoder=SpanAttrClassificationDecoderConfig())
         attr_decoder_config = config.decoder
     else:
-        config = ModelConfig(decoder=JointExtractionDecoderConfig(attr_decoder=SpanAttrClassificationDecoderConfig(), rel_decoder=None))
+        config = ExtractorConfig(decoder=JointExtractionDecoderConfig(attr_decoder=SpanAttrClassificationDecoderConfig(), rel_decoder=None))
         attr_decoder_config = config.decoder.attr_decoder
-
+    
     dataset = Dataset(EAR_data_demo, config, training=training)
     dataset.build_vocabs_and_dims()
-
+    
     chunks_obj = dataset[0]['chunks_obj']
     assert chunks_obj.attributes == attributes
-
+    
     if building:
         assert chunks_obj.chunks == chunks
         assert chunks_obj.is_built
@@ -113,7 +112,7 @@ def test_chunks_obj(EAR_data_demo, training, building):
         chunks_obj.build(attr_decoder_config)
         assert len(chunks_obj.chunks) == len(chunks) + len(chunks_pred) if training else len(chunks_obj.chunks) == len(chunks_pred)
         assert chunks_obj.is_built
-
+    
     assert (chunks_obj.span_size_ids+1).tolist() == [e-s for l, s, e in chunks_obj.chunks]
     assert chunks_obj.attr_label_ids.size(0) == len(chunks_obj.chunks)
     

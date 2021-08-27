@@ -16,11 +16,9 @@ from eznlp.config import ConfigDict
 from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig, CharConfig, SoftLexiconConfig
 from eznlp.model import ELMoConfig, BertLikeConfig, FlairConfig
 from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderConfig, BoundarySelectionDecoderConfig
-from eznlp.model import ModelConfig
+from eznlp.model import ExtractorConfig
 from eznlp.model.bert_like import segment_uniformly_for_bert_like
-from eznlp.training import Trainer
-from eznlp.training.utils import count_params
-from eznlp.training.evaluation import evaluate_entity_recognition
+from eznlp.training import Trainer, count_params, evaluate_entity_recognition
 
 from utils import add_base_arguments, parse_to_args
 from utils import load_data, dataset2language, load_pretrained, build_trainer, header_format
@@ -32,36 +30,43 @@ def parse_arguments(parser: argparse.ArgumentParser):
     group_data = parser.add_argument_group('dataset')
     group_data.add_argument('--dataset', type=str, default='conll2003', 
                             help="dataset name")
+    group_data.add_argument('--doc_level', default=False, action='store_true', 
+                            help="whether to load data at document level")
     group_data.add_argument('--pipeline', default=False, action='store_true', 
                             help="whether to save predicted chunks for pipeline")
     
     group_decoder = parser.add_argument_group('decoder configurations')
     group_decoder.add_argument('--ck_decoder', type=str, default='sequence_tagging', 
                                help="chunk decoding method", choices=['sequence_tagging', 'span_classification', 'boundary_selection'])
-    group_decoder.add_argument('--criterion', type=str, default='CRF', 
-                               help="decoder loss criterion")
-    group_decoder.add_argument('--focal_gamma', type=float, default=2.0, 
+    # Loss
+    group_decoder.add_argument('--fl_gamma', type=float, default=0.0, 
                                help="Focal Loss gamma")
+    group_decoder.add_argument('--sl_epsilon', type=float, default=0.0, 
+                               help="Label smoothing loss epsilon")
     
-    group_sequence_tagging = parser.add_argument_group('sequence tagging')
-    group_sequence_tagging.add_argument('--scheme', type=str, default='BIOES', 
-                                        help="sequence tagging scheme", choices=['BIOES', 'BIO2'])
+    # Sequence tagging
+    group_decoder.add_argument('--scheme', type=str, default='BIOES', 
+                               help="sequence tagging scheme", choices=['BIOES', 'BIO2'])
+    group_decoder.add_argument('--no_crf', dest='use_crf', default=True, action='store_false', 
+                               help="whether to use CRF")
     
-    group_span_classification = parser.add_argument_group('span classification')
-    group_span_classification.add_argument('--agg_mode', type=str, default='max_pooling', 
-                                           help="aggregating mode")
-    group_span_classification.add_argument('--num_neg_chunks', type=int, default=100, 
-                                           help="number of sampling negative chunks")
-    group_span_classification.add_argument('--max_span_size', type=int, default=10, 
-                                           help="maximum span size")
-    group_span_classification.add_argument('--ck_size_emb_dim', type=int, default=25, 
-                                           help="span size embedding dim")
+    # Span-based
+    group_decoder.add_argument('--agg_mode', type=str, default='max_pooling', 
+                               help="aggregating mode")
+    group_decoder.add_argument('--num_neg_chunks', type=int, default=100, 
+                               help="number of sampling negative chunks")
+    group_decoder.add_argument('--max_span_size', type=int, default=10, 
+                               help="maximum span size")
+    group_decoder.add_argument('--ck_size_emb_dim', type=int, default=25, 
+                               help="span size embedding dim")
     
-    group_boundary_selection = parser.add_argument_group('boundary selection')
-    group_boundary_selection.add_argument('--no_biaffine', dest='use_biaffine', default=True, action='store_false', 
-                                          help="whether to use biaffine")
-    group_boundary_selection.add_argument('--affine_arch', type=str, default='FFN', 
-                                          help="affine encoder architecture")
+    # Boundary selection
+    group_decoder.add_argument('--no_biaffine', dest='use_biaffine', default=True, action='store_false', 
+                               help="whether to use biaffine")
+    group_decoder.add_argument('--affine_arch', type=str, default='FFN', 
+                               help="affine encoder architecture")
+    group_decoder.add_argument('--sb_epsilon', type=float, default=0.0, 
+                               help="Boundary smoothing loss epsilon")
     return parse_to_args(parser)
 
 
@@ -157,13 +162,14 @@ def build_ER_config(args: argparse.Namespace):
     
     if args.ck_decoder == 'sequence_tagging':
         decoder_config = SequenceTaggingDecoderConfig(scheme=args.scheme, 
-                                                      criterion=args.criterion, 
-                                                      gamma=args.focal_gamma, 
+                                                      use_crf=args.use_crf, 
+                                                      fl_gamma=args.fl_gamma,
+                                                      sl_epsilon=args.sl_epsilon, 
                                                       in_drop_rates=drop_rates)
     elif args.ck_decoder == 'span_classification':
         decoder_config = SpanClassificationDecoderConfig(agg_mode=args.agg_mode, 
-                                                         criterion=args.criterion, 
-                                                         gamma=args.focal_gamma, 
+                                                         fl_gamma=args.fl_gamma,
+                                                         sl_epsilon=args.sl_epsilon, 
                                                          num_neg_chunks=args.num_neg_chunks, 
                                                          max_span_size=args.max_span_size, 
                                                          size_emb_dim=args.ck_size_emb_dim, 
@@ -171,10 +177,11 @@ def build_ER_config(args: argparse.Namespace):
     elif args.ck_decoder == 'boundary_selection':
         decoder_config = BoundarySelectionDecoderConfig(use_biaffine=args.use_biaffine, 
                                                         affine=EncoderConfig(arch=args.affine_arch, hid_dim=150, num_layers=1, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2), 
-                                                        criterion=args.criterion, 
-                                                        gamma=args.focal_gamma, 
+                                                        fl_gamma=args.fl_gamma,
+                                                        sl_epsilon=args.sl_epsilon, 
+                                                        sb_epsilon=args.sb_epsilon,
                                                         hid_drop_rates=drop_rates)
-    return ModelConfig(**collect_IE_assembly_config(args), decoder=decoder_config)
+    return ExtractorConfig(**collect_IE_assembly_config(args), decoder=decoder_config)
 
 
 if __name__ == '__main__':
@@ -211,20 +218,31 @@ if __name__ == '__main__':
     args.language = dataset2language[args.dataset]
     config = build_ER_config(args)
     
-    if args.command in ('finetune', 'ft') and args.dataset in ('SIGHAN2006', 'yidu_s4k'):
+    if (args.command in ('finetune', 'ft') and 
+            ((args.dataset in ('SIGHAN2006', 'yidu_s4k')) or 
+             (args.dataset in ('conll2003', 'conll2012') and getattr(args, 'doc_level', False)))):
         train_data = segment_uniformly_for_bert_like(train_data, config.bert_like.tokenizer, verbose=args.log_terminal)
         dev_data   = segment_uniformly_for_bert_like(dev_data,   config.bert_like.tokenizer, verbose=args.log_terminal)
         test_data  = segment_uniformly_for_bert_like(test_data,  config.bert_like.tokenizer, verbose=args.log_terminal)
     
-    train_set = Dataset(train_data, config, training=True)
-    train_set.build_vocabs_and_dims(dev_data, test_data)
-    dev_set   = Dataset(dev_data,  train_set.config, training=False)
-    test_set  = Dataset(test_data, train_set.config, training=False)
-    
+    if not args.train_with_dev:
+        train_set = Dataset(train_data, config, training=True)
+        train_set.build_vocabs_and_dims(dev_data, test_data)
+        dev_set   = Dataset(dev_data,  train_set.config, training=False)
+        test_set  = Dataset(test_data, train_set.config, training=False)
+
+        train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
+        dev_loader   = torch.utils.data.DataLoader(dev_set,   batch_size=args.batch_size, shuffle=False, collate_fn=dev_set.collate)
+    else:
+        train_set = Dataset(train_data + dev_data, config, training=True)
+        train_set.build_vocabs_and_dims(test_data)
+        dev_set   = Dataset([],        train_set.config, training=False)
+        test_set  = Dataset(test_data, train_set.config, training=False)
+
+        train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
+        dev_loader   = None
+
     logger.info(train_set.summary)
-    train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
-    dev_loader   = torch.utils.data.DataLoader(dev_set,   batch_size=args.batch_size, shuffle=False, collate_fn=dev_set.collate)
-    
     
     logger.info(header_format("Building", sep='-'))
     model = config.instantiate().to(device)
@@ -248,22 +266,27 @@ if __name__ == '__main__':
     trainer = Trainer(model, device=device)
     
     logger.info("Evaluating on dev-set")
-    evaluate_entity_recognition(trainer, dev_set)
+    evaluate_entity_recognition(trainer, dev_set, batch_size=args.batch_size)
     logger.info("Evaluating on test-set")
-    evaluate_entity_recognition(trainer, test_set)
+    evaluate_entity_recognition(trainer, test_set, batch_size=args.batch_size)
     
     
     if args.pipeline:
         # Replace gold chunks with predicted chunks for pipeline
-        train_set_chunks_pred = trainer.predict(train_set)
+        if args.train_with_dev:
+            # Retrieve the original splits
+            train_set = Dataset(train_data, train_set.config, training=True)
+            dev_set   = Dataset(dev_data,   train_set.config, training=False)
+
+        train_set_chunks_pred = trainer.predict(train_set, batch_size=args.batch_size)
         for ex, chunks_pred in zip(train_data, train_set_chunks_pred):
             ex['chunks'] = ex['chunks'] + [ck for ck in chunks_pred if ck not in ex['chunks']]
         
-        dev_set_chunks_pred = trainer.predict(dev_set)
+        dev_set_chunks_pred = trainer.predict(dev_set, batch_size=args.batch_size)
         for ex, chunks_pred in zip(dev_data, dev_set_chunks_pred):
             ex['chunks'] = chunks_pred
         
-        test_set_chunks_pred = trainer.predict(test_set)
+        test_set_chunks_pred = trainer.predict(test_set, batch_size=args.batch_size)
         for ex, chunks_pred in zip(test_data, test_set_chunks_pred):
             ex['chunks'] = chunks_pred
             
@@ -273,5 +296,3 @@ if __name__ == '__main__':
     logger.info(" ".join(sys.argv))
     logger.info(pprint.pformat(args.__dict__))
     logger.info(header_format("Ending", sep='='))
-    
-    

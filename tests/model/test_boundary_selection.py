@@ -3,7 +3,7 @@ import pytest
 import torch
 
 from eznlp.dataset import Dataset
-from eznlp.model import EncoderConfig, BertLikeConfig, BoundarySelectionDecoderConfig, ModelConfig
+from eznlp.model import EncoderConfig, BertLikeConfig, BoundarySelectionDecoderConfig, ExtractorConfig
 from eznlp.model.decoder.boundary_selection import _generate_spans_from_upper_triangular
 from eznlp.training import Trainer
 
@@ -15,9 +15,10 @@ class TestModel(object):
         batch = [self.dataset[i] for i in range(4)]
         batch012 = self.dataset.collate(batch[:3]).to(self.device)
         batch123 = self.dataset.collate(batch[1:]).to(self.device)
-        losses012, hidden012 = self.model(batch012, return_hidden=True)
-        losses123, hidden123 = self.model(batch123, return_hidden=True)
+        losses012, states012 = self.model(batch012, return_states=True)
+        losses123, states123 = self.model(batch123, return_states=True)
         
+        hidden012, hidden123 = states012['full_hidden'], states123['full_hidden']
         min_step = min(hidden012.size(1), hidden123.size(1))
         delta_hidden = hidden012[1:, :min_step] - hidden123[:-1, :min_step]
         assert delta_hidden.abs().max().item() < 1e-4
@@ -25,8 +26,8 @@ class TestModel(object):
         delta_losses = losses012[1:] - losses123[:-1]
         assert delta_losses.abs().max().item() < 5e-4
         
-        pred012 = self.model.decode(batch012)
-        pred123 = self.model.decode(batch123)
+        pred012 = self.model.decode(batch012, **states012)
+        pred123 = self.model.decode(batch123, **states123)
         assert pred012[1:] == pred123[:-1]
         
         
@@ -52,12 +53,16 @@ class TestModel(object):
     @pytest.mark.parametrize("use_biaffine", [True, False])
     @pytest.mark.parametrize("affine_arch", ['FFN', 'LSTM'])
     @pytest.mark.parametrize("size_emb_dim", [25, 0])
-    @pytest.mark.parametrize("criterion", ['CE', 'FL'])
-    def test_model(self, use_biaffine, affine_arch, size_emb_dim, criterion, conll2004_demo, device):
-        self.config = ModelConfig(decoder=BoundarySelectionDecoderConfig(use_biaffine=use_biaffine, 
-                                                                         affine=EncoderConfig(arch=affine_arch), 
-                                                                         size_emb_dim=size_emb_dim, 
-                                                                         criterion=criterion))
+    @pytest.mark.parametrize("fl_gamma, sl_epsilon, sb_epsilon", [(0.0, 0.0, 0.0), 
+                                                                  (2.0, 0.0, 0.0), 
+                                                                  (0.0, 0.1, 0.0), 
+                                                                  (0.0, 0.0, 0.1), 
+                                                                  (0.0, 0.1, 0.1)])
+    def test_model(self, use_biaffine, affine_arch, size_emb_dim, fl_gamma, sl_epsilon, sb_epsilon, conll2004_demo, device):
+        self.config = ExtractorConfig(decoder=BoundarySelectionDecoderConfig(use_biaffine=use_biaffine, 
+                                                                             affine=EncoderConfig(arch=affine_arch), 
+                                                                             size_emb_dim=size_emb_dim, 
+                                                                             fl_gamma=fl_gamma, sl_epsilon=sl_epsilon, sb_epsilon=sb_epsilon))
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
@@ -65,17 +70,17 @@ class TestModel(object):
         
     def test_model_with_bert_like(self, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
-        self.config = ModelConfig('boundary_selection', 
-                                  ohots=None, 
-                                  bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert), 
-                                  intermediate2=None)
+        self.config = ExtractorConfig('boundary_selection', 
+                                      ohots=None, 
+                                      bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert), 
+                                      intermediate2=None)
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
         
         
     def test_prediction_without_gold(self, conll2004_demo, device):
-        self.config = ModelConfig('boundary_selection')
+        self.config = ExtractorConfig('boundary_selection')
         self._setup_case(conll2004_demo, device)
         
         data_wo_gold = [{'tokens': entry['tokens']} for entry in conll2004_demo]
@@ -87,22 +92,43 @@ class TestModel(object):
 
 
 
-def test_boundaries_obj(EAR_data_demo):
+@pytest.mark.parametrize("sb_epsilon", [0.0, 0.1])
+def test_boundaries_obj(sb_epsilon, EAR_data_demo):
     entry = EAR_data_demo[0]
     tokens, chunks = entry['tokens'], entry['chunks']
     
-    config = ModelConfig('boundary_selection')
+    config = ExtractorConfig(decoder=BoundarySelectionDecoderConfig(sb_epsilon=sb_epsilon))
     dataset = Dataset(EAR_data_demo, config)
     dataset.build_vocabs_and_dims()
     
     boundaries_obj = dataset[0]['boundaries_obj']
     assert boundaries_obj.chunks == chunks
-    assert all(boundaries_obj.boundary2label_id[start, end-1] == config.decoder.label2idx[label] for label, start, end in chunks)
-    
-    labels_retr = [config.decoder.idx2label[i] for i in boundaries_obj.boundary2label_id[torch.arange(len(tokens)) >= torch.arange(len(tokens)).unsqueeze(-1)].tolist()]
+    if sb_epsilon == 0:
+        assert all(boundaries_obj.boundary2label_id[start, end-1] == config.decoder.label2idx[label] for label, start, end in chunks)
+        labels_retr = [config.decoder.idx2label[i] for i in boundaries_obj.boundary2label_id[torch.arange(len(tokens)) >= torch.arange(len(tokens)).unsqueeze(-1)].tolist()]
+        
+    else:
+        assert all(boundaries_obj.boundary2label_id[start, end-1].argmax() == config.decoder.label2idx[label] for label, start, end in chunks)
+        labels_retr = [config.decoder.idx2label[i] for i in boundaries_obj.boundary2label_id[torch.arange(len(tokens)) >= torch.arange(len(tokens)).unsqueeze(-1)].argmax(dim=-1).tolist()]
+
     chunks_retr = [(label, start, end) for label, (start, end) in zip(labels_retr, _generate_spans_from_upper_triangular(len(tokens))) if label != config.decoder.none_label]
     assert set(chunks_retr) == set(chunks)
 
+
+def test_boundaries_obj_for_boundary_smoothing():
+    entry = {'tokens': ['a', 'b', 'c', 'd', 'e'], 
+             'chunks': [('EntA', 0, 1), ('EntA', 0, 4), ('EntB', 0, 5), ('EntA', 2, 4), ('EntA', 3, 4)]}
+    config = BoundarySelectionDecoderConfig(sb_epsilon=0.1)
+    config.build_vocab([entry])
+
+    boundaries_obj = config.exemplify(entry)['boundaries_obj']
+    assert (boundaries_obj.boundary2label_id[0, 0] - torch.tensor([0.025, 0.975, 0.0])).abs().max().item() < 1e-6
+    assert (boundaries_obj.boundary2label_id[0, 1] - torch.tensor([0.975, 0.025, 0.0])).abs().max().item() < 1e-6
+    assert (boundaries_obj.boundary2label_id[0, 2] - torch.tensor([0.975, 0.025, 0.0])).abs().max().item() < 1e-6
+    assert (boundaries_obj.boundary2label_id[0, 3] - torch.tensor([0.050, 0.925, 0.025])).abs().max().item() < 1e-6
+    assert (boundaries_obj.boundary2label_id[0, 4] - torch.tensor([0.025, 0.025, 0.950])).abs().max().item() < 1e-6
+    assert (boundaries_obj.boundary2label_id[2, 3] - torch.tensor([0.075, 0.925, 0.0])).abs().max().item() < 1e-6
+    assert (boundaries_obj.boundary2label_id[3, 3] - torch.tensor([0.025, 0.975, 0.0])).abs().max().item() < 1e-6
 
 
 @pytest.mark.parametrize("seq_len", [1, 5, 10, 100])

@@ -107,7 +107,7 @@ def count_params(model_or_params: Union[torch.nn.Module, torch.nn.Parameter, Lis
     elif not isinstance(model_or_params, list):
         raise TypeError("`model_or_params` is neither a `torch.nn.Module` nor a list of `torch.nn.Parameter`, "
                         "`model_or_params` should NOT be a `Generator`. ")
-        
+    
     num_trainable = sum(p.numel() for p in model_or_params if p.requires_grad)
     num_frozen = sum(p.numel() for p in model_or_params if not p.requires_grad)
     
@@ -119,7 +119,7 @@ def count_params(model_or_params: Union[torch.nn.Module, torch.nn.Parameter, Lis
         return num_trainable
     else:
         return num_trainable + num_frozen
-    
+
 
 def auto_device(min_memory: int=2048):
     """
@@ -150,5 +150,3 @@ def auto_device(min_memory: int=2048):
             logger.info(f"Cuda device `cuda:{selected_id}` with free memory {selected_mem} MiB "
                         f"successfully allocated, device `cuda:{selected_id}` returned")
             return torch.device('cuda', selected_id)
-        
-        
