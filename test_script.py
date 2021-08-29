@@ -32,6 +32,7 @@ from eznlp.config import ConfigList, ConfigDict
 from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig
 from eznlp.model import NestedOneHotConfig, CharConfig, SoftLexiconConfig
 from eznlp.model import ELMoConfig, BertLikeConfig, FlairConfig
+from eznlp.model import ImageEncoderConfig
 from eznlp.model.bert_like import truncate_for_bert_like
 
 from eznlp.model import (TextClassificationDecoderConfig, 
@@ -40,8 +41,9 @@ from eznlp.model import (TextClassificationDecoderConfig,
                          SpanAttrClassificationDecoderConfig, 
                          SpanRelClassificationDecoderConfig, 
                          BoundarySelectionDecoderConfig, 
-                         JointExtractionDecoderConfig)
-from eznlp.model import ExtractorConfig
+                         JointExtractionDecoderConfig, 
+                         GeneratorConfig)
+from eznlp.model import ExtractorConfig, Image2TextConfig
 
 from eznlp.language_modeling import MaskedLMConfig
 from eznlp.language_modeling import MaskedLMDataset, FolderLikeMaskedLMDataset, MaskedLMTrainer
@@ -55,9 +57,9 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     device = auto_device()
     
-    with open("data/multi30k/train.de", encoding='utf-8') as f:
-        txt = f.readlines()
-        print(len(txt))
+    # with open("data/multi30k/train.de", encoding='utf-8') as f:
+    #     txt = f.readlines()
+    #     print(len(txt))
 
     # batch_tokenized_raw_text = [["I", "like", "it", "."], 
     #                             ["Do", "you", "love", "me", "?"], 
@@ -107,6 +109,59 @@ if __name__ == '__main__':
     # optimizer = torch.optim.AdamW(model.parameters())
     # trainer = Trainer(model, optimizer=optimizer, device=device)
     # res = trainer.train_epoch([batch])
+    
+    caption_io = TabularIO(text_col_id=1, label_col_id=0, sep='\t')
+    data = caption_io.read("data/flickr8k/Flickr8k.token.txt")
+    for entry in data:
+        entry['trg_tokens'] = entry.pop('tokens')
+        entry['img_fn'], entry['cap_no'] = entry.pop('label').split('#')
+    
+    img_folder = "data/flickr8k/Flicker8k_Dataset"
+    
+    with open("data/flickr8k/Flickr_8k.trainImages.txt") as f:
+        train_fns = set([line.strip() for line in f])
+    with open("data/flickr8k/Flickr_8k.devImages.txt") as f:
+        dev_fns = set([line.strip() for line in f])
+    with open("data/flickr8k/Flickr_8k.testImages.txt") as f:
+        test_fns = set([line.strip() for line in f])
+        
+    train_data = [entry for entry in data if entry['img_fn'] in train_fns]
+    dev_data   = [entry for entry in data if entry['img_fn'] in dev_fns]
+    test_data  = [entry for entry in data if entry['img_fn'] in test_fns]
+    
+    
+    # i = 0
+    # entry = train_data[i]
+    # img = torchvision.io.read_image(f"{img_folder}/{entry['img_fn']}")
+    # # torchvision.transforms.functional.to_pil_image(img)
+    # img = img / 255.0
+    
+    resnet = torchvision.models.resnet101(pretrained=False)
+    resnet.load_state_dict(torch.load("assets/resnet/resnet101-5d3b4d8f.pth"))
+    resnet = torch.nn.Sequential(*list(resnet.children())[:-2])
+    
+    trans = torch.nn.Sequential(torchvision.transforms.Resize((256, 256)), 
+                                torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                                                 std =[0.229, 0.224, 0.225]))
+    
+    config = Image2TextConfig(encoder=ImageEncoderConfig(backbone=resnet, folder=img_folder, transforms=trans), 
+                              decoder=GeneratorConfig())
+    train_set = Dataset(train_data, config, training=True)
+    train_set.build_vocabs_and_dims(dev_data, test_data)
+    
+    dev_data  = pd.DataFrame(dev_data,  columns=['img_fn', 'trg_tokens']).groupby('img_fn').aggregate(lambda x: x.tolist()).reset_index().to_dict(orient='records')
+    test_data = pd.DataFrame(test_data, columns=['img_fn', 'trg_tokens']).groupby('img_fn').aggregate(lambda x: x.tolist()).reset_index().to_dict(orient='records')
+    dev_set   = Dataset(dev_data,  config=train_set.config, training=False)
+    test_set  = Dataset(test_data, config=train_set.config, training=False)
+    model = config.instantiate()
+    
+    batch = train_set.collate([train_set[i] for i in range(0, 4)])
+    losses, states = model(batch, return_states=True)
+    
+    optimizer = torch.optim.AdamW(model.parameters())
+    trainer = Trainer(model, optimizer=optimizer, device=device)
+    res = trainer.train_epoch([batch])
+    print(res)
     
     
     # for model_name in ["hfl/chinese-macbert-base", "hfl/chinese-macbert-large"]:
