@@ -38,6 +38,7 @@ class GeneratorMixin(DecoderMixinBase):
             return {'trg_tokenized_text': [entry['trg_tokens'].text], 
                     'trg_tok_ids': trg_tok_ids}
         else:
+            # Notes: The dev. loss will always be 0
             trg_tok_ids = torch.tensor([self.embedding.sos_idx] + [self.embedding.pad_idx]*(self.max_len+1), dtype=torch.long)
             if 'trg_tokens' in entry:
                 # Multiple ground-truth sentences for evaluation
