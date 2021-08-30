@@ -4,7 +4,7 @@ import torch
 
 from eznlp.dataset import Dataset
 from eznlp.model import EncoderConfig, BertLikeConfig, BoundarySelectionDecoderConfig, ExtractorConfig
-from eznlp.model.decoder.boundary_selection import _generate_spans_from_upper_triangular
+from eznlp.model.decoder.boundary_selection import _non_mask2spans
 from eznlp.training import Trainer
 
 
@@ -53,16 +53,18 @@ class TestModel(object):
     @pytest.mark.parametrize("use_biaffine", [True, False])
     @pytest.mark.parametrize("affine_arch", ['FFN', 'LSTM'])
     @pytest.mark.parametrize("size_emb_dim", [25, 0])
-    @pytest.mark.parametrize("fl_gamma, sl_epsilon, sb_epsilon", [(0.0, 0.0, 0.0), 
-                                                                  (2.0, 0.0, 0.0), 
-                                                                  (0.0, 0.1, 0.0), 
-                                                                  (0.0, 0.0, 0.1), 
-                                                                  (0.0, 0.1, 0.1)])
-    def test_model(self, use_biaffine, affine_arch, size_emb_dim, fl_gamma, sl_epsilon, sb_epsilon, conll2004_demo, device):
+    @pytest.mark.parametrize("fl_gamma, sl_epsilon, sb_epsilon, sb_size", [(0.0, 0.0, 0.0, 1), 
+                                                                           (2.0, 0.0, 0.0, 1), 
+                                                                           (0.0, 0.1, 0.0, 1), 
+                                                                           (0.0, 0.0, 0.1, 1), 
+                                                                           (0.0, 0.0, 0.1, 2), 
+                                                                           (0.0, 0.0, 0.1, 3), 
+                                                                           (0.0, 0.1, 0.1, 1)])
+    def test_model(self, use_biaffine, affine_arch, size_emb_dim, fl_gamma, sl_epsilon, sb_epsilon, sb_size, conll2004_demo, device):
         self.config = ExtractorConfig(decoder=BoundarySelectionDecoderConfig(use_biaffine=use_biaffine, 
                                                                              affine=EncoderConfig(arch=affine_arch), 
                                                                              size_emb_dim=size_emb_dim, 
-                                                                             fl_gamma=fl_gamma, sl_epsilon=sl_epsilon, sb_epsilon=sb_epsilon))
+                                                                             fl_gamma=fl_gamma, sl_epsilon=sl_epsilon, sb_epsilon=sb_epsilon, sb_size=sb_size))
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
@@ -111,26 +113,75 @@ def test_boundaries_obj(sb_epsilon, EAR_data_demo):
         assert all(boundaries_obj.boundary2label_id[start, end-1].argmax() == config.decoder.label2idx[label] for label, start, end in chunks)
         labels_retr = [config.decoder.idx2label[i] for i in boundaries_obj.boundary2label_id[torch.arange(len(tokens)) >= torch.arange(len(tokens)).unsqueeze(-1)].argmax(dim=-1).tolist()]
 
-    chunks_retr = [(label, start, end) for label, (start, end) in zip(labels_retr, _generate_spans_from_upper_triangular(len(tokens))) if label != config.decoder.none_label]
+    chunks_retr = [(label, start, end) for label, (start, end) in zip(labels_retr, _non_mask2spans(boundaries_obj.non_mask)) if label != config.decoder.none_label]
     assert set(chunks_retr) == set(chunks)
 
 
-def test_boundaries_obj_for_boundary_smoothing():
-    entry = {'tokens': ['a', 'b', 'c', 'd', 'e'], 
-             'chunks': [('EntA', 0, 1), ('EntA', 0, 4), ('EntB', 0, 5), ('EntA', 2, 4), ('EntA', 3, 4)]}
-    config = BoundarySelectionDecoderConfig(sb_epsilon=0.1)
+@pytest.mark.parametrize("sb_epsilon", [0.1, 0.5])
+@pytest.mark.parametrize("sb_size", [1, 2, 3])
+def test_boundaries_obj_for_boundary_smoothing(sb_epsilon, sb_size):
+    entry = {'tokens': list("abcdef"), 
+             'chunks': [('EntA', 0, 1), ('EntA', 0, 4), ('EntB', 0, 5), ('EntA', 3, 5), ('EntA', 4, 5)]}
+    config = BoundarySelectionDecoderConfig(sb_epsilon=sb_epsilon, sb_size=sb_size)
     config.build_vocab([entry])
-
     boundaries_obj = config.exemplify(entry)['boundaries_obj']
-    assert (boundaries_obj.boundary2label_id[0, 0] - torch.tensor([0.025, 0.975, 0.0])).abs().max().item() < 1e-6
-    assert (boundaries_obj.boundary2label_id[0, 1] - torch.tensor([0.975, 0.025, 0.0])).abs().max().item() < 1e-6
-    assert (boundaries_obj.boundary2label_id[0, 2] - torch.tensor([0.975, 0.025, 0.0])).abs().max().item() < 1e-6
-    assert (boundaries_obj.boundary2label_id[0, 3] - torch.tensor([0.050, 0.925, 0.025])).abs().max().item() < 1e-6
-    assert (boundaries_obj.boundary2label_id[0, 4] - torch.tensor([0.025, 0.025, 0.950])).abs().max().item() < 1e-6
-    assert (boundaries_obj.boundary2label_id[2, 3] - torch.tensor([0.075, 0.925, 0.0])).abs().max().item() < 1e-6
-    assert (boundaries_obj.boundary2label_id[3, 3] - torch.tensor([0.025, 0.975, 0.0])).abs().max().item() < 1e-6
+    
+    num_tokens, num_chunks = len(entry['tokens']), len(entry['chunks'])
+    span_sizes = torch.arange(num_tokens) - torch.arange(num_tokens).unsqueeze(-1) + 1
+    assert not boundaries_obj.non_mask[span_sizes<=0].any().item()
+    assert (boundaries_obj.boundary2label_id.sum(dim=-1) - 1).abs().max().item() < 1e-6
+    assert (boundaries_obj.boundary2label_id[:, :, 1:].sum() - num_chunks).abs().max().item() < 1e-6
+    assert (boundaries_obj.boundary2label_id[span_sizes<=0] - torch.tensor([1.0, 0.0, 0.0])).abs().max().item() < 1e-6
+    
+    if sb_size == 1:
+        assert (boundaries_obj.boundary2label_id[0, 0] - torch.tensor([(1/4)*sb_epsilon, 1-(1/4)*sb_epsilon, 0.0])).abs().max().item() < 1e-6
+        assert (boundaries_obj.boundary2label_id[0, 3] - torch.tensor([(1/2)*sb_epsilon, 1-(3/4)*sb_epsilon, (1/4)*sb_epsilon])).abs().max().item() < 1e-6
+        assert (boundaries_obj.boundary2label_id[0, 4] - torch.tensor([(1/2)*sb_epsilon, (1/4)*sb_epsilon, 1-(3/4)*sb_epsilon])).abs().max().item() < 1e-6
+        assert (boundaries_obj.boundary2label_id[3, 4] - torch.tensor([(3/4)*sb_epsilon, 1-(3/4)*sb_epsilon, 0.0])).abs().max().item() < 1e-6
+        assert (boundaries_obj.boundary2label_id[4, 4] - torch.tensor([(1/4)*sb_epsilon, 1-(1/4)*sb_epsilon, 0.0])).abs().max().item() < 1e-6
+    elif sb_size == 2:
+        assert (boundaries_obj.boundary2label_id[0, 0] - torch.tensor([(1/4)*sb_epsilon, 1-(1/4)*sb_epsilon, 0.0])).abs().max().item() < 1e-6
+        assert (boundaries_obj.boundary2label_id[0, 3] - torch.tensor([(9/16)*sb_epsilon, 1-(11/16)*sb_epsilon, (1/8)*sb_epsilon])).abs().max().item() < 1e-6
+        assert (boundaries_obj.boundary2label_id[0, 4] - torch.tensor([(1/2)*sb_epsilon, (1/8)*sb_epsilon, 1-(5/8)*sb_epsilon])).abs().max().item() < 1e-6
+        assert (boundaries_obj.boundary2label_id[3, 4] - torch.tensor([(5/8)*sb_epsilon, 1-(5/8)*sb_epsilon, 0.0])).abs().max().item() < 1e-6
+        assert (boundaries_obj.boundary2label_id[4, 4] - torch.tensor([(3/8)*sb_epsilon, 1-(3/8)*sb_epsilon, 0.0])).abs().max().item() < 1e-6
+    elif sb_size == 3:
+        assert (boundaries_obj.boundary2label_id[0, 0] - torch.tensor([(7/36)*sb_epsilon, 1-(7/36)*sb_epsilon, 0.0])).abs().max().item() < 1e-6
+        assert (boundaries_obj.boundary2label_id[0, 3] - torch.tensor([(37/72)*sb_epsilon, 1-(43/72)*sb_epsilon, (1/12)*sb_epsilon])).abs().max().item() < 1e-6
+        assert (boundaries_obj.boundary2label_id[0, 4] - torch.tensor([(4/9)*sb_epsilon, (1/9)*sb_epsilon, 1-(5/9)*sb_epsilon])).abs().max().item() < 1e-6
+        assert (boundaries_obj.boundary2label_id[3, 4] - torch.tensor([(19/36)*sb_epsilon, 1-(5/9)*sb_epsilon, (1/36)*sb_epsilon])).abs().max().item() < 1e-6
+        assert (boundaries_obj.boundary2label_id[4, 4] - torch.tensor([(1/3)*sb_epsilon, 1-(1/3)*sb_epsilon, 0.0])).abs().max().item() < 1e-6
+
+
+
+@pytest.mark.parametrize("neg_sampling_rate, hard_neg_sampling_rate", [(1.0, 1.0), (0.0, 1.0), (0.0, 0.0), 
+                                                                       (0.3, 0.6), (0.1, 0.9), (0.2, 0.8)])
+@pytest.mark.parametrize("training", [True, False])
+def test_boundaries_obj_for_neg_sampling(neg_sampling_rate, hard_neg_sampling_rate, training):
+    entry = {'tokens': list("abcdefhijk"), 
+             'chunks': [('EntA', 0, 1), ('EntA', 0, 4), ('EntB', 0, 5), ('EntA', 3, 5), ('EntA', 4, 5)]}
+    config = BoundarySelectionDecoderConfig(neg_sampling_rate=neg_sampling_rate, 
+                                            hard_neg_sampling_rate=hard_neg_sampling_rate, 
+                                            hard_neg_sampling_size=3)
+    config.build_vocab([entry])
+    boundaries_obj = config.exemplify(entry, training=training)['boundaries_obj']
+    
+    if not training:
+        assert boundaries_obj.non_mask.sum().item() == 55
+    elif neg_sampling_rate >= 1 and hard_neg_sampling_rate >= 1:
+        assert boundaries_obj.non_mask.sum().item() == 55
+    elif neg_sampling_rate <=0 and hard_neg_sampling_rate <= 0:
+        assert boundaries_obj.non_mask.sum().item() == 5
+    elif neg_sampling_rate <=0 and hard_neg_sampling_rate >= 1:
+        assert boundaries_obj.non_mask.sum().item() == 30
+    else:
+        assert abs(boundaries_obj.non_mask.sum().item() - (25*neg_sampling_rate + 25*hard_neg_sampling_rate + 5)) < 5
 
 
 @pytest.mark.parametrize("seq_len", [1, 5, 10, 100])
-def test_generate_spans_from_upper_triangular(seq_len):
-    assert len(list(_generate_spans_from_upper_triangular(seq_len))) == (seq_len+1)*seq_len // 2
+def test_non_mask2spans(seq_len):
+    non_mask = (torch.arange(seq_len) - torch.arange(seq_len).unsqueeze(-1) >= 0)
+    assert len(list(_non_mask2spans(non_mask))) == (seq_len+1)*seq_len // 2
+    
+    non_mask = torch.empty(seq_len, seq_len).bernoulli(p=0.5).bool()
+    assert len(list(_non_mask2spans(non_mask))) == non_mask.sum().item()
