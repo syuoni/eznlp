@@ -3,6 +3,7 @@ import pytest
 import spacy
 import jieba
 import torch
+import torchvision
 import allennlp.modules
 import transformers
 import flair
@@ -187,4 +188,26 @@ def flair_lm(request, flair_fw_lm, flair_bw_lm):
         return flair_fw_lm
     elif request.param == 'bw':
         return flair_bw_lm
+
+
+
+@pytest.fixture
+def flickr8k_demo_with_folder():
+    data = TabularIO(text_col_id=1, label_col_id=0, sep='\t').read("data/flickr8k/demo.Flickr8k.token.txt")
+    for entry in data:
+        entry['trg_tokens'] = entry.pop('tokens')
+        entry['img_fn'], entry['cap_no'] = entry.pop('label').split('#')
+    folder = "data/flickr8k/Flicker8k_Dataset"
+    return data, folder
+
+
+@pytest.fixture
+def resnet18_with_trans():
+    resnet = torchvision.models.resnet18(pretrained=False)
+    resnet.load_state_dict(torch.load("assets/resnet/resnet18-5c106cde.pth"))
+    resnet = torch.nn.Sequential(*list(resnet.children())[:-2])
     
+    trans = torch.nn.Sequential(torchvision.transforms.Resize((256, 256)), 
+                                torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                                                 std =[0.229, 0.224, 0.225]))
+    return resnet, trans
