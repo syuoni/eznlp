@@ -65,8 +65,16 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                help="whether to use biaffine")
     group_decoder.add_argument('--affine_arch', type=str, default='FFN', 
                                help="affine encoder architecture")
+    group_decoder.add_argument('--neg_sampling_rate', type=float, default=1.0, 
+                               help="Negative sampling rate")
+    group_decoder.add_argument('--hard_neg_sampling_rate', type=float, default=1.0, 
+                               help="Hard negative sampling rate")
+    group_decoder.add_argument('--hard_neg_sampling_size', type=int, default=5, 
+                               help="Hard negative sampling window size")
     group_decoder.add_argument('--sb_epsilon', type=float, default=0.0, 
                                help="Boundary smoothing loss epsilon")
+    group_decoder.add_argument('--sb_size', type=int, default=1, 
+                               help="Boundary smoothing window size")
     return parse_to_args(parser)
 
 
@@ -172,7 +180,11 @@ def build_ER_config(args: argparse.Namespace):
                                                         affine=EncoderConfig(arch=args.affine_arch, hid_dim=150, num_layers=1, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2), 
                                                         fl_gamma=args.fl_gamma,
                                                         sl_epsilon=args.sl_epsilon, 
-                                                        sb_epsilon=args.sb_epsilon,
+                                                        neg_sampling_rate=args.neg_sampling_rate, 
+                                                        hard_neg_sampling_rate=args.hard_neg_sampling_rate, 
+                                                        hard_neg_sampling_size=args.hard_neg_sampling_size, 
+                                                        sb_epsilon=args.sb_epsilon, 
+                                                        sb_size=args.sb_size,
                                                         hid_drop_rates=drop_rates)
     return ExtractorConfig(**collect_IE_assembly_config(args), decoder=decoder_config)
 

@@ -68,9 +68,7 @@ if __name__ == '__main__':
         
     elif args.task == 'entity_recognition' and args.language.lower() == 'english':
         if not args.use_bert:
-            sampler = OptionSampler(doc_level=True, 
-                                    train_with_dev=False, 
-                                    num_epochs=100, 
+            sampler = OptionSampler(num_epochs=100, 
                                     optimizer=['SGD'], lr=[0.1], 
                                     batch_size=32, 
                                     num_layers=[1, 2], 
@@ -100,7 +98,9 @@ if __name__ == '__main__':
             #                         sb_epsilon=[0.0, 0.1],
             #                         char_arch=['LSTM', 'Conv'])
         else:
-            sampler = OptionSampler(num_epochs=50, 
+            sampler = OptionSampler(doc_level=True, 
+                                    train_with_dev=False, 
+                                    num_epochs=50, 
                                     lr=[1e-3, 2e-3], 
                                     # lr=numpy.logspace(-3.1, -2.5, num=100, base=10).tolist(), # 8e-4 ~ 3e-3
                                     finetune_lr=[1e-5, 2e-5], 
