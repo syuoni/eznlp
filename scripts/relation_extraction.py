@@ -38,7 +38,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                help="Focal Loss gamma")
     group_decoder.add_argument('--sl_epsilon', type=float, default=0.0, 
                                help="Label smoothing loss epsilon")
-
+    
     # Span-based
     group_decoder.add_argument('--agg_mode', type=str, default='max_pooling', 
                                help="aggregating mode")
@@ -83,7 +83,7 @@ if __name__ == '__main__':
     save_path =  f"cache/{args.dataset}-RE/{timestamp}"
     if not os.path.exists(save_path):
         os.makedirs(save_path)
-        
+    
     handlers = [logging.FileHandler(f"{save_path}/training.log")]
     if args.log_terminal:
         handlers.append(logging.StreamHandler(sys.stdout))
@@ -102,7 +102,7 @@ if __name__ == '__main__':
     device = auto_device()
     if device.type.startswith('cuda'):
         torch.cuda.set_device(device)
-        
+    
     if len(args.pipeline_path) > 0:
         if not os.path.exists(f"{args.pipeline_path}/data-with-chunks-pred.pth"):
             raise RuntimeError("`pipeline_path` is specified but not existing")
@@ -141,7 +141,7 @@ if __name__ == '__main__':
     trainer = build_trainer(model, device, len(train_loader), args)
     if args.pdb: 
         pdb.set_trace()
-        
+    
     torch.save(config, f"{save_path}/{config.name}-config.pth")
     def save_callback(model):
         torch.save(model, f"{save_path}/{config.name}.pth")

@@ -54,6 +54,19 @@ def add_base_arguments(parser: argparse.ArgumentParser):
                              help="number of gradient accumulation steps")
     
     group_model = parser.add_argument_group('model configurations')
+    group_model.add_argument('--emb_dim', type=int, default=100, 
+                             help="embedding dim (`0` for w/o embeddings)")
+    group_model.add_argument('--emb_freeze', default=False, action='store_true', 
+                             help="whether to freeze embedding weights")
+    group_model.add_argument('--char_arch', type=str, default='None', choices=['None', 'LSTM', 'GRU', 'Conv'], 
+                             help="character-level encoder architecture (None for w/o character-level encoder)")
+    group_model.add_argument('--use_bigram', default=False, action='store_true', 
+                             help="whether to use bigram")
+    group_model.add_argument('--use_softword', default=False, action='store_true', 
+                             help="whether to use softword")
+    group_model.add_argument('--use_softlexicon', default=False, action='store_true', 
+                             help="whether to use softlexicon")
+    
     group_model.add_argument('--hid_dim', type=int, default=200, 
                              help="hidden dim")
     group_model.add_argument('--num_layers', type=int, default=1, 
@@ -62,39 +75,19 @@ def add_base_arguments(parser: argparse.ArgumentParser):
                              help="dropout rate")
     group_model.add_argument('--use_locked_drop', default=False, action='store_true', 
                              help="whether to use locked dropout")
+    group_model.add_argument('--use_interm1', default=False, action='store_true', 
+                             help="whether to use intermediate1")
     
-    subparsers = parser.add_subparsers(dest='command', help="sub-commands")
-    parser_fs = subparsers.add_parser('from_scratch', aliases=['fs'], 
-                                      help="train from scratch, or with freezed pretrained models", 
-                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser_fs.add_argument('--emb_dim', type=int, default=100, 
-                           help="embedding dim")
-    parser_fs.add_argument('--emb_freeze', default=False, action='store_true', 
-                           help="whether to freeze embedding weights")
-    parser_fs.add_argument('--char_arch', type=str, default='LSTM', 
-                           help="character-level encoder architecture")
-    parser_fs.add_argument('--use_interm1', default=False, action='store_true', 
-                           help="whether to use intermediate1")
-    parser_fs.add_argument('--use_elmo', default=False, action='store_true', 
-                           help="whether to use ELMo")
-    parser_fs.add_argument('--use_flair', default=False, action='store_true', 
-                           help="whether to use Flair")
-    parser_fs.add_argument('--use_bigram', default=False, action='store_true', 
-                           help="whether to use bigram")
-    parser_fs.add_argument('--use_softword', default=False, action='store_true', 
-                           help="whether to use softword")
-    parser_fs.add_argument('--use_softlexicon', default=False, action='store_true', 
-                           help="whether to use softlexicon")
-    
-    parser_ft = subparsers.add_parser('finetune', aliases=['ft'], 
-                                      help="train by finetuning pretrained models", 
-                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser_ft.add_argument('--bert_arch', type=str, default='BERT_base', 
-                           help="bert-like architecture")
-    parser_ft.add_argument('--bert_drop_rate', type=float, default=0.2, 
-                           help="dropout rate for BERT")
-    parser_ft.add_argument('--use_interm2', default=False, action='store_true', 
-                           help="whether to use intermediate2")
+    group_model.add_argument('--use_elmo', default=False, action='store_true', 
+                             help="whether to use ELMo")
+    group_model.add_argument('--use_flair', default=False, action='store_true', 
+                             help="whether to use Flair")
+    group_model.add_argument('--bert_arch', type=str, default='None', 
+                             help="bert-like architecture (None for w/o bert-like)")
+    group_model.add_argument('--bert_drop_rate', type=float, default=0.2, 
+                             help="dropout rate for BERT")
+    group_model.add_argument('--use_interm2', default=False, action='store_true', 
+                             help="whether to use intermediate2")
     return parser
 
 
@@ -210,7 +203,7 @@ def load_data(args: argparse.Namespace):
         for data in [train_data, dev_data, test_data]:
             for entry in data:
                 entry['chunks'] = [ck for ck in entry['chunks'] if ck[0] in ('PERSON', 'LOC', 'ORG', 'GPE')]
-
+        
     elif args.dataset == 'yidu_s4k':
         io = JsonIO(is_tokenized=False, tokenize_callback='char', 
                     text_key='originalText', chunk_key='entities', chunk_type_key='label_type', chunk_start_key='start_pos', chunk_end_key='end_pos', 
@@ -314,11 +307,11 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
         return allennlp.modules.Elmo(options_file="assets/allennlp/elmo_2x4096_512_2048cnn_2xhighway_options.json", 
                                      weight_file="assets/allennlp/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5", 
                                      num_output_representations=1)
-    
+        
     elif pretrained_str.lower() == 'flair':
         return (flair.models.LanguageModel.load_language_model("assets/flair/news-forward-0.4.1.pt"), 
                 flair.models.LanguageModel.load_language_model("assets/flair/news-backward-0.4.1.pt"))
-    
+        
     elif args.language.lower() == 'english':
         if pretrained_str.lower().startswith('bert'):
             if 'wwm' in pretrained_str.lower():
@@ -329,7 +322,7 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
                 PATH = "assets/transformers/bert-large-cased" if cased else "assets/transformers/bert-large-uncased"
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.BertTokenizer.from_pretrained(PATH))
-        
+            
         elif pretrained_str.lower().startswith('roberta'):
             if 'base' in pretrained_str.lower():
                 PATH = "assets/transformers/roberta-base"
@@ -337,14 +330,14 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
                 PATH = "assets/transformers/roberta-large"
             return (transformers.RobertaModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.RobertaTokenizer.from_pretrained(PATH, add_prefix_space=True))
-        
+            
         elif pretrained_str.lower().startswith('albert'):
             size = re.search("x*(base|large)", pretrained_str.lower())
             if size is not None:
                 PATH = f"assets/transformers/albert-{size.group()}-v2"
             return (transformers.AlbertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.AlbertTokenizer.from_pretrained(PATH))
-        
+            
         elif pretrained_str.lower().startswith('spanbert'):
             if 'base' in pretrained_str.lower():
                 PATH = "assets/transformers/SpanBERT/spanbert-base-cased"
@@ -358,7 +351,7 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
             PATH = "assets/transformers/hfl/chinese-bert-wwm-ext"
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512))
-        
+            
         elif pretrained_str.lower().startswith('roberta'):
             # RoBERTa-like BERT
             # https://github.com/ymcui/Chinese-BERT-wwm#faq
@@ -373,7 +366,7 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
                 PATH = "assets/transformers/hfl/chinese-macbert-large"
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512))
-
+            
         elif pretrained_str.lower().startswith('ernie'):
             PATH = "assets/transformers/nghuyong/ernie-1.0"
             return (transformers.AutoModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 

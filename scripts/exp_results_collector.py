@@ -45,7 +45,7 @@ if __name__ == '__main__':
         for fn in logging_fns:
             with open(fn) as f:
                 log_text = f.read()
-                
+            
             try:
                 exp_res = dict_re.search(log_text).group()
                 exp_res = eval(exp_res)
@@ -69,7 +69,7 @@ if __name__ == '__main__':
                 logger.warning(f"Failed to parse {fn}")
             else:
                 exp_results.append(exp_res)
-                
+        
         df = pandas.DataFrame(exp_results)
         df.to_excel(f"cache/{args.dataset}-collected-{timestamp}.xlsx", index=False)
         
@@ -77,5 +77,3 @@ if __name__ == '__main__':
         with zipfile.ZipFile(f"cache/{args.dataset}-collected-{timestamp}.zip", 'w') as zipf:
             for fn in logging_fns:
                 zipf.write(fn, fn.split('/', 1)[1])
-            
-    

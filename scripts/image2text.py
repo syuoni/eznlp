@@ -16,8 +16,7 @@ from eznlp.vectors import Vectors, GloVe
 from eznlp.dataset import Dataset
 from eznlp.model import ImageEncoderConfig, OneHotConfig, GeneratorConfig
 from eznlp.model import Image2TextConfig
-from eznlp.model.bert_like import segment_uniformly_for_bert_like
-from eznlp.training import Trainer, count_params, evaluate_entity_recognition
+from eznlp.training import Trainer, count_params
 
 from utils import add_base_arguments, parse_to_args
 from utils import load_data, dataset2language, build_trainer, header_format
@@ -54,26 +53,20 @@ def collect_I2T_assembly_config(args: argparse.Namespace):
                                                                  std =[0.229, 0.224, 0.225]))
     enc_config = ImageEncoderConfig(backbone=resnet, folder=img_folder, transforms=trans)
     
-    if args.command in ('from_scratch', 'fs'):
-        if args.language.lower() == 'english' and args.emb_dim in (50, 100, 200):
-            vectors = GloVe(f"assets/vectors/glove.6B.{args.emb_dim}d.txt")
-        elif args.language.lower() == 'english' and args.emb_dim == 300:
-            vectors = GloVe("assets/vectors/glove.840B.300d.txt")
-        elif args.language.lower() == 'chinese' and args.emb_dim == 50:
-            vectors = Vectors.load("assets/vectors/gigaword_chn.all.a2b.uni.ite50.vec", encoding='utf-8')
-        else:
-            vectors = None
-        emb_config = OneHotConfig(tokens_key='trg_tokens', field='text', has_sos=True, has_eos=True, 
-                                  vectors=vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze)
-        gen_config = GeneratorConfig(arch='LSTM', embedding=emb_config, 
-                                     hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
-        
-    elif args.command in ('finetune', 'ft'):
-        pass
-        
+    if args.language.lower() == 'english' and args.emb_dim in (50, 100, 200):
+        vectors = GloVe(f"assets/vectors/glove.6B.{args.emb_dim}d.txt")
+    elif args.language.lower() == 'english' and args.emb_dim == 300:
+        vectors = GloVe("assets/vectors/glove.840B.300d.txt")
+    elif args.language.lower() == 'chinese' and args.emb_dim == 50:
+        vectors = Vectors.load("assets/vectors/gigaword_chn.all.a2b.uni.ite50.vec", encoding='utf-8')
     else:
-        raise Exception("No sub-command specified")
-        
+        vectors = None
+    
+    emb_config = OneHotConfig(tokens_key='trg_tokens', field='text', has_sos=True, has_eos=True, 
+                              vectors=vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze)
+    gen_config = GeneratorConfig(arch='LSTM', embedding=emb_config, 
+                                 hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
+    
     return {'encoder': enc_config, 
             'decoder': gen_config}
 
@@ -91,7 +84,7 @@ if __name__ == '__main__':
     save_path =  f"cache/{args.dataset}-I2T/{timestamp}"
     if not os.path.exists(save_path):
         os.makedirs(save_path)
-        
+    
     handlers = [logging.FileHandler(f"{save_path}/training.log")]
     if args.log_terminal:
         handlers.append(logging.StreamHandler(sys.stdout))
@@ -111,7 +104,7 @@ if __name__ == '__main__':
     if device.type.startswith('cuda'):
         torch.cuda.set_device(device)
         temp = torch.randn(100).to(device)
-        
+    
     train_data, dev_data, test_data = load_data(args)
     args.language = dataset2language[args.dataset]
     # train_data, dev_data, test_data = train_data[:100], dev_data[:100], test_data[:100]
@@ -137,8 +130,7 @@ if __name__ == '__main__':
     trainer = build_trainer(model, device, len(train_loader), args)
     if args.pdb: 
         pdb.set_trace()
-        
-        
+    
     torch.save(config, f"{save_path}/{config.name}-config.pth")
     def save_callback(model):
         torch.save(model, f"{save_path}/{config.name}.pth")
