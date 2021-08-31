@@ -1,0 +1,10 @@
+--optimizer
+AdamW
+--scheduler
+LinearDecayWithWarmup
+--emb_dim
+0
+--char_arch
+None
+--bert_arch
+BERT_base

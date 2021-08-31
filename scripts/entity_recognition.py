@@ -178,7 +178,8 @@ def build_ER_config(args: argparse.Namespace):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                     fromfile_prefix_chars='@')
     args = parse_arguments(parser)
     
     # Use micro-seconds to ensure different timestamps while adopting multiprocessing
@@ -211,7 +212,7 @@ if __name__ == '__main__':
     args.language = dataset2language[args.dataset]
     config = build_ER_config(args)
     
-    if (args.bert_arch.lower() != 'none' and 
+    if (config.bert_like is not None and 
             ((args.dataset in ('SIGHAN2006', 'yidu_s4k')) or 
              (args.dataset in ('conll2003', 'conll2012') and getattr(args, 'doc_level', False)))):
         train_data = segment_uniformly_for_bert_like(train_data, config.bert_like.tokenizer, verbose=args.log_terminal)

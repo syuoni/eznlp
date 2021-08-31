@@ -25,8 +25,8 @@ if __name__ == '__main__':
                         help="dataset name")
     parser.add_argument('--seed', type=int, default=515, 
                         help="random seed")
-    parser.add_argument('--command', type=str, default='fs', 
-                        help="sub-commands")
+    parser.add_argument('--use_bert', default=False, action='store_true', 
+                        help="whether to use bert-like")
     parser.add_argument('--num_exps', type=int, default=-1, 
                         help="number of experiments to run")
     parser.add_argument('--num_workers', type=int ,default=0, 
@@ -43,31 +43,31 @@ if __name__ == '__main__':
     COMMAND = f"python scripts/{args.task}.py --dataset {args.dataset} --seed {args.seed}"
     if args.num_workers > 0:
         COMMAND = " ".join([COMMAND, "--no_log_terminal"])
+    if args.use_bert:
+        COMMAND = " ".join([COMMAND, "@scripts/options/with_bert.opt"])
+    else:
+        COMMAND = " ".join([COMMAND, "@scripts/options/without_bert.opt"])
     
     if args.task == 'text_classification':
-        if args.command in ('fs', 'from_scratch'):
+        if not args.use_bert:
             sampler = OptionSampler(num_epochs=50, 
                                     optimizer=['SGD'], lr=[0.05, 0.1, 0.2, 0.5], 
                                     # optimizer=['AdamW'], lr=[5e-4, 1e-3, 2e-3], 
                                     # optimizer=['Adadelta'], lr=[0.5, 1.0, 2.0], 
                                     batch_size=64, 
                                     num_layers=[1, 2], 
-                                    agg_mode=['max_pooling', 'multiplicative_attention'], 
-                                    fs=None)
+                                    agg_mode=['max_pooling', 'multiplicative_attention'])
         else:
             sampler = OptionSampler(num_epochs=10, 
-                                    optimizer=['AdamW'], 
                                     lr=[5e-4, 1e-3, 2e-3], 
                                     finetune_lr=[1e-5, 2e-5], 
                                     batch_size=32, 
-                                    scheduler='LinearDecayWithWarmup', 
-                                    ft=None, 
                                     bert_drop_rate=0.2, 
                                     use_interm2=[False, True], 
                                     bert_arch=['BERT_base', 'RoBERTa_base'])
         
     elif args.task == 'entity_recognition' and args.language.lower() == 'english':
-        if args.command in ('fs', 'from_scratch'):
+        if not args.use_bert:
             sampler = OptionSampler(doc_level=True, 
                                     train_with_dev=False, 
                                     num_epochs=100, 
@@ -77,7 +77,6 @@ if __name__ == '__main__':
                                     # grad_clip=[-1, 5],
                                     # use_locked_drop=[False, True],
                                     ck_decoder='sequence_tagging',
-                                    fs=None, 
                                     use_elmo=[False, True], 
                                     use_flair=[False, True], 
                                     char_arch=['LSTM', 'Conv'])
@@ -90,7 +89,6 @@ if __name__ == '__main__':
             #                         num_neg_chunks=[100, 200], 
             #                         max_span_size=[5, 10], 
             #                         ck_size_emb_dim=[10, 25],
-            #                         fs=None, 
             #                         char_arch=['LSTM', 'Conv'])
             
             # sampler = OptionSampler(num_epochs=100, 
@@ -100,19 +98,15 @@ if __name__ == '__main__':
             #                         ck_decoder='boundary_selection',
             #                         affine_arch=['FFN', 'LSTM'],
             #                         sb_epsilon=[0.0, 0.1],
-            #                         fs=None, 
             #                         char_arch=['LSTM', 'Conv'])
         else:
             sampler = OptionSampler(num_epochs=50, 
-                                    optimizer=['AdamW'], 
                                     lr=[1e-3, 2e-3], 
                                     # lr=numpy.logspace(-3.1, -2.5, num=100, base=10).tolist(), # 8e-4 ~ 3e-3
                                     finetune_lr=[1e-5, 2e-5], 
                                     # finetune_lr=numpy.logspace(-5.1, -4.5, num=100, base=10).tolist(), # 8e-6 ~ 3e-5
                                     batch_size=48, 
-                                    scheduler='LinearDecayWithWarmup', 
                                     ck_decoder='sequence_tagging',
-                                    ft=None, 
                                     bert_drop_rate=0.2, 
                                     use_interm2=[False, True], 
                                     bert_arch=['BERT_base', 'RoBERTa_base', 
@@ -122,59 +116,49 @@ if __name__ == '__main__':
                                                'SpanBERT_base', 'SpanBERT_large'])
             
             # sampler = OptionSampler(num_epochs=50, 
-            #                         optimizer=['AdamW'], 
             #                         lr=[1e-3, 2e-3], 
             #                         finetune_lr=[1e-5, 2e-5], 
             #                         batch_size=48, 
-            #                         scheduler='LinearDecayWithWarmup', 
             #                         ck_decoder='span_classification',
-            #                         ft=None, 
             #                         bert_drop_rate=0.2, 
             #                         use_interm2=[False, True], 
             #                         bert_arch=['BERT_base', 'RoBERTa_base'])
             
             # sampler = OptionSampler(num_epochs=50, 
-            #                         optimizer=['AdamW'], 
             #                         lr=[1e-3, 2e-3], 
             #                         finetune_lr=[1e-5, 2e-5], 
             #                         batch_size=48, 
-            #                         scheduler='LinearDecayWithWarmup', 
             #                         ck_decoder='boundary_selection',
             #                         affine_arch=['FFN', 'LSTM'],
             #                         sb_epsilon=[0.0, 0.1],
-            #                         ft=None, 
             #                         bert_drop_rate=0.2, 
             #                         use_interm2=[False, True], 
             #                         bert_arch=['BERT_base', 'RoBERTa_base'])
             
     elif args.task == 'entity_recognition' and args.language.lower() == 'chinese':
-        if args.command in ('fs', 'from_scratch'):
+        if not args.use_bert:
             sampler = OptionSampler(num_epochs=100, 
                                     optimizer=['AdamW', 'Adamax'], lr=[5e-4, 1e-3, 2e-3, 5e-3], 
                                     batch_size=32, 
                                     num_layers=[1, 2], 
                                     ck_decoder='sequence_tagging',
-                                    fs=None, 
                                     # use_bigram=[False, True], 
                                     # use_softword=[False, True], 
                                     use_softlexicon=[False, True])
             
         else:
             sampler = OptionSampler(num_epochs=50, 
-                                    optimizer=['AdamW'], 
                                     lr=[1e-3, 2e-3], 
                                     finetune_lr=[1e-5, 2e-5], 
                                     batch_size=48, 
-                                    scheduler='LinearDecayWithWarmup', 
                                     ck_decoder='sequence_tagging',
-                                    ft=None, 
                                     bert_drop_rate=0.2, 
                                     use_interm2=[False, True], 
                                     bert_arch=['BERT_base', 'RoBERTa_base', 
                                                'MacBERT_base', 'MacBERT_large', 'ERNIE'])
             
     elif args.task == 'relation_extraction':
-        if args.command in ('fs', 'from_scratch'):
+        if not args.use_bert:
             sampler = OptionSampler(num_epochs=100, 
                                     # optimizer=['SGD'], lr=[0.1], 
                                     # optimizer=['Adadelta'], lr=[1.0],
@@ -183,22 +167,18 @@ if __name__ == '__main__':
                                     num_layers=[1, 2], 
                                     num_neg_relations=[100, 200], 
                                     ck_size_emb_dim=[10, 25], 
-                                    ck_label_emb_dim=[10, 25],
-                                    fs=None)
+                                    ck_label_emb_dim=[10, 25])
         else:
             sampler = OptionSampler(num_epochs=50, 
-                                    optimizer=['AdamW'], 
                                     lr=[1e-3, 2e-3], 
                                     finetune_lr=[1e-5, 2e-5], 
                                     batch_size=48, 
-                                    scheduler='LinearDecayWithWarmup', 
-                                    ft=None, 
                                     bert_drop_rate=0.2, 
                                     use_interm2=[False, True], 
                                     bert_arch=['BERT_base', 'RoBERTa_base'])
             
     elif args.task == 'joint_extraction':
-        if args.command in ('fs', 'from_scratch'):
+        if not args.use_bert:
             sampler = OptionSampler(num_epochs=100, 
                                     # optimizer=['SGD'], lr=[0.1], 
                                     # optimizer=['Adadelta'], lr=[1.0],
@@ -210,17 +190,13 @@ if __name__ == '__main__':
                                     num_neg_relations=[100, 200], 
                                     max_span_size=[5, 10],
                                     ck_size_emb_dim=[10, 25], 
-                                    ck_label_emb_dim=[10, 25],
-                                    fs=None)
+                                    ck_label_emb_dim=[10, 25])
         else:
             sampler = OptionSampler(num_epochs=50, 
-                                    optimizer=['AdamW'], 
                                     lr=[1e-3, 2e-3], 
                                     finetune_lr=[1e-5, 2e-5], 
                                     batch_size=48, 
-                                    scheduler='LinearDecayWithWarmup', 
                                     ck_decoder='span_classification',
-                                    ft=None, 
                                     bert_drop_rate=0.2, 
                                     use_interm2=[False, True], 
                                     bert_arch=['BERT_base', 'RoBERTa_base'])
