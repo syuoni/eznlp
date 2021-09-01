@@ -21,7 +21,7 @@ from eznlp.model.bert_like import segment_uniformly_for_bert_like
 from eznlp.training import Trainer, count_params, evaluate_entity_recognition
 
 from utils import add_base_arguments, parse_to_args
-from utils import load_data, dataset2language, load_pretrained, build_trainer, header_format
+from utils import load_data, dataset2language, load_pretrained, build_trainer, header_format, profile
 
 
 def parse_arguments(parser: argparse.ArgumentParser):
@@ -257,6 +257,10 @@ if __name__ == '__main__':
     logger.info(header_format("Training", sep='-'))
     trainer = build_trainer(model, device, len(train_loader), args)
     if args.pdb: 
+        pdb.set_trace()
+    
+    if args.profile:
+        prof = profile(trainer, train_loader)
         pdb.set_trace()
     
     torch.save(config, f"{save_path}/{config.name}-config.pth")

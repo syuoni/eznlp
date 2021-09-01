@@ -71,7 +71,7 @@ if __name__ == '__main__':
                 exp_results.append(exp_res)
         
         df = pandas.DataFrame(exp_results)
-        filter_cols = ['log_terminal', 'pdb', 'pipeline', 'dataset', 'use_amp', 'seed', 'fl_gamma', 'grad_clip', 'use_locked_drop', 
+        filter_cols = ['log_terminal', 'profile', 'pdb', 'pipeline', 'dataset', 'use_amp', 'seed', 'fl_gamma', 'grad_clip', 'use_locked_drop', 
                        'scheme', 'use_crf', 'num_neg_chunks', 'max_span_size', 'size_emb_dim', 'agg_mode']
         df = df.iloc[:, ~df.columns.isin(filter_cols)]
         df.to_excel(f"cache/{args.dataset}-collected-{timestamp}.xlsx", index=False)

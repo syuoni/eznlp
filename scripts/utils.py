@@ -5,6 +5,7 @@ import re
 import spacy
 import jieba
 import random
+import time
 import numpy
 import sklearn.model_selection
 import torch
@@ -25,6 +26,8 @@ def add_base_arguments(parser: argparse.ArgumentParser):
     group_debug = parser.add_argument_group('debug')
     group_debug.add_argument('--pdb', default=False, action='store_true', 
                              help="whether to use pdb for debug")
+    group_debug.add_argument('--profile', default=False, action='store_true', 
+                             help="whether to profile")
     group_debug.add_argument('--no_log_terminal', dest='log_terminal', default=True, action='store_false', 
                              help="whether log to terminal")
     
@@ -402,3 +405,20 @@ def build_trainer(model, device, num_train_batches: int, args: argparse.Namespac
     
     return Trainer(model, optimizer=optimizer, scheduler=scheduler, schedule_by_step=schedule_by_step, num_grad_acc_steps=args.num_grad_acc_steps,
                    device=device, grad_clip=args.grad_clip, use_amp=args.use_amp)
+
+
+
+def profile(trainer, dataloader):
+    # raise "out of memory" error if use_cuda=Ture
+    with torch.autograd.profiler.profile(use_cuda=False) as prof:
+        t0 = time.time()
+        prof_loader = [batch for _, batch in zip(range(10), dataloader)]
+        logger.info(f"Data loading time: {time.time()-t0:.3f}s")
+        t0 = time.time()
+        trainer.train_epoch(prof_loader)
+        logger.info(f"Model training time: {time.time()-t0:.3f}s")
+    
+    sort_by = "cuda_time_total" if trainer.device.type.startswith('cuda') else "cpu_time_total"
+    prof_table = prof.key_averages().table(sort_by=sort_by, row_limit=10)
+    logger.info(f"\n{prof_table}")
+    return prof
