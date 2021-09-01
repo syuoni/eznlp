@@ -4,7 +4,7 @@ import torch
 
 from eznlp.dataset import Dataset
 from eznlp.model import EncoderConfig, BertLikeConfig, BoundarySelectionDecoderConfig, ExtractorConfig
-from eznlp.model.decoder.boundary_selection import _non_mask2spans
+from eznlp.model.decoder.boundary_selection import _spans_from_upper_triangular
 from eznlp.training import Trainer
 
 
@@ -104,7 +104,6 @@ def test_boundaries_obj(sb_epsilon, EAR_data_demo):
     dataset.build_vocabs_and_dims()
     boundaries_obj = dataset[0]['boundaries_obj']
     
-    num_tokens, num_chunks = len(entry['tokens']), len(entry['chunks'])
     assert boundaries_obj.chunks == chunks
     if sb_epsilon == 0:
         assert all(boundaries_obj.boundary2label_id[start, end-1] == config.decoder.label2idx[label] for label, start, end in chunks)
@@ -113,8 +112,7 @@ def test_boundaries_obj(sb_epsilon, EAR_data_demo):
         assert all(boundaries_obj.boundary2label_id[start, end-1].argmax() == config.decoder.label2idx[label] for label, start, end in chunks)
         labels_retr = [config.decoder.idx2label[i] for i in boundaries_obj.boundary2label_id[torch.arange(len(tokens)) >= torch.arange(len(tokens)).unsqueeze(-1)].argmax(dim=-1).tolist()]
     
-    non_mask = (torch.arange(num_tokens) - torch.arange(num_tokens).unsqueeze(-1) >= 0)
-    chunks_retr = [(label, start, end) for label, (start, end) in zip(labels_retr, _non_mask2spans(non_mask)) if label != config.decoder.none_label]
+    chunks_retr = [(label, start, end) for label, (start, end) in zip(labels_retr, _spans_from_upper_triangular(len(tokens))) if label != config.decoder.none_label]
     assert set(chunks_retr) == set(chunks)
 
 
@@ -177,9 +175,5 @@ def test_boundaries_obj_for_neg_sampling(neg_sampling_rate, hard_neg_sampling_ra
 
 
 @pytest.mark.parametrize("seq_len", [1, 5, 10, 100])
-def test_non_mask2spans(seq_len):
-    non_mask = (torch.arange(seq_len) - torch.arange(seq_len).unsqueeze(-1) >= 0)
-    assert len(list(_non_mask2spans(non_mask))) == (seq_len+1)*seq_len // 2
-    
-    non_mask = non_mask & torch.empty(seq_len, seq_len).bernoulli(p=0.5).bool()
-    assert len(list(_non_mask2spans(non_mask))) == non_mask.sum().item()
+def test_spans_from_upper_triangular(seq_len):
+    assert len(list(_spans_from_upper_triangular(seq_len))) == (seq_len+1)*seq_len // 2

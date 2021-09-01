@@ -53,7 +53,9 @@ class BoundarySelectionDecoderMixin(DecoderMixinBase):
         return ave_scores['micro']['f1']
 
 
-def _surrounding_spans(span: Tuple[int], distance: int, num_tokens: int):
+def _spans_from_surrounding(span: Tuple[int], distance: int, num_tokens: int):
+    """Spans from the surrounding area of the given `span`.
+    """
     for k in range(distance):
         for start_offset, end_offset in [(-k, -distance+k), 
                                          (-distance+k, k), 
@@ -64,13 +66,12 @@ def _surrounding_spans(span: Tuple[int], distance: int, num_tokens: int):
                 yield (start, end)
 
 
-def _non_mask2spans(non_mask: torch.BoolTensor):
-    """Spans in the upper triangular area. 
+def _spans_from_upper_triangular(seq_len: int):
+    """Spans from the upper triangular area. 
     """
-    for start in range(non_mask.size(0)):
-        for end in range(start+1, non_mask.size(1)+1):
-            if non_mask[start, end-1].item():
-                yield (start, end)
+    for start in range(seq_len):
+        for end in range(start+1, seq_len+1):
+            yield (start, end)
 
 
 class Boundaries(TargetWrapper):
@@ -100,7 +101,7 @@ class Boundaries(TargetWrapper):
                 hard_neg_non_mask = torch.zeros_like(non_mask)
                 for label, start, end in self.chunks:
                     for dist in range(1, config.hard_neg_sampling_size+1):
-                        for sur_start, sur_end in _surrounding_spans((start, end), dist, num_tokens):
+                        for sur_start, sur_end in _spans_from_surrounding((start, end), dist, num_tokens):
                             hard_neg_non_mask[sur_start, sur_end-1] = True
                 
                 if config.hard_neg_sampling_rate < 1:
@@ -127,7 +128,7 @@ class Boundaries(TargetWrapper):
                     
                     for dist in range(1, config.sb_size+1):
                         eps_per_span = config.sb_epsilon / (config.sb_size * dist * 4)
-                        sur_spans = list(_surrounding_spans((start, end), dist, num_tokens))
+                        sur_spans = list(_spans_from_surrounding((start, end), dist, num_tokens))
                         for sur_start, sur_end in sur_spans:
                             self.boundary2label_id[sur_start, sur_end-1, label_id] += eps_per_span
                         # Absorb the probabilities assigned to illegal positions
@@ -308,7 +309,7 @@ class BoundarySelectionDecoder(DecoderBase, BoundarySelectionDecoderMixin):
             
             confidences, label_ids = curr_scores[:curr_len, :curr_len][curr_non_mask].softmax(dim=-1).max(dim=-1)
             labels = [self.idx2label[i] for i in label_ids.cpu().tolist()]
-            chunks = [(label, start, end) for label, (start, end) in zip(labels, _non_mask2spans(curr_non_mask)) if label != self.none_label]
+            chunks = [(label, start, end) for label, (start, end) in zip(labels, _spans_from_upper_triangular(curr_len)) if label != self.none_label]
             
             # Sort chunks from high to low confidences
             chunks = [ck for _, ck in sorted(zip(confidences.cpu().tolist(), chunks), reverse=True)]
