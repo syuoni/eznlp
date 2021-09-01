@@ -236,9 +236,10 @@ class BoundarySelectionDecoder(DecoderBase, BoundarySelectionDecoderMixin):
         # Use buffer to accelerate computation
         # Note: size_id = size - 1
         self.register_buffer('_span_size_ids', torch.arange(config.max_len) - torch.arange(config.max_len).unsqueeze(-1))
+        # Create `_span_non_mask` before changing values of `_span_size_ids`
+        self.register_buffer('_span_non_mask', self._span_size_ids >= 0)
         self._span_size_ids.masked_fill_(self._span_size_ids < 0, 0)
         self._span_size_ids.masked_fill_(self._span_size_ids >= config.max_span_size, config.max_span_size-1)
-        self.register_buffer('_span_non_mask', self._span_size_ids >= 0)
         
         self.dropout = CombinedDropout(*config.hid_drop_rates)
         
