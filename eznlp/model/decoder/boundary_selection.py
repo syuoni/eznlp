@@ -65,8 +65,10 @@ def _surrounding_spans(span: Tuple[int], distance: int, num_tokens: int):
 
 
 def _non_mask2spans(non_mask: torch.BoolTensor):
+    """Spans in the upper triangular area. 
+    """
     for start in range(non_mask.size(0)):
-        for end in range(1, non_mask.size(1)+1):
+        for end in range(start+1, non_mask.size(1)+1):
             if non_mask[start, end-1].item():
                 yield (start, end)
 
@@ -84,21 +86,33 @@ class Boundaries(TargetWrapper):
         super().__init__(training)
         
         self.chunks = data_entry.get('chunks', None)
-        
         num_tokens = len(data_entry['tokens'])
-        self.non_mask = (torch.arange(num_tokens) - torch.arange(num_tokens).unsqueeze(-1) >= 0)
         
         if training and config.neg_sampling_rate < 1:
-            pos_mask = torch.zeros_like(self.non_mask)
-            hard_neg_mask = torch.zeros_like(self.non_mask)
+            non_mask = (torch.arange(num_tokens) - torch.arange(num_tokens).unsqueeze(-1) >= 0)
+            pos_non_mask = torch.zeros_like(non_mask)
             for label, start, end in self.chunks:
-                pos_mask[start, end-1] = True
-                for dist in range(1, config.hard_neg_sampling_size+1):
-                    for sur_start, sur_end in _surrounding_spans((start, end), dist, num_tokens):
-                        hard_neg_mask[sur_start, sur_end-1] = True
-            neg_sampling_rate = ((hard_neg_mask).float() * config.hard_neg_sampling_rate + 
-                                 (self.non_mask & ~hard_neg_mask).float() * config.neg_sampling_rate)
-            self.non_mask = torch.bernoulli(neg_sampling_rate).bool() | pos_mask
+                pos_non_mask[start, end-1] = True
+            
+            neg_sampled = torch.empty_like(non_mask).bernoulli(p=config.neg_sampling_rate)
+            
+            if config.hard_neg_sampling_rate > config.neg_sampling_rate:
+                hard_neg_non_mask = torch.zeros_like(non_mask)
+                for label, start, end in self.chunks:
+                    for dist in range(1, config.hard_neg_sampling_size+1):
+                        for sur_start, sur_end in _surrounding_spans((start, end), dist, num_tokens):
+                            hard_neg_non_mask[sur_start, sur_end-1] = True
+                
+                if config.hard_neg_sampling_rate < 1:
+                    # Solve: 1 - (1 - p_{neg})(1 - p_{comp}) = p_{hard}
+                    # Get: p_{comp} = (p_{hard} - p_{neg}) / (1 - p_{neg})
+                    comp_sampling_rate = (config.hard_neg_sampling_rate - config.neg_sampling_rate) / (1 - config.neg_sampling_rate)
+                    comp_sampled = torch.empty_like(non_mask).bernoulli(p=comp_sampling_rate)
+                    neg_sampled = neg_sampled | (comp_sampled & hard_neg_non_mask)
+                else:
+                    neg_sampled = neg_sampled | hard_neg_non_mask
+            
+            self.non_mask = pos_non_mask | (neg_sampled & non_mask)
         
         if self.chunks is not None:
             if config.sb_epsilon <= 0:
@@ -112,11 +126,12 @@ class Boundaries(TargetWrapper):
                     self.boundary2label_id[start, end-1, label_id] += (1 - config.sb_epsilon)
                     
                     for dist in range(1, config.sb_size+1):
+                        eps_per_span = config.sb_epsilon / (config.sb_size * dist * 4)
                         sur_spans = list(_surrounding_spans((start, end), dist, num_tokens))
                         for sur_start, sur_end in sur_spans:
-                            self.boundary2label_id[sur_start, sur_end-1, label_id] += config.sb_epsilon/config.sb_size/4/dist
+                            self.boundary2label_id[sur_start, sur_end-1, label_id] += eps_per_span
                         # Absorb the probabilities assigned to illegal positions
-                        self.boundary2label_id[start, end-1, label_id] += config.sb_epsilon/config.sb_size/4/dist * (dist*4 - len(sur_spans))
+                        self.boundary2label_id[start, end-1, label_id] += eps_per_span * (dist * 4 - len(sur_spans))
                 
                 self.boundary2label_id[:, :, config.none_idx] = 1 - self.boundary2label_id.sum(dim=-1)
 
@@ -216,11 +231,13 @@ class BoundarySelectionDecoder(DecoderBase, BoundarySelectionDecoderMixin):
         if config.size_emb_dim > 0:
             self.size_embedding = torch.nn.Embedding(config.max_span_size, config.size_emb_dim)
             reinit_embedding_(self.size_embedding)
-            
-            # Note: size_id = size - 1
-            self.register_buffer('span_size_ids', torch.arange(config.max_len) - torch.arange(config.max_len).unsqueeze(-1))
-            self.span_size_ids.masked_fill_(self.span_size_ids < 0, 0)
-            self.span_size_ids.masked_fill_(self.span_size_ids >= config.max_span_size, config.max_span_size-1)
+        
+        # Use buffer to accelerate computation
+        # Note: size_id = size - 1
+        self.register_buffer('_span_size_ids', torch.arange(config.max_len) - torch.arange(config.max_len).unsqueeze(-1))
+        self._span_size_ids.masked_fill_(self._span_size_ids < 0, 0)
+        self._span_size_ids.masked_fill_(self._span_size_ids >= config.max_span_size, config.max_span_size-1)
+        self.register_buffer('_span_non_mask', self._span_size_ids >= 0)
         
         self.dropout = CombinedDropout(*config.hid_drop_rates)
         
@@ -232,6 +249,13 @@ class BoundarySelectionDecoder(DecoderBase, BoundarySelectionDecoderMixin):
         torch.nn.init.zeros_(self.b.data)
         
         self.criterion = config.instantiate_criterion(reduction='sum')
+        
+        
+    def _get_span_size_ids(self, seq_len: int):
+        return self._span_size_ids[:seq_len, :seq_len]
+        
+    def _get_span_non_mask(self, seq_len: int):
+        return self._span_non_mask[:seq_len, :seq_len]
         
         
     def compute_scores(self, batch: Batch, full_hidden: torch.Tensor):
@@ -253,7 +277,7 @@ class BoundarySelectionDecoder(DecoderBase, BoundarySelectionDecoderMixin):
         
         if hasattr(self, 'size_embedding'):
             # size_embedded: (start_step, end_step, emb_dim)
-            size_embedded = self.size_embedding(self.span_size_ids[:affined_start.size(1), :affined_end.size(1)])
+            size_embedded = self.size_embedding(self._get_span_size_ids(full_hidden.size(1)))
             # affined_cat: (batch, start_step, end_step, affine_dim*2 + emb_dim)
             affined_cat = torch.cat([affined_cat, self.dropout(size_embedded).unsqueeze(0).expand(batch.size, -1, -1, -1)], dim=-1)
         
@@ -268,8 +292,9 @@ class BoundarySelectionDecoder(DecoderBase, BoundarySelectionDecoderMixin):
         
         losses = []
         for curr_scores, boundaries_obj, curr_len in zip(batch_scores, batch.boundaries_objs, batch.seq_lens.cpu().tolist()):
-            loss = self.criterion(curr_scores[:curr_len, :curr_len][boundaries_obj.non_mask], 
-                                  boundaries_obj.boundary2label_id[boundaries_obj.non_mask])
+            curr_non_mask = getattr(boundaries_obj, 'non_mask', self._get_span_non_mask(curr_len))
+            
+            loss = self.criterion(curr_scores[:curr_len, :curr_len][curr_non_mask], boundaries_obj.boundary2label_id[curr_non_mask])
             losses.append(loss)
         return torch.stack(losses)
         
@@ -278,10 +303,12 @@ class BoundarySelectionDecoder(DecoderBase, BoundarySelectionDecoderMixin):
         batch_scores = self.compute_scores(batch, full_hidden)
         
         batch_chunks = []
-        for curr_scores, boundaries_obj, curr_len in zip(batch_scores, batch.boundaries_objs, batch.seq_lens.cpu().tolist()):
-            confidences, label_ids = curr_scores[:curr_len, :curr_len][boundaries_obj.non_mask].softmax(dim=-1).max(dim=-1)
+        for curr_scores, curr_len in zip(batch_scores, batch.seq_lens.cpu().tolist()):
+            curr_non_mask = self._get_span_non_mask(curr_len)
+            
+            confidences, label_ids = curr_scores[:curr_len, :curr_len][curr_non_mask].softmax(dim=-1).max(dim=-1)
             labels = [self.idx2label[i] for i in label_ids.cpu().tolist()]
-            chunks = [(label, start, end) for label, (start, end) in zip(labels, _non_mask2spans(boundaries_obj.non_mask)) if label != self.none_label]
+            chunks = [(label, start, end) for label, (start, end) in zip(labels, _non_mask2spans(curr_non_mask)) if label != self.none_label]
             
             # Sort chunks from high to low confidences
             chunks = [ck for _, ck in sorted(zip(confidences.cpu().tolist(), chunks), reverse=True)]

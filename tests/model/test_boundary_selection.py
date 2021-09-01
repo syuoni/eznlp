@@ -102,18 +102,19 @@ def test_boundaries_obj(sb_epsilon, EAR_data_demo):
     config = ExtractorConfig(decoder=BoundarySelectionDecoderConfig(sb_epsilon=sb_epsilon))
     dataset = Dataset(EAR_data_demo, config)
     dataset.build_vocabs_and_dims()
-    
     boundaries_obj = dataset[0]['boundaries_obj']
+    
+    num_tokens, num_chunks = len(entry['tokens']), len(entry['chunks'])
     assert boundaries_obj.chunks == chunks
     if sb_epsilon == 0:
         assert all(boundaries_obj.boundary2label_id[start, end-1] == config.decoder.label2idx[label] for label, start, end in chunks)
         labels_retr = [config.decoder.idx2label[i] for i in boundaries_obj.boundary2label_id[torch.arange(len(tokens)) >= torch.arange(len(tokens)).unsqueeze(-1)].tolist()]
-        
     else:
         assert all(boundaries_obj.boundary2label_id[start, end-1].argmax() == config.decoder.label2idx[label] for label, start, end in chunks)
         labels_retr = [config.decoder.idx2label[i] for i in boundaries_obj.boundary2label_id[torch.arange(len(tokens)) >= torch.arange(len(tokens)).unsqueeze(-1)].argmax(dim=-1).tolist()]
-
-    chunks_retr = [(label, start, end) for label, (start, end) in zip(labels_retr, _non_mask2spans(boundaries_obj.non_mask)) if label != config.decoder.none_label]
+    
+    non_mask = (torch.arange(num_tokens) - torch.arange(num_tokens).unsqueeze(-1) >= 0)
+    chunks_retr = [(label, start, end) for label, (start, end) in zip(labels_retr, _non_mask2spans(non_mask)) if label != config.decoder.none_label]
     assert set(chunks_retr) == set(chunks)
 
 
@@ -128,7 +129,6 @@ def test_boundaries_obj_for_boundary_smoothing(sb_epsilon, sb_size):
     
     num_tokens, num_chunks = len(entry['tokens']), len(entry['chunks'])
     span_sizes = torch.arange(num_tokens) - torch.arange(num_tokens).unsqueeze(-1) + 1
-    assert not boundaries_obj.non_mask[span_sizes<=0].any().item()
     assert (boundaries_obj.boundary2label_id.sum(dim=-1) - 1).abs().max().item() < 1e-6
     assert (boundaries_obj.boundary2label_id[:, :, 1:].sum() - num_chunks).abs().max().item() < 1e-6
     assert (boundaries_obj.boundary2label_id[span_sizes<=0] - torch.tensor([1.0, 0.0, 0.0])).abs().max().item() < 1e-6
@@ -166,10 +166,8 @@ def test_boundaries_obj_for_neg_sampling(neg_sampling_rate, hard_neg_sampling_ra
     config.build_vocab([entry])
     boundaries_obj = config.exemplify(entry, training=training)['boundaries_obj']
     
-    if not training:
-        assert boundaries_obj.non_mask.sum().item() == 55
-    elif neg_sampling_rate >= 1 and hard_neg_sampling_rate >= 1:
-        assert boundaries_obj.non_mask.sum().item() == 55
+    if (not training) or (neg_sampling_rate >= 1):
+        assert not hasattr(boundaries_obj, 'non_mask')
     elif neg_sampling_rate <=0 and hard_neg_sampling_rate <= 0:
         assert boundaries_obj.non_mask.sum().item() == 5
     elif neg_sampling_rate <=0 and hard_neg_sampling_rate >= 1:
@@ -183,5 +181,5 @@ def test_non_mask2spans(seq_len):
     non_mask = (torch.arange(seq_len) - torch.arange(seq_len).unsqueeze(-1) >= 0)
     assert len(list(_non_mask2spans(non_mask))) == (seq_len+1)*seq_len // 2
     
-    non_mask = torch.empty(seq_len, seq_len).bernoulli(p=0.5).bool()
+    non_mask = non_mask & torch.empty(seq_len, seq_len).bernoulli(p=0.5).bool()
     assert len(list(_non_mask2spans(non_mask))) == non_mask.sum().item()
