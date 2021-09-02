@@ -110,6 +110,8 @@ spacy_nlp_en = spacy.load("en_core_web_sm", disable=['tagger', 'parser', 'ner'])
 
 dataset2language = {'conll2003': 'English', 
                     'conll2012': 'English', 
+                    'ace2004': 'English', 
+                    'ace2005': 'English', 
                     'conll2004': 'English', 
                     'SciERC': 'English', 
                     'ResumeNER': 'Chinese', 
@@ -145,6 +147,22 @@ def load_data(args: argparse.Namespace):
         train_data = io.read("data/conll2012/train.english.v4_gold_conll")
         dev_data   = io.read("data/conll2012/dev.english.v4_gold_conll")
         test_data  = io.read("data/conll2012/test.english.v4_gold_conll")
+        
+    elif args.dataset == 'ace2004':
+        io = JsonIO(text_key='tokens', 
+                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', 
+                    case_mode='None', number_mode='Zeros')
+        train_data = io.read("data/ace-lu2015emnlp/ACE2004/train.json")
+        dev_data   = io.read("data/ace-lu2015emnlp/ACE2004/dev.json")
+        test_data  = io.read("data/ace-lu2015emnlp/ACE2004/test.json")
+        
+    elif args.dataset == 'ace2005':
+        io = JsonIO(text_key='tokens', 
+                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', 
+                    case_mode='None', number_mode='Zeros')
+        train_data = io.read("data/ace-lu2015emnlp/ACE2005/train.json")
+        dev_data   = io.read("data/ace-lu2015emnlp/ACE2005/dev.json")
+        test_data  = io.read("data/ace-lu2015emnlp/ACE2005/test.json")
         
     elif args.dataset == 'conll2004':
         json_io = JsonIO(text_key='tokens', 
