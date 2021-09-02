@@ -104,16 +104,23 @@ def test_boundaries_obj(sb_epsilon, EAR_data_demo):
     dataset.build_vocabs_and_dims()
     boundaries_obj = dataset[0]['boundaries_obj']
     
+    num_tokens, num_chunks = len(tokens), len(chunks)
     assert boundaries_obj.chunks == chunks
     if sb_epsilon == 0:
         assert all(boundaries_obj.boundary2label_id[start, end-1] == config.decoder.label2idx[label] for label, start, end in chunks)
-        labels_retr = [config.decoder.idx2label[i] for i in boundaries_obj.boundary2label_id[torch.arange(len(tokens)) >= torch.arange(len(tokens)).unsqueeze(-1)].tolist()]
+        labels_retr = [config.decoder.idx2label[i] for i in boundaries_obj.boundary2label_id[torch.arange(num_tokens) >= torch.arange(num_tokens).unsqueeze(-1)].tolist()]
     else:
         assert all(boundaries_obj.boundary2label_id[start, end-1].argmax() == config.decoder.label2idx[label] for label, start, end in chunks)
-        labels_retr = [config.decoder.idx2label[i] for i in boundaries_obj.boundary2label_id[torch.arange(len(tokens)) >= torch.arange(len(tokens)).unsqueeze(-1)].argmax(dim=-1).tolist()]
+        labels_retr = [config.decoder.idx2label[i] for i in boundaries_obj.boundary2label_id[torch.arange(num_tokens) >= torch.arange(num_tokens).unsqueeze(-1)].argmax(dim=-1).tolist()]
     
-    chunks_retr = [(label, start, end) for label, (start, end) in zip(labels_retr, _spans_from_upper_triangular(len(tokens))) if label != config.decoder.none_label]
+    chunks_retr = [(label, start, end) for label, (start, end) in zip(labels_retr, _spans_from_upper_triangular(num_tokens)) if label != config.decoder.none_label]
     assert set(chunks_retr) == set(chunks)
+    
+    extractor = config.instantiate()
+    # \sum_{k=0}^N k(N-k), where N is `num_tokens`
+    assert extractor.decoder._span_size_ids.sum().item() == (num_tokens**3 - num_tokens) // 6
+    assert extractor.decoder._span_non_mask.sum().item() == (num_tokens**2 + num_tokens) // 2
+
 
 
 @pytest.mark.parametrize("sb_epsilon", [0.1, 0.5])
