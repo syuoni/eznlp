@@ -199,9 +199,11 @@ class SpanClassificationDecoder(DecoderBase, SpanClassificationDecoderMixin):
             confidences, label_ids = batch_logits[k].softmax(dim=-1).max(dim=-1)
             labels = [self.idx2label[i] for i in label_ids.cpu().tolist()]
             chunks = [(label, start, end) for label, (start, end) in zip(labels, batch.spans_objs[k].spans) if label != self.none_label]
+            confidences = [conf for label, conf in zip(labels, confidences.cpu().tolist()) if label != self.none_label]
+            assert len(confidences) == len(chunks)
             
             # Sort chunks from high to low confidences
-            chunks = [ck for _, ck in sorted(zip(confidences.cpu().tolist(), chunks), reverse=True)]
+            chunks = [ck for _, ck in sorted(zip(confidences, chunks), reverse=True)]
             chunks = filter_clashed_by_priority(chunks, allow_nested=self.allow_nested)
             
             batch_chunks.append(chunks)
