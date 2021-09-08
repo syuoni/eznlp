@@ -13,8 +13,6 @@ import allennlp.modules
 import transformers
 import flair
 
-from eznlp.token import LexiconTokenizer
-from eznlp.vectors import Vectors
 from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO, BratIO
 from eznlp.io import PostIO
 from eznlp.training import Trainer, LRLambda, collect_params, check_param_groups
@@ -304,20 +302,6 @@ def load_data(args: argparse.Namespace):
         
     else:
         raise Exception("Dataset does NOT exist", args.dataset)
-        
-    if getattr(args, 'use_softword', False) or getattr(args, 'use_softlexicon', False):
-        ctb50 = Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
-        tokenizer = LexiconTokenizer(ctb50.itos)
-        for data in [train_data, dev_data, test_data]:
-            for data_entry in data:
-                data_entry['tokens'].build_softwords(tokenizer.tokenize)
-                data_entry['tokens'].build_softlexicons(tokenizer.tokenize)
-    
-    if args.dataset in ('ChnSentiCorp', 'THUCNews_10'):
-        for data in [train_data, dev_data, test_data]:
-            for data_entry in data:
-                if len(data_entry['tokens']) > 1200:
-                    data_entry['tokens'] = data_entry['tokens'][:300] + data_entry['tokens'][-900:]
     
     return train_data, dev_data, test_data
 

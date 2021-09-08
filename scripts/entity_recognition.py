@@ -11,6 +11,7 @@ import torch
 
 from eznlp import auto_device
 from eznlp.vectors import Vectors, GloVe
+from eznlp.token import LexiconTokenizer
 from eznlp.dataset import Dataset
 from eznlp.config import ConfigDict
 from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig, CharConfig, SoftLexiconConfig
@@ -189,6 +190,28 @@ def build_ER_config(args: argparse.Namespace):
     return ExtractorConfig(**collect_IE_assembly_config(args), decoder=decoder_config)
 
 
+def process_IE_data(train_data, dev_data, test_data, args, config):
+    if (config.bert_like is not None and 
+            ((args.dataset in ('SIGHAN2006', 'yidu_s4k')) or 
+             (args.dataset in ('conll2003', 'conll2012') and getattr(args, 'doc_level', False)))):
+        train_data = segment_uniformly_for_bert_like(train_data, config.bert_like.tokenizer, verbose=args.log_terminal)
+        dev_data   = segment_uniformly_for_bert_like(dev_data,   config.bert_like.tokenizer, verbose=args.log_terminal)
+        test_data  = segment_uniformly_for_bert_like(test_data,  config.bert_like.tokenizer, verbose=args.log_terminal)
+    
+    if getattr(args, 'use_softword', False) or getattr(args, 'use_softlexicon', False):
+        if config.nested_ohots is not None and 'softlexicon' in config.nested_ohots.keys():
+            ctb50 = config.nested_ohots['softlexicon'].vectors
+        else:
+            ctb50 = Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
+        tokenizer = LexiconTokenizer(ctb50.itos)
+        for data in [train_data, dev_data, test_data]:
+            for data_entry in data:
+                data_entry['tokens'].build_softwords(tokenizer.tokenize)
+                data_entry['tokens'].build_softlexicons(tokenizer.tokenize)
+    
+    return train_data, dev_data, test_data
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      fromfile_prefix_chars='@')
@@ -223,13 +246,7 @@ if __name__ == '__main__':
     train_data, dev_data, test_data = load_data(args)
     args.language = dataset2language[args.dataset]
     config = build_ER_config(args)
-    
-    if (config.bert_like is not None and 
-            ((args.dataset in ('SIGHAN2006', 'yidu_s4k')) or 
-             (args.dataset in ('conll2003', 'conll2012') and getattr(args, 'doc_level', False)))):
-        train_data = segment_uniformly_for_bert_like(train_data, config.bert_like.tokenizer, verbose=args.log_terminal)
-        dev_data   = segment_uniformly_for_bert_like(dev_data,   config.bert_like.tokenizer, verbose=args.log_terminal)
-        test_data  = segment_uniformly_for_bert_like(test_data,  config.bert_like.tokenizer, verbose=args.log_terminal)
+    train_data, dev_data, test_data = process_IE_data(train_data, dev_data, test_data, args, config)
     
     if not args.train_with_dev:
         train_set = Dataset(train_data, config, training=True)

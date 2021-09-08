@@ -137,10 +137,16 @@ if __name__ == '__main__':
     # train_data, dev_data, test_data = train_data[:1000], dev_data[:1000], test_data[:1000]
     config = build_TC_config(args)
     
+    # Truncate too long sentences
     if config.bert_like is not None:
         train_data = truncate_for_bert_like(train_data, config.bert_like.tokenizer, verbose=args.log_terminal)
         dev_data   = truncate_for_bert_like(dev_data,   config.bert_like.tokenizer, verbose=args.log_terminal)
         test_data  = truncate_for_bert_like(test_data,  config.bert_like.tokenizer, verbose=args.log_terminal)
+    elif args.dataset in ('ChnSentiCorp', 'THUCNews_10'):
+        for data in [train_data, dev_data, test_data]:
+            for data_entry in data:
+                if len(data_entry['tokens']) > 1200:
+                    data_entry['tokens'] = data_entry['tokens'][:300] + data_entry['tokens'][-900:]
     
     train_set = Dataset(train_data, config, training=True)
     train_set.build_vocabs_and_dims(dev_data, test_data)

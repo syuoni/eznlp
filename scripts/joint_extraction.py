@@ -21,7 +21,7 @@ from eznlp.training import Trainer, count_params, evaluate_joint_extraction
 
 from utils import add_base_arguments, parse_to_args
 from utils import load_data, dataset2language, load_pretrained, build_trainer, header_format
-from entity_recognition import collect_IE_assembly_config
+from entity_recognition import collect_IE_assembly_config, process_IE_data
 
 
 def parse_arguments(parser: argparse.ArgumentParser):
@@ -165,6 +165,7 @@ if __name__ == '__main__':
     train_data, dev_data, test_data = load_data(args)
     args.language = dataset2language[args.dataset]
     config = build_joint_config(args)
+    train_data, dev_data, test_data = process_IE_data(train_data, dev_data, test_data, args, config)
     
     if not args.train_with_dev:
         train_set = Dataset(train_data, config, training=True)
