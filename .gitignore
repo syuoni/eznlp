@@ -141,6 +141,7 @@ dmypy.json
 !/data/conlleval/*.txt
 !/data/*/fix_*.py
 !/data/ontonotesv4/*.py
+!/data/GENIA/*.py
 
 !/publications/
 /publications/*
