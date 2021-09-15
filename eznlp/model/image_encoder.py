@@ -3,7 +3,6 @@ from typing import List
 import torch
 import torchvision
 
-
 from ..config import Config
 
 
@@ -12,6 +11,7 @@ class ImageEncoderConfig(Config):
         self.arch = kwargs.pop('arch', 'ResNet')
         self.backbone = kwargs.pop('backbone', None)
         self.transforms = kwargs.pop('transforms', None)
+        self.use_cache = kwargs.pop('use_cache', True)
         
         self.height = kwargs.pop('height', 14)
         self.width = kwargs.pop('width', 14)
@@ -35,12 +35,21 @@ class ImageEncoderConfig(Config):
         state['backbone'] = None
         return state
         
-    def exemplify(self, image_path: str):
-        img = torchvision.io.read_image(image_path)
-        return self.transforms(img.float().div(255))
+    def exemplify(self, entry: dict, training: bool=True):
+        if self.use_cache:
+            if 'img' not in entry:
+                entry['img'] = torchvision.io.read_image(entry['img_path']).float().div(255)
+            img = entry['img']
+        else:
+            img = torchvision.io.read_image(entry['img_path']).float().div(255)
         
-    def batchify(self, batch_examples: List[torch.Tensor]):
-        return torch.stack(batch_examples)
+        # `transforms` may include random augmentation
+        return {'img': self.transforms(img)}
+        
+        
+    def batchify(self, batch_examples: List[dict]):
+        # The cached `img` will not be passed to cuda device
+        return {'img': torch.stack([ex['img'] for ex in batch_examples])}
         
     def instantiate(self):
         return ImageEncoder(self)

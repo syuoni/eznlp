@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from typing import List
-import torch
 
 from ...wrapper import Batch
 from ..embedder import OneHotConfig
@@ -31,13 +30,13 @@ class Image2TextConfig(ModelConfigBase):
         
     def exemplify(self, entry: dict, training: bool=True):
         example = {}
-        example['img'] = self.encoder.exemplify(entry['img_path'])
+        example.update(self.encoder.exemplify(entry, training=training))
         example.update(self.decoder.exemplify(entry, training=training))
         return example
         
     def batchify(self, batch_examples: List[dict]):
         batch = {}
-        batch['img'] = self.encoder.batchify([ex['img'] for ex in batch_examples])
+        batch.update(self.encoder.batchify(batch_examples))
         batch.update(self.decoder.batchify(batch_examples))
         return batch
         

@@ -92,3 +92,20 @@ def test_generation_dataset(training, flickr8k_demo, resnet18_with_trans):
         assert len(dataset) == 2
         examples = [dataset[i] for i in range(len(dataset))]
         assert (examples[1]['img'] - examples[0]['img']).abs().max().item() > 1e-4
+
+
+@pytest.mark.parametrize("use_cache", [True, False])
+def test_image_cache(use_cache, flickr8k_demo, resnet18_with_trans, device):
+    resnet, trans = resnet18_with_trans
+    config = Image2TextConfig(encoder=ImageEncoderConfig(backbone=resnet, transforms=trans, use_cache=use_cache))
+    
+    dataset = GenerationDataset(flickr8k_demo, config)
+    dataset.build_vocabs_and_dims()
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=4, collate_fn=dataset.collate)
+    
+    for batch in dataloader:
+        batch = batch.to(device)
+    if use_cache:
+        assert all('img' in entry for entry in flickr8k_demo)
+    else:
+        assert all('img' not in entry for entry in flickr8k_demo)

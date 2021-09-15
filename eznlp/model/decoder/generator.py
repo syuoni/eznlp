@@ -4,7 +4,6 @@ import itertools
 import torch
 import torchtext
 
-from ...token import TokenSequence
 from ...wrapper import Batch
 from ...nn.functional import sequence_pooling
 from ...nn.modules import CombinedDropout, SequenceAttention
