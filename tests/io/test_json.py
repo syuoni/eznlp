@@ -2,7 +2,7 @@
 import pytest
 import jieba
 
-from eznlp.io import JsonIO, SQuADIO, BratIO
+from eznlp.io import JsonIO, SQuADIO, KarpathyIO, BratIO
 from eznlp.utils.chunk import detect_nested, filter_clashed_by_priority
 
 
@@ -188,3 +188,28 @@ class TestSQuADIO(object):
         assert len(dev_data) == 11873
         assert len(dev_errors) == 0
         assert len(dev_mismatches) == 208
+
+
+
+class TestKarpathyIO(object):
+    """
+    References
+    ----------
+    [1] Vinyals, et al. 2015. Show and tell: A neural image caption generator. CVPR 2015.
+    """
+    def test_flickr8k(self):
+        io = KarpathyIO(img_folder="data/flickr8k/Flicker8k_Dataset")
+        train_data, dev_data, test_data = io.read("data/flickr8k/flickr8k-karpathy2015cvpr.json")
+        
+        assert len(train_data) == 6_000
+        assert len(dev_data) == 1_000
+        assert len(test_data) == 1_000
+        
+        
+    def test_flickr30k(self):
+        io = KarpathyIO(img_folder="data/flickr30k/flickr30k-images")
+        train_data, dev_data, test_data = io.read("data/flickr30k/flickr30k-karpathy2015cvpr.json")
+        
+        assert len(train_data) == 29_000
+        assert len(dev_data) == 1_014
+        assert len(test_data) == 1_000

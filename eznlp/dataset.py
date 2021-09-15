@@ -29,17 +29,6 @@ class Dataset(torch.utils.data.Dataset):
         return len(self.data)
         
     @property
-    def _has_tokens(self):
-        return 'tokens' in self.data[0]
-        
-    def _make_tokens_summary(self, field: str='tokens'):
-        seq_lens = [len(entry[field]) for entry in self.data]
-        ave_len = sum(seq_lens) / len(seq_lens)
-        max_len = max(seq_lens)
-        return [f"The average `{field}` length is {ave_len:,.1f}", 
-                f"The maximum `{field}` length is {max_len:,}"]
-        
-    @property
     def summary(self):
         summary = []
         num_seqs = len(self.data)
@@ -50,10 +39,10 @@ class Dataset(torch.utils.data.Dataset):
             summary.append(f"\tbuilt from {num_raws:,} raw entries")
         
         if 'tokens' in self.data[0]:
-            summary.extend(self._make_tokens_summary('tokens'))
-        
-        if 'trg_tokens' in self.data[0]:
-            summary.extend(self._make_tokens_summary('trg_tokens'))
+            seq_lens = [len(entry['tokens']) for entry in self.data]
+            ave_len, max_len = sum(seq_lens)/len(seq_lens), max(seq_lens)
+            summary.extend([f"The average `tokens` length is {ave_len:,.1f}", 
+                            f"The maximum `tokens` length is {max_len:,}"])
         
         if 'label' in self.data[0]:
             num_label_types = len({entry['label'] for entry in self.data})
@@ -80,11 +69,13 @@ class Dataset(torch.utils.data.Dataset):
     def build_vocabs_and_dims(self, *others):
         self.config.build_vocabs_and_dims(self.data, *others)
         
+    def _get_entry(self, i):
+        return self.data[i]
         
     def __getitem__(self, i):
-        entry = self.data[i]
+        entry = self._get_entry(i)
         example = {}
-        if self._has_tokens:
+        if 'tokens' in self.data[0]:
             example['tokenized_text'] = entry['tokens'].text
         
         example.update(self.config.exemplify(entry, training=self.training))
@@ -93,10 +84,47 @@ class Dataset(torch.utils.data.Dataset):
         
     def collate(self, batch_examples: List[dict]):
         batch = {}
-        if self._has_tokens:
+        if 'tokens' in self.data[0]:
             batch['tokenized_text'] = [ex['tokenized_text'] for ex in batch_examples]
             batch['seq_lens'] = torch.tensor([len(tokenized_text) for tokenized_text in batch['tokenized_text']])
             batch['mask'] = seq_lens2mask(batch['seq_lens'])
         
         batch.update(self.config.batchify(batch_examples))
         return Batch(**batch)
+
+
+
+
+class GenerationDataset(Dataset):
+    def __init__(self, data: List[dict], config: ModelConfigBase=None, training: bool=True):
+        super().__init__(data, config=config, training=training)
+        if training:
+            self._indexing = [(src_idx, trg_idx) for src_idx, entry in enumerate(self.data) 
+                                for trg_idx, tokens in enumerate(entry['full_trg_tokens'])]
+        
+    @property
+    def summary(self):
+        summary = [super().summary]
+        
+        seq_lens = [len(tokens) for entry in self.data for tokens in entry['full_trg_tokens']]
+        ave_len, max_len = sum(seq_lens)/len(seq_lens), max(seq_lens)
+        summary.extend([f"The average `trg_tokens` length is {ave_len:,.1f}", 
+                        f"The maximum `trg_tokens` length is {max_len:,}"])
+        return "\n".join(summary)
+        
+        
+    def __len__(self):
+        if self.training:
+            return len(self._indexing)
+        else:
+            return len(self.data)
+        
+    def _get_entry(self, i):
+        if self.training:
+            src_idx, trg_idx = self._indexing[i]
+            entry = self.data[src_idx]
+            # `trg_tokens` is a cache field
+            entry['trg_tokens'] = entry['full_trg_tokens'][trg_idx]
+            return entry
+        else:
+            return self.data[i]

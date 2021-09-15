@@ -11,7 +11,7 @@ import flair
 from eznlp import auto_device
 from eznlp.token import TokenSequence
 from eznlp.vectors import Vectors, GloVe
-from eznlp.io import TabularIO, ConllIO, JsonIO, BratIO
+from eznlp.io import TabularIO, ConllIO, JsonIO, KarpathyIO, BratIO
 
 
 def pytest_addoption(parser):
@@ -192,13 +192,10 @@ def flair_lm(request, flair_fw_lm, flair_bw_lm):
 
 
 @pytest.fixture
-def flickr8k_demo_with_folder():
-    data = TabularIO(text_col_id=1, label_col_id=0, sep='\t').read("data/flickr8k/demo.Flickr8k.token.txt")
-    for entry in data:
-        entry['trg_tokens'] = entry.pop('tokens')
-        entry['img_fn'], entry['cap_no'] = entry.pop('label').split('#')
-    folder = "data/flickr8k/Flicker8k_Dataset"
-    return data, folder
+def flickr8k_demo():
+    io = KarpathyIO(img_folder="data/flickr8k/Flicker8k_Dataset")
+    train_data, *_ = io.read("data/flickr8k/demo.flickr8k-karpathy2015cvpr.json")
+    return train_data
 
 
 @pytest.fixture

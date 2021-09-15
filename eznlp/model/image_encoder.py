@@ -11,11 +11,10 @@ class ImageEncoderConfig(Config):
     def __init__(self, **kwargs):
         self.arch = kwargs.pop('arch', 'ResNet')
         self.backbone = kwargs.pop('backbone', None)
+        self.transforms = kwargs.pop('transforms', None)
+        
         self.height = kwargs.pop('height', 14)
         self.width = kwargs.pop('width', 14)
-        
-        self.folder = kwargs.pop('folder', None)
-        self.transforms = kwargs.pop('transforms', None)
         super().__init__(**kwargs)
         
     @property
@@ -36,8 +35,8 @@ class ImageEncoderConfig(Config):
         state['backbone'] = None
         return state
         
-    def exemplify(self, image_fn: str):
-        img = torchvision.io.read_image(f"{self.folder}/{image_fn}")
+    def exemplify(self, image_path: str):
+        img = torchvision.io.read_image(image_path)
         return self.transforms(img.float().div(255))
         
     def batchify(self, batch_examples: List[torch.Tensor]):

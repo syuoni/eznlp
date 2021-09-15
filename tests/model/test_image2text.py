@@ -2,7 +2,7 @@
 import pytest
 import torch
 
-from eznlp.dataset import Dataset
+from eznlp.dataset import GenerationDataset
 from eznlp.training import Trainer
 from eznlp.model import ImageEncoderConfig, GeneratorConfig, Image2TextConfig
 
@@ -45,32 +45,50 @@ class TestModel(object):
     def _setup_case(self, data, device):
         self.device = device
         
-        self.dataset = Dataset(data, self.config)
+        self.dataset = GenerationDataset(data, self.config)
         self.dataset.build_vocabs_and_dims()
         self.model = self.config.instantiate().to(self.device)
         assert isinstance(self.config.name, str) and len(self.config.name) > 0
         
         
     @pytest.mark.parametrize("fl_gamma", [0.0, 2.0])
-    def test_model(self, fl_gamma, flickr8k_demo_with_folder, resnet18_with_trans, device):
-        flickr8k_demo, folder = flickr8k_demo_with_folder
+    def test_model(self, fl_gamma, flickr8k_demo, resnet18_with_trans, device):
         resnet, trans = resnet18_with_trans
-        self.config = Image2TextConfig(encoder=ImageEncoderConfig(backbone=resnet, transforms=trans, folder=folder), 
+        self.config = Image2TextConfig(encoder=ImageEncoderConfig(backbone=resnet, transforms=trans), 
                                        decoder=GeneratorConfig(fl_gamma=fl_gamma))
         self._setup_case(flickr8k_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
         
         
-    def test_prediction_without_gold(self, flickr8k_demo_with_folder, resnet18_with_trans, device):
-        flickr8k_demo, folder = flickr8k_demo_with_folder
+    def test_prediction_without_gold(self, flickr8k_demo, resnet18_with_trans, device):
         resnet, trans = resnet18_with_trans
-        self.config = Image2TextConfig(encoder=ImageEncoderConfig(backbone=resnet, transforms=trans, folder=folder))
+        self.config = Image2TextConfig(encoder=ImageEncoderConfig(backbone=resnet, transforms=trans))
         self._setup_case(flickr8k_demo, device)
         
-        data_wo_gold = [{'img_fn': entry['img_fn']} for entry in flickr8k_demo]
-        dataset_wo_gold = Dataset(data_wo_gold, self.config, training=False)
+        data_wo_gold = [{'img_path': entry['img_path']} for entry in flickr8k_demo]
+        dataset_wo_gold = GenerationDataset(data_wo_gold, self.config, training=False)
         
         trainer = Trainer(self.model, device=device)
         y_pred = trainer.predict(dataset_wo_gold)
         assert len(y_pred) == len(data_wo_gold)
+
+
+
+@pytest.mark.parametrize("training", [True, False])
+def test_generation_dataset(training, flickr8k_demo, resnet18_with_trans):
+    resnet, trans = resnet18_with_trans
+    config = Image2TextConfig(encoder=ImageEncoderConfig(backbone=resnet, transforms=trans))
+    
+    dataset = GenerationDataset(flickr8k_demo, config, training=training)
+    dataset.build_vocabs_and_dims()
+    if training:
+        assert len(dataset) == 10
+        examples = [dataset[i] for i in range(len(dataset))]
+        assert all((examples[i]['img']-examples[0]['img']).abs().max().item() < 1e-6 for i in range(5))
+        assert all((examples[i]['img']-examples[0]['img']).abs().max().item() > 1e-4 for i in range(5, 10))
+        assert len(set(tuple(ex['trg_tok_ids'].tolist()) for ex in examples)) == 10
+    else:
+        assert len(dataset) == 2
+        examples = [dataset[i] for i in range(len(dataset))]
+        assert (examples[1]['img'] - examples[0]['img']).abs().max().item() > 1e-4

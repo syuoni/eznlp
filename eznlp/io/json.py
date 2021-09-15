@@ -196,3 +196,35 @@ class SQuADIO(IO):
             return data, errors, mismatches
         else:
             return data
+
+
+
+class KarpathyIO(IO):
+    """An IO Interface of json files by Karpathy et al. (2015). 
+    
+    References
+    ----------
+    [1] Karpathy and Li. 2015. Deep visual-semantic alignments for generating image descriptions. CVPR, 2015.
+    """
+    def __init__(self, img_folder: str, encoding=None, verbose: bool=True, **token_kwargs):
+        self.img_folder = img_folder
+        super().__init__(is_tokenized=True, tokenize_callback=None, encoding=encoding, verbose=verbose, **token_kwargs)
+        
+    def read(self, file_path):
+        with open(file_path, 'r', encoding=self.encoding) as f:
+            raw_data = json.load(f)
+        raw_data = raw_data['images']
+        
+        train_data, dev_data, test_data = [], [], []
+        for raw_entry in raw_data:
+            entry = {'img_path': f"{self.img_folder}/{raw_entry['filename']}", 
+                     'full_trg_tokens': [self._build_tokens(sent['tokens']) for sent in raw_entry['sentences']]}
+            
+            if raw_entry['split'].lower().startswith(('dev', 'val')):
+                dev_data.append(entry)
+            elif raw_entry['split'].lower().startswith('test'):
+                test_data.append(entry)
+            else:
+                train_data.append(entry)
+        
+        return train_data, dev_data, test_data

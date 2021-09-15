@@ -31,7 +31,7 @@ class Image2TextConfig(ModelConfigBase):
         
     def exemplify(self, entry: dict, training: bool=True):
         example = {}
-        example['img'] = self.encoder.exemplify(entry['img_fn'])
+        example['img'] = self.encoder.exemplify(entry['img_path'])
         example.update(self.decoder.exemplify(entry, training=training))
         return example
         

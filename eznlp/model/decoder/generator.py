@@ -30,38 +30,34 @@ class GeneratorMixin(DecoderMixinBase):
         
         
     def exemplify(self, entry: dict, training: bool=True):
-        if training:
-            trg_tok_ids = self.embedding.exemplify(entry['trg_tokens'])
-            # Single ground-truth sentence for training
-            assert isinstance(entry['trg_tokens'], TokenSequence)
-            # Prepare `trg_tokenized_text` in a list for BLEU evaluation
-            return {'trg_tokenized_text': [entry['trg_tokens'].text], 
-                    'trg_tok_ids': trg_tok_ids}
-        else:
-            # Notes: The dev. loss will always be 0
-            trg_tok_ids = torch.tensor([self.embedding.sos_idx] + [self.embedding.pad_idx]*(self.max_len+1), dtype=torch.long)
-            if 'trg_tokens' in entry:
-                # Multiple ground-truth sentences for evaluation
-                assert isinstance(entry['trg_tokens'], list)
-                return {'trg_tokenized_text': [tokens.text for tokens in entry['trg_tokens']], 
-                        'trg_tok_ids': trg_tok_ids}
-            else:
-                # No ground-truth sentence for prediction
-                return {'trg_tok_ids': trg_tok_ids}
+        example = {}
         
+        if training:
+            # Single ground-truth sentence for training
+            example['trg_tok_ids'] = self.embedding.exemplify(entry['trg_tokens'])
+        else:
+            assert 'trg_tokens' not in entry
+            # Notes: The dev. loss will always be 0
+            example['trg_tok_ids'] = torch.tensor([self.embedding.sos_idx] + [self.embedding.pad_idx]*(self.max_len+1), dtype=torch.long)
+        
+        if 'full_trg_tokens' in entry:
+            # Multiple reference sentences for evaluation
+            example['full_trg_tokenized_text'] = [tokens.text for tokens in entry['full_trg_tokens']]
+        
+        return example
         
     def batchify(self, batch_examples: List[dict]):
         batch = {}
-        
-        if 'trg_tokenized_text' in batch_examples[0]:
-            batch['trg_tokenized_text'] = [ex['trg_tokenized_text'] for ex in batch_examples]
-        
         batch['trg_tok_ids'] = self.embedding.batchify([ex['trg_tok_ids'] for ex in batch_examples])
+        
+        if 'full_trg_tokenized_text' in batch_examples[0]:
+            batch['full_trg_tokenized_text'] = [ex['full_trg_tokenized_text'] for ex in batch_examples]
+        
         return batch
         
         
     def retrieve(self, batch: Batch):
-        return batch.trg_tokenized_text
+        return batch.full_trg_tokenized_text
         
     def evaluate(self, y_gold: List[List[List[str]]], y_pred: List[List[str]]):
         assert isinstance(y_gold[0], list) and isinstance(y_gold[0][0], list) and isinstance(y_gold[0][0][0], str)
@@ -114,9 +110,9 @@ class GeneratorConfig(SingleDecoderConfigBase, GeneratorMixin):
             return self.hid_dim + self.ctx_dim + self.emb_dim
         
     def build_vocab(self, *partitions):
-        self.embedding.build_vocab(*partitions)
-        self.max_len = max(len(entry['trg_tokens']) for data in partitions for entry in data)
-        
+        flattened = [[{'trg_tokens': tokens} for entry in data for tokens in entry['full_trg_tokens']] for data in partitions]
+        self.embedding.build_vocab(*flattened)
+        self.max_len = max(len(entry['trg_tokens']) for data in flattened for entry in data)
         
     def instantiate(self):
         if self.arch.lower() in ('lstm', 'gru'):
