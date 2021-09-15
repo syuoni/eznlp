@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import os
 import argparse
 import logging
 import re
@@ -13,7 +14,7 @@ import allennlp.modules
 import transformers
 import flair
 
-from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO, BratIO
+from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO, KarpathyIO, BratIO
 from eznlp.io import PostIO
 from eznlp.training import Trainer, LRLambda, collect_params, check_param_groups
 
@@ -283,22 +284,12 @@ def load_data(args: argparse.Namespace):
         test_data  = tabular_io.read("data/THUCNews-10/cnews.test.txt")
         
     elif args.dataset == 'flickr8k':
-        io = TabularIO(text_col_id=1, label_col_id=0, sep='\t', verbose=args.log_terminal, case_mode='None', number_mode='None')
-        data = io.read("data/flickr8k/Flickr8k.token.txt")
-        for entry in data:
-            entry['trg_tokens'] = entry.pop('tokens')
-            entry['img_fn'], entry['cap_no'] = entry.pop('label').split('#')
+        io = KarpathyIO(img_folder="data/flickr8k/Flicker8k_Dataset")
+        train_data, dev_data, test_data = io.read("data/flickr8k/flickr8k-karpathy2015cvpr.json")
         
-        with open("data/flickr8k/Flickr_8k.trainImages.txt") as f:
-            train_fns = set([line.strip() for line in f])
-        with open("data/flickr8k/Flickr_8k.devImages.txt") as f:
-            dev_fns = set([line.strip() for line in f])
-        with open("data/flickr8k/Flickr_8k.testImages.txt") as f:
-            test_fns = set([line.strip() for line in f])
-            
-        train_data = [entry for entry in data if entry['img_fn'] in train_fns]
-        dev_data   = [entry for entry in data if entry['img_fn'] in dev_fns]
-        test_data  = [entry for entry in data if entry['img_fn'] in test_fns]
+    elif args.dataset == 'flickr30k':
+        io = KarpathyIO(img_folder="data/flickr30k/flickr30k-images")
+        train_data, dev_data, test_data = io.read("data/flickr30k/flickr30k-karpathy2015cvpr.json")
         
     else:
         raise Exception("Dataset does NOT exist", args.dataset)

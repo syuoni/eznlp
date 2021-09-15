@@ -7,13 +7,12 @@ import pdb
 import logging
 import pprint
 import numpy
-import pandas
 import torch
 import torchvision
 
 from eznlp import auto_device
 from eznlp.vectors import Vectors, GloVe
-from eznlp.dataset import Dataset
+from eznlp.dataset import GenerationDataset
 from eznlp.model import ImageEncoderConfig, OneHotConfig, GeneratorConfig
 from eznlp.model import Image2TextConfig
 from eznlp.training import Trainer, count_params
@@ -111,12 +110,10 @@ if __name__ == '__main__':
     # train_data, dev_data, test_data = train_data[:100], dev_data[:100], test_data[:100]
     config = build_I2T_config(args)
     
-    train_set = Dataset(train_data, config, training=True)
+    train_set = GenerationDataset(train_data, config, training=True)
     train_set.build_vocabs_and_dims(dev_data, test_data)
-    dev_data  = pandas.DataFrame(dev_data,  columns=['img_fn', 'trg_tokens']).groupby('img_fn').aggregate(lambda x: x.tolist()).reset_index().to_dict(orient='records')
-    test_data = pandas.DataFrame(test_data, columns=['img_fn', 'trg_tokens']).groupby('img_fn').aggregate(lambda x: x.tolist()).reset_index().to_dict(orient='records')
-    dev_set   = Dataset(dev_data,  config=train_set.config, training=False)
-    test_set  = Dataset(test_data, config=train_set.config, training=False)
+    dev_set   = GenerationDataset(dev_data,  config=train_set.config, training=False)
+    test_set  = GenerationDataset(test_data, config=train_set.config, training=False)
     
     logger.info(train_set.summary)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
