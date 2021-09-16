@@ -185,10 +185,12 @@ class RNNGenerator(Generator):
             reinit_gru_(self.rnn)
         
         self.ctx2h_0 = torch.nn.Linear(config.ctx_dim, config.hid_dim*config.num_layers)
-        reinit_layer_(self.ctx2h_0, 'linear')
+        reinit_layer_(self.ctx2h_0, 'tanh')
         if isinstance(self.rnn, torch.nn.LSTM):
             self.ctx2c_0 = torch.nn.Linear(config.ctx_dim, config.hid_dim*config.num_layers)
-            reinit_layer_(self.ctx2c_0, 'linear')
+            reinit_layer_(self.ctx2c_0, 'tanh')
+        # RNN hidden states are tanh-activated
+        self.tanh = torch.nn.Tanh()
         
         
     def _get_top_hidden(self, h_t: torch.Tensor):
@@ -201,9 +203,11 @@ class RNNGenerator(Generator):
         
     def _init_hidden(self, src_hidden: torch.Tensor, src_mask: torch.Tensor=None):
         context_0 = sequence_pooling(src_hidden, src_mask, mode='mean')
-        h_0 = self.ctx2h_0(context_0).view(-1, self.rnn.num_layers, self.rnn.hidden_size).permute(1, 0, 2)
+        h_0 = self.tanh(self.ctx2h_0(context_0))
+        h_0 = h_0.view(-1, self.rnn.num_layers, self.rnn.hidden_size).permute(1, 0, 2)
         if isinstance(self.rnn, torch.nn.LSTM):
-            c_0 = self.ctx2c_0(context_0).view(-1, self.rnn.num_layers, self.rnn.hidden_size).permute(1, 0, 2)
+            c_0 = self.tanh(self.ctx2c_0(context_0))
+            c_0 = c_0.view(-1, self.rnn.num_layers, self.rnn.hidden_size).permute(1, 0, 2)
             h_0 = (h_0, c_0)
         return h_0
         
