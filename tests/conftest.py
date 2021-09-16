@@ -42,6 +42,10 @@ def device(request):
 def spacy_nlp_en():
     return spacy.load("en_core_web_sm", disable=['tagger', 'parser', 'ner'])
 
+@pytest.fixture
+def spacy_nlp_de():
+    return spacy.load("de_core_news_sm", disable=['tagger', 'parser', 'ner'])
+
 
 @pytest.fixture
 def conll2003_demo():
