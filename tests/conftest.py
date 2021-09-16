@@ -11,7 +11,7 @@ import flair
 from eznlp import auto_device
 from eznlp.token import TokenSequence
 from eznlp.vectors import Vectors, GloVe
-from eznlp.io import TabularIO, ConllIO, JsonIO, KarpathyIO, BratIO
+from eznlp.io import TabularIO, ConllIO, JsonIO, KarpathyIO, BratIO, Src2TrgIO
 
 
 def pytest_addoption(parser):
@@ -193,6 +193,14 @@ def flair_lm(request, flair_fw_lm, flair_bw_lm):
     elif request.param == 'bw':
         return flair_bw_lm
 
+
+@pytest.fixture
+def multi30k_demo(spacy_nlp_en, spacy_nlp_de):
+    return Src2TrgIO(tokenize_callback=spacy_nlp_de, 
+                     trg_tokenize_callback=spacy_nlp_en, 
+                     encoding='utf-8', 
+                     case_mode='Lower', 
+                     number_mode='None').read("data/multi30k/demo.train.de", "data/multi30k/demo.train.en")
 
 
 @pytest.fixture
