@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import pytest
 import numpy
+import nltk
+import torchtext
 
 from eznlp.metrics import precision_recall_f1_report
 from eznlp.utils import ChunksTagsTranslator
@@ -12,8 +14,8 @@ class TestMetric(object):
         for key in ave_scores:
             for score_key in ['precision', 'recall', 'f1']:
                 assert numpy.abs(ave_scores[key][score_key] - expected_ave_scores[key][score_key]) < 1e-6
-    
-    
+        
+        
     @pytest.mark.parametrize("tags_gold_data, tags_pred_data, expected_ave_scores", 
                              [([['B-A', 'B-B', 'O', 'B-A']], 
                                [['O', 'B-B', 'B-C', 'B-A']], 
@@ -51,4 +53,17 @@ class TestMetric(object):
                                          'f1': 0.74348697}}
         scores, ave_scores = precision_recall_f1_report(chunks_gold_data, chunks_pred_data)
         self._assert_scores_equal(ave_scores, expected_ave_scores)
-        
+
+
+
+def test_bleu_score():
+    # `nltk` and `torchtext` results are consistent if all candidate sentences are longer than 4. 
+    # `torchtext.data.bleu_score` raise errors if the input sentences include spaces
+    candidate_corpus = [['my', 'full', 'pytorch', 'test'], 
+                        ['this', 'is', 'another', 'sentence']]
+    references_corpus = [[['my', 'full', 'pytorch', 'test'], ['completely', 'different']], 
+                         [['this', 'is']]]
+    torchtext_bleu = torchtext.data.bleu_score(candidate_corpus, references_corpus)
+    nltk_bleu = nltk.translate.bleu_score.corpus_bleu(references_corpus, candidate_corpus)
+    
+    assert abs(torchtext_bleu - nltk_bleu) < 1e-6

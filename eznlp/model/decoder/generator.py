@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from typing import List
 import itertools
+import nltk
 import torch
 import torchtext
 
@@ -36,7 +37,7 @@ class GeneratorMixin(DecoderMixinBase):
             example['trg_tok_ids'] = self.embedding.exemplify(entry['trg_tokens'])
         else:
             assert 'trg_tokens' not in entry
-            # Notes: The dev. loss will always be 0
+            # Notes: The padding positions are ignored in loss computation, so the dev. loss will always be 0
             example['trg_tok_ids'] = torch.tensor([self.embedding.sos_idx] + [self.embedding.pad_idx]*(self.max_len+1), dtype=torch.long)
         
         if 'full_trg_tokens' in entry:
@@ -44,6 +45,7 @@ class GeneratorMixin(DecoderMixinBase):
             example['full_trg_tokenized_text'] = [tokens.text for tokens in entry['full_trg_tokens']]
         
         return example
+        
         
     def batchify(self, batch_examples: List[dict]):
         batch = {}
@@ -61,7 +63,8 @@ class GeneratorMixin(DecoderMixinBase):
     def evaluate(self, y_gold: List[List[List[str]]], y_pred: List[List[str]]):
         assert isinstance(y_gold[0], list) and isinstance(y_gold[0][0], list) and isinstance(y_gold[0][0][0], str)
         assert isinstance(y_pred[0], list) and isinstance(y_pred[0][0], str)
-        return torchtext.data.metrics.bleu_score(candidate_corpus=y_pred, references_corpus=y_gold)
+        # return torchtext.data.metrics.bleu_score(candidate_corpus=y_pred, references_corpus=y_gold)
+        return nltk.translate.bleu_score.corpus_bleu(list_of_references=y_gold, hypotheses=y_pred)
 
 
 
@@ -160,7 +163,7 @@ class Generator(DecoderBase, GeneratorMixin):
         batch_toks = []
         for tok_ids in batch_tok_ids.cpu().tolist():
             toks = [self.vocab.itos[tok_id] for tok_id in tok_ids]
-            toks = list(itertools.takewhile(lambda tok: tok!='<sos>', toks))
+            toks = list(itertools.takewhile(lambda tok: tok!='<eos>', toks))
             batch_toks.append(toks)
         return batch_toks
 

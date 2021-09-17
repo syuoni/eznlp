@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from typing import Union, List
 import tqdm
+import re
 
 from ..token import TokenSequence
 from .base import IO
@@ -30,9 +31,10 @@ class Src2TrgIO(IO):
     def read(self, src_path, trg_path):
         data = []
         with open(src_path, 'r', encoding=self.encoding) as f:
-            src_lines = [line.strip() for line in f if line.strip() != '']
+            # Replace consecutive spaces with a single space
+            src_lines = [re.sub('\s+', ' ', line.strip()) for line in f if line.strip() != '']
         with open(trg_path, 'r', encoding=self.encoding) as f:
-            trg_lines = [line.strip() for line in f if line.strip() != '']
+            trg_lines = [re.sub('\s+', ' ', line.strip()) for line in f if line.strip() != '']
         
         assert len(src_lines) == len(trg_lines)
         for src_line, trg_line in tqdm.tqdm(zip(src_lines, trg_lines), total=len(src_lines), disable=not self.verbose, ncols=100, desc="Loading src2trg data"):
