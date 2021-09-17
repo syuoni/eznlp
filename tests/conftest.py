@@ -17,18 +17,18 @@ from eznlp.io import TabularIO, ConllIO, JsonIO, KarpathyIO, BratIO, Src2TrgIO
 def pytest_addoption(parser):
     parser.addoption('--device', type=str, default='auto', help="device to run tests (`auto`, `cpu` or `cuda:x`)")
     parser.addoption('--runslow', default=False, action='store_true', help="whether to run slow tests")
-    
+
 def pytest_configure(config):
     config.addinivalue_line("markers", "slow: mark test as slow")
-    
+
 def pytest_collection_modifyitems(config, items):
     if not config.getoption("--runslow"):
         skip_slow = pytest.mark.skip(reason="need --runslow option to run")
         for item in items:
             if "slow" in item.keywords:
                 item.add_marker(skip_slow)
-    
-    
+
+
 @pytest.fixture(scope='session')
 def device(request):
     device_str = request.config.getoption('--device')
@@ -36,8 +36,8 @@ def device(request):
         return auto_device()
     else:
         return torch.device(device_str)
-    
-    
+
+
 @pytest.fixture
 def spacy_nlp_en():
     return spacy.load("en_core_web_sm", disable=['tagger', 'parser', 'ner'])

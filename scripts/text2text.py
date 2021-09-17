@@ -8,13 +8,12 @@ import logging
 import pprint
 import numpy
 import torch
-import torchvision
 
 from eznlp import auto_device
 from eznlp.vectors import Vectors, GloVe
 from eznlp.dataset import GenerationDataset
-from eznlp.model import ImageEncoderConfig, OneHotConfig, GeneratorConfig
-from eznlp.model import Image2TextConfig
+from eznlp.model import OneHotConfig, EncoderConfig, GeneratorConfig
+from eznlp.model import Text2TextConfig
 from eznlp.training import Trainer, count_params
 
 from utils import add_base_arguments, parse_to_args
@@ -25,7 +24,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
     parser = add_base_arguments(parser)
     
     group_data = parser.add_argument_group('dataset')
-    group_data.add_argument('--dataset', type=str, default='flickr8k', 
+    group_data.add_argument('--dataset', type=str, default='multi30k', 
                             help="dataset name")
     
     group_decoder = parser.add_argument_group('decoder configurations')
@@ -37,38 +36,38 @@ def parse_arguments(parser: argparse.ArgumentParser):
     return parse_to_args(parser)
 
 
-def collect_I2T_assembly_config(args: argparse.Namespace):
+
+def _get_vectors(language: str, emb_dim: int):
+    if language.lower() == 'english' and emb_dim in (50, 100, 200):
+        return GloVe(f"assets/vectors/glove.6B.{args.emb_dim}d.txt")
+    elif language.lower() == 'english' and emb_dim == 300:
+        return GloVe("assets/vectors/glove.840B.300d.txt")
+    else:
+        return None
+
+
+def collect_T2T_assembly_config(args: argparse.Namespace):
     drop_rates = (0.0, 0.05, args.drop_rate) if args.use_locked_drop else (args.drop_rate, 0.0, 0.0)
     
-    resnet = torchvision.models.resnet101(pretrained=False)
-    resnet.load_state_dict(torch.load("assets/resnet/resnet101-5d3b4d8f.pth"))
-    resnet = torch.nn.Sequential(*list(resnet.children())[:-2])
+    src_vectors = _get_vectors(args.language[0], args.emb_dim)
+    emb_config = OneHotConfig(tokens_key='tokens', field='text', min_freq=2, 
+                              vectors=src_vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze)
+    enc_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
     
-    trans = torch.nn.Sequential(torchvision.transforms.Resize((256, 256)), 
-                                torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                                                 std =[0.229, 0.224, 0.225]))
-    enc_config = ImageEncoderConfig(backbone=resnet, transforms=trans)
+    trg_vectors = _get_vectors(args.language[1], args.emb_dim)
     
-    if args.language.lower() == 'english' and args.emb_dim in (50, 100, 200):
-        vectors = GloVe(f"assets/vectors/glove.6B.{args.emb_dim}d.txt")
-    elif args.language.lower() == 'english' and args.emb_dim == 300:
-        vectors = GloVe("assets/vectors/glove.840B.300d.txt")
-    elif args.language.lower() == 'chinese' and args.emb_dim == 50:
-        vectors = Vectors.load("assets/vectors/gigaword_chn.all.a2b.uni.ite50.vec", encoding='utf-8')
-    else:
-        vectors = None
-    
-    emb_config = OneHotConfig(tokens_key='trg_tokens', field='text', has_sos=True, has_eos=True, 
-                              vectors=vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze)
-    gen_config = GeneratorConfig(arch='LSTM', embedding=emb_config, 
+    trg_emb_config = OneHotConfig(tokens_key='trg_tokens', field='text', min_freq=2, has_sos=True, has_eos=True, 
+                                  vectors=trg_vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze)
+    gen_config = GeneratorConfig(arch='LSTM', embedding=trg_emb_config, shortcut=True, 
                                  hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
     
-    return {'encoder': enc_config, 
+    return {'embedder': emb_config, 
+            'encoder': enc_config, 
             'decoder': gen_config}
 
 
-def build_I2T_config(args: argparse.Namespace):
-    return Image2TextConfig(**collect_I2T_assembly_config(args))
+def build_T2T_config(args: argparse.Namespace):
+    return Text2TextConfig(**collect_T2T_assembly_config(args))
 
 
 if __name__ == '__main__':
@@ -78,7 +77,7 @@ if __name__ == '__main__':
     
     # Use micro-seconds to ensure different timestamps while adopting multiprocessing
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-    save_path =  f"cache/{args.dataset}-I2T/{timestamp}"
+    save_path =  f"cache/{args.dataset}-T2T/{timestamp}"
     if not os.path.exists(save_path):
         os.makedirs(save_path)
     
@@ -105,7 +104,7 @@ if __name__ == '__main__':
     train_data, dev_data, test_data = load_data(args)
     args.language = dataset2language[args.dataset]
     # train_data, dev_data, test_data = train_data[:100], dev_data[:100], test_data[:100]
-    config = build_I2T_config(args)
+    config = build_T2T_config(args)
     
     train_set = GenerationDataset(train_data, config, training=True)
     train_set.build_vocabs_and_dims(dev_data, test_data)

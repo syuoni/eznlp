@@ -14,7 +14,7 @@ import allennlp.modules
 import transformers
 import flair
 
-from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO, KarpathyIO, BratIO
+from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO, KarpathyIO, BratIO, Src2TrgIO
 from eznlp.io import PostIO
 from eznlp.training import Trainer, LRLambda, collect_params, check_param_groups
 
@@ -106,6 +106,8 @@ def parse_to_args(parser: argparse.ArgumentParser):
 
 
 spacy_nlp_en = spacy.load("en_core_web_sm", disable=['tagger', 'parser', 'ner'])
+spacy_nlp_de = spacy.load("de_core_news_sm", disable=['tagger', 'parser', 'ner'])
+
 
 dataset2language = {'conll2003': 'English', 
                     'conll2012': 'English', 
@@ -125,6 +127,7 @@ dataset2language = {'conll2003': 'English',
                     'yelp_full': 'English', 
                     'ChnSentiCorp': 'Chinese', 
                     'THUCNews_10': 'Chinese', 
+                    'multi30k': ('German', 'English'), 
                     'flickr8k': 'English', 
                     'flickr30k': 'English'}
 
@@ -282,6 +285,13 @@ def load_data(args: argparse.Namespace):
         train_data = tabular_io.read("data/THUCNews-10/cnews.train.txt")
         dev_data   = tabular_io.read("data/THUCNews-10/cnews.val.txt")
         test_data  = tabular_io.read("data/THUCNews-10/cnews.test.txt")
+        
+    elif args.dataset == 'multi30k':
+        io = Src2TrgIO(tokenize_callback=spacy_nlp_de, trg_tokenize_callback=spacy_nlp_en, encoding='utf-8', verbose=args.log_terminal, 
+                       case_mode='Lower', number_mode='None')
+        train_data = io.read("data/multi30k/train.de", "data/multi30k/train.en")
+        dev_data   = io.read("data/multi30k/val.de", "data/multi30k/val.en")
+        test_data  = io.read("data/multi30k/test2016.de", "data/multi30k/test2016.en")
         
     elif args.dataset == 'flickr8k':
         io = KarpathyIO(img_folder="data/flickr8k/Flicker8k_Dataset")
