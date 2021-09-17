@@ -207,10 +207,10 @@ class RNNGenerator(Generator):
     def _init_hidden(self, src_hidden: torch.Tensor, src_mask: torch.Tensor=None):
         context_0 = sequence_pooling(src_hidden, src_mask, mode='mean')
         h_0 = self.tanh(self.ctx2h_0(context_0))
-        h_0 = h_0.view(-1, self.rnn.num_layers, self.rnn.hidden_size).permute(1, 0, 2)
+        h_0 = h_0.view(-1, self.rnn.num_layers, self.rnn.hidden_size).permute(1, 0, 2).contiguous()
         if isinstance(self.rnn, torch.nn.LSTM):
             c_0 = self.tanh(self.ctx2c_0(context_0))
-            c_0 = c_0.view(-1, self.rnn.num_layers, self.rnn.hidden_size).permute(1, 0, 2)
+            c_0 = c_0.view(-1, self.rnn.num_layers, self.rnn.hidden_size).permute(1, 0, 2).contiguous()
             h_0 = (h_0, c_0)
         return h_0
         
