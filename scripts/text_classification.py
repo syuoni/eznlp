@@ -56,12 +56,12 @@ def collect_TC_assembly_config(args: argparse.Namespace):
         ohots_config = None
     
     if args.use_interm1:
-        interm1_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
+        interm1_config = EncoderConfig(arch=args.enc_arch, hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
     else:
         interm1_config = None
     
     if args.use_interm2:
-        interm2_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
+        interm2_config = EncoderConfig(arch=args.enc_arch, hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
     else:
         interm2_config = None
     
@@ -149,7 +149,7 @@ if __name__ == '__main__':
                     data_entry['tokens'] = data_entry['tokens'][:300] + data_entry['tokens'][-900:]
     
     train_set = Dataset(train_data, config, training=True)
-    train_set.build_vocabs_and_dims(dev_data, test_data)
+    train_set.build_vocabs_and_dims(dev_data)
     dev_set   = Dataset(dev_data,  train_set.config, training=False)
     test_set  = Dataset(test_data, train_set.config, training=False)
     

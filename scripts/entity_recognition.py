@@ -118,12 +118,12 @@ def collect_IE_assembly_config(args: argparse.Namespace):
         nested_ohots_config = None
     
     if args.use_interm1:
-        interm1_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
+        interm1_config = EncoderConfig(arch=args.enc_arch, hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
     else:
         interm1_config = None
     
     if args.use_interm2:
-        interm2_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
+        interm2_config = EncoderConfig(arch=args.enc_arch, hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
     else:
         interm2_config = None
     

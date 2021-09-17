@@ -29,6 +29,8 @@ def parse_arguments(parser: argparse.ArgumentParser):
                             help="dataset name")
     
     group_decoder = parser.add_argument_group('decoder configurations')
+    group_decoder.add_argument('--dec_arch', type=str, default='LSTM', choices=['LSTM', 'GRU', 'Conv'], 
+                               help="token-level decoder architecture")
     # Loss
     group_decoder.add_argument('--fl_gamma', type=float, default=0.0, 
                                help="Focal Loss gamma")
@@ -58,9 +60,9 @@ def collect_I2T_assembly_config(args: argparse.Namespace):
     else:
         vectors = None
     
-    emb_config = OneHotConfig(tokens_key='trg_tokens', field='text', has_sos=True, has_eos=True, 
+    emb_config = OneHotConfig(tokens_key='trg_tokens', field='text', min_freq=2, has_sos=True, has_eos=True, 
                               vectors=vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze)
-    gen_config = GeneratorConfig(arch='LSTM', embedding=emb_config, 
+    gen_config = GeneratorConfig(arch=args.dec_arch, embedding=emb_config, scoring='biaffine', 
                                  hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
     
     return {'encoder': enc_config, 
@@ -108,7 +110,7 @@ if __name__ == '__main__':
     config = build_I2T_config(args)
     
     train_set = GenerationDataset(train_data, config, training=True)
-    train_set.build_vocabs_and_dims(dev_data, test_data)
+    train_set.build_vocabs_and_dims(dev_data)
     dev_set   = GenerationDataset(dev_data,  config=train_set.config, training=False)
     test_set  = GenerationDataset(test_data, config=train_set.config, training=False)
     
