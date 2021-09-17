@@ -15,7 +15,7 @@ from eznlp.vectors import Vectors, GloVe
 from eznlp.dataset import GenerationDataset
 from eznlp.model import ImageEncoderConfig, OneHotConfig, GeneratorConfig
 from eznlp.model import Image2TextConfig
-from eznlp.training import Trainer, count_params
+from eznlp.training import Trainer, count_params, evaluate_generation
 
 from utils import add_base_arguments, parse_to_args
 from utils import load_data, dataset2language, build_trainer, header_format
@@ -139,11 +139,11 @@ if __name__ == '__main__':
     model = torch.load(f"{save_path}/{config.name}.pth", map_location=device)
     trainer = Trainer(model, device=device)
     
-    # logger.info("Evaluating on dev-set")
-    # evaluate_entity_recognition(trainer, dev_set, batch_size=args.batch_size)
-    # logger.info("Evaluating on test-set")
-    # evaluate_entity_recognition(trainer, test_set, batch_size=args.batch_size)
+    logger.info("Evaluating on dev-set")
+    evaluate_generation(trainer, dev_set, batch_size=args.batch_size)
+    logger.info("Evaluating on test-set")
+    evaluate_generation(trainer, test_set, batch_size=args.batch_size)
     
-    # logger.info(" ".join(sys.argv))
-    # logger.info(pprint.pformat(args.__dict__))
-    # logger.info(header_format("Ending", sep='='))
+    logger.info(" ".join(sys.argv))
+    logger.info(pprint.pformat(args.__dict__))
+    logger.info(header_format("Ending", sep='='))

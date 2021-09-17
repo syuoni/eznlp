@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+import nltk
 
 from ..metrics import precision_recall_f1_report
 from ..dataset import Dataset
@@ -74,3 +75,12 @@ def evaluate_joint_extraction(trainer: Trainer, dataset: Dataset, has_attr: bool
 
         scores, ave_scores = precision_recall_f1_report(set_relations_gold, set_relations_pred)
         disp_prf(ave_scores, task='RE')
+
+
+
+def evaluate_generation(trainer: Trainer, dataset: Dataset, batch_size: int=32):
+    set_trg_pred = trainer.predict(dataset, batch_size=batch_size)
+    set_trg_gold = [[tokens.text for tokens in ex['full_trg_tokens']] for ex in dataset.data]
+    
+    bleu4 = nltk.translate.bleu_score.corpus_bleu(list_of_references=set_trg_gold, hypotheses=set_trg_pred)
+    logger.info(f"BLEU-4: {bleu4*100:2.3f}%")
