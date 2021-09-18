@@ -98,9 +98,7 @@ class NestedOneHotEmbedder(OneHotEmbedder):
             self.encoder = config.encoder.instantiate()
         
         self.agg_mode = config.agg_mode
-        if self.agg_mode.lower() == 'rnn_last':
-            assert isinstance(self.encoder, RNNEncoder)
-        elif self.agg_mode.lower().endswith('_pooling'):
+        if self.agg_mode.lower().endswith('_pooling') or self.agg_mode.lower().startswith('rnn_last'):
             self.aggregating = SequencePooling(mode=self.agg_mode.replace('_pooling', ''))
         
         
@@ -128,15 +126,11 @@ class NestedOneHotEmbedder(OneHotEmbedder):
         # hidden: (batch*step*num_channels, inner_step, hid_dim)
         # agg_hidden: (batch*step*num_channels, hid_dim)
         if hasattr(self, 'encoder'):
-            if self.agg_mode.lower() == 'rnn_last':
-                agg_hidden = self.encoder.forward2last_hidden(embedded, inner_mask)
-            else:
-                hidden = self.encoder(embedded, inner_mask)
-                agg_hidden = self.aggregating(hidden, inner_mask, weight=inner_weight)
-                
+            hidden = self.encoder(embedded, inner_mask)
+            agg_hidden = self.aggregating(hidden, inner_mask, weight=inner_weight)
         else:
             agg_hidden = self.aggregating(embedded, inner_mask, weight=inner_weight)
-            
+        
         # Restore outer shapes (token-level steps)
         return self._restore_outer_shapes(agg_hidden, seq_lens)
 

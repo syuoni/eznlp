@@ -193,28 +193,37 @@ class RNNEncoder(Encoder):
                 h_0 = (h_0, c_0)
         else:
             h_0 = None
-            
+        
         if isinstance(self.rnn, torch.nn.LSTM):
             packed_rnn_outs, (h_T, _) = self.rnn(packed_embedded, h_0)
         else:
             packed_rnn_outs, h_T = self.rnn(packed_embedded, h_0)
-            
+        
+        # rnn_outs: (batch, step, hid_dim)
+        rnn_outs, _ = torch.nn.utils.rnn.pad_packed_sequence(packed_rnn_outs, batch_first=True, padding_value=0)
+        
         if return_last_hidden:
-            # h_T: (layers*directions, batch, hid_dim/2) -> (batch, hid_dim)
-            h_T = torch.cat([h_T[-2], h_T[-1]], dim=-1)
-            return h_T
+            # h_T: (layers*directions, batch, hid_dim/2)
+            return rnn_outs, h_T
         else:
-            # rnn_outs: (batch, step, hid_dim)
-            rnn_outs, _ = torch.nn.utils.rnn.pad_packed_sequence(packed_rnn_outs, batch_first=True, padding_value=0)
             return rnn_outs
         
         
-    def forward2last_hidden(self, embedded: torch.FloatTensor, mask: torch.BoolTensor):
+    def forward(self, embedded: torch.FloatTensor, mask: torch.BoolTensor, return_last_hidden: bool=False):
+        # embedded: (batch, step, emb_dim)
+        # hidden: (batch, step, hid_dim)
         if hasattr(self, 'in_proj_layer'):
-            return self.embedded2hidden(self.in_proj_layer(self.dropout(embedded)), mask, return_last_hidden=True)
+            hidden = self.embedded2hidden(self.in_proj_layer(self.dropout(embedded)), mask, return_last_hidden=return_last_hidden)
         else:
-            return self.embedded2hidden(self.dropout(embedded), mask, return_last_hidden=True)
-
+            hidden = self.embedded2hidden(self.dropout(embedded), mask, return_last_hidden=return_last_hidden)
+        
+        if self.shortcut:
+            if return_last_hidden:
+                return torch.cat([hidden[0], embedded], dim=-1), hidden[1]
+            else:
+                return torch.cat([hidden, embedded], dim=-1)
+        else:
+            return hidden
 
 
 

@@ -79,6 +79,25 @@ def sequence_pooling(x: torch.FloatTensor,
 
 
 
+def rnn_last_selecting(x: torch.FloatTensor, mask: torch.BoolTensor=None):
+    """Selecting the last states of a RNN output. 
+    
+    Parameters
+    ----------
+    x: torch.FloatTensor (batch, step, hid_dim)
+    mask: torch.BoolTensor (batch, step)
+    """
+    x_fwd, x_bwd = torch.chunk(x, 2, dim=-1)
+    if mask is None:
+        x_fwd_last = x_fwd[:, -1]
+    else:
+        seq_lens = mask2seq_lens(mask)
+        x_fwd_last = x_fwd[torch.arange(x.size(0), device=x.device), seq_lens-1]
+    return torch.cat([x_fwd_last, x_bwd[:, 0]], dim=-1)
+
+
+
+
 def sequence_group_aggregating(x: torch.FloatTensor, group_by: torch.LongTensor, agg_mode: str='mean', agg_step: int=None):
     """Aggregating values over steps by groups. 
     
