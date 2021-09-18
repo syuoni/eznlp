@@ -52,10 +52,11 @@ class TestModel(object):
         
         
     @pytest.mark.parametrize("sl_epsilon", [0.0, 0.1])
-    def test_model(self, sl_epsilon, flickr8k_demo, resnet18_with_trans, device):
+    @pytest.mark.parametrize("init_ctx_mode", ['mean_pooling', 'max_pooling'])
+    def test_model(self, sl_epsilon, init_ctx_mode, flickr8k_demo, resnet18_with_trans, device):
         resnet, trans = resnet18_with_trans
         self.config = Image2TextConfig(encoder=ImageEncoderConfig(backbone=resnet, transforms=trans), 
-                                       decoder=GeneratorConfig(sl_epsilon=sl_epsilon))
+                                       decoder=GeneratorConfig(sl_epsilon=sl_epsilon, init_ctx_mode=init_ctx_mode))
         self._setup_case(flickr8k_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()

@@ -6,9 +6,8 @@ import torch
 import torchtext
 
 from ...wrapper import Batch
-from ...nn.functional import sequence_pooling
-from ...nn.modules import CombinedDropout, SequenceAttention
-from ...nn.init import reinit_layer_, reinit_lstm_, reinit_gru_
+from ...nn.modules import CombinedDropout, SequencePooling, SequenceAttention
+from ...nn.init import reinit_layer_, reinit_lstm_, reinit_gru_, reinit_vector_parameter_
 from ..embedder import OneHotConfig
 from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
 
@@ -62,7 +61,7 @@ class GeneratorMixin(DecoderMixinBase):
         
     def evaluate(self, y_gold: List[List[List[str]]], y_pred: List[List[str]]):
         assert isinstance(y_gold[0], list) and isinstance(y_gold[0][0], list) and isinstance(y_gold[0][0][0], str)
-        assert isinstance(y_pred[0], list) and isinstance(y_pred[0][0], str)
+        assert isinstance(y_pred[0], list) and (len(y_pred[0]) == 0 or isinstance(y_pred[0][0], str))
         # return torchtext.data.metrics.bleu_score(candidate_corpus=y_pred, references_corpus=y_gold)
         return nltk.translate.bleu_score.corpus_bleu(list_of_references=y_gold, hypotheses=y_pred)
 
@@ -79,6 +78,7 @@ class GeneratorConfig(SingleDecoderConfigBase, GeneratorMixin):
         
         self.hid_dim = kwargs.pop('hid_dim', 128)
         if self.arch.lower() in ('lstm', 'gru'):
+            self.init_ctx_mode = kwargs.pop('init_ctx_mode', 'mean_pooling')
             self.num_layers = kwargs.pop('num_layers', 1)
             self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
             self.hid_drop_rate = kwargs.pop('hid_drop_rate', 0.5)
@@ -133,7 +133,10 @@ class Generator(DecoderBase, GeneratorMixin):
         self.embedding = config.embedding.instantiate()
         self.attention = SequenceAttention(key_dim=config.ctx_dim, query_dim=config.hid_dim, scoring=config.scoring, external_query=True)
         self.hid2logit = torch.nn.Linear(config.full_hid_dim, config.embedding.voc_dim)
-        self.criterion = config.instantiate_criterion(ignore_index=config.embedding.pad_idx, reduction='mean')
+        # Every token in a batch should be assigned the same weight, so use `sum` as the reduction method. 
+        # This will not cause the model to generate shorter sequence, because the loss is summed over the ground-truth tokens, 
+        # which have fixed lengths. 
+        self.criterion = config.instantiate_criterion(ignore_index=config.embedding.pad_idx, reduction='sum')
         
         
     def forward2logits(self, batch: Batch, src_hidden: torch.Tensor, src_mask: torch.Tensor=None):
@@ -187,6 +190,12 @@ class RNNGenerator(Generator):
             self.rnn = torch.nn.GRU(**rnn_config)
             reinit_gru_(self.rnn)
         
+        if config.init_ctx_mode.lower().endswith('_pooling') or config.init_ctx_mode.lower().startswith('rnn_last'):
+            self.init_ctx = SequencePooling(mode=config.init_ctx_mode.replace('_pooling', ''))
+        else:
+            self.init_query = torch.nn.Parameter(torch.empty(config.hid_dim))
+            reinit_vector_parameter_(self.init_query)
+        
         self.ctx2h_0 = torch.nn.Linear(config.ctx_dim, config.hid_dim*config.num_layers)
         reinit_layer_(self.ctx2h_0, 'tanh')
         if isinstance(self.rnn, torch.nn.LSTM):
@@ -205,7 +214,11 @@ class RNNGenerator(Generator):
             return h_t[-1].unsqueeze(1)
         
     def _init_hidden(self, src_hidden: torch.Tensor, src_mask: torch.Tensor=None):
-        context_0 = sequence_pooling(src_hidden, src_mask, mode='mean')
+        if hasattr(self, 'init_ctx'):
+            context_0 = self.init_ctx(src_hidden, mask=src_mask)
+        else:
+            context_0 = self.attention(src_hidden, mask=src_mask, query=self.init_query)
+        
         h_0 = self.tanh(self.ctx2h_0(context_0))
         h_0 = h_0.view(-1, self.rnn.num_layers, self.rnn.hidden_size).permute(1, 0, 2).contiguous()
         if isinstance(self.rnn, torch.nn.LSTM):
