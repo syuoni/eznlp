@@ -62,6 +62,13 @@ def reinit_embedding_by_pretrained_(embedding: torch.nn.Embedding,
 
 
 
+def reinit_vector_parameter_(param: torch.nn.Parameter):
+    assert param.dim() == 1
+    uniform_range = (3 / param.size(0)) ** 0.5
+    torch.nn.init.uniform_(param.data, -uniform_range, uniform_range)
+
+
+
 def reinit_layer_(layer: torch.nn.Module, nonlinearity='relu'):
     """
     Refs: 

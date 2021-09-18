@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import torch
 
-from ..init import reinit_layer_
+from ..init import reinit_layer_, reinit_vector_parameter_
 
 
 class SequenceAttention(torch.nn.Module):
@@ -36,14 +36,13 @@ class SequenceAttention(torch.nn.Module):
         
         if not external_query:
             self.query = torch.nn.Parameter(torch.empty(query_dim))
-            uniform_range = (3 / query_dim) ** 0.5
-            torch.nn.init.uniform_(self.query.data, -uniform_range, uniform_range)
+            reinit_vector_parameter_(self.query)
         
         self.scoring = scoring
         if self.scoring.lower() == 'dot':
             if query_dim != key_dim:
                 raise ValueError(f"`query_dim` {query_dim} does not equals `key_dim` {key_dim}")
-                
+            
         elif self.scoring.lower() == 'multiplicative':
             self.proj_layer = torch.nn.Linear(key_dim, query_dim)
             reinit_layer_(self.proj_layer, 'linear')
@@ -53,8 +52,7 @@ class SequenceAttention(torch.nn.Module):
             reinit_layer_(self.proj_layer, 'linear')
             
             self.w2 = torch.nn.Parameter(torch.empty(atten_dim))
-            uniform_range = (3 / atten_dim) ** 0.5
-            torch.nn.init.uniform_(self.w2.data, -uniform_range, uniform_range)
+            reinit_vector_parameter_(self.w2)
             
         elif self.scoring.lower() == 'biaffine':
             self.query_proj_layer = torch.nn.Linear(query_dim, atten_dim)
@@ -63,9 +61,8 @@ class SequenceAttention(torch.nn.Module):
             reinit_layer_(self.key_proj_layer, 'linear')
             
             self.w2 = torch.nn.Parameter(torch.empty(atten_dim))
-            uniform_range = (3 / atten_dim) ** 0.5
-            torch.nn.init.uniform_(self.w2.data, -uniform_range, uniform_range)
-
+            reinit_vector_parameter_(self.w2)
+            
         else:
             raise ValueError(f"Invalid attention scoring mode {scoring}")
         
