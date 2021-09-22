@@ -134,7 +134,7 @@ if __name__ == '__main__':
             #                         bert_drop_rate=0.2, 
             #                         use_interm2=[False, True], 
             #                         bert_arch=['BERT_base', 'RoBERTa_base'])
-            
+        
     elif args.task == 'entity_recognition' and args.language.lower() == 'chinese':
         if not args.use_bert:
             sampler = OptionSampler(num_epochs=100, 
@@ -156,7 +156,7 @@ if __name__ == '__main__':
                                     use_interm2=[False, True], 
                                     bert_arch=['BERT_base', 'RoBERTa_base', 
                                                'MacBERT_base', 'MacBERT_large', 'ERNIE'])
-            
+        
     elif args.task == 'relation_extraction':
         if not args.use_bert:
             sampler = OptionSampler(num_epochs=100, 
@@ -176,7 +176,7 @@ if __name__ == '__main__':
                                     bert_drop_rate=0.2, 
                                     use_interm2=[False, True], 
                                     bert_arch=['BERT_base', 'RoBERTa_base'])
-            
+        
     elif args.task == 'joint_extraction':
         if not args.use_bert:
             sampler = OptionSampler(num_epochs=100, 
@@ -200,6 +200,19 @@ if __name__ == '__main__':
                                     bert_drop_rate=0.2, 
                                     use_interm2=[False, True], 
                                     bert_arch=['BERT_base', 'RoBERTa_base'])
+        
+    elif args.task == 'text2text':
+        sampler = OptionSampler(num_epochs=10, 
+                                optimizer=['AdamW'], lr=[1e-3],
+                                batch_size=128, 
+                                emb_dim=256, 
+                                enc_arch='LSTM', 
+                                dec_arch='LSTM', 
+                                hid_dim=512, 
+                                num_layers=[1, 2], 
+                                init_ctx_mode=['rnn_last', 'mean_pooling', 'max_pooling', 'attention'],
+                                sl_epsilon=0.0)
+    
     
     options = sampler.sample(args.num_exps)
     commands = [" ".join([COMMAND, *option]) for option in options]

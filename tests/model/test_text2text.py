@@ -53,7 +53,7 @@ class TestModel(object):
         
     @pytest.mark.parametrize("shortcut", [False, True])
     @pytest.mark.parametrize("sl_epsilon", [0.0, 0.1])
-    @pytest.mark.parametrize("init_ctx_mode", ['mean_pooling', 'rnn_last'])
+    @pytest.mark.parametrize("init_ctx_mode", ['mean_pooling', 'attention', 'rnn_last'])
     def test_model(self, shortcut, sl_epsilon, init_ctx_mode, multi30k_demo, device):
         self.config = Text2TextConfig(decoder=GeneratorConfig(shortcut=shortcut, sl_epsilon=sl_epsilon, init_ctx_mode=init_ctx_mode))
         self._setup_case(multi30k_demo, device)
