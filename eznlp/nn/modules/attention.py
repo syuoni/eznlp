@@ -26,8 +26,11 @@ class SequenceAttention(torch.nn.Module):
     ----------
     [1] D. Hu. 2018. An introductory survey on attention mechanisms in NLP problems. 
     [2] H. Chen, et al. 2016. Neural sentiment classification with user and product attention. 
+    [3] A. Vaswani, et al. 2018. Attention is all you need. 
     """
-    def __init__(self, key_dim: int, query_dim: int=None, atten_dim: int=None, scoring: str='Multiplicative', external_query: bool=False):
+    def __init__(self, key_dim: int, query_dim: int=None, atten_dim: int=None, 
+                 scoring: str='additive', nonlinearity: str='tanh', 
+                 external_query: bool=False):
         super().__init__()
         if query_dim is None:
             query_dim = key_dim
@@ -38,33 +41,43 @@ class SequenceAttention(torch.nn.Module):
             self.query = torch.nn.Parameter(torch.empty(query_dim))
             reinit_vector_parameter_(self.query)
         
-        self.scoring = scoring
-        if self.scoring.lower() == 'dot':
-            if query_dim != key_dim:
-                raise ValueError(f"`query_dim` {query_dim} does not equals `key_dim` {key_dim}")
+        if scoring.lower() in ('dot', 'scaled_dot'):
+            assert query_dim == key_dim, f"`query_dim` {query_dim} does not equals `key_dim` {key_dim}"
             
-        elif self.scoring.lower() == 'multiplicative':
+        elif scoring.lower() == 'multiplicative':
             self.proj_layer = torch.nn.Linear(key_dim, query_dim)
-            reinit_layer_(self.proj_layer, 'linear')
+            reinit_layer_(self.proj_layer, nonlinearity)
             
-        elif self.scoring.lower() == 'additive':
+        elif scoring.lower() == 'additive':
             self.proj_layer = torch.nn.Linear(key_dim+query_dim, atten_dim)
-            reinit_layer_(self.proj_layer, 'linear')
+            reinit_layer_(self.proj_layer, nonlinearity)
             
             self.w2 = torch.nn.Parameter(torch.empty(atten_dim))
             reinit_vector_parameter_(self.w2)
             
-        elif self.scoring.lower() == 'biaffine':
+        elif scoring.lower() == 'biaffine':
             self.query_proj_layer = torch.nn.Linear(query_dim, atten_dim)
             self.key_proj_layer = torch.nn.Linear(key_dim, atten_dim)
-            reinit_layer_(self.query_proj_layer, 'linear')
-            reinit_layer_(self.key_proj_layer, 'linear')
+            reinit_layer_(self.query_proj_layer, nonlinearity)
+            reinit_layer_(self.key_proj_layer, nonlinearity)
             
             self.w2 = torch.nn.Parameter(torch.empty(atten_dim))
             reinit_vector_parameter_(self.w2)
             
         else:
             raise ValueError(f"Invalid attention scoring mode {scoring}")
+        
+        if nonlinearity.lower() == 'linear':
+            self.activation = torch.nn.Identidy()
+        elif nonlinearity.lower() == 'tanh':
+            self.activation = torch.nn.Tanh()
+        elif nonlinearity.lower() == 'relu':
+            self.activation = torch.nn.ReLU()
+        else:
+            raise ValueError(f"Invalid nonlinearity {nonlinearity}")
+        
+        self.scoring = scoring
+        self.nonlinearity = nonlinearity
         
         
     def compute_scores(self, query: torch.FloatTensor, x: torch.FloatTensor):
@@ -78,20 +91,26 @@ class SequenceAttention(torch.nn.Module):
         # x: (batch, key_step, key_dim) -> scores: (batch, query_step, key_step)
         if self.scoring.lower() == 'dot':
             return query.bmm(x.permute(0, 2, 1))
+            
+        elif self.scoring.lower() == 'scaled_dot':
+            return query.bmm(x.permute(0, 2, 1)) / (query.size(-1) ** 0.5)
+            
         elif self.scoring.lower() == 'multiplicative':
             # x_projed: (batch, key_step, query_dim)
-            x_projed = self.proj_layer(x)
+            x_projed = self.activation(self.proj_layer(x))
             return query.bmm(x_projed.permute(0, 2, 1))
+            
         elif self.scoring.lower() == 'additive':
             # x_query: (batch, query_step, key_step, key_dim+query_dim)
             x_query = torch.cat([x.unsqueeze(1).expand(-1, query.size(1), -1, -1), 
                                  query.unsqueeze(2).expand(-1, -1, x.size(1), -1)], dim=-1)
-            x_query_projed = self.proj_layer(x_query)
+            x_query_projed = self.activation(self.proj_layer(x_query))
             return x_query_projed.matmul(self.w2)
+            
         elif self.scoring.lower() == 'biaffine':
             # x_query: (batch, query_step, key_step, atten_dim)
             x_query = self.key_proj_layer(x).unsqueeze(1) + self.query_proj_layer(query).unsqueeze(2)
-            return torch.nn.functional.relu(x_query).matmul(self.w2)
+            return self.activation(x_query).matmul(self.w2)
         
         
     def forward(self, x: torch.FloatTensor, mask: torch.BoolTensor=None, query: torch.FloatTensor=None, return_atten_weight: bool=False):
@@ -124,4 +143,4 @@ class SequenceAttention(torch.nn.Module):
         
         
     def __repr__(self):
-        return f"{self.__class__.__name__}(scoring={self.scoring})"
+        return f"{self.__class__.__name__}(scoring={self.scoring}, nonlinearity={self.nonlinearity})"
