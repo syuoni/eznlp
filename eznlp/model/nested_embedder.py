@@ -62,7 +62,7 @@ class NestedOneHotConfig(OneHotConfig):
                     counter.update(inner_seq)
         self.vocab = torchtext.vocab.Vocab(counter, 
                                            min_freq=self.min_freq, 
-                                           specials=('<unk>', '<pad>'), 
+                                           specials=self.specials, 
                                            specials_first=True)
         
         
@@ -70,7 +70,7 @@ class NestedOneHotConfig(OneHotConfig):
         inner_ids_list = []
         for inner_seq in self._inner_sequences(tokens):
             inner_ids_list.append(torch.tensor([self.vocab[x] for x in inner_seq]))
-            
+        
         # inner_ids: (step*num_channels, inner_step)
         return {'inner_ids': inner_ids_list}
         
@@ -182,7 +182,7 @@ class SoftLexiconConfig(NestedOneHotConfig):
         inner_freqs_list = []
         for inner_seq in self._inner_sequences(tokens):
             inner_freqs_list.append(torch.tensor([self.freqs[x] for x in inner_seq]))
-            
+        
         example['inner_freqs'] = inner_freqs_list
         return example
         
@@ -215,7 +215,7 @@ class CharConfig(NestedOneHotConfig):
         elif kwargs['encoder'].arch.lower() in ('conv', 'gehring'):
             kwargs['agg_mode'] = kwargs.pop('agg_mode', 'max_pooling')
         super().__init__(**kwargs)
-    
+        
     @property
     def name(self):
         return f"Char{self.encoder.arch}"

@@ -13,42 +13,8 @@ from ..vectors import Vectors
 logger = logging.getLogger(__name__)
 
 
-class OneHotConfig(Config):
-    """Config of an one-hot embedder.
-    """
-    def __init__(self, **kwargs):
-        self.tokens_key = kwargs.pop('tokens_key', 'tokens')
-        self.field = kwargs.pop('field')
-        self.vocab = kwargs.pop('vocab', None)
-        self.has_sos = kwargs.pop('has_sos', False)
-        self.has_eos = kwargs.pop('has_eos', False)
-        self.min_freq = kwargs.pop('min_freq', 1)
-        
-        self.emb_dim = kwargs.pop('emb_dim', 100)
-        self.vectors: Vectors = kwargs.pop('vectors', None)
-        if self.vectors is not None:
-            if self.emb_dim != self.vectors.emb_dim:
-                logger.warning(f"`emb_dim` {self.emb_dim} does not equal `vectors.emb_dim` {self.vectors.emb_dim} \n" 
-                               f"Reset `emb_dim` to be {self.vectors.emb_dim}")
-                self.emb_dim = self.vectors.emb_dim
-                
-        self.oov_init = kwargs.pop('oov_vector', 'zeros')
-        self.freeze = kwargs.pop('freeze', False)
-        self.scale_grad_by_freq = kwargs.pop('scale_grad_by_freq', False)
-        super().__init__(**kwargs)
-        
-    @property
-    def valid(self):
-        return all(attr is not None for name, attr in self.__dict__.items() if name != 'vectors')
-        
-    @property
-    def name(self):
-        return self.field
-        
-    @property
-    def out_dim(self):
-        return self.emb_dim
-        
+
+class VocabMixin(object):
     @property
     def voc_dim(self):
         return len(self.vocab)
@@ -72,6 +38,44 @@ class OneHotConfig(Config):
     @property
     def eos_idx(self):
         return self.vocab['<eos>']
+
+
+
+class OneHotConfig(Config, VocabMixin):
+    """Config of an one-hot embedder.
+    """
+    def __init__(self, **kwargs):
+        self.tokens_key = kwargs.pop('tokens_key', 'tokens')
+        self.field = kwargs.pop('field')
+        self.vocab = kwargs.pop('vocab', None)
+        self.has_sos = kwargs.pop('has_sos', False)
+        self.has_eos = kwargs.pop('has_eos', False)
+        self.min_freq = kwargs.pop('min_freq', 1)
+        
+        self.emb_dim = kwargs.pop('emb_dim', 100)
+        self.vectors: Vectors = kwargs.pop('vectors', None)
+        if self.vectors is not None:
+            if self.emb_dim != self.vectors.emb_dim:
+                logger.warning(f"`emb_dim` {self.emb_dim} does not equal `vectors.emb_dim` {self.vectors.emb_dim} \n" 
+                               f"Reset `emb_dim` to be {self.vectors.emb_dim}")
+                self.emb_dim = self.vectors.emb_dim
+        
+        self.oov_init = kwargs.pop('oov_vector', 'zeros')
+        self.freeze = kwargs.pop('freeze', False)
+        self.scale_grad_by_freq = kwargs.pop('scale_grad_by_freq', False)
+        super().__init__(**kwargs)
+        
+    @property
+    def valid(self):
+        return all(attr is not None for name, attr in self.__dict__.items() if name != 'vectors')
+        
+    @property
+    def name(self):
+        return self.field
+        
+    @property
+    def out_dim(self):
+        return self.emb_dim
         
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -100,7 +104,7 @@ class OneHotConfig(Config):
         # It is generally recommended to return cpu tensors in multi-process loading. 
         # See https://pytorch.org/docs/stable/data.html#single-and-multi-process-data-loading
         return torch.tensor([self.vocab[x] for x in self._get_field(tokens)], dtype=torch.long)
-    
+        
     def batchify(self, batch_ids: List[torch.LongTensor]):
         return torch.nn.utils.rnn.pad_sequence(batch_ids, batch_first=True, padding_value=self.pad_idx)
         
@@ -120,7 +124,7 @@ class OneHotEmbedder(torch.nn.Module):
             reinit_embedding_(self.embedding)
         else:
             reinit_embedding_by_pretrained_(self.embedding, config.vocab.itos, config.vectors, config.oov_init)
-            
+        
         self.freeze = config.freeze
         self.embedding.requires_grad_(not self.freeze)
         
@@ -139,27 +143,27 @@ class MultiHotConfig(Config):
         self.use_emb = kwargs.pop('use_emb', True)
         self.emb_dim = kwargs.pop('emb_dim', 50)
         super().__init__(**kwargs)
-    
+        
     @property
     def name(self):
         return self.field
-    
+        
     @property
     def out_dim(self):
         if self.use_emb:
             return self.emb_dim
         else:
             return self.in_dim
-    
+        
     def build_dim(self, tokens: TokenSequence):
         self.in_dim = getattr(tokens, self.field)[0].shape[0]
         
     def exemplify(self, tokens: TokenSequence):
         return torch.tensor(getattr(tokens, self.field), dtype=torch.float)
-    
+        
     def batchify(self, batch_values: List[torch.FloatTensor]):
         return torch.nn.utils.rnn.pad_sequence(batch_values, batch_first=True, padding_value=0.0)
-    
+        
     def instantiate(self):
         return MultiHotEmbedder(self)
 
