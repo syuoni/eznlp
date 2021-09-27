@@ -183,7 +183,7 @@ class BoundarySelectionDecoderConfig(SingleDecoderConfigBase, BoundarySelectionD
     @property
     def criterion(self):
         if self.sb_epsilon > 0:
-            return f"SB({self.sb_epsilon:.2f}, {self.sl_epsilon:.2f})"
+            return f"SB({self.sb_epsilon:.2f}, {self.sb_size})"
         else:
             return super().criterion
         
