@@ -133,7 +133,12 @@ def load_data(args: argparse.Namespace):
             io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', document_sep_starts=["-DOCSTART-"], document_level=True, case_mode='None', number_mode='Zeros')
         else:
             io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', case_mode='None', number_mode='Zeros')
-        train_data = io.read("data/conll2003/eng.train")
+        if getattr(args, 'corrupt_rate', 0.0) <= 0:
+            train_data = io.read("data/conll2003/eng.train")
+        else:
+            assert getattr(args, 'doc_level', False)
+            json_io = JsonIO(is_tokenized=True, case_mode='None', number_mode='Zeros')
+            train_data = json_io.read(f"data/conll2003/eng.train.corrupted({args.corrupt_rate:.1f}, 1).json")
         dev_data   = io.read("data/conll2003/eng.testa")
         test_data  = io.read("data/conll2003/eng.testb")
         

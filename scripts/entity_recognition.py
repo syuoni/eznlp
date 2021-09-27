@@ -33,6 +33,8 @@ def parse_arguments(parser: argparse.ArgumentParser):
                             help="dataset name")
     group_data.add_argument('--doc_level', default=False, action='store_true', 
                             help="whether to load data at document level")
+    group_data.add_argument('--corrupt_rate', type=float, default=0.0, 
+                            help="boundary corrupt rate")
     group_data.add_argument('--pipeline', default=False, action='store_true', 
                             help="whether to save predicted chunks for pipeline")
     
