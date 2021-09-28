@@ -86,6 +86,8 @@ class Spans(TargetWrapper):
         self.span_size_ids = torch.tensor([end-start-1 for start, end in self.spans], dtype=torch.long)
         self.span_size_ids.masked_fill_(self.span_size_ids>=config.max_span_size, config.max_span_size-1)
         
+        # TODO: boundary/label smoothing
+        # Do not smooth to `<none>` label
         if self.chunks is not None:
             span2label = {(start, end): label for label, start, end in self.chunks}
             labels = [span2label.get(span, config.none_label) for span in self.spans]

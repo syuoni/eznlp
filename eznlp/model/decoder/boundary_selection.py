@@ -6,7 +6,7 @@ import torch
 
 from ...wrapper import TargetWrapper, Batch
 from ...utils.chunk import detect_nested, filter_clashed_by_priority
-from ...nn.modules import CombinedDropout, SmoothLabelCrossEntropyLoss, SoftLabelCrossEntropyLoss
+from ...nn.modules import CombinedDropout, SoftLabelCrossEntropyLoss
 from ...nn.init import reinit_embedding_, reinit_layer_
 from ...metrics import precision_recall_f1_report
 from ..encoder import EncoderConfig
@@ -116,11 +116,13 @@ class Boundaries(TargetWrapper):
             self.non_mask = pos_non_mask | (neg_sampled & non_mask)
         
         if self.chunks is not None:
-            if config.sb_epsilon <= 0:
+            if config.sb_epsilon <= 0 and config.sl_epsilon <= 0:
+                # Cross entropy loss
                 self.boundary2label_id = torch.full((num_tokens, num_tokens), config.none_idx, dtype=torch.long)
                 for label, start, end in self.chunks:
                     self.boundary2label_id[start, end-1] = config.label2idx[label]
             else:
+                # Soft label loss for either boundary or label smoothing 
                 self.boundary2label_id = torch.zeros(num_tokens, num_tokens, config.voc_dim, dtype=torch.float)
                 for label, start, end in self.chunks:
                     label_id = config.label2idx[label]
@@ -135,6 +137,12 @@ class Boundaries(TargetWrapper):
                         self.boundary2label_id[start, end-1, label_id] += eps_per_span * (dist * 4 - len(sur_spans))
                 
                 self.boundary2label_id[:, :, config.none_idx] = 1 - self.boundary2label_id.sum(dim=-1)
+                
+                if config.sl_epsilon > 0:
+                    # Do not smooth to `<none>` label
+                    pos_indic = (torch.arange(config.voc_dim) != config.none_idx)
+                    self.boundary2label_id[:, :, pos_indic] = (self.boundary2label_id[:, :, pos_indic] * (1-config.sl_epsilon) + 
+                                                               self.boundary2label_id[:, :, pos_indic].sum(dim=-1, keepdim=True)*config.sl_epsilon / (config.voc_dim-1))
 
 
 
@@ -188,11 +196,10 @@ class BoundarySelectionDecoderConfig(SingleDecoderConfigBase, BoundarySelectionD
             return super().criterion
         
     def instantiate_criterion(self, **kwargs):
-        if self.criterion.lower().startswith('sb'):
-            if self.sl_epsilon > 0:
-                return SmoothLabelCrossEntropyLoss(epsilon=self.sl_epsilon, **kwargs)
-            else:
-                return SoftLabelCrossEntropyLoss(**kwargs)
+        if self.criterion.lower().startswith(('sb', 'sl')):
+            # For boundary/label smoothing, the `Boundaries` object has been accordingly changed; 
+            # hence, do not use `SmoothLabelCrossEntropyLoss`
+            return SoftLabelCrossEntropyLoss(**kwargs)
         else:
             return super().instantiate_criterion(**kwargs)
         
