@@ -111,9 +111,14 @@ def test_boundaries_obj(sb_epsilon, sl_epsilon, EAR_data_demo):
         assert all(boundaries_obj.boundary2label_id[start, end-1] == config.decoder.label2idx[label] for label, start, end in chunks)
         labels_retr = [config.decoder.idx2label[i] for i in boundaries_obj.boundary2label_id[torch.arange(num_tokens) >= torch.arange(num_tokens).unsqueeze(-1)].tolist()]
     else:
-        assert (boundaries_obj.boundary2label_id.sum(dim=-1) - 1).abs().max().item() < 1e-6
         assert all(boundaries_obj.boundary2label_id[start, end-1].argmax() == config.decoder.label2idx[label] for label, start, end in chunks)
         labels_retr = [config.decoder.idx2label[i] for i in boundaries_obj.boundary2label_id[torch.arange(num_tokens) >= torch.arange(num_tokens).unsqueeze(-1)].argmax(dim=-1).tolist()]
+        
+        assert (boundaries_obj.boundary2label_id.sum(dim=-1) - 1).abs().max().item() < 1e-6
+        if sb_epsilon == 0:
+            assert (boundaries_obj.boundary2label_id[:, :, config.decoder.none_idx] < 1).sum().item() == num_chunks
+        else:
+            assert (boundaries_obj.boundary2label_id[:, :, config.decoder.none_idx] < 1).sum().item() > num_chunks
     
     chunks_retr = [(label, start, end) for label, (start, end) in zip(labels_retr, _spans_from_upper_triangular(num_tokens)) if label != config.decoder.none_label]
     assert set(chunks_retr) == set(chunks)
