@@ -71,3 +71,16 @@ class TestModel(object):
         trainer = Trainer(self.model, device=device)
         y_pred = trainer.predict(dataset_wo_gold)
         assert len(y_pred) == len(data_wo_gold)
+        
+        
+    def test_beam_search(self, multi30k_demo, device):
+        self.config = Text2TextConfig()
+        self._setup_case(multi30k_demo, device)
+        
+        self.model.eval()
+        batch = [self.dataset[i] for i in range(4)]
+        batch = self.dataset.collate(batch).to(self.device)
+        
+        greedy_res = self.model.decode(batch)
+        beam1_res  = self.model.beam_search(1, batch)
+        assert beam1_res == greedy_res

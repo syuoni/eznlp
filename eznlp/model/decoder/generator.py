@@ -8,11 +8,11 @@ import torchtext
 from ...wrapper import Batch
 from ...nn.modules import CombinedDropout, SequencePooling, SequenceAttention
 from ...nn.init import reinit_layer_, reinit_lstm_, reinit_gru_, reinit_vector_parameter_
-from ..embedder import OneHotConfig
+from ..embedder import OneHotConfig, VocabMixin
 from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
 
 
-class GeneratorMixin(DecoderMixinBase):
+class GeneratorMixin(DecoderMixinBase, VocabMixin):
     @property
     def vocab(self):
         if isinstance(self, GeneratorConfig):
@@ -132,11 +132,11 @@ class Generator(DecoderBase, GeneratorMixin):
         self.dropout = CombinedDropout(*config.in_drop_rates)
         self.embedding = config.embedding.instantiate()
         self.attention = SequenceAttention(key_dim=config.ctx_dim, query_dim=config.hid_dim, scoring=config.scoring, external_query=True)
-        self.hid2logit = torch.nn.Linear(config.full_hid_dim, config.embedding.voc_dim)
+        self.hid2logit = torch.nn.Linear(config.full_hid_dim, config.voc_dim)
         # Every token in a batch should be assigned the same weight, so use `sum` as the reduction method. 
         # This will not cause the model to generate shorter sequence, because the loss is summed over the ground-truth tokens, 
         # which have fixed lengths. 
-        self.criterion = config.instantiate_criterion(ignore_index=config.embedding.pad_idx, reduction='sum')
+        self.criterion = config.instantiate_criterion(ignore_index=config.pad_idx, reduction='sum')
         
         
     def forward2logits(self, batch: Batch, src_hidden: torch.Tensor, src_mask: torch.Tensor=None):
@@ -260,14 +260,15 @@ class RNNGenerator(Generator):
         x_t = batch.trg_tok_ids[:, 0].unsqueeze(1)
         h_tm1 = h_0
         
+        # TODO: fully teacher forcing...
         for t in range(1, batch.trg_tok_ids.size(1)):
             # t: 1, 2, ..., T-1
             logits_t, h_t, atten_weight_t = self.forward_step(x_t, h_tm1, src_hidden, src_mask)
-        
+            
             logits.append(logits_t)
             atten_weights.append(atten_weight_t)
             top1 = logits_t.argmax(dim=-1)
-        
+            
             # Prepare for step t+1
             if self.training:
                 tf_mask = torch.empty_like(top1).bernoulli(p=self.teacher_forcing_rate).type(torch.bool)
@@ -285,3 +286,77 @@ class RNNGenerator(Generator):
             return logits, atten_weights
         else:
             return logits
+        
+        
+        
+    def beam_search(self, beam_size:int, batch: Batch, src_hidden: torch.Tensor, src_mask: torch.Tensor=None):
+        batch_best_trg_toks = []
+        
+        for k in range(batch.size):
+            # The `k`-th source states
+            curr_src_hidden = src_hidden[k].unsqueeze(0)
+            curr_src_mask = None if src_mask is None else src_mask[k].unsqueeze(0)
+            
+            h_0 = self._init_hidden(curr_src_hidden, curr_src_mask)
+            # x_t: (batch=1, step=1)
+            x_t = batch.trg_tok_ids[k, 0].view(1, 1)
+            h_tm1 = h_0
+            
+            beam_trg_toks = [[]]
+            ended_beam_trg_toks, ended_log_scores = [], []
+            
+            for t in range(1, batch.trg_tok_ids.size(1)):
+                # t: 1, 2, ..., T-1
+                # logits_t: (batch=1, step=1, voc_dim)
+                logits_t, h_t, _ = self.forward_step(x_t, h_tm1, 
+                                                     src_hidden=curr_src_hidden.expand(x_t.size(0), -1, -1), 
+                                                     src_mask=None if src_mask is None else curr_src_mask.expand(x_t.size(0), -1))
+                
+                if t == 1:
+                    # log_scores: (batch=1, step=1, voc_dim)
+                    log_scores = logits_t.log_softmax(dim=-1)
+                    # log_scores/topk_indexes: (batch=beam, step=1)
+                    log_scores, topk_indexes = log_scores.permute(0, 2, 1).flatten(end_dim=1).topk(beam_size, dim=0)
+                    
+                    h_t = (h_t[0].expand(-1, beam_size, -1), h_t[1].expand(-1, beam_size, -1))
+                else:
+                    # log_scores: (batch=beam, step=1, voc_dim)
+                    log_scores = log_scores.unsqueeze(-1) + logits_t.log_softmax(dim=-1)
+                    # log_scores/topk_indexes: (batch=beam, step=1)
+                    log_scores, topk_indexes = log_scores.permute(0, 2, 1).flatten(end_dim=1).topk(x_t.size(0), dim=0)
+                
+                # Treat it as having a batch size of `beam_size`
+                # prev_indexes/x_t: (batch=beam, step=1)
+                prev_indexes, x_t = (topk_indexes // self.voc_dim), (topk_indexes % self.voc_dim)
+                
+                beam_trg_toks = [beam_trg_toks[prev_idx] + [self.vocab.itos[tok_id]] 
+                                    for prev_idx, tok_id 
+                                    in zip(prev_indexes.flatten().cpu().tolist(), x_t.flatten().cpu().tolist())]
+                
+                # is_end: (batch=beam, )
+                is_end = (x_t.flatten() == self.eos_idx)
+                
+                if is_end.any().item():
+                    # Remove `<eos>`
+                    ended_beam_trg_toks.extend([trg_toks[:-1] for trg_toks, ise in zip(beam_trg_toks, is_end.cpu().tolist()) if ise])
+                    ended_log_scores.extend(log_scores[is_end].flatten().cpu().tolist())
+                    
+                    if len(ended_beam_trg_toks) == beam_size:
+                        break
+                    
+                    beam_trg_toks = [trg_toks for trg_toks, ise in zip(beam_trg_toks, is_end.cpu().tolist()) if not ise]
+                    x_t = x_t[~is_end]
+                    h_t = (h_t[0][:, ~is_end], h_t[1][:, ~is_end])
+                    log_scores = log_scores[~is_end]
+                
+                h_tm1 = h_t
+            
+            # Use *ended* sequences only, unless all sequences are not *ended*
+            if len(ended_beam_trg_toks) == 0:
+                ended_beam_trg_toks = beam_trg_toks
+                ended_log_scores = log_scores.flatten().cpu().tolist()
+            
+            max_log_score, best_trg_toks = max(zip(ended_log_scores, ended_beam_trg_toks))
+            batch_best_trg_toks.append(best_trg_toks)
+        
+        return batch_best_trg_toks

@@ -71,3 +71,13 @@ class Text2Text(ModelBase):
         return {'src_hidden': src_hidden, 
                 'src_mask': src_mask, 
                 'logits': logits}
+        
+        
+    def beam_search(self, beam_size:int, batch: Batch):
+        src_embedded = self.embedder(batch.tok_ids)
+        
+        # src_hidden: (batch, src_step, ctx_dim)
+        src_hidden = self.encoder(src_embedded, batch.mask)
+        src_mask = batch.mask
+        
+        return self.decoder.beam_search(beam_size, batch, src_hidden=src_hidden, src_mask=src_mask)
