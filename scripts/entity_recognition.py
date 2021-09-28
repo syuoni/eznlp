@@ -195,12 +195,12 @@ def build_ER_config(args: argparse.Namespace):
 def process_IE_data(train_data, dev_data, test_data, args, config):
     if (config.bert_like is not None and 
             ((args.dataset in ('SIGHAN2006', 'yidu_s4k')) or 
-             (args.dataset in ('conll2003', 'conll2012') and getattr(args, 'doc_level', False)))):
+             (args.dataset in ('conll2003', 'conll2012') and args.doc_level))):
         train_data = segment_uniformly_for_bert_like(train_data, config.bert_like.tokenizer, verbose=args.log_terminal)
         dev_data   = segment_uniformly_for_bert_like(dev_data,   config.bert_like.tokenizer, verbose=args.log_terminal)
         test_data  = segment_uniformly_for_bert_like(test_data,  config.bert_like.tokenizer, verbose=args.log_terminal)
     
-    if getattr(args, 'use_softword', False) or getattr(args, 'use_softlexicon', False):
+    if args.use_softword or args.use_softlexicon:
         if config.nested_ohots is not None and 'softlexicon' in config.nested_ohots.keys():
             ctb50 = config.nested_ohots['softlexicon'].vectors
         else:

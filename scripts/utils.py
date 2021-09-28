@@ -16,6 +16,7 @@ import flair
 from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO, BratIO
 from eznlp.io import PostIO
 from eznlp.training import Trainer, LRLambda, collect_params, check_param_groups
+from eznlp.metrics import precision_recall_f1_report
 
 logger = logging.getLogger(__name__)
 
@@ -129,21 +130,27 @@ dataset2language = {'conll2003': 'English',
 
 def load_data(args: argparse.Namespace):
     if args.dataset == 'conll2003':
-        if getattr(args, 'doc_level', False):
+        if args.doc_level:
             io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', document_sep_starts=["-DOCSTART-"], document_level=True, case_mode='None', number_mode='Zeros')
         else:
             io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', case_mode='None', number_mode='Zeros')
-        if getattr(args, 'corrupt_rate', 0.0) <= 0:
-            train_data = io.read("data/conll2003/eng.train")
-        else:
-            assert getattr(args, 'doc_level', False)
-            json_io = JsonIO(is_tokenized=True, case_mode='None', number_mode='Zeros')
-            train_data = json_io.read(f"data/conll2003/eng.train.corrupted({args.corrupt_rate:.1f}, 1).json")
+        train_data = io.read("data/conll2003/eng.train")
         dev_data   = io.read("data/conll2003/eng.testa")
         test_data  = io.read("data/conll2003/eng.testb")
         
+        if args.corrupt_rate > 0 and args.doc_level:
+            set_chunks_gold = [ex['chunks'] for ex in train_data]
+            
+            json_io = JsonIO(is_tokenized=True, case_mode='None', number_mode='Zeros')
+            train_data = json_io.read(f"data/conll2003/eng.train.corrupted({args.corrupt_rate:.1f}, 1).json")
+            set_chunks_corr = [ex['chunks'] for ex in train_data]
+            scores, ave_scores = precision_recall_f1_report(set_chunks_gold, set_chunks_corr)
+            logger.warning(f"Loading data with corruption rate of {args.corrupt_rate:.1f} \n"
+                           f"Corruption Retrieval F1-score: {ave_scores['micro']['f1']*100:2.3f}%")
+        
+        
     elif args.dataset == 'conll2012':
-        if getattr(args, 'doc_level', False):
+        if args.doc_level:
             io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end", "pt/"], document_sep_starts=["#begin"], document_level=True, encoding='utf-8', case_mode='None', number_mode='Zeros')
         else:
             io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end", "pt/"], document_sep_starts=["#begin"], encoding='utf-8', case_mode='None', number_mode='Zeros')
@@ -166,6 +173,14 @@ def load_data(args: argparse.Namespace):
         train_data = io.read("data/ace-lu2015emnlp/ACE2005/train.json")
         dev_data   = io.read("data/ace-lu2015emnlp/ACE2005/dev.json")
         test_data  = io.read("data/ace-lu2015emnlp/ACE2005/test.json")
+        
+        if args.corrupt_rate > 0:
+            set_chunks_gold = [ex['chunks'] for ex in train_data]
+            train_data = io.read(f"data/ace-lu2015emnlp/ACE2005/train.corrupted({args.corrupt_rate:.1f}, 1).json")
+            set_chunks_corr = [ex['chunks'] for ex in train_data]
+            scores, ave_scores = precision_recall_f1_report(set_chunks_gold, set_chunks_corr)
+            logger.warning(f"Loading data with corruption rate of {args.corrupt_rate:.1f} \n"
+                           f"Corruption Retrieval F1-score: {ave_scores['micro']['f1']*100:2.3f}%")
         
     elif args.dataset == 'conll2004':
         json_io = JsonIO(text_key='tokens', 
