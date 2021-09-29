@@ -132,9 +132,14 @@ class Boundaries(TargetWrapper):
                         eps_per_span = config.sb_epsilon / (config.sb_size * dist * 4)
                         sur_spans = list(_spans_from_surrounding((start, end), dist, num_tokens))
                         for sur_start, sur_end in sur_spans:
-                            self.boundary2label_id[sur_start, sur_end-1, label_id] += eps_per_span
+                            self.boundary2label_id[sur_start, sur_end-1, label_id] += (eps_per_span*config.sb_adj_factor)
                         # Absorb the probabilities assigned to illegal positions
                         self.boundary2label_id[start, end-1, label_id] += eps_per_span * (dist * 4 - len(sur_spans))
+                
+                if config.sb_adj_factor > 1:
+                    overflow_indic = (self.boundary2label_id.sum(dim=-1) > 1)
+                    if overflow_indic.any().item():
+                        self.boundary2label_id[overflow_indic] = torch.nn.functional.normalize(self.boundary2label_id[overflow_indic], p=1, dim=-1)
                 
                 self.boundary2label_id[:, :, config.none_idx] = 1 - self.boundary2label_id.sum(dim=-1)
                 
@@ -169,6 +174,7 @@ class BoundarySelectionDecoderConfig(SingleDecoderConfigBase, BoundarySelectionD
         # Boundary smoothing epsilon
         self.sb_epsilon = kwargs.pop('sb_epsilon', 0.0)
         self.sb_size = kwargs.pop('sb_size', 1)
+        self.sb_adj_factor = kwargs.pop('sb_adj_factor', 1.0)
         super().__init__(**kwargs)
         
         
