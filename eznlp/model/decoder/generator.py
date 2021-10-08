@@ -213,6 +213,18 @@ class RNNGenerator(Generator):
             # h_t: (num_layers, batch, hid_dim) -> (batch, step=1, hid_dim)
             return h_t[-1].unsqueeze(1)
         
+    def _expand_hidden(self, h_t: torch.Tensor, batch_size: int):
+        if isinstance(self.rnn, torch.nn.LSTM):
+            return h_t[0].expand(-1, batch_size, -1).contiguous(), h_t[1].expand(-1, batch_size, -1).contiguous()
+        else:
+            return h_t.expand(-1, batch_size, -1).contiguous()
+        
+    def _select_hidden(self, h_t: torch.Tensor, batch_indexing: torch.Tensor):
+        if isinstance(self.rnn, torch.nn.LSTM):
+            return h_t[0][:, batch_indexing].contiguous(), h_t[1][:, batch_indexing].contiguous()
+        else:
+            return h_t[:, batch_indexing].contiguous()
+        
     def _init_hidden(self, src_hidden: torch.Tensor, src_mask: torch.Tensor=None):
         if hasattr(self, 'init_ctx'):
             context_0 = self.init_ctx(src_hidden, mask=src_mask)
@@ -318,7 +330,7 @@ class RNNGenerator(Generator):
                     # log_scores/topk_indexes: (batch=beam, step=1)
                     log_scores, topk_indexes = log_scores.permute(0, 2, 1).flatten(end_dim=1).topk(beam_size, dim=0)
                     
-                    h_t = (h_t[0].expand(-1, beam_size, -1), h_t[1].expand(-1, beam_size, -1))
+                    h_t = self._expand_hidden(h_t, beam_size)
                 else:
                     # log_scores: (batch=beam, step=1, voc_dim)
                     log_scores = log_scores.unsqueeze(-1) + logits_t.log_softmax(dim=-1)
@@ -346,7 +358,7 @@ class RNNGenerator(Generator):
                     
                     beam_trg_toks = [trg_toks for trg_toks, ise in zip(beam_trg_toks, is_end.cpu().tolist()) if not ise]
                     x_t = x_t[~is_end]
-                    h_t = (h_t[0][:, ~is_end], h_t[1][:, ~is_end])
+                    h_t = self._select_hidden(h_t, ~is_end)
                     log_scores = log_scores[~is_end]
                 
                 h_tm1 = h_t
