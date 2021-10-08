@@ -136,11 +136,10 @@ class Boundaries(TargetWrapper):
                         # Absorb the probabilities assigned to illegal positions
                         self.boundary2label_id[start, end-1, label_id] += eps_per_span * (dist * 4 - len(sur_spans))
                 
-                if config.sb_adj_factor > 1:
-                    overflow_indic = (self.boundary2label_id.sum(dim=-1) > 1)
-                    if overflow_indic.any().item():
-                        self.boundary2label_id[overflow_indic] = torch.nn.functional.normalize(self.boundary2label_id[overflow_indic], p=1, dim=-1)
-                
+                # In very rare cases (e.g., ACE 2005), multiple entities may have the same span but different types
+                overflow_indic = (self.boundary2label_id.sum(dim=-1) > 1)
+                if overflow_indic.any().item():
+                    self.boundary2label_id[overflow_indic] = torch.nn.functional.normalize(self.boundary2label_id[overflow_indic], p=1, dim=-1)
                 self.boundary2label_id[:, :, config.none_idx] = 1 - self.boundary2label_id.sum(dim=-1)
                 
                 if config.sl_epsilon > 0:
