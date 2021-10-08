@@ -142,9 +142,15 @@ if __name__ == '__main__':
     trainer = Trainer(model, device=device)
     
     logger.info("Evaluating on dev-set")
-    evaluate_generation(trainer, dev_set, batch_size=args.batch_size)
+    evaluate_generation(trainer, dev_set, batch_size=args.batch_size, beam_size=1)
+    evaluate_generation(trainer, dev_set, batch_size=args.batch_size, beam_size=2)
+    evaluate_generation(trainer, dev_set, batch_size=args.batch_size, beam_size=3)
+    evaluate_generation(trainer, dev_set, batch_size=args.batch_size, beam_size=4)
     logger.info("Evaluating on test-set")
-    evaluate_generation(trainer, test_set, batch_size=args.batch_size)
+    evaluate_generation(trainer, test_set, batch_size=args.batch_size, beam_size=1)
+    evaluate_generation(trainer, test_set, batch_size=args.batch_size, beam_size=2)
+    evaluate_generation(trainer, test_set, batch_size=args.batch_size, beam_size=3)
+    evaluate_generation(trainer, test_set, batch_size=args.batch_size, beam_size=4)
     
     logger.info(" ".join(sys.argv))
     logger.info(pprint.pformat(args.__dict__))
