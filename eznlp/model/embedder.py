@@ -48,6 +48,7 @@ class OneHotConfig(Config, VocabMixin):
         self.tokens_key = kwargs.pop('tokens_key', 'tokens')
         self.field = kwargs.pop('field')
         self.vocab = kwargs.pop('vocab', None)
+        self.max_len = kwargs.pop('max_len', None)
         self.has_sos = kwargs.pop('has_sos', False)
         self.has_eos = kwargs.pop('has_eos', False)
         self.min_freq = kwargs.pop('min_freq', 1)
@@ -59,9 +60,13 @@ class OneHotConfig(Config, VocabMixin):
                 logger.warning(f"`emb_dim` {self.emb_dim} does not equal `vectors.emb_dim` {self.vectors.emb_dim} \n" 
                                f"Reset `emb_dim` to be {self.vectors.emb_dim}")
                 self.emb_dim = self.vectors.emb_dim
-        
         self.oov_init = kwargs.pop('oov_vector', 'zeros')
+        
         self.freeze = kwargs.pop('freeze', False)
+        assert not (self.freeze and self.vectors is None)
+        
+        self.has_positional_emb = kwargs.pop('has_positional_emb', False)
+        
         self.scale_grad_by_freq = kwargs.pop('scale_grad_by_freq', False)
         super().__init__(**kwargs)
         
@@ -94,11 +99,16 @@ class OneHotConfig(Config, VocabMixin):
         counter = Counter()
         for data in partitions:
             for entry in data:
-                counter.update(self._get_field(entry[self.tokens_key]))
+                field_seq = self._get_field(entry[self.tokens_key])
+                counter.update(field_seq)
+                if self.max_len is None or len(field_seq) > self.max_len:
+                    self.max_len = len(field_seq)
+        
         self.vocab = torchtext.vocab.Vocab(counter, 
                                            min_freq=self.min_freq, 
                                            specials=self.specials, 
                                            specials_first=True)
+        
         
     def exemplify(self, tokens: TokenSequence):
         # It is generally recommended to return cpu tensors in multi-process loading. 
@@ -128,9 +138,23 @@ class OneHotEmbedder(torch.nn.Module):
         self.freeze = config.freeze
         self.embedding.requires_grad_(not self.freeze)
         
+        if config.has_positional_emb:
+            self.pos_embedding = torch.nn.Embedding(config.max_len, config.emb_dim, scale_grad_by_freq=config.scale_grad_by_freq)
+            reinit_embedding_(self.pos_embedding)
+            self.register_buffer('_pos_ids', torch.arange(config.max_len))
+        
         
     def forward(self, x_ids: torch.LongTensor):
-        return self.embedding(x_ids)
+        embedded = self.embedding(x_ids)
+        
+        if hasattr(self, 'pos_embedding'):
+            # The last dimension of `x_ids` is assumed to be step
+            *batch_dims, max_step = x_ids.size()
+            pos_ids = self._pos_ids[:max_step].expand(*batch_dims, -1)
+            embedded = embedded + self.embedding(pos_ids)
+        
+        return embedded
+
 
 
 

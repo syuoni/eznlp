@@ -60,6 +60,9 @@ class NestedOneHotConfig(OneHotConfig):
             for data_entry in data:
                 for inner_seq in self._inner_sequences(data_entry[self.tokens_key]):
                     counter.update(inner_seq)
+                    if self.max_len is None or len(inner_seq) > self.max_len:
+                        self.max_len = len(inner_seq)
+        
         self.vocab = torchtext.vocab.Vocab(counter, 
                                            min_freq=self.min_freq, 
                                            specials=self.specials, 
