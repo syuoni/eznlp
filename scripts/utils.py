@@ -143,6 +143,7 @@ def load_data(args: argparse.Namespace):
             
             json_io = JsonIO(is_tokenized=True, case_mode='None', number_mode='Zeros')
             train_data = json_io.read(f"data/conll2003/eng.train.corrupted({args.corrupt_rate:.1f}, 1).json")
+            # train_data = json_io.read(f"data/conll2003/eng.train.sys.corrupted({args.corrupt_rate:.1f}, 1).json")
             set_chunks_corr = [ex['chunks'] for ex in train_data]
             scores, ave_scores = precision_recall_f1_report(set_chunks_gold, set_chunks_corr)
             logger.warning(f"Loading data with corruption rate of {args.corrupt_rate:.1f} \n"
@@ -177,6 +178,7 @@ def load_data(args: argparse.Namespace):
         if args.corrupt_rate > 0:
             set_chunks_gold = [ex['chunks'] for ex in train_data]
             train_data = io.read(f"data/ace-lu2015emnlp/ACE2005/train.corrupted({args.corrupt_rate:.1f}, 1).json")
+            # train_data = io.read(f"data/ace-lu2015emnlp/ACE2005/train.sys.corrupted({args.corrupt_rate:.1f}, 1).json")
             set_chunks_corr = [ex['chunks'] for ex in train_data]
             scores, ave_scores = precision_recall_f1_report(set_chunks_gold, set_chunks_corr)
             logger.warning(f"Loading data with corruption rate of {args.corrupt_rate:.1f} \n"

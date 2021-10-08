@@ -78,6 +78,8 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                help="Boundary smoothing loss epsilon")
     group_decoder.add_argument('--sb_size', type=int, default=1, 
                                help="Boundary smoothing window size")
+    group_decoder.add_argument('--sb_adj_factor', type=float, default=1.0, 
+                               help="Boundary smoothing probability adjust factor")
     return parse_to_args(parser)
 
 
@@ -188,6 +190,7 @@ def build_ER_config(args: argparse.Namespace):
                                                         hard_neg_sampling_size=args.hard_neg_sampling_size, 
                                                         sb_epsilon=args.sb_epsilon, 
                                                         sb_size=args.sb_size,
+                                                        sb_adj_factor=args.sb_adj_factor, 
                                                         hid_drop_rates=drop_rates)
     return ExtractorConfig(**collect_IE_assembly_config(args), decoder=decoder_config)
 
