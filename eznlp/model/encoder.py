@@ -4,6 +4,7 @@ import torch
 from ..nn.init import reinit_layer_, reinit_lstm_, reinit_gru_, reinit_transformer_encoder_layer_
 from ..nn.functional import mask2seq_lens
 from ..nn.modules import CombinedDropout
+from ..nn.modules import FeedForwardBlock, ConvBlock, GehringConvBlock
 from ..config import Config
 
 
@@ -34,13 +35,14 @@ class EncoderConfig(Config):
                 
             elif self.arch.lower() in ('conv', 'gehring'):
                 self.kernel_size = kwargs.pop('kernel_size', 3)
+                self.scale = kwargs.pop('scale', 0.5**0.5)
                 self.num_layers = kwargs.pop('num_layers', 3)
                 self.in_drop_rates = kwargs.pop('in_drop_rates', (0.25, 0.0, 0.0))
                 self.hid_drop_rate = kwargs.pop('hid_drop_rate', 0.25)
                 
             elif self.arch.lower() == 'transformer':
-                self.nhead = kwargs.pop('nhead', 8)
-                self.pf_dim = kwargs.pop('pf_dim', 256)
+                self.num_heads = kwargs.pop('num_heads', 8)
+                self.ffn_dim = kwargs.pop('ffn_dim', 256)
                 self.num_layers = kwargs.pop('num_layers', 3)
                 self.in_drop_rates = kwargs.pop('in_drop_rates', (0.1, 0.0, 0.0))
                 self.hid_drop_rate = kwargs.pop('hid_drop_rate', 0.1)
@@ -61,10 +63,10 @@ class EncoderConfig(Config):
             out_dim = self.in_dim
         else:
             out_dim = self.hid_dim
-            
+        
         if self.shortcut:
             out_dim = out_dim + self.in_dim
-            
+        
         return out_dim
     
     
@@ -114,7 +116,6 @@ class Encoder(torch.nn.Module):
 
 
 
-
 class IdentityEncoder(Encoder):
     def __init__(self, config: EncoderConfig):
         super().__init__(config)
@@ -122,19 +123,6 @@ class IdentityEncoder(Encoder):
     def embedded2hidden(self, embedded: torch.FloatTensor, mask: torch.BoolTensor):
         return embedded
 
-
-
-
-class FeedForwardBlock(torch.nn.Module):
-    def __init__(self, in_dim: int, out_dim: int, drop_rate: float):
-        super().__init__()
-        self.proj_layer = torch.nn.Linear(in_dim, out_dim)
-        self.relu = torch.nn.ReLU()
-        reinit_layer_(self.proj_layer, 'relu')
-        self.dropout = torch.nn.Dropout(drop_rate)
-        
-    def forward(self, x: torch.FloatTensor):
-        return self.relu(self.proj_layer(self.dropout(x)))
 
 
 class FFNEncoder(Encoder):
@@ -151,9 +139,8 @@ class FFNEncoder(Encoder):
         hidden = embedded
         for ff_block in self.ff_blocks:
             hidden = ff_block(hidden)
-            
+        
         return hidden
-
 
 
 
@@ -227,26 +214,6 @@ class RNNEncoder(Encoder):
 
 
 
-class ConvBlock(torch.nn.Module):
-    def __init__(self, in_dim: int, out_dim: int, kernel_size: int, drop_rate: float):
-        super().__init__()
-        self.conv = torch.nn.Conv1d(in_dim, out_dim, kernel_size=kernel_size, padding=(kernel_size-1)//2)
-        self.relu = torch.nn.ReLU()
-        reinit_layer_(self.conv, 'relu')
-        self.dropout = torch.nn.Dropout(drop_rate)
-        
-    def forward(self, x: torch.FloatTensor, mask: torch.BoolTensor):
-        # NOTE: It would be better to ensure the input (rather than the output) of convolutional
-        # layers to be zeros in padding positions, since only convolutional layers have such 
-        # a property: Its output values in non-padding positions are sensitive to the input
-        # values in padding positions. 
-        
-        # x: (batch, in_dim=channels, step)
-        # mask: (batch, step)
-        x.masked_fill_(mask.unsqueeze(1), 0)
-        return self.relu(self.conv(self.dropout(x)))
-
-
 class ConvEncoder(Encoder):
     def __init__(self, config: EncoderConfig):
         super().__init__(config)
@@ -269,25 +236,6 @@ class ConvEncoder(Encoder):
 
 
 
-
-class GehringConvBlock(torch.nn.Module):
-    def __init__(self, hid_dim: int, kernel_size: int, drop_rate: float):
-        super().__init__()
-        self.conv = torch.nn.Conv1d(hid_dim, hid_dim*2, kernel_size=kernel_size, padding=(kernel_size-1)//2)
-        self.glu = torch.nn.GLU(dim=1)
-        reinit_layer_(self.conv, 'sigmoid')
-        self.dropout = torch.nn.Dropout(drop_rate)
-        
-    def forward(self, x: torch.FloatTensor, mask: torch.BoolTensor):
-        # x: (batch, hid_dim=channels, step)
-        # mask: (batch, step)
-        x.masked_fill_(mask.unsqueeze(1), 0)
-        conved = self.glu(self.conv(self.dropout(x)))
-        
-        # Residual connection
-        return (x + conved) * (0.5**0.5)
-
-
 class GehringConvEncoder(Encoder):
     """
     References
@@ -305,6 +253,7 @@ class GehringConvEncoder(Encoder):
                               kernel_size=config.kernel_size, 
                               drop_rate=config.hid_drop_rate) for k in range(config.num_layers)]
         )
+        self.scale = config.scale
         
     def embedded2hidden(self, embedded: torch.FloatTensor, mask: torch.BoolTensor):
         init_hidden = self.glu(self.emb2init_hid(embedded))
@@ -313,12 +262,11 @@ class GehringConvEncoder(Encoder):
         hidden = init_hidden.permute(0, 2, 1)
         for conv_block in self.conv_blocks:
             hidden = conv_block(hidden, mask)
-            
+        
         # hidden: (batch, hid_dim/channels, step) -> (batch, step, hid_dim/channels) 
         final_hidden = hidden.permute(0, 2, 1)
         # Residual connection
-        return (init_hidden + final_hidden) * (0.5**0.5)
-
+        return (init_hidden + final_hidden) * self.scale
 
 
 
@@ -335,13 +283,13 @@ class TransformerEncoder(Encoder):
         reinit_layer_(self.emb2init_hid, 'sigmoid')
         
         self.tf_layers = torch.nn.ModuleList([torch.nn.TransformerEncoderLayer(d_model=config.hid_dim, 
-                                                                               nhead=config.nhead, 
-                                                                               dim_feedforward=config.pf_dim, 
+                                                                               nhead=config.num_heads, 
+                                                                               dim_feedforward=config.ffn_dim, 
                                                                                dropout=config.hid_drop_rate) 
                                                   for k in range(config.num_layers)])
         for tf_layer in self.tf_layers:
             reinit_transformer_encoder_layer_(tf_layer)
-            
+        
         
     def embedded2hidden(self, embedded: torch.FloatTensor, mask: torch.BoolTensor):
         init_hidden = self.glu(self.emb2init_hid(embedded))
