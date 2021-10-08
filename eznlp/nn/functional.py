@@ -156,6 +156,12 @@ def _reduce_losses(losses: torch.Tensor, sample_weight: torch.Tensor=None, reduc
         return losses
 
 
+def _check_soft_target(x: torch.Tensor):
+    assert x.dim() == 2
+    assert (x >= 0).all().item()
+    assert (x.sum(dim=-1) - 1).abs().max().item() < 1e-6
+
+
 def soft_label_cross_entropy(logits: torch.Tensor, soft_target: torch.Tensor, weight: torch.Tensor=None, reduction: str='none'):
     """Soft label cross entropy loss.
     
@@ -168,6 +174,8 @@ def soft_label_cross_entropy(logits: torch.Tensor, soft_target: torch.Tensor, we
     weight : torch.Tensor (logit_dim, )
         A manual rescaling weight given to each class. 
     """
+    _check_soft_target(soft_target)
+    
     log_prob = logits.log_softmax(dim=-1)
     
     if weight is not None:
