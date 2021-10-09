@@ -51,11 +51,18 @@ class TestModel(object):
         assert isinstance(self.config.name, str) and len(self.config.name) > 0
         
         
+    @pytest.mark.parametrize("arch", ['Gehring', 'LSTM', 'GRU'])
     @pytest.mark.parametrize("shortcut", [False, True])
     @pytest.mark.parametrize("sl_epsilon", [0.0, 0.1])
+    def test_model(self, arch, shortcut, sl_epsilon, multi30k_demo, device):
+        self.config = Text2TextConfig(decoder=GeneratorConfig(arch=arch, shortcut=shortcut, sl_epsilon=sl_epsilon))
+        self._setup_case(multi30k_demo, device)
+        self._assert_batch_consistency()
+        self._assert_trainable()
+        
     @pytest.mark.parametrize("init_ctx_mode", ['mean_pooling', 'attention', 'rnn_last'])
-    def test_model(self, shortcut, sl_epsilon, init_ctx_mode, multi30k_demo, device):
-        self.config = Text2TextConfig(decoder=GeneratorConfig(shortcut=shortcut, sl_epsilon=sl_epsilon, init_ctx_mode=init_ctx_mode))
+    def test_model_with_rnn(self, init_ctx_mode, multi30k_demo, device):
+        self.config = Text2TextConfig(decoder=GeneratorConfig(arch='LSTM', init_ctx_mode=init_ctx_mode))
         self._setup_case(multi30k_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
