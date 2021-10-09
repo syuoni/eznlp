@@ -2,6 +2,7 @@
 import torch
 
 from ..init import reinit_layer_, reinit_vector_parameter_
+from ..utils import _nonlinearity2activation
 
 
 class SequenceAttention(torch.nn.Module):
@@ -67,15 +68,7 @@ class SequenceAttention(torch.nn.Module):
         else:
             raise ValueError(f"Invalid attention scoring mode {scoring}")
         
-        if nonlinearity.lower() == 'linear':
-            self.activation = torch.nn.Identidy()
-        elif nonlinearity.lower() == 'tanh':
-            self.activation = torch.nn.Tanh()
-        elif nonlinearity.lower() == 'relu':
-            self.activation = torch.nn.ReLU()
-        else:
-            raise ValueError(f"Invalid nonlinearity {nonlinearity}")
-        
+        self.activation = _nonlinearity2activation(nonlinearity)
         self.scoring = scoring
         self.nonlinearity = nonlinearity
         

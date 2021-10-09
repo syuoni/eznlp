@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import torch
 
+
 def pad_seqs(seqs, padding_value=0.0, length=None):
     """Pad a list of list, making it prepared as a tensor. 
     """
@@ -31,3 +32,20 @@ def unpad_seqs(seqs, seq_lens):
     
     return [seq[:seq_len] for seq, seq_len in zip(seqs.cpu().tolist(), seq_lens)]
 
+
+
+def _nonlinearity2activation(nonlinearity: str, **kwargs):
+    if nonlinearity.lower() in ('linear', 'identidy'):
+        return torch.nn.Identidy()
+    elif nonlinearity.lower() == 'sigmoid':
+        return torch.nn.Sigmoid()
+    elif nonlinearity.lower() == 'tanh':
+        return torch.nn.Tanh()
+    elif nonlinearity.lower() == 'relu':
+        return torch.nn.ReLU()
+    elif nonlinearity.lower() in ('leaky_relu', 'leakyrelu'):
+        return torch.nn.LeakyReLU(**kwargs)
+    elif nonlinearity.lower() == 'glu':
+        return torch.nn.GLU(**kwargs)
+    else:
+        raise ValueError(f"Invalid nonlinearity {nonlinearity}")

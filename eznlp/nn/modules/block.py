@@ -2,6 +2,7 @@
 import torch
 
 from ..init import reinit_layer_
+from ..utils import _nonlinearity2activation
 
 
 class FeedForwardBlock(torch.nn.Module):
@@ -18,14 +19,20 @@ class FeedForwardBlock(torch.nn.Module):
 
 
 class ConvBlock(torch.nn.Module):
-    def __init__(self, in_dim: int, out_dim: int, kernel_size: int, drop_rate: float):
+    def __init__(self, in_dim: int, out_dim: int, kernel_size: int, drop_rate: float, nonlinearity: str='relu'):
         super().__init__()
-        self.conv = torch.nn.Conv1d(in_dim, out_dim, kernel_size=kernel_size, padding=(kernel_size-1)//2)
-        self.relu = torch.nn.ReLU()
-        reinit_layer_(self.conv, 'relu')
+        if nonlinearity.lower() == 'glu':
+            self.conv = torch.nn.Conv1d(in_dim, out_dim*2, kernel_size=kernel_size, padding=(kernel_size-1)//2)
+            self.activation = torch.nn.GLU(dim=1)
+        else:
+            self.conv = torch.nn.Conv1d(in_dim, out_dim, kernel_size=kernel_size, padding=(kernel_size-1)//2)
+            self.activation = _nonlinearity2activation(nonlinearity)
+        
+        reinit_layer_(self.conv, nonlinearity)
         self.dropout = torch.nn.Dropout(drop_rate)
         
-    def forward(self, x: torch.FloatTensor, mask: torch.BoolTensor):
+        
+    def forward(self, x: torch.FloatTensor, mask: torch.BoolTensor=None):
         # NOTE: It would be better to ensure the input (rather than the output) of convolutional
         # layers to be zeros in padding positions, since only convolutional layers have such 
         # a property: Its output values in non-padding positions are sensitive to the input
@@ -33,25 +40,7 @@ class ConvBlock(torch.nn.Module):
         
         # x: (batch, in_dim=channels, step)
         # mask: (batch, step)
-        x.masked_fill_(mask.unsqueeze(1), 0)
-        return self.relu(self.conv(self.dropout(x)))
-
-
-
-class GehringConvBlock(torch.nn.Module):
-    def __init__(self, hid_dim: int, kernel_size: int, drop_rate: float, scale: float=0.5**0.5):
-        super().__init__()
-        self.conv = torch.nn.Conv1d(hid_dim, hid_dim*2, kernel_size=kernel_size, padding=(kernel_size-1)//2)
-        self.glu = torch.nn.GLU(dim=1)
-        reinit_layer_(self.conv, 'sigmoid')
-        self.dropout = torch.nn.Dropout(drop_rate)
-        self.scale = scale
+        if mask is not None:
+            x.masked_fill_(mask.unsqueeze(1), 0)
         
-    def forward(self, x: torch.FloatTensor, mask: torch.BoolTensor):
-        # x: (batch, hid_dim=channels, step)
-        # mask: (batch, step)
-        x.masked_fill_(mask.unsqueeze(1), 0)
-        conved = self.glu(self.conv(self.dropout(x)))
-        
-        # Residual connection
-        return (x + conved) * self.scale
+        return self.activation(self.conv(self.dropout(x)))

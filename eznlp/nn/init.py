@@ -13,7 +13,7 @@ def reinit_embedding_(embedding: torch.nn.Embedding):
     torch.nn.init.uniform_(embedding.weight.data, -uniform_range, uniform_range)
     if embedding.padding_idx is not None:
         torch.nn.init.zeros_(embedding.weight.data[embedding.padding_idx])
-        
+    
     logger.info(
         "Embeddings initialized with randomized vectors \n"
         f"Vector average absolute value: {uniform_range/2:.4f}"
@@ -42,7 +42,7 @@ def reinit_embedding_by_pretrained_(embedding: torch.nn.Embedding,
                 torch.nn.init.zeros_(embedding.weight.data[idx])
             elif oov_init.lower() == 'uniform':
                 torch.nn.init.uniform_(embedding.weight.data[idx], -uniform_range, uniform_range)
-                
+    
     if embedding.padding_idx is not None:
         torch.nn.init.zeros_(embedding.weight.data[embedding.padding_idx])
     ave_vec_abs = acc_vec_abs / (len(itos) - len(oov))
@@ -83,13 +83,14 @@ def reinit_layer_(layer: torch.nn.Module, nonlinearity='relu'):
         elif name.startswith('weight'):
             if nonlinearity.lower() in ('relu', 'leaky_relu'):
                 torch.nn.init.kaiming_uniform_(param.data, nonlinearity=nonlinearity)
+            elif nonlinearity.lower() in ('glu', ):
+                torch.nn.init.xavier_uniform_(param.data, gain=torch.nn.init.calculate_gain('sigmoid'))
             else:
-                torch.nn.init.xavier_uniform_(param.data, 
-                                              gain=torch.nn.init.calculate_gain(nonlinearity))
+                torch.nn.init.xavier_uniform_(param.data, gain=torch.nn.init.calculate_gain(nonlinearity))
         else:
             raise TypeError(f"Invalid Layer {layer}")
-    
-    
+
+
 def reinit_transformer_encoder_layer_(tf_encoder_layer: torch.nn.TransformerEncoderLayer):
     for name, param in tf_encoder_layer.named_parameters():
         if name.startswith('norm'):
@@ -97,12 +98,11 @@ def reinit_transformer_encoder_layer_(tf_encoder_layer: torch.nn.TransformerEnco
         elif name.endswith('bias'):
             torch.nn.init.zeros_(param.data)
         elif name.endswith('weight'):
-            torch.nn.init.xavier_uniform_(param.data, 
-                                          gain=torch.nn.init.calculate_gain('linear'))
+            torch.nn.init.xavier_uniform_(param.data, gain=torch.nn.init.calculate_gain('linear'))
         else:
             raise TypeError(f"Invalid TransformerEncoderLayer {tf_encoder_layer}")
 
-    
+
 def reinit_lstm_(lstm: torch.nn.LSTM):
     '''
     W_i: (W_ii|W_if|W_ig|W_io) of shape (hid_size*4, in_size)
