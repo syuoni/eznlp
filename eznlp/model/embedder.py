@@ -141,13 +141,13 @@ class OneHotEmbedder(torch.nn.Module):
             self.register_buffer('_pos_ids', torch.arange(config.max_len))
         
         
-    def forward(self, x_ids: torch.LongTensor):
+    def forward(self, x_ids: torch.LongTensor, start_position_id: int=0):
         embedded = self.embedding(x_ids)
         
         if hasattr(self, 'pos_embedding'):
             # The last dimension of `x_ids` is assumed to be step
-            *batch_dims, max_step = x_ids.size()
-            pos_ids = self._pos_ids[:max_step].expand(*batch_dims, -1)
+            *batch_dims, step = x_ids.size()
+            pos_ids = self._pos_ids[start_position_id:start_position_id+step].expand(*batch_dims, -1)
             embedded = embedded + self.embedding(pos_ids)
         
         return embedded

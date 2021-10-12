@@ -122,6 +122,8 @@ class NestedOneHotEmbedder(OneHotEmbedder):
         # embedded: (batch*step*num_channels, inner_step, emb_dim)
         embedded = self.embedding(inner_ids)
         
+        # TODO: positional embedding?
+        
         # encoding -> aggregating
         # hidden: (batch*step*num_channels, inner_step, hid_dim)
         # agg_hidden: (batch*step*num_channels, hid_dim)
