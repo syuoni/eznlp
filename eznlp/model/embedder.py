@@ -3,11 +3,11 @@ from typing import List
 from collections import Counter
 import logging
 import torch
-import torchtext
 
 from ..token import TokenSequence
 from ..nn.init import reinit_embedding_, reinit_embedding_by_pretrained_, reinit_layer_
 from ..config import Config
+from ..vocab import Vocab
 from ..vectors import Vectors
 
 logger = logging.getLogger(__name__)
@@ -104,10 +104,7 @@ class OneHotConfig(Config, VocabMixin):
                 if self.max_len is None or len(field_seq) > self.max_len:
                     self.max_len = len(field_seq)
         
-        self.vocab = torchtext.vocab.Vocab(counter, 
-                                           min_freq=self.min_freq, 
-                                           specials=self.specials, 
-                                           specials_first=True)
+        self.vocab = Vocab(counter, min_freq=self.min_freq, specials=self.specials, specials_first=True)
         
         
     def exemplify(self, tokens: TokenSequence):

@@ -2,9 +2,9 @@
 from typing import List
 from collections import Counter
 import torch
-import torchtext
 
 from ..token import TokenSequence
+from ..vocab import Vocab
 from ..nn.modules import SequencePooling
 from ..nn.functional import seq_lens2mask
 from .embedder import OneHotConfig, OneHotEmbedder
@@ -63,10 +63,7 @@ class NestedOneHotConfig(OneHotConfig):
                     if self.max_len is None or len(inner_seq) > self.max_len:
                         self.max_len = len(inner_seq)
         
-        self.vocab = torchtext.vocab.Vocab(counter, 
-                                           min_freq=self.min_freq, 
-                                           specials=self.specials, 
-                                           specials_first=True)
+        self.vocab = Vocab(counter, min_freq=self.min_freq, specials=self.specials, specials_first=True)
         
         
     def exemplify(self, tokens: TokenSequence):
