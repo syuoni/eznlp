@@ -30,7 +30,7 @@ class Text2TextConfig(ModelConfigBase):
         self.embedder.build_vocab(*partitions)
         self.decoder.build_vocab(*partitions)
         self.encoder.in_dim = self.embedder.out_dim
-        self.decoder.ctx_dim = self.encoder.out_dim
+        self.decoder.in_dim = self.encoder.out_dim
         
     def exemplify(self, entry: dict, training: bool=True):
         example = {}

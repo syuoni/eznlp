@@ -26,7 +26,7 @@ class Image2TextConfig(ModelConfigBase):
         
     def build_vocabs_and_dims(self, *partitions):
         self.decoder.build_vocab(*partitions)
-        self.decoder.ctx_dim = self.encoder.out_dim
+        self.decoder.in_dim = self.encoder.out_dim
         
     def exemplify(self, entry: dict, training: bool=True):
         example = {}

@@ -47,7 +47,7 @@ class GeneratorMixin(DecoderMixinBase, VocabMixin):
     def evaluate(self, y_gold: List[List[List[str]]], y_pred: List[List[str]]):
         assert isinstance(y_gold[0], list) and isinstance(y_gold[0][0], list) and isinstance(y_gold[0][0][0], str)
         assert isinstance(y_pred[0], list) and (len(y_pred[0]) == 0 or isinstance(y_pred[0][0], str))
-        # return torchtext.data.metrics.bleu_score(candidate_corpus=y_pred, references_corpus=y_gold)
+        # torchtext.data.metrics.bleu_score(candidate_corpus=y_pred, references_corpus=y_gold)
         return nltk.translate.bleu_score.corpus_bleu(list_of_references=y_gold, hypotheses=y_pred)
 
 
@@ -57,10 +57,8 @@ class GeneratorConfig(SingleDecoderConfigBase, GeneratorMixin):
         self.arch = kwargs.pop('arch', 'LSTM')
         
         # Attention is the default structure
-        self.ctx_dim = kwargs.pop('ctx_dim', None)
         self.scoring = kwargs.pop('scoring', 'biaffine')
         
-        self.hid_dim = kwargs.pop('hid_dim', 128)
         if self.arch.lower() in ('lstm', 'gru'):
             self.init_ctx_mode = kwargs.pop('init_ctx_mode', 'mean_pooling')
             self.embedding = kwargs.pop('embedding', OneHotConfig(tokens_key='trg_tokens', field='text', has_sos=True, has_eos=True))
@@ -96,12 +94,13 @@ class GeneratorConfig(SingleDecoderConfigBase, GeneratorMixin):
         return self._name_sep.join([self.scoring, self.arch, self.criterion])
         
     @property
-    def in_dim(self):
-        return self.ctx_dim
+    def ctx_dim(self):
+        return self.in_dim
         
-    @in_dim.setter
-    def in_dim(self, dim: int):
-        self.ctx_dim = dim
+    @property
+    def hid_dim(self):
+        # `hid_dim` is fixed, equal to `ctx_dim`/`in_dim`
+        return self.in_dim
         
     @property
     def emb_dim(self):
@@ -154,7 +153,7 @@ class Generator(DecoderBase, GeneratorMixin):
     def _init_states(self, src_hidden: torch.Tensor, src_mask: torch.Tensor=None):
         raise NotImplementedError("Not Implemented `_init_states`")
         
-    def forward_step(self, x_t: torch.Tensor, src_hidden: torch.Tensor, src_mask: torch.Tensor=None, **states_utm1):
+    def forward_step(self, x_t: torch.Tensor, t: int, src_hidden: torch.Tensor, src_mask: torch.Tensor=None, **states_utm1):
         raise NotImplementedError("Not Implemented `forward_step`")
         
     def forward2logits_step_by_step(self, batch: Batch, src_hidden: torch.Tensor, src_mask: torch.Tensor=None, return_atten_weight: bool=False):
@@ -172,7 +171,7 @@ class Generator(DecoderBase, GeneratorMixin):
             # t: 1, 2, ..., T-1
             # `utm1` means time step until `t-1` 
             # `ut`   means time step until `t`
-            logits_t, states_ut, atten_weight_t = self.forward_step(x_t, src_hidden, src_mask=src_mask, **states_utm1)
+            logits_t, states_ut, atten_weight_t = self.forward_step(x_t, t, src_hidden, src_mask=src_mask, **states_utm1)
             
             logits.append(logits_t)
             atten_weights.append(atten_weight_t)
@@ -180,7 +179,7 @@ class Generator(DecoderBase, GeneratorMixin):
             
             # Prepare for step t+1
             if self.training:
-                tf_mask = torch.empty_like(top1).bernoulli(p=self.teacher_forcing_rate).type(torch.bool)
+                tf_mask = torch.empty_like(top1).bernoulli(p=self.teacher_forcing_rate).bool()
                 x_t = torch.where(tf_mask, batch.trg_tok_ids[:, t].unsqueeze(1), top1)
             else:
                 x_t = top1
@@ -263,7 +262,7 @@ class Generator(DecoderBase, GeneratorMixin):
             for t in range(1, batch.trg_tok_ids.size(1)):
                 # t: 1, 2, ..., T-1
                 # logits_t: (batch=1, step=1, voc_dim)
-                logits_t, states_ut, _ = self.forward_step(x_t, 
+                logits_t, states_ut, _ = self.forward_step(x_t, t, 
                                                            src_hidden=curr_src_hidden.expand(x_t.size(0), -1, -1), 
                                                            src_mask=None if src_mask is None else curr_src_mask.expand(x_t.size(0), -1), 
                                                            **states_utm1)
@@ -391,16 +390,20 @@ class RNNGenerator(Generator):
         return {'h_tm1': h_tm1}
         
         
-    def forward_step(self, x_t: torch.Tensor, src_hidden: torch.Tensor, src_mask: torch.Tensor=None, h_tm1: torch.Tensor=None):
+    def forward_step(self, x_t: torch.Tensor, t: int, src_hidden: torch.Tensor, src_mask: torch.Tensor=None, h_tm1: torch.Tensor=None):
         # x_t: (batch, step=1)
-        # h_tm1/h_t: (num_layers, batch, hid_dim)
         # src_hidden: (batch, src_step, ctx_dim)
+        # src_mask: (batch, src_step)
+        # h_tm1/h_t: (num_layers, batch, hid_dim)
+        
         # embedded_t: (batch, step=1, emb_dim)
-        embedded_t = self.dropout(self.embedding(x_t))
+        embedded_t = self.dropout(self.embedding(x_t, start_position_id=t-1))
         
         # query_t: (batch, step=1, hid_dim)
         # context_t: (batch, step=1, ctx_dim)
-        context_t, atten_weight_t = self.attention(src_hidden, mask=src_mask, query=self._get_top_hidden(h_tm1), return_atten_weight=True)
+        context_t, atten_weight_t = self.attention(src_hidden, mask=src_mask, 
+                                                   query=self._get_top_hidden(h_tm1), 
+                                                   return_atten_weight=True)
         
         # Forward one RNN step
         _, h_t = self.rnn(torch.cat([embedded_t, context_t], dim=-1), h_tm1)
@@ -441,59 +444,88 @@ class GehringConvGenerator(Generator):
         return {'hidden_stack_utm1': [self._pre_padding.expand(src_hidden.size(0), -1, -1) for _ in self.conv_blocks]}
         
     def _expand_states(self, batch_size: int, hidden_stack_utm1: List[torch.Tensor]):
-        return {'hidden_stack_utm1': hidden_utm1.expand(batch_size, -1, -1) for hidden_utm1 in hidden_stack_utm1}
+        return {'hidden_stack_utm1': [hidden_utm1.expand(batch_size, -1, -1) for hidden_utm1 in hidden_stack_utm1]}
         
     def _select_states(self, batch_indexing: torch.Tensor, hidden_stack_utm1: List[torch.Tensor]):
-        return {'hidden_stack_utm1': hidden_utm1[batch_indexing] for hidden_utm1 in hidden_stack_utm1}
+        return {'hidden_stack_utm1': [hidden_utm1[batch_indexing] for hidden_utm1 in hidden_stack_utm1]}
         
         
-    def forward_step(self, x_t: torch.Tensor, src_hidden: torch.Tensor, src_mask: torch.Tensor=None, hidden_stack_utm1: List[torch.Tensor]=None):
+    def forward_step(self, x_t: torch.Tensor, t: int, src_hidden: torch.Tensor, src_mask: torch.Tensor=None, hidden_stack_utm1: List[torch.Tensor]=None):
         # x_t: (batch, step=1)
         # embedded_t: (batch, step=1, emb_dim)
-        embedded_t = self.dropout(self.embedding(x_t))
+        embedded_t = self.dropout(self.embedding(x_t, start_position_id=t-1))
         
+        # init_hidden_t: (batch, step=1, hid_dim)
         init_hidden_t = self.glu(self.emb2init_hid(embedded_t))
         
+        # hidden_t: (batch, hid_dim/channels, step=1)
         hidden_t = init_hidden_t.permute(0, 2, 1)
         
         hidden_stack_ut = []
         for conv_block, hidden_utm1 in zip(self.conv_blocks, hidden_stack_utm1): 
-            # `utm1` means time step until `t-1`; `ut` means time step until `t`
+            # `utm1` means time step until `t-1` 
+            # `ut`   means time step until `t`
             hidden_ut = torch.cat([hidden_utm1, hidden_t], dim=-1)
             hidden_stack_ut.append(hidden_ut)
             
-            # conved_t: (batch, hid_dim, trg_step=1)
+            # conved_t: (batch, hid_dim/channels, step=1)
             conved_t = conv_block(hidden_ut[:, :, -self.kernel_size:])
             
-            context_t, atten_weight_t = self.attention(src_hidden, mask=src_mask, query=(hidden_t + conved_t).permute(0, 2, 1)*self.scale, return_atten_weight=True)
+            # context_t: (batch, step=1, ctx_dim=hid_dim)
+            context_t, atten_weight_t = self.attention(src_hidden, mask=src_mask, 
+                                                       query=(hidden_t+conved_t).permute(0, 2, 1)*self.scale, 
+                                                       return_atten_weight=True)
+            
+            # conved_context_t: (batch, hid_dim/channels, step=1)
             conved_context_t = (conved_t + context_t.permute(0, 2, 1)) * self.scale
             hidden_t = (hidden_t + conved_context_t) * self.scale
         
+        # final_hidden_t: (batch, step=1, hid_dim)
         final_hidden_t = hidden_t.permute(0, 2, 1)
         if self.shortcut:
             final_hidden_t = torch.cat([final_hidden_t, embedded_t, context_t], dim=-1)
         
+        # logits_t: (batch, step=1, voc_dim)
         logits_t = self.hid2logit(final_hidden_t)
         return logits_t, {'hidden_stack_utm1': hidden_stack_ut}, atten_weight_t
         
-    # TODO
-    # def forward2logits_all_at_once(self, batch: Batch, src_hidden: torch.Tensor, src_mask: torch.Tensor=None):
-    #     embedded = self.dropout(self.embedding(batch.trg_tok_ids))
         
-    #     # init_hidden: (batch, trg_step, hid_dim)
-    #     init_hidden = self.glu(self.emb2init_hid(embedded))
+    def forward2logits_all_at_once(self, batch: Batch, src_hidden: torch.Tensor, src_mask: torch.Tensor=None, return_atten_weight: bool=False):
+        states_ut0 = self._init_states(src_hidden, src_mask=src_mask)
+        hidden_stack_ut0 = states_ut0['hidden_stack_utm1']
         
-    #     # hidden: (batch, hid_dim, trg_step)
-    #     hidden = init_hidden.permute(0, 2, 1)
+        # embedded: (batch, step, emb_dim); step = trg_step-1
+        embedded = self.dropout(self.embedding(batch.trg_tok_ids[:, :-1]))
         
-    #     for conv_block in self.conv_blocks:
-    #         hidden_padded = torch.cat([self._pre_padding.expand(hidden.size(0), -1, -1), hidden], dim=-1)
-    #         conved = conv_block(hidden_padded) # No need for mask, since padding are all in front
+        # init_hidden: (batch, step, hid_dim)
+        init_hidden = self.glu(self.emb2init_hid(embedded))
+        
+        # hidden: (batch, hid_dim, step)
+        hidden = init_hidden.permute(0, 2, 1)
+        
+        for conv_block, hidden_ut0 in zip(self.conv_blocks, hidden_stack_ut0):
+            hidden_padded = torch.cat([hidden_ut0, hidden], dim=-1)
             
-    #         context, atten_weight = self.attention(src_hidden, mask=src_mask, query=(hidden + conved).permute(0, 2, 1)*self.scale)
-    #         conved_context = (conved + context.permute(0, 2, 1)) * self.scale
-    #         hidden = (hidden + conved_context) * self.scale
+            # conved: (batch, hid_dim/channels, step)
+            conved = conv_block(hidden_padded) # No need for mask, since padding are all in front
+            
+            # context: (batch, step, ctx_dim=hid_dim)
+            context, atten_weight = self.attention(src_hidden, mask=src_mask, 
+                                                   query=(hidden + conved).permute(0, 2, 1)*self.scale, 
+                                                   return_atten_weight=True)
+            
+            # conved_context: (batch, hid_dim/channels, step)
+            conved_context = (conved + context.permute(0, 2, 1)) * self.scale
+            hidden = (hidden + conved_context) * self.scale
         
-    #     final_hidden = hidden.permute(0, 2, 1)
-    #     return self.hid2logit(final_hidden)
+        # final_hidden: (batch, step, hid_dim)
+        final_hidden = hidden.permute(0, 2, 1)
+        if self.shortcut:
+            final_hidden = torch.cat([final_hidden, embedded, context], dim=-1)
         
+        # logits: (batch, step, voc_dim)
+        logits = self.hid2logit(final_hidden)
+        if return_atten_weight:
+            return logits, atten_weight # Only atten_weight on the top layer
+        else:
+            return logits
