@@ -31,9 +31,8 @@ class SequenceAttention(torch.nn.Module):
     [2] H. Chen, et al. 2016. Neural sentiment classification with user and product attention. 
     [3] A. Vaswani, et al. 2018. Attention is all you need. 
     """
-    def __init__(self, key_dim: int, query_dim: int=None, atten_dim: int=None, 
-                 scoring: str='additive', nonlinearity: str='tanh', 
-                 external_query: bool=False):
+    def __init__(self, key_dim: int, query_dim: int=None, atten_dim: int=None, num_heads: int=1, 
+                 scoring: str='additive', nonlinearity: str='tanh', external_query: bool=False):
         super().__init__()
         if query_dim is None:
             query_dim = key_dim
@@ -48,19 +47,19 @@ class SequenceAttention(torch.nn.Module):
             assert query_dim == key_dim, f"`query_dim` {query_dim} does not equals `key_dim` {key_dim}"
             
         elif scoring.lower() == 'multiplicative':
-            self.proj_layer = torch.nn.Linear(key_dim, query_dim)
+            self.proj_layer = torch.nn.Linear(key_dim//num_heads, query_dim//num_heads)
             reinit_layer_(self.proj_layer, nonlinearity)
             
         elif scoring.lower() == 'additive':
-            self.proj_layer = torch.nn.Linear(key_dim+query_dim, atten_dim)
+            self.proj_layer = torch.nn.Linear((key_dim+query_dim)//num_heads, atten_dim)
             reinit_layer_(self.proj_layer, nonlinearity)
             
             self.w2 = torch.nn.Parameter(torch.empty(atten_dim))
             reinit_vector_parameter_(self.w2)
             
         elif scoring.lower() == 'biaffine':
-            self.query_proj_layer = torch.nn.Linear(query_dim, atten_dim)
-            self.key_proj_layer = torch.nn.Linear(key_dim, atten_dim)
+            self.query_proj_layer = torch.nn.Linear(query_dim//num_heads, atten_dim)
+            self.key_proj_layer = torch.nn.Linear(key_dim//num_heads, atten_dim)
             reinit_layer_(self.query_proj_layer, nonlinearity)
             reinit_layer_(self.key_proj_layer, nonlinearity)
             
@@ -71,19 +70,18 @@ class SequenceAttention(torch.nn.Module):
             raise ValueError(f"Invalid attention scoring mode {scoring}")
         
         self.activation = _nonlinearity2activation(nonlinearity)
+        
+        self.key_dim = key_dim
+        self.query_dim = query_dim
+        self.num_heads = num_heads
         self.scoring = scoring
         self.nonlinearity = nonlinearity
         
         
     def compute_scores(self, query: torch.Tensor, key: torch.Tensor):
-        if query.dim() == 1:
-            # query: (query_dim, ) -> (batch, query_step=1, query_dim)
-            query = query.expand(key.size(0), 1, -1)
-        elif query.dim() == 2:
-            # query: (batch, query_dim) -> (batch, query_step=1, query_dim)
-            query = query.unsqueeze(1)
-        
-        # key: (batch, key_step, key_dim) -> scores: (batch, query_step, key_step)
+        # query: (batch, query_step, query_dim)
+        # key: (batch, key_step, key_dim) 
+        # scores: (batch, query_step, key_step)
         if self.scoring.lower() == 'dot':
             return query.bmm(key.permute(0, 2, 1))
             
@@ -108,6 +106,20 @@ class SequenceAttention(torch.nn.Module):
             return self.activation(key_query).matmul(self.w2)
         
         
+    def _prepare_multiheads(self, x: torch.Tensor):
+        assert x.size(-1) % self.num_heads == 0
+        batch_size = x.size(0)
+        dim_per_head = x.size(-1) // self.num_heads
+        # x: (batch, step, dim) -> (batch*num_heads, step, dim/num_heads)
+        return x.view(batch_size, -1, self.num_heads, dim_per_head).permute(0, 2, 1, 3).contiguous().view(batch_size*self.num_heads, -1, dim_per_head)
+        
+    def _restore_multiheads(self, x: torch.Tensor):
+        batch_size = x.size(0) // self.num_heads
+        dim_per_head = x.size(-1)
+        # x: (batch*num_heads, step, dim/num_heads) -> (batch, step, dim)
+        return x.view(batch_size, self.num_heads, -1, dim_per_head).permute(0, 2, 1, 3).contiguous().view(batch_size, -1, dim_per_head*self.num_heads)
+        
+        
     def forward(self, x: torch.Tensor, mask: torch.Tensor=None, query: torch.Tensor=None, key: torch.Tensor=None, return_atten_weight: bool=False):
         if hasattr(self, 'query'):
             assert query is None
@@ -115,12 +127,27 @@ class SequenceAttention(torch.nn.Module):
         else:
             assert query is not None
         
+        original_query_num_dims = query.dim()
+        if original_query_num_dims == 1:
+            # query: (query_dim, ) -> (batch, query_step=1, query_dim)
+            query = query.expand(x.size(0), 1, -1)
+        elif original_query_num_dims == 2:
+            # query: (batch, query_dim) -> (batch, query_step=1, query_dim)
+            query = query.unsqueeze(1)
+        
         if key is None:
             key = x
         
         # x/key: (batch, key_step, value_dim/key_dim)
-        # scores/atten_weight: (batch, query_step, key_step)
+        # query: (batch, query_step, query_dim)
         # mask: (batch, key_step) or (batch, query_step, key_step)
+        
+        if self.num_heads > 1:
+            query = self._prepare_multiheads(query)
+            key   = self._prepare_multiheads(key)
+            x     = self._prepare_multiheads(x)
+        
+        # scores/atten_weight: (batch, query_step, key_step)
         scores = self.compute_scores(query, key)
         
         if mask is None:
@@ -129,15 +156,23 @@ class SequenceAttention(torch.nn.Module):
             if mask.dim() == 2:
                 mask = mask.unsqueeze(1)
             assert mask.dim() == 3
+            if self.num_heads > 1:
+                mask  = mask.repeat_interleave(self.num_heads, dim=0)
             atten_weight = torch.nn.functional.softmax(scores.masked_fill(mask, float('-inf')), dim=-1)
         
         # atten_values: (batch, query_step, value_dim)
         atten_values = atten_weight.bmm(x)
         
-        if query.dim() <= 2:
-            atten_values = atten_values.squeeze(1)
-            atten_weight = atten_weight.squeeze(1)
+        if self.num_heads > 1:
+            atten_values = self._restore_multiheads(atten_values)
+            atten_weight = atten_weight.view(atten_values.size(0), self.num_heads, atten_weight.size(-2), atten_weight.size(-1))
         
+        if original_query_num_dims <= 2:
+            atten_values = atten_values.squeeze(-2)
+            atten_weight = atten_weight.squeeze(-2)
+        
+        # atten_values: (batch, query_step, value_dim)
+        # atten_weight: (batch, query_step, key_step) or (batch, num_heads, query_step, key_step)
         if return_atten_weight:
             return atten_values, atten_weight
         else:
@@ -145,4 +180,4 @@ class SequenceAttention(torch.nn.Module):
         
         
     def __repr__(self):
-        return f"{self.__class__.__name__}(scoring={self.scoring}, nonlinearity={self.nonlinearity})"
+        return f"{self.__class__.__name__}(key_dim={self.key_dim}, query_dim={self.query_dim}, num_heads={self.num_heads}, scoring={self.scoring}, nonlinearity={self.nonlinearity})"
