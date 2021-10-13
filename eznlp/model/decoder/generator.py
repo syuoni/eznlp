@@ -65,6 +65,7 @@ class GeneratorConfig(SingleDecoderConfigBase, GeneratorMixin):
             self.num_layers = kwargs.pop('num_layers', 1)
             self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
             self.hid_drop_rate = kwargs.pop('hid_drop_rate', 0.5)
+            kwargs['shortcut'] = kwargs.pop('shortcut', True)
             
         elif self.arch.lower() in ('conv', 'gehring'):
             self.kernel_size = kwargs.pop('kernel_size', 3)
@@ -434,6 +435,12 @@ class GehringConvGenerator(Generator):
                        nonlinearity='glu') for k in range(config.num_layers)]
         )
         self.register_buffer('_pre_padding', torch.zeros(config.hid_dim, config.kernel_size-1))
+        
+        # Maybe always use **affined** hidden states for attention computation branches? 
+        self.pre_atten_affine  = torch.nn.Conv1d(config.hid_dim, config.hid_dim, kernel_size=1) # Use conv-layer of kernel size 1
+        self.post_atten_affine = torch.nn.Linear(config.ctx_dim, config.hid_dim)
+        reinit_layer_(self.pre_atten_affine, 'linear')
+        reinit_layer_(self.post_atten_affine, 'linear')
         self.scale = config.scale
         
     @property
@@ -470,11 +477,13 @@ class GehringConvGenerator(Generator):
             
             # conved_t: (batch, hid_dim/channels, step=1)
             conved_t = conv_block(hidden_ut[:, :, -self.kernel_size:])
+            conved_t = self.pre_atten_affine(conved_t)
             
             # context_t: (batch, step=1, ctx_dim=hid_dim)
             context_t, atten_weight_t = self.attention(src_hidden, mask=src_mask, 
                                                        query=(hidden_t+conved_t).permute(0, 2, 1)*self.scale, 
                                                        return_atten_weight=True)
+            context_t = self.post_atten_affine(context_t)
             
             # conved_context_t: (batch, hid_dim/channels, step=1)
             conved_context_t = (conved_t + context_t.permute(0, 2, 1)) * self.scale
@@ -508,11 +517,13 @@ class GehringConvGenerator(Generator):
             
             # conved: (batch, hid_dim/channels, step)
             conved = conv_block(hidden_padded) # No need for mask, since padding are all in front
+            conved = self.pre_atten_affine(conved)
             
             # context: (batch, step, ctx_dim=hid_dim)
             context, atten_weight = self.attention(src_hidden, mask=src_mask, 
                                                    query=(hidden + conved).permute(0, 2, 1)*self.scale, 
                                                    return_atten_weight=True)
+            context = self.post_atten_affine(context)
             
             # conved_context: (batch, hid_dim/channels, step)
             conved_context = (conved + context.permute(0, 2, 1)) * self.scale
