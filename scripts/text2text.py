@@ -28,8 +28,12 @@ def parse_arguments(parser: argparse.ArgumentParser):
                             help="dataset name")
     
     group_decoder = parser.add_argument_group('decoder configurations')
-    group_decoder.add_argument('--dec_arch', type=str, default='LSTM', choices=['LSTM', 'GRU', 'Conv'], 
+    group_decoder.add_argument('--dec_arch', type=str, default='LSTM', choices=['LSTM', 'GRU', 'Gehring'], 
                                help="token-level decoder architecture")
+    group_decoder.add_argument('--atten_scoring', type=str, default='additive', 
+                               help="Attention scoring")
+    group_decoder.add_argument('--teacher_forcing_rate', type=float, default=0.5, 
+                               help="teacher forcing rate")
     group_decoder.add_argument('--init_ctx_mode', type=str, default='rnn_last', 
                                help="init context vector mode")
     # Loss
@@ -59,11 +63,11 @@ def collect_T2T_assembly_config(args: argparse.Namespace):
     enc_config = EncoderConfig(arch=args.enc_arch, hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
     
     trg_vectors = _get_vectors(args.language[1], args.emb_dim)
-    
     trg_emb_config = OneHotConfig(tokens_key='trg_tokens', field='text', min_freq=2, has_sos=True, has_eos=True, 
                                   vectors=trg_vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze)
-    gen_config = GeneratorConfig(arch=args.dec_arch, embedding=trg_emb_config, scoring='additive', shortcut=True, 
-                                 init_ctx_mode=args.init_ctx_mode, hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
+    gen_config = GeneratorConfig(arch=args.dec_arch, num_layers=args.num_layers, in_drop_rates=drop_rates, 
+                                 embedding=trg_emb_config, scoring=args.atten_scoring, teacher_forcing_rate=args.teacher_forcing_rate, 
+                                 init_ctx_mode=args.init_ctx_mode)
     
     return {'embedder': emb_config, 
             'encoder': enc_config, 
