@@ -57,6 +57,7 @@ class GeneratorConfig(SingleDecoderConfigBase, GeneratorMixin):
         self.arch = kwargs.pop('arch', 'LSTM')
         
         # Attention is the default structure
+        self.num_heads = kwargs.pop('num_heads', 1)
         self.scoring = kwargs.pop('scoring', 'biaffine')
         
         if self.arch.lower() in ('lstm', 'gru'):
@@ -143,7 +144,7 @@ class Generator(DecoderBase, GeneratorMixin):
         
         self.dropout = CombinedDropout(*config.in_drop_rates)
         self.embedding = config.embedding.instantiate()
-        self.attention = SequenceAttention(key_dim=config.ctx_dim, query_dim=config.hid_dim, scoring=config.scoring, external_query=True)
+        self.attention = SequenceAttention(key_dim=config.ctx_dim, query_dim=config.hid_dim, num_heads=config.num_heads, scoring=config.scoring, external_query=True)
         self.hid2logit = torch.nn.Linear(config.full_hid_dim, config.voc_dim)
         # Every token in a batch should be assigned the same weight, so use `sum` as the reduction method. 
         # This will not cause the model to generate shorter sequence, because the loss is summed over the ground-truth tokens, 

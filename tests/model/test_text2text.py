@@ -52,11 +52,12 @@ class TestModel(object):
         
         
     @pytest.mark.parametrize("arch", ['Gehring', 'LSTM', 'GRU'])
+    @pytest.mark.parametrize("num_heads", [1, 4])
     @pytest.mark.parametrize("shortcut", [False, True])
     @pytest.mark.parametrize("sl_epsilon", [0.0, 0.1])
-    def test_model(self, arch, shortcut, sl_epsilon, multi30k_demo, device):
+    def test_model(self, arch, num_heads, shortcut, sl_epsilon, multi30k_demo, device):
         self.config = Text2TextConfig(encoder=EncoderConfig(arch=arch), 
-                                      decoder=GeneratorConfig(arch=arch, shortcut=shortcut, sl_epsilon=sl_epsilon))
+                                      decoder=GeneratorConfig(arch=arch, num_heads=num_heads, shortcut=shortcut, sl_epsilon=sl_epsilon))
         self._setup_case(multi30k_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()

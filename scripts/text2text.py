@@ -30,8 +30,10 @@ def parse_arguments(parser: argparse.ArgumentParser):
     group_decoder = parser.add_argument_group('decoder configurations')
     group_decoder.add_argument('--dec_arch', type=str, default='LSTM', choices=['LSTM', 'GRU', 'Gehring'], 
                                help="token-level decoder architecture")
+    group_decoder.add_argument('--atten_num_heads', type=int, default=1, 
+                               help="attention number of heads")
     group_decoder.add_argument('--atten_scoring', type=str, default='additive', 
-                               help="Attention scoring")
+                               help="attention scoring")
     group_decoder.add_argument('--teacher_forcing_rate', type=float, default=0.5, 
                                help="teacher forcing rate")
     group_decoder.add_argument('--init_ctx_mode', type=str, default='rnn_last', 
@@ -66,7 +68,7 @@ def collect_T2T_assembly_config(args: argparse.Namespace):
     trg_emb_config = OneHotConfig(tokens_key='trg_tokens', field='text', min_freq=2, has_sos=True, has_eos=True, 
                                   vectors=trg_vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze)
     gen_config = GeneratorConfig(arch=args.dec_arch, num_layers=args.num_layers, in_drop_rates=drop_rates, 
-                                 embedding=trg_emb_config, scoring=args.atten_scoring, teacher_forcing_rate=args.teacher_forcing_rate, 
+                                 embedding=trg_emb_config, num_heads=args.atten_num_heads, scoring=args.atten_scoring, teacher_forcing_rate=args.teacher_forcing_rate, 
                                  init_ctx_mode=args.init_ctx_mode)
     
     return {'embedder': emb_config, 
