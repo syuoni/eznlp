@@ -3,23 +3,24 @@ import torch
 
 from ..init import reinit_layer_
 from ..utils import _nonlinearity2activation
+from .attention import SequenceAttention
 
 
 class FeedForwardBlock(torch.nn.Module):
-    def __init__(self, in_dim: int, out_dim: int, drop_rate: float):
+    def __init__(self, in_dim: int, out_dim: int, drop_rate: float=0.5, nonlinearity: str='relu'):
         super().__init__()
         self.proj_layer = torch.nn.Linear(in_dim, out_dim)
-        self.relu = torch.nn.ReLU()
-        reinit_layer_(self.proj_layer, 'relu')
+        self.activation = _nonlinearity2activation(nonlinearity)
+        reinit_layer_(self.proj_layer, nonlinearity)
         self.dropout = torch.nn.Dropout(drop_rate)
         
     def forward(self, x: torch.Tensor):
-        return self.relu(self.proj_layer(self.dropout(x)))
+        return self.activation(self.proj_layer(self.dropout(x)))
 
 
 
 class ConvBlock(torch.nn.Module):
-    def __init__(self, in_dim: int, out_dim: int, kernel_size: int, drop_rate: float, padding_mode: str='both', nonlinearity: str='relu'):
+    def __init__(self, in_dim: int, out_dim: int, kernel_size: int, padding_mode: str='both', drop_rate: float=0.5, nonlinearity: str='relu'):
         super().__init__()
         padding_size = 0 if padding_mode.lower() == 'none' else kernel_size-1
         
@@ -77,3 +78,127 @@ class ConvBlock(torch.nn.Module):
             return conved
         else:
             return self._trim(conved)
+
+
+
+class MultiheadAttention(torch.nn.Module):
+    def __init__(self, in_dim: int, affine_dim: int, out_dim: int, num_heads: int=8, scoring: str='scaled_dot', drop_rate: float=0.1):
+        super().__init__()
+        self.query_affine = torch.nn.Linear(in_dim, affine_dim)
+        self.key_affine   = torch.nn.Linear(in_dim, affine_dim)
+        self.value_affine = torch.nn.Linear(in_dim, affine_dim)
+        reinit_layer_(self.query_affine, 'linear')
+        reinit_layer_(self.key_affine, 'linear')
+        reinit_layer_(self.value_affine, 'linear')
+        
+        self.attention = SequenceAttention(key_dim=affine_dim, query_dim=affine_dim, num_heads=num_heads, 
+                                           scoring=scoring, drop_rate=drop_rate, external_query=True)
+        self.out_affine = torch.nn.Linear(affine_dim, out_dim)
+        reinit_layer_(self.out_affine, 'linear')
+        
+    def forward(self, query: torch.Tensor, key: torch.Tensor, value: torch.Tensor, mask: torch.Tensor=None, return_atten_weight: bool=False):
+        QW = self.query_affine(query)
+        KW = self.key_affine(key)
+        VW = self.value_affine(value)
+        
+        atten_values, atten_weight = self.attention(VW, mask=mask, query=QW, key=KW, return_atten_weight=True)
+        OW = self.out_affine(atten_values)
+        if return_atten_weight:
+            return OW, atten_weight
+        else:
+            return OW
+
+
+
+class TransformerEncoderBlock(torch.nn.Module):
+    def __init__(self, in_dim: int, out_dim: int, ff_dim: int, num_heads: int=8, scoring: str='scaled_dot', drop_rate: float=0.1, nonlinearity: str='relu'):
+        super().__init__()
+        self.self_attenion = MultiheadAttention(in_dim, out_dim, out_dim, num_heads=num_heads, scoring=scoring, drop_rate=drop_rate)
+        self.self_norm = torch.nn.LayerNorm(out_dim)
+        
+        self.ff1 = torch.nn.Linear(out_dim, ff_dim)
+        reinit_layer_(self.ff1, nonlinearity)
+        self.activation = _nonlinearity2activation(nonlinearity)
+        self.ff2 = torch.nn.Linear(ff_dim, out_dim)
+        reinit_layer_(self.ff2, 'linear')
+        self.ff_norm = torch.nn.LayerNorm(out_dim)
+        
+        self.dropout = torch.nn.Dropout(drop_rate)
+        
+        
+    def forward(self, x: torch.Tensor, mask: torch.Tensor=None, return_atten_weight: bool=False):
+        attened, atten_weight = self.self_attenion(self.dropout(x), self.dropout(x), self.dropout(x), mask=mask, return_atten_weight=True)
+        attened_x = self.self_norm(x + self.dropout(attened))
+        
+        ffed = self.ff2(self.dropout(self.activation(self.ff1(attened_x))))
+        ffed_attened_x = self.ff_norm(attened_x + self.dropout(ffed))
+        if return_atten_weight:
+            return ffed_attened_x, atten_weight
+        else:
+            return ffed_attened_x
+
+
+
+class TransformerDecoderBlock(torch.nn.Module):
+    def __init__(self, in_dim: int, out_dim: int, ff_dim: int, num_heads: int=8, scoring: str='scaled_dot', drop_rate: float=0.1, nonlinearity: str='relu'):
+        super().__init__()
+        self.self_attenion = MultiheadAttention(in_dim, out_dim, out_dim, num_heads=num_heads, scoring=scoring, drop_rate=drop_rate)
+        self.self_norm = torch.nn.LayerNorm(out_dim)
+        
+        self.cross_attention = MultiheadAttention(out_dim, out_dim, out_dim, num_heads=num_heads, scoring=scoring, drop_rate=drop_rate)
+        self.cross_norm = torch.nn.LayerNorm(out_dim)
+        
+        self.ff1 = torch.nn.Linear(out_dim, ff_dim)
+        reinit_layer_(self.ff1, nonlinearity)
+        self.activation = _nonlinearity2activation(nonlinearity)
+        self.ff2 = torch.nn.Linear(ff_dim, out_dim)
+        reinit_layer_(self.ff2, 'linear')
+        self.ff_norm = torch.nn.LayerNorm(out_dim)
+        
+        self.dropout = torch.nn.Dropout(drop_rate)
+        
+        # `trg_mask` masks subsequent/future tokens, which is a matrix where
+        # rows represent queries, and columns represent keys/values. 
+        # Note the last query token can observe all tokens (last row is all False) 
+        # | F T T T ... T |
+        # | F F T T ... T |
+        # | F F F T ... T |
+        # | ... ... ... . |
+        # | F F F F ... F |
+        self.register_buffer('_trg_mask', torch.ones(100, 100, dtype=torch.bool).triu(diagonal=1))
+        
+        
+    def _get_trg_mask(self, seq_len: int):
+        if self._trg_mask.size(0) < seq_len:
+            self.register_buffer('_trg_mask', torch.ones(seq_len*2, seq_len*2, dtype=torch.bool, device=self._trg_mask.device).triu(diagonal=1))
+        return self._trg_mask[:seq_len, :seq_len]
+        
+    def forward(self, x: torch.Tensor, src_x: torch.Tensor, src_mask: torch.Tensor=None, last_step: bool=False, return_atten_weight: bool=False):
+        # x: (batch, trg_step, hid_dim)
+        #     Targets as queries/keys/values in self-attention. 
+        # src_x: (batch, src_step, hid_dim)
+        #     Sources as keys/values in cross-attention. 
+        # src_mask: (batch, src_step)
+        
+        if last_step:
+            # Use the last step of `x` only as the query
+            # xq: (batch, trg_step=1, hid_dim)
+            xq = x[:, -1:]
+            trg_mask = None
+        else:
+            xq = x
+            # trg_mask: (batch, trg_step, trg_step)
+            trg_mask = self._get_trg_mask(x.size(1)).expand(x.size(0), -1, -1)
+        
+        attened, atten_weight = self.self_attenion(self.dropout(xq), self.dropout(x), self.dropout(x), mask=trg_mask, return_atten_weight=True)
+        attened_xq = self.self_norm(self.dropout(xq) + self.dropout(attened))
+        
+        crossed, cross_atten_weight = self.cross_attention(attened_xq, self.dropout(src_x), self.dropout(src_x), mask=src_mask, return_atten_weight=True)
+        crossed_attened_xq = self.cross_norm(attened_xq + self.dropout(crossed))
+        
+        ffed = self.ff2(self.dropout(self.activation(self.ff1(crossed_attened_xq))))
+        ffed_crossed_attened_xq = self.ff_norm(crossed_attened_xq + self.dropout(ffed))
+        if return_atten_weight:
+            return ffed_crossed_attened_xq, atten_weight, cross_atten_weight
+        else:
+            return ffed_crossed_attened_xq

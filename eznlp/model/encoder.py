@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 import torch
 
-from ..nn.init import reinit_layer_, reinit_lstm_, reinit_gru_, reinit_transformer_encoder_layer_
+from ..nn.init import reinit_layer_, reinit_lstm_, reinit_gru_
 from ..nn.functional import mask2seq_lens
 from ..nn.modules import CombinedDropout
-from ..nn.modules import FeedForwardBlock, ConvBlock
+from ..nn.modules import FeedForwardBlock, ConvBlock, TransformerEncoderBlock
 from ..config import Config
 
 
@@ -42,7 +42,7 @@ class EncoderConfig(Config):
                 
             elif self.arch.lower() == 'transformer':
                 self.num_heads = kwargs.pop('num_heads', 8)
-                self.ffn_dim = kwargs.pop('ffn_dim', 256)
+                self.ff_dim = kwargs.pop('ff_dim', 256)
                 self.num_layers = kwargs.pop('num_layers', 3)
                 self.in_drop_rates = kwargs.pop('in_drop_rates', (0.1, 0.0, 0.0))
                 self.hid_drop_rate = kwargs.pop('hid_drop_rate', 0.1)
@@ -253,7 +253,7 @@ class GehringConvEncoder(Encoder):
             [ConvBlock(in_dim=config.hid_dim, 
                        out_dim=config.hid_dim, 
                        kernel_size=config.kernel_size, 
-                       drop_rate=config.hid_drop_rate, 
+                       drop_rate=config.hid_drop_rate, # Note to apply dropout to `init_hidden`
                        nonlinearity='glu') for k in range(config.num_layers)]
         )
         self.scale = config.scale
@@ -283,26 +283,23 @@ class TransformerEncoder(Encoder):
     """
     def __init__(self, config: EncoderConfig):
         super().__init__(config)
-        self.emb2init_hid = torch.nn.Linear(config.in_dim, config.hid_dim*2)
-        self.glu = torch.nn.GLU(dim=-1)
-        reinit_layer_(self.emb2init_hid, 'glu')
+        self.emb2init_hid = torch.nn.Linear(config.in_dim, config.hid_dim)
+        self.relu = torch.nn.ReLU()
+        reinit_layer_(self.emb2init_hid, 'relu')
         
-        self.tf_layers = torch.nn.ModuleList([torch.nn.TransformerEncoderLayer(d_model=config.hid_dim, 
-                                                                               nhead=config.num_heads, 
-                                                                               dim_feedforward=config.ffn_dim, 
-                                                                               dropout=config.hid_drop_rate) 
-                                                  for k in range(config.num_layers)])
-        for tf_layer in self.tf_layers:
-            reinit_transformer_encoder_layer_(tf_layer)
-        
+        self.tf_blocks = torch.nn.ModuleList(
+            [TransformerEncoderBlock(in_dim=config.hid_dim, 
+                                     out_dim=config.hid_dim, 
+                                     ff_dim=config.ff_dim, 
+                                     num_heads=config.num_heads, 
+                                     drop_rate=config.hid_drop_rate, # Note to apply dropout to `init_hidden`
+                                     nonlinearity='relu') for k in range(config.num_layers)]
+        )
         
     def embedded2hidden(self, embedded: torch.FloatTensor, mask: torch.BoolTensor):
-        init_hidden = self.glu(self.emb2init_hid(embedded))
+        hidden = self.relu(self.emb2init_hid(embedded))
         
-        # hidden: (batch, step, hid_dim) -> (step, batch, hid_dim)
-        hidden = init_hidden.permute(1, 0, 2)
-        for tf_layer in self.tf_layers:
-            hidden = tf_layer(hidden, src_key_padding_mask=mask)
+        for tf_block in self.tf_blocks:
+            hidden = tf_block(hidden, mask=mask)
         
-        # hidden: (step, batch, hid_dim) -> (batch, step, hid_dim) 
-        return hidden.permute(1, 0, 2)
+        return hidden

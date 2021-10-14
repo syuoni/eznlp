@@ -51,13 +51,12 @@ class TestModel(object):
         assert isinstance(self.config.name, str) and len(self.config.name) > 0
         
         
-    @pytest.mark.parametrize("arch", ['Gehring', 'LSTM', 'GRU'])
+    @pytest.mark.parametrize("arch", ['LSTM', 'GRU', 'Gehring', 'Transformer'])
     @pytest.mark.parametrize("num_heads", [1, 4])
     @pytest.mark.parametrize("shortcut", [False, True])
-    @pytest.mark.parametrize("sl_epsilon", [0.0, 0.1])
-    def test_model(self, arch, num_heads, shortcut, sl_epsilon, multi30k_demo, device):
+    def test_model(self, arch, num_heads, shortcut, multi30k_demo, device):
         self.config = Text2TextConfig(encoder=EncoderConfig(arch=arch), 
-                                      decoder=GeneratorConfig(arch=arch, num_heads=num_heads, shortcut=shortcut, sl_epsilon=sl_epsilon))
+                                      decoder=GeneratorConfig(arch=arch, num_heads=num_heads, shortcut=shortcut))
         self._setup_case(multi30k_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
@@ -69,8 +68,14 @@ class TestModel(object):
         self._assert_batch_consistency()
         self._assert_trainable()
         
+    @pytest.mark.parametrize("sl_epsilon", [0.0, 0.1, 0.2])
+    def test_model_with_label_smoothing(self, sl_epsilon, multi30k_demo, device):
+        self.config = Text2TextConfig(decoder=GeneratorConfig(arch='LSTM', sl_epsilon=sl_epsilon))
+        self._setup_case(multi30k_demo, device)
+        self._assert_batch_consistency()
+        self._assert_trainable()
         
-    @pytest.mark.parametrize("arch", ['Gehring'])
+    @pytest.mark.parametrize("arch", ['Gehring', 'Transformer'])
     def test_forward_consistency(self, arch, multi30k_demo, device):
         # Note `Generator.forward2logits_step_by_step` always uses predicted token as the input in the eval mode
         # Hence, here manually set all dropout rate to be 0 and use training mode. 
@@ -89,19 +94,7 @@ class TestModel(object):
         assert (logits_aao - logits_sbs).abs().max().item() < 1e-6
         
         
-    def test_prediction_without_gold(self, multi30k_demo, device):
-        self.config = Text2TextConfig()
-        self._setup_case(multi30k_demo, device)
-        
-        data_wo_gold = [{'tokens': entry['tokens']} for entry in multi30k_demo]
-        dataset_wo_gold = GenerationDataset(data_wo_gold, self.config, training=False)
-        
-        trainer = Trainer(self.model, device=device)
-        y_pred = trainer.predict(dataset_wo_gold)
-        assert len(y_pred) == len(data_wo_gold)
-        
-        
-    @pytest.mark.parametrize("arch", ['Gehring', 'LSTM', 'GRU'])
+    @pytest.mark.parametrize("arch", ['LSTM', 'Gehring', 'Transformer'])
     def test_beam_search(self, arch, multi30k_demo, device):
         self.config = Text2TextConfig(encoder=EncoderConfig(arch=arch), decoder=GeneratorConfig(arch=arch))
         self._setup_case(multi30k_demo, device)
@@ -113,3 +106,17 @@ class TestModel(object):
         greedy_res = self.model.decode(batch)
         beam1_res  = self.model.beam_search(1, batch)
         assert beam1_res == greedy_res
+        
+        
+    @pytest.mark.parametrize("arch", ['LSTM', 'Gehring', 'Transformer'])
+    def test_prediction_without_gold(self, arch, multi30k_demo, device):
+        self.config = Text2TextConfig(encoder=EncoderConfig(arch=arch), 
+                                      decoder=GeneratorConfig(arch=arch))
+        self._setup_case(multi30k_demo, device)
+        
+        data_wo_gold = [{'tokens': entry['tokens']} for entry in multi30k_demo]
+        dataset_wo_gold = GenerationDataset(data_wo_gold, self.config, training=False)
+        
+        trainer = Trainer(self.model, device=device)
+        y_pred = trainer.predict(dataset_wo_gold)
+        assert len(y_pred) == len(data_wo_gold)

@@ -6,7 +6,7 @@ import torch
 
 from ...wrapper import Batch
 from ...nn.modules import CombinedDropout, SequencePooling, SequenceAttention
-from ...nn.modules import ConvBlock
+from ...nn.modules import ConvBlock, TransformerDecoderBlock
 from ...nn.init import reinit_layer_, reinit_lstm_, reinit_gru_, reinit_vector_parameter_
 from ..embedder import OneHotConfig, VocabMixin
 from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
@@ -22,7 +22,7 @@ class GeneratorMixin(DecoderMixinBase, VocabMixin):
         else:
             assert 'trg_tokens' not in entry
             # Notes: The padding positions are ignored in loss computation, so the dev. loss will always be 0
-            example['trg_tok_ids'] = torch.tensor([self.embedding.sos_idx] + [self.embedding.pad_idx]*(self.max_len+1), dtype=torch.long)
+            example['trg_tok_ids'] = torch.tensor([self.embedding.sos_idx] + [self.embedding.pad_idx]*(self.max_len-1), dtype=torch.long)
         
         if 'full_trg_tokens' in entry:
             # Multiple reference sentences for evaluation
@@ -57,37 +57,41 @@ class GeneratorConfig(SingleDecoderConfigBase, GeneratorMixin):
         self.arch = kwargs.pop('arch', 'LSTM')
         
         # Attention is the default structure
-        self.num_heads = kwargs.pop('num_heads', 1)
-        self.scoring = kwargs.pop('scoring', 'biaffine')
-        
         if self.arch.lower() in ('lstm', 'gru'):
             self.init_ctx_mode = kwargs.pop('init_ctx_mode', 'mean_pooling')
             self.embedding = kwargs.pop('embedding', OneHotConfig(tokens_key='trg_tokens', field='text', has_sos=True, has_eos=True))
             self.num_layers = kwargs.pop('num_layers', 1)
+            self.num_heads = kwargs.pop('num_heads', 1)
+            self.scoring = kwargs.pop('scoring', 'additive')
             self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
             self.hid_drop_rate = kwargs.pop('hid_drop_rate', 0.5)
-            kwargs['shortcut'] = kwargs.pop('shortcut', True)
+            self.shortcut = kwargs.pop('shortcut', True)
             
         elif self.arch.lower() in ('conv', 'gehring'):
             self.kernel_size = kwargs.pop('kernel_size', 3)
             self.scale = kwargs.pop('scale', 0.5**0.5)
             self.embedding = kwargs.pop('embedding', OneHotConfig(tokens_key='trg_tokens', field='text', has_sos=True, has_eos=True, has_positional_emb=True))
             self.num_layers = kwargs.pop('num_layers', 3)
+            self.num_heads = kwargs.pop('num_heads', 1)
+            self.scoring = kwargs.pop('scoring', 'dot')
             self.in_drop_rates = kwargs.pop('in_drop_rates', (0.25, 0.0, 0.0))
             self.hid_drop_rate = kwargs.pop('hid_drop_rate', 0.25)
+            self.shortcut = kwargs.pop('shortcut', False)
             
         elif self.arch.lower() == 'transformer':
-            self.num_heads = kwargs.pop('num_heads', 8)
-            self.ffn_dim = kwargs.pop('ffn_dim', 256)
+            self.ff_dim = kwargs.pop('ff_dim', 256)
             self.embedding = kwargs.pop('embedding', OneHotConfig(tokens_key='trg_tokens', field='text', has_sos=True, has_eos=True, has_positional_emb=True))
             self.num_layers = kwargs.pop('num_layers', 3)
+            self.num_heads = kwargs.pop('num_heads', 8)
+            self.scoring = kwargs.pop('scoring', 'scaled_dot')
             self.in_drop_rates = kwargs.pop('in_drop_rates', (0.1, 0.0, 0.0))
             self.hid_drop_rate = kwargs.pop('hid_drop_rate', 0.1)
+            self.shortcut = kwargs.pop('shortcut', False)
             
         else:
             raise ValueError(f"Invalid encoder architecture {self.arch}")
         
-        self.shortcut = kwargs.pop('shortcut', False)
+        
         self.teacher_forcing_rate = kwargs.pop('teacher_forcing_rate', 0.5)
         super().__init__(**kwargs)
         
@@ -112,8 +116,10 @@ class GeneratorConfig(SingleDecoderConfigBase, GeneratorMixin):
     def full_hid_dim(self):
         if not self.shortcut:
             return self.hid_dim
+        elif self.arch.lower() in ('lstm', 'gru'):
+            return self.hid_dim + self.emb_dim + self.ctx_dim
         else:
-            return self.hid_dim + self.ctx_dim + self.emb_dim
+            return self.hid_dim + self.emb_dim
         
     @property
     def vocab(self):
@@ -132,6 +138,8 @@ class GeneratorConfig(SingleDecoderConfigBase, GeneratorMixin):
             return RNNGenerator(self)
         elif self.arch.lower() == 'gehring':
             return GehringConvGenerator(self)
+        elif self.arch.lower() == 'transformer':
+            return TransformerGenerator(self)
 
 
 
@@ -493,7 +501,7 @@ class GehringConvGenerator(Generator):
         # final_hidden_t: (batch, step=1, hid_dim)
         final_hidden_t = hidden_t.permute(0, 2, 1)
         if self.shortcut:
-            final_hidden_t = torch.cat([final_hidden_t, embedded_t, context_t], dim=-1)
+            final_hidden_t = torch.cat([final_hidden_t, embedded_t], dim=-1)
         
         # logits_t: (batch, step=1, voc_dim)
         logits_t = self.hid2logit(final_hidden_t)
@@ -533,11 +541,85 @@ class GehringConvGenerator(Generator):
         # final_hidden: (batch, step, hid_dim)
         final_hidden = hidden.permute(0, 2, 1)
         if self.shortcut:
-            final_hidden = torch.cat([final_hidden, embedded, context], dim=-1)
+            final_hidden = torch.cat([final_hidden, embedded], dim=-1)
         
         # logits: (batch, step, voc_dim)
         logits = self.hid2logit(final_hidden)
         if return_atten_weight:
             return logits, atten_weight # Only atten_weight on the top layer
+        else:
+            return logits
+
+
+
+class TransformerGenerator(Generator):
+    def __init__(self, config: GeneratorConfig):
+        super().__init__(config)
+        self.emb2init_hid = torch.nn.Linear(config.emb_dim, config.hid_dim)
+        self.relu = torch.nn.ReLU()
+        reinit_layer_(self.emb2init_hid, 'relu')
+        
+        self.tf_blocks = torch.nn.ModuleList(
+            [TransformerDecoderBlock(in_dim=config.hid_dim, 
+                                     out_dim=config.hid_dim, 
+                                     ff_dim=config.ff_dim, 
+                                     num_heads=config.num_heads, 
+                                     drop_rate=config.hid_drop_rate, # Note to apply dropout to `init_hidden`
+                                     nonlinearity='relu') for k in range(config.num_layers)]
+        )
+        
+        
+    def _init_states(self, src_hidden: torch.Tensor, src_mask: torch.Tensor=None):
+        return {'hidden_stack_utm1': [torch.zeros(src_hidden.size(0), 0, self.emb2init_hid.out_features, device=src_hidden.device) for _ in self.tf_blocks]}
+        
+    def _expand_states(self, batch_size: int, hidden_stack_utm1: List[torch.Tensor]):
+        return {'hidden_stack_utm1': [hidden_utm1.expand(batch_size, -1, -1) for hidden_utm1 in hidden_stack_utm1]}
+        
+    def _select_states(self, batch_indexing: torch.Tensor, hidden_stack_utm1: List[torch.Tensor]):
+        return {'hidden_stack_utm1': [hidden_utm1[batch_indexing] for hidden_utm1 in hidden_stack_utm1]}
+        
+    def forward_step(self, x_t: torch.Tensor, t: int, src_hidden: torch.Tensor, src_mask: torch.Tensor=None, hidden_stack_utm1: List[torch.Tensor]=None):
+        # x_t: (batch, step=1)
+        # embedded_t: (batch, step=1, emb_dim)
+        embedded_t = self.dropout(self.embedding(x_t, start_position_id=t-1))
+        
+        # init_hidden_t: (batch, step=1, hid_dim)
+        init_hidden_t = self.relu(self.emb2init_hid(embedded_t))
+        
+        hidden_t = init_hidden_t
+        hidden_stack_ut = []
+        for tf_block, hidden_utm1 in zip(self.tf_blocks, hidden_stack_utm1):
+            hidden_ut = torch.cat([hidden_utm1, hidden_t], dim=1)
+            hidden_stack_ut.append(hidden_ut)
+            
+            hidden_t, atten_weight_t, cross_atten_weight_t = tf_block(hidden_ut, src_hidden, src_mask=src_mask, last_step=True, return_atten_weight=True)
+        
+        # hidden_t: (batch, step=1, hid_dim)
+        if self.shortcut:
+            hidden_t = torch.cat([hidden_t, embedded_t], dim=-1)
+        
+        # logits_t: (batch, step=1, voc_dim)
+        logits_t = self.hid2logit(hidden_t)
+        return logits_t, {'hidden_stack_utm1': hidden_stack_ut}, cross_atten_weight_t
+        
+        
+    def forward2logits_all_at_once(self, batch: Batch, src_hidden: torch.Tensor, src_mask: torch.Tensor=None, return_atten_weight: bool=False):
+        # embedded: (batch, step, emb_dim); step = trg_step-1
+        embedded = self.dropout(self.embedding(batch.trg_tok_ids[:, :-1]))
+        
+        # init_hidden: (batch, step, hid_dim)
+        init_hidden = self.relu(self.emb2init_hid(embedded))
+        
+        hidden = init_hidden
+        for tf_block in self.tf_blocks:
+            hidden, atten_weight, cross_atten_weight = tf_block(hidden, src_hidden, src_mask=src_mask, last_step=False, return_atten_weight=True)
+        
+        if self.shortcut:
+            hidden = torch.cat([hidden, embedded], dim=-1)
+        
+        # logits: (batch, step, voc_dim)
+        logits = self.hid2logit(hidden)
+        if return_atten_weight:
+            return logits, cross_atten_weight # Only atten_weight on the top layer
         else:
             return logits

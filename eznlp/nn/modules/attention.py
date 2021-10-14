@@ -32,7 +32,7 @@ class SequenceAttention(torch.nn.Module):
     [3] A. Vaswani, et al. 2018. Attention is all you need. 
     """
     def __init__(self, key_dim: int, query_dim: int=None, atten_dim: int=None, num_heads: int=1, 
-                 scoring: str='additive', nonlinearity: str='tanh', external_query: bool=False):
+                 scoring: str='additive', nonlinearity: str='tanh', drop_rate: float=0.0, external_query: bool=False):
         super().__init__()
         if query_dim is None:
             query_dim = key_dim
@@ -70,6 +70,7 @@ class SequenceAttention(torch.nn.Module):
             raise ValueError(f"Invalid attention scoring mode {scoring}")
         
         self.activation = _nonlinearity2activation(nonlinearity)
+        self.dropout = torch.nn.Dropout(drop_rate)
         
         self.key_dim = key_dim
         self.query_dim = query_dim
@@ -159,6 +160,7 @@ class SequenceAttention(torch.nn.Module):
             if self.num_heads > 1:
                 mask  = mask.repeat_interleave(self.num_heads, dim=0)
             atten_weight = torch.nn.functional.softmax(scores.masked_fill(mask, float('-inf')), dim=-1)
+            atten_weight = self.dropout(atten_weight) # Apply dropout on attention weight?
         
         # atten_values: (batch, query_step, value_dim)
         atten_values = atten_weight.bmm(x)
