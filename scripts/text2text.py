@@ -28,7 +28,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
                             help="dataset name")
     
     group_decoder = parser.add_argument_group('decoder configurations')
-    group_decoder.add_argument('--dec_arch', type=str, default='LSTM', choices=['LSTM', 'GRU', 'Gehring'], 
+    group_decoder.add_argument('--dec_arch', type=str, default='LSTM', choices=['LSTM', 'GRU', 'Gehring', 'Transformer'], 
                                help="token-level decoder architecture")
     group_decoder.add_argument('--atten_num_heads', type=int, default=1, 
                                help="attention number of heads")
@@ -37,7 +37,9 @@ def parse_arguments(parser: argparse.ArgumentParser):
     group_decoder.add_argument('--teacher_forcing_rate', type=float, default=0.5, 
                                help="teacher forcing rate")
     group_decoder.add_argument('--init_ctx_mode', type=str, default='rnn_last', 
-                               help="init context vector mode")
+                               help="rnn init context vector mode")
+    group_decoder.add_argument('--ff_dim', type=int, default=512, 
+                               help="transformer position-wise feedforward dim")
     # Loss
     group_decoder.add_argument('--fl_gamma', type=float, default=0.0, 
                                help="Focal Loss gamma")
@@ -61,15 +63,18 @@ def collect_T2T_assembly_config(args: argparse.Namespace):
     
     src_vectors = _get_vectors(args.language[0], args.emb_dim)
     emb_config = OneHotConfig(tokens_key='tokens', field='text', min_freq=2, 
-                              vectors=src_vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze)
-    enc_config = EncoderConfig(arch=args.enc_arch, hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
+                              vectors=src_vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze, 
+                              has_positional_emb=(args.enc_arch.lower() not in ('lstm', 'gru')))
+    enc_config = EncoderConfig(arch=args.enc_arch, hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates, 
+                               ff_dim=args.ff_dim)
     
     trg_vectors = _get_vectors(args.language[1], args.emb_dim)
     trg_emb_config = OneHotConfig(tokens_key='trg_tokens', field='text', min_freq=2, has_sos=True, has_eos=True, 
-                                  vectors=trg_vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze)
+                                  vectors=trg_vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze, 
+                                  has_positional_emb=(args.dec_arch.lower() not in ('lstm', 'gru')))
     gen_config = GeneratorConfig(arch=args.dec_arch, num_layers=args.num_layers, in_drop_rates=drop_rates, 
                                  embedding=trg_emb_config, num_heads=args.atten_num_heads, scoring=args.atten_scoring, teacher_forcing_rate=args.teacher_forcing_rate, 
-                                 init_ctx_mode=args.init_ctx_mode)
+                                 init_ctx_mode=args.init_ctx_mode, ff_dim=args.ff_dim)
     
     return {'embedder': emb_config, 
             'encoder': enc_config, 
@@ -130,6 +135,12 @@ if __name__ == '__main__':
     logger.info(header_format("Building", sep='-'))
     model = config.instantiate().to(device)
     count_params(model)
+    
+    def init_weights(m: torch.nn.Module):
+        for name, param in m.named_parameters():
+            if 'weight' in name and param.dim() > 1:
+                torch.nn.init.xavier_uniform_(param.data)
+    model.apply(init_weights)
     
     logger.info(header_format("Training", sep='-'))
     trainer = build_trainer(model, device, len(train_loader), args)

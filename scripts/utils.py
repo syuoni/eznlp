@@ -69,7 +69,7 @@ def add_base_arguments(parser: argparse.ArgumentParser):
     group_model.add_argument('--use_softlexicon', default=False, action='store_true', 
                              help="whether to use softlexicon")
     
-    group_model.add_argument('--enc_arch', type=str, default='LSTM', choices=['LSTM', 'GRU', 'Conv', 'Gehring'], 
+    group_model.add_argument('--enc_arch', type=str, default='LSTM', choices=['LSTM', 'GRU', 'Conv', 'Gehring', 'Transformer'], 
                              help="token-level encoder architecture")
     group_model.add_argument('--hid_dim', type=int, default=200, 
                              help="hidden dim")
