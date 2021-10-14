@@ -136,12 +136,6 @@ if __name__ == '__main__':
     model = config.instantiate().to(device)
     count_params(model)
     
-    def init_weights(m: torch.nn.Module):
-        for name, param in m.named_parameters():
-            if 'weight' in name and param.dim() > 1:
-                torch.nn.init.xavier_uniform_(param.data)
-    model.apply(init_weights)
-    
     logger.info(header_format("Training", sep='-'))
     trainer = build_trainer(model, device, len(train_loader), args)
     if args.pdb: 

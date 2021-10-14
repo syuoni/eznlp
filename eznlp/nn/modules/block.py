@@ -117,7 +117,8 @@ class TransformerEncoderBlock(torch.nn.Module):
         self.self_norm = torch.nn.LayerNorm(hid_dim)
         
         self.ff1 = torch.nn.Linear(hid_dim, ff_dim)
-        reinit_layer_(self.ff1, nonlinearity)
+        # reinit_layer_(self.ff1, nonlinearity)
+        reinit_layer_(self.ff1, 'linear')
         self.activation = _nonlinearity2activation(nonlinearity)
         self.ff2 = torch.nn.Linear(ff_dim, hid_dim)
         reinit_layer_(self.ff2, 'linear')
@@ -128,7 +129,7 @@ class TransformerEncoderBlock(torch.nn.Module):
         
     def forward(self, x: torch.Tensor, mask: torch.Tensor=None, return_atten_weight: bool=False):
         attened, atten_weight = self.self_attention(self.dropout(x), self.dropout(x), self.dropout(x), mask=mask, return_atten_weight=True)
-        attened_x = self.self_norm(x + self.dropout(attened))
+        attened_x = self.self_norm(self.dropout(x) + self.dropout(attened))
         
         ffed = self.ff2(self.dropout(self.activation(self.ff1(attened_x))))
         ffed_attened_x = self.ff_norm(attened_x + self.dropout(ffed))
@@ -149,7 +150,8 @@ class TransformerDecoderBlock(torch.nn.Module):
         self.cross_norm = torch.nn.LayerNorm(hid_dim)
         
         self.ff1 = torch.nn.Linear(hid_dim, ff_dim)
-        reinit_layer_(self.ff1, nonlinearity)
+        # reinit_layer_(self.ff1, nonlinearity)
+        reinit_layer_(self.ff1, 'linear')
         self.activation = _nonlinearity2activation(nonlinearity)
         self.ff2 = torch.nn.Linear(ff_dim, hid_dim)
         reinit_layer_(self.ff2, 'linear')
