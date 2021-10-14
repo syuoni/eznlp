@@ -147,8 +147,9 @@ class OneHotEmbedder(torch.nn.Module):
         if hasattr(self, 'pos_embedding'):
             # The last dimension of `x_ids` is assumed to be step
             *batch_dims, step = x_ids.size()
+            assert start_position_id + step <= self._pos_ids.size(0)
             pos_ids = self._pos_ids[start_position_id:start_position_id+step].expand(*batch_dims, -1)
-            embedded = embedded + self.embedding(pos_ids)
+            embedded = embedded + self.pos_embedding(pos_ids)
         
         return embedded
 
