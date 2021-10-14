@@ -55,8 +55,8 @@ class TestModel(object):
     @pytest.mark.parametrize("num_heads", [1, 4])
     @pytest.mark.parametrize("shortcut", [False, True])
     def test_model(self, arch, num_heads, shortcut, multi30k_demo, device):
-        self.config = Text2TextConfig(encoder=EncoderConfig(arch=arch), 
-                                      decoder=GeneratorConfig(arch=arch, num_heads=num_heads, shortcut=shortcut))
+        self.config = Text2TextConfig(encoder=EncoderConfig(arch=arch, use_emb2init_hid=True), 
+                                      decoder=GeneratorConfig(arch=arch, use_emb2init_hid=True, num_heads=num_heads, shortcut=shortcut))
         self._setup_case(multi30k_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
@@ -68,6 +68,16 @@ class TestModel(object):
         self._assert_batch_consistency()
         self._assert_trainable()
         
+    @pytest.mark.parametrize("use_emb2init_hid", [False, True])
+    def test_model_with_transformer(self, use_emb2init_hid, multi30k_demo, device):
+        self.config = Text2TextConfig(embedder=OneHotConfig(tokens_key='tokens', field='text', emb_dim=128), 
+                                      encoder=EncoderConfig(arch='Transformer', use_emb2init_hid=use_emb2init_hid, hid_dim=128), 
+                                      decoder=GeneratorConfig(embedding=OneHotConfig(tokens_key='trg_tokens', field='text', emb_dim=128, has_sos=True, has_eos=True, has_positional_emb=True), 
+                                                              arch='Transformer', use_emb2init_hid=use_emb2init_hid))
+        self._setup_case(multi30k_demo, device)
+        self._assert_batch_consistency()
+        self._assert_trainable()
+        
     @pytest.mark.parametrize("sl_epsilon", [0.0, 0.1, 0.2])
     def test_model_with_label_smoothing(self, sl_epsilon, multi30k_demo, device):
         self.config = Text2TextConfig(decoder=GeneratorConfig(arch='LSTM', sl_epsilon=sl_epsilon))
@@ -75,12 +85,14 @@ class TestModel(object):
         self._assert_batch_consistency()
         self._assert_trainable()
         
+        
     @pytest.mark.parametrize("arch", ['Gehring', 'Transformer'])
     def test_forward_consistency(self, arch, multi30k_demo, device):
         # Note `Generator.forward2logits_step_by_step` always uses predicted token as the input in the eval mode
         # Hence, here manually set all dropout rate to be 0 and use training mode. 
-        self.config = Text2TextConfig(encoder=EncoderConfig(arch=arch, in_drop_rates=(0.0, 0.0, 0.0), hid_drop_rate=0.0), 
-                                      decoder=GeneratorConfig(arch=arch, num_layers=1, teacher_forcing_rate=1.0, in_drop_rates=(0.0, 0.0, 0.0), hid_drop_rate=0.0))
+        self.config = Text2TextConfig(encoder=EncoderConfig(arch=arch, use_emb2init_hid=True, in_drop_rates=(0.0, 0.0, 0.0), hid_drop_rate=0.0), 
+                                      decoder=GeneratorConfig(arch=arch, use_emb2init_hid=True, num_layers=1, teacher_forcing_rate=1.0, 
+                                                              in_drop_rates=(0.0, 0.0, 0.0), hid_drop_rate=0.0))
         self._setup_case(multi30k_demo, device)
         
         self.model.train()
@@ -96,7 +108,7 @@ class TestModel(object):
         
     @pytest.mark.parametrize("arch", ['LSTM', 'Gehring', 'Transformer'])
     def test_beam_search(self, arch, multi30k_demo, device):
-        self.config = Text2TextConfig(encoder=EncoderConfig(arch=arch), decoder=GeneratorConfig(arch=arch))
+        self.config = Text2TextConfig(encoder=EncoderConfig(arch=arch, use_emb2init_hid=True), decoder=GeneratorConfig(arch=arch, use_emb2init_hid=True))
         self._setup_case(multi30k_demo, device)
         
         self.model.eval()
@@ -110,8 +122,8 @@ class TestModel(object):
         
     @pytest.mark.parametrize("arch", ['LSTM', 'Gehring', 'Transformer'])
     def test_prediction_without_gold(self, arch, multi30k_demo, device):
-        self.config = Text2TextConfig(encoder=EncoderConfig(arch=arch), 
-                                      decoder=GeneratorConfig(arch=arch))
+        self.config = Text2TextConfig(encoder=EncoderConfig(arch=arch, use_emb2init_hid=True), 
+                                      decoder=GeneratorConfig(arch=arch, use_emb2init_hid=True))
         self._setup_case(multi30k_demo, device)
         
         data_wo_gold = [{'tokens': entry['tokens']} for entry in multi30k_demo]

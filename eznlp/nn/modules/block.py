@@ -111,23 +111,23 @@ class MultiheadAttention(torch.nn.Module):
 
 
 class TransformerEncoderBlock(torch.nn.Module):
-    def __init__(self, in_dim: int, out_dim: int, ff_dim: int, num_heads: int=8, scoring: str='scaled_dot', drop_rate: float=0.1, nonlinearity: str='relu'):
+    def __init__(self, hid_dim: int, ff_dim: int, num_heads: int=8, scoring: str='scaled_dot', drop_rate: float=0.1, nonlinearity: str='relu'):
         super().__init__()
-        self.self_attenion = MultiheadAttention(in_dim, out_dim, out_dim, num_heads=num_heads, scoring=scoring, drop_rate=drop_rate)
-        self.self_norm = torch.nn.LayerNorm(out_dim)
+        self.self_attention = MultiheadAttention(hid_dim, hid_dim, hid_dim, num_heads=num_heads, scoring=scoring, drop_rate=drop_rate)
+        self.self_norm = torch.nn.LayerNorm(hid_dim)
         
-        self.ff1 = torch.nn.Linear(out_dim, ff_dim)
+        self.ff1 = torch.nn.Linear(hid_dim, ff_dim)
         reinit_layer_(self.ff1, nonlinearity)
         self.activation = _nonlinearity2activation(nonlinearity)
-        self.ff2 = torch.nn.Linear(ff_dim, out_dim)
+        self.ff2 = torch.nn.Linear(ff_dim, hid_dim)
         reinit_layer_(self.ff2, 'linear')
-        self.ff_norm = torch.nn.LayerNorm(out_dim)
+        self.ff_norm = torch.nn.LayerNorm(hid_dim)
         
         self.dropout = torch.nn.Dropout(drop_rate)
         
         
     def forward(self, x: torch.Tensor, mask: torch.Tensor=None, return_atten_weight: bool=False):
-        attened, atten_weight = self.self_attenion(self.dropout(x), self.dropout(x), self.dropout(x), mask=mask, return_atten_weight=True)
+        attened, atten_weight = self.self_attention(self.dropout(x), self.dropout(x), self.dropout(x), mask=mask, return_atten_weight=True)
         attened_x = self.self_norm(x + self.dropout(attened))
         
         ffed = self.ff2(self.dropout(self.activation(self.ff1(attened_x))))
@@ -140,20 +140,20 @@ class TransformerEncoderBlock(torch.nn.Module):
 
 
 class TransformerDecoderBlock(torch.nn.Module):
-    def __init__(self, in_dim: int, out_dim: int, ff_dim: int, num_heads: int=8, scoring: str='scaled_dot', drop_rate: float=0.1, nonlinearity: str='relu'):
+    def __init__(self, hid_dim: int, ff_dim: int, num_heads: int=8, scoring: str='scaled_dot', drop_rate: float=0.1, nonlinearity: str='relu'):
         super().__init__()
-        self.self_attenion = MultiheadAttention(in_dim, out_dim, out_dim, num_heads=num_heads, scoring=scoring, drop_rate=drop_rate)
-        self.self_norm = torch.nn.LayerNorm(out_dim)
+        self.self_attention = MultiheadAttention(hid_dim, hid_dim, hid_dim, num_heads=num_heads, scoring=scoring, drop_rate=drop_rate)
+        self.self_norm = torch.nn.LayerNorm(hid_dim)
         
-        self.cross_attention = MultiheadAttention(out_dim, out_dim, out_dim, num_heads=num_heads, scoring=scoring, drop_rate=drop_rate)
-        self.cross_norm = torch.nn.LayerNorm(out_dim)
+        self.cross_attention = MultiheadAttention(hid_dim, hid_dim, hid_dim, num_heads=num_heads, scoring=scoring, drop_rate=drop_rate)
+        self.cross_norm = torch.nn.LayerNorm(hid_dim)
         
-        self.ff1 = torch.nn.Linear(out_dim, ff_dim)
+        self.ff1 = torch.nn.Linear(hid_dim, ff_dim)
         reinit_layer_(self.ff1, nonlinearity)
         self.activation = _nonlinearity2activation(nonlinearity)
-        self.ff2 = torch.nn.Linear(ff_dim, out_dim)
+        self.ff2 = torch.nn.Linear(ff_dim, hid_dim)
         reinit_layer_(self.ff2, 'linear')
-        self.ff_norm = torch.nn.LayerNorm(out_dim)
+        self.ff_norm = torch.nn.LayerNorm(hid_dim)
         
         self.dropout = torch.nn.Dropout(drop_rate)
         
@@ -190,7 +190,7 @@ class TransformerDecoderBlock(torch.nn.Module):
             # trg_mask: (batch, trg_step, trg_step)
             trg_mask = self._get_trg_mask(x.size(1)).expand(x.size(0), -1, -1)
         
-        attened, atten_weight = self.self_attenion(self.dropout(xq), self.dropout(x), self.dropout(x), mask=trg_mask, return_atten_weight=True)
+        attened, atten_weight = self.self_attention(self.dropout(xq), self.dropout(x), self.dropout(x), mask=trg_mask, return_atten_weight=True)
         attened_xq = self.self_norm(self.dropout(xq) + self.dropout(attened))
         
         crossed, cross_atten_weight = self.cross_attention(attened_xq, self.dropout(src_x), self.dropout(src_x), mask=src_mask, return_atten_weight=True)

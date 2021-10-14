@@ -41,6 +41,7 @@ class EncoderConfig(Config):
                 self.hid_drop_rate = kwargs.pop('hid_drop_rate', 0.25)
                 
             elif self.arch.lower() == 'transformer':
+                self.use_emb2init_hid = kwargs.pop('use_emb2init_hid', False)
                 self.num_heads = kwargs.pop('num_heads', 8)
                 self.ff_dim = kwargs.pop('ff_dim', 256)
                 self.num_layers = kwargs.pop('num_layers', 3)
@@ -51,12 +52,12 @@ class EncoderConfig(Config):
                 raise ValueError(f"Invalid encoder architecture {self.arch}")
         
         super().__init__(**kwargs)
-    
-    
+        
+        
     @property
     def name(self):
         return self.arch
-    
+        
     @property
     def out_dim(self):
         if self.arch.lower() == 'identity':
@@ -68,8 +69,8 @@ class EncoderConfig(Config):
             out_dim = out_dim + self.in_dim
         
         return out_dim
-    
-    
+        
+        
     def instantiate(self):
         if self.arch.lower() == 'identity':
             return IdentityEncoder(self)
@@ -283,21 +284,26 @@ class TransformerEncoder(Encoder):
     """
     def __init__(self, config: EncoderConfig):
         super().__init__(config)
-        self.emb2init_hid = torch.nn.Linear(config.in_dim, config.hid_dim)
-        self.relu = torch.nn.ReLU()
-        reinit_layer_(self.emb2init_hid, 'relu')
+        if config.use_emb2init_hid:
+            self.emb2init_hid = torch.nn.Linear(config.in_dim, config.hid_dim)
+            self.relu = torch.nn.ReLU()
+            reinit_layer_(self.emb2init_hid, 'relu')
+        else:
+            assert config.hid_dim == config.in_dim
         
         self.tf_blocks = torch.nn.ModuleList(
-            [TransformerEncoderBlock(in_dim=config.hid_dim, 
-                                     out_dim=config.hid_dim, 
+            [TransformerEncoderBlock(hid_dim=config.hid_dim, 
                                      ff_dim=config.ff_dim, 
                                      num_heads=config.num_heads, 
-                                     drop_rate=config.hid_drop_rate, # Note to apply dropout to `init_hidden`
+                                     drop_rate=(0.0 if (k==0 and not config.use_emb2init_hid) else config.hid_drop_rate), 
                                      nonlinearity='relu') for k in range(config.num_layers)]
         )
         
     def embedded2hidden(self, embedded: torch.FloatTensor, mask: torch.BoolTensor):
-        hidden = self.relu(self.emb2init_hid(embedded))
+        if hasattr(self, 'emb2init_hid'):
+            hidden = self.relu(self.emb2init_hid(embedded))
+        else:
+            hidden = embedded
         
         for tf_block in self.tf_blocks:
             hidden = tf_block(hidden, mask=mask)

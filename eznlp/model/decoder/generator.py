@@ -79,6 +79,7 @@ class GeneratorConfig(SingleDecoderConfigBase, GeneratorMixin):
             self.shortcut = kwargs.pop('shortcut', False)
             
         elif self.arch.lower() == 'transformer':
+            self.use_emb2init_hid = kwargs.pop('use_emb2init_hid', False)
             self.ff_dim = kwargs.pop('ff_dim', 256)
             self.embedding = kwargs.pop('embedding', OneHotConfig(tokens_key='trg_tokens', field='text', has_sos=True, has_eos=True, has_positional_emb=True))
             self.num_layers = kwargs.pop('num_layers', 3)
@@ -152,7 +153,7 @@ class Generator(DecoderBase, GeneratorMixin):
         
         self.dropout = CombinedDropout(*config.in_drop_rates)
         self.embedding = config.embedding.instantiate()
-        self.attention = SequenceAttention(key_dim=config.ctx_dim, query_dim=config.hid_dim, num_heads=config.num_heads, scoring=config.scoring, external_query=True)
+        
         self.hid2logit = torch.nn.Linear(config.full_hid_dim, config.voc_dim)
         # Every token in a batch should be assigned the same weight, so use `sum` as the reduction method. 
         # This will not cause the model to generate shorter sequence, because the loss is summed over the ground-truth tokens, 
@@ -360,6 +361,8 @@ class RNNGenerator(Generator):
             reinit_layer_(self.ctx2c_0, 'tanh')
         # RNN hidden states are tanh-activated
         self.tanh = torch.nn.Tanh()
+        self.attention = SequenceAttention(key_dim=config.ctx_dim, query_dim=config.hid_dim, num_heads=config.num_heads, scoring=config.scoring, external_query=True)
+        
         
     def _init_states(self, src_hidden: torch.Tensor, src_mask: torch.Tensor=None):
         if hasattr(self, 'init_ctx'):
@@ -439,12 +442,13 @@ class GehringConvGenerator(Generator):
             [ConvBlock(in_dim=config.hid_dim, 
                        out_dim=config.hid_dim, 
                        kernel_size=config.kernel_size, 
-                       drop_rate=config.hid_drop_rate, 
+                       drop_rate=config.hid_drop_rate, # Note to apply dropout to `init_hidden`
                        padding_mode='none', # The paddings have to be manually operated
                        nonlinearity='glu') for k in range(config.num_layers)]
         )
         self.register_buffer('_pre_padding', torch.zeros(config.hid_dim, config.kernel_size-1))
         
+        self.attention = SequenceAttention(key_dim=config.ctx_dim, query_dim=config.hid_dim, num_heads=config.num_heads, scoring=config.scoring, external_query=True)
         # Maybe always use **affined** hidden states for attention computation branches? 
         self.pre_atten_affine  = torch.nn.Conv1d(config.hid_dim, config.hid_dim, kernel_size=1) # Use conv-layer of kernel size 1
         self.post_atten_affine = torch.nn.Linear(config.ctx_dim, config.hid_dim)
@@ -555,22 +559,27 @@ class GehringConvGenerator(Generator):
 class TransformerGenerator(Generator):
     def __init__(self, config: GeneratorConfig):
         super().__init__(config)
-        self.emb2init_hid = torch.nn.Linear(config.emb_dim, config.hid_dim)
-        self.relu = torch.nn.ReLU()
-        reinit_layer_(self.emb2init_hid, 'relu')
+        if config.use_emb2init_hid:
+            self.emb2init_hid = torch.nn.Linear(config.emb_dim, config.hid_dim)
+            self.relu = torch.nn.ReLU()
+            reinit_layer_(self.emb2init_hid, 'relu')
+        else:
+            assert config.hid_dim == config.emb_dim
         
         self.tf_blocks = torch.nn.ModuleList(
-            [TransformerDecoderBlock(in_dim=config.hid_dim, 
-                                     out_dim=config.hid_dim, 
+            [TransformerDecoderBlock(hid_dim=config.hid_dim, 
                                      ff_dim=config.ff_dim, 
                                      num_heads=config.num_heads, 
-                                     drop_rate=config.hid_drop_rate, # Note to apply dropout to `init_hidden`
+                                     drop_rate=(0.0 if (k==0 and not config.use_emb2init_hid) else config.hid_drop_rate), 
                                      nonlinearity='relu') for k in range(config.num_layers)]
         )
+        # Actually no pre-padding is needed
+        # This is a placeholder for `_init_states`, and thus for consistent/easier implementation of `forward_step`
+        self.register_buffer('_pre_padding', torch.zeros(0, config.hid_dim))
         
         
     def _init_states(self, src_hidden: torch.Tensor, src_mask: torch.Tensor=None):
-        return {'hidden_stack_utm1': [torch.zeros(src_hidden.size(0), 0, self.emb2init_hid.out_features, device=src_hidden.device) for _ in self.tf_blocks]}
+        return {'hidden_stack_utm1': [self._pre_padding.expand(src_hidden.size(0), -1, -1) for _ in self.tf_blocks]}
         
     def _expand_states(self, batch_size: int, hidden_stack_utm1: List[torch.Tensor]):
         return {'hidden_stack_utm1': [hidden_utm1.expand(batch_size, -1, -1) for hidden_utm1 in hidden_stack_utm1]}
@@ -583,10 +592,11 @@ class TransformerGenerator(Generator):
         # embedded_t: (batch, step=1, emb_dim)
         embedded_t = self.dropout(self.embedding(x_t, start_position_id=t-1))
         
-        # init_hidden_t: (batch, step=1, hid_dim)
-        init_hidden_t = self.relu(self.emb2init_hid(embedded_t))
+        if hasattr(self, 'emb2init_hid'):
+            hidden_t = self.relu(self.emb2init_hid(embedded_t))
+        else:
+            hidden_t = embedded_t
         
-        hidden_t = init_hidden_t
         hidden_stack_ut = []
         for tf_block, hidden_utm1 in zip(self.tf_blocks, hidden_stack_utm1):
             hidden_ut = torch.cat([hidden_utm1, hidden_t], dim=1)
@@ -607,10 +617,11 @@ class TransformerGenerator(Generator):
         # embedded: (batch, step, emb_dim); step = trg_step-1
         embedded = self.dropout(self.embedding(batch.trg_tok_ids[:, :-1]))
         
-        # init_hidden: (batch, step, hid_dim)
-        init_hidden = self.relu(self.emb2init_hid(embedded))
+        if hasattr(self, 'emb2init_hid'):
+            hidden = self.relu(self.emb2init_hid(embedded))
+        else:
+            hidden = embedded
         
-        hidden = init_hidden
         for tf_block in self.tf_blocks:
             hidden, atten_weight, cross_atten_weight = tf_block(hidden, src_hidden, src_mask=src_mask, last_step=False, return_atten_weight=True)
         
