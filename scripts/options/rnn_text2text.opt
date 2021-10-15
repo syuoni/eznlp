@@ -1,3 +1,5 @@
+--optimizer
+AdamW
 --batch_size
 128
 --emb_dim

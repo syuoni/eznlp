@@ -34,6 +34,10 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                help="attention number of heads")
     group_decoder.add_argument('--atten_scoring', type=str, default='additive', 
                                help="attention scoring")
+    group_decoder.add_argument('--sin_positional_emb', default=False, action='store_true', 
+                               help="whether to use sinusoid positional encodings")
+    group_decoder.add_argument('--use_weight_tying', default=False, action='store_true', 
+                               help="whether to use weight tying")
     group_decoder.add_argument('--teacher_forcing_rate', type=float, default=0.5, 
                                help="teacher forcing rate")
     group_decoder.add_argument('--init_ctx_mode', type=str, default='rnn_last', 
@@ -64,16 +68,18 @@ def collect_T2T_assembly_config(args: argparse.Namespace):
     src_vectors = _get_vectors(args.language[0], args.emb_dim)
     emb_config = OneHotConfig(tokens_key='tokens', field='text', min_freq=2, 
                               vectors=src_vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze, 
-                              has_positional_emb=(args.enc_arch.lower() not in ('lstm', 'gru')))
+                              has_positional_emb=(args.enc_arch.lower() not in ('lstm', 'gru')), sin_positional_emb=args.sin_positional_emb)
     enc_config = EncoderConfig(arch=args.enc_arch, hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates, 
                                ff_dim=args.ff_dim)
     
     trg_vectors = _get_vectors(args.language[1], args.emb_dim)
     trg_emb_config = OneHotConfig(tokens_key='trg_tokens', field='text', min_freq=2, has_sos=True, has_eos=True, 
                                   vectors=trg_vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze, 
-                                  has_positional_emb=(args.dec_arch.lower() not in ('lstm', 'gru')))
-    gen_config = GeneratorConfig(arch=args.dec_arch, num_layers=args.num_layers, in_drop_rates=drop_rates, 
-                                 embedding=trg_emb_config, num_heads=args.atten_num_heads, scoring=args.atten_scoring, teacher_forcing_rate=args.teacher_forcing_rate, 
+                                  has_positional_emb=(args.dec_arch.lower() not in ('lstm', 'gru')), sin_positional_emb=args.sin_positional_emb)
+    gen_config = GeneratorConfig(arch=args.dec_arch, embedding=trg_emb_config, num_layers=args.num_layers, in_drop_rates=drop_rates, 
+                                 fl_gamma=args.fl_gamma, sl_epsilon=args.sl_epsilon, 
+                                 num_heads=args.atten_num_heads, scoring=args.atten_scoring, 
+                                 weight_tying=args.use_weight_tying, teacher_forcing_rate=args.teacher_forcing_rate, 
                                  init_ctx_mode=args.init_ctx_mode, ff_dim=args.ff_dim)
     
     return {'embedder': emb_config, 
