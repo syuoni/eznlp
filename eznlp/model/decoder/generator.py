@@ -92,7 +92,9 @@ class GeneratorConfig(SingleDecoderConfigBase, GeneratorMixin):
         else:
             raise ValueError(f"Invalid encoder architecture {self.arch}")
         
-        
+        # See Vaswani et al. (2017)
+        self.weight_tying = kwargs.pop('weight_tying', False)
+        self.weight_tying_scale = kwargs.pop('weight_tying_scale', self.emb_dim**(-0.5))
         self.teacher_forcing_rate = kwargs.pop('teacher_forcing_rate', 0.5)
         super().__init__(**kwargs)
         
@@ -154,12 +156,25 @@ class Generator(DecoderBase, GeneratorMixin):
         self.dropout = CombinedDropout(*config.in_drop_rates)
         self.embedding = config.embedding.instantiate()
         
-        self.hid2logit = torch.nn.Linear(config.full_hid_dim, config.voc_dim)
+        if config.weight_tying:
+            assert config.full_hid_dim == config.emb_dim
+            self.weight_tying_scale = config.weight_tying_scale
+            self.hid2logit_bias = torch.nn.Parameter(torch.zeros(config.voc_dim))
+        else:
+            self.hid2logit = torch.nn.Linear(config.full_hid_dim, config.voc_dim)
+            reinit_layer_(self.hid2logit, 'sigmoid')
+        
         # Every token in a batch should be assigned the same weight, so use `sum` as the reduction method. 
         # This will not cause the model to generate shorter sequence, because the loss is summed over the ground-truth tokens, 
         # which have fixed lengths. 
         self.criterion = config.instantiate_criterion(ignore_index=config.pad_idx, reduction='sum')
         
+        
+    def _forward_hid2logit(self, hidden: torch.Tensor):
+        if hasattr(self, 'hid2logit'):
+            return self.hid2logit(hidden)
+        else:
+            return torch.nn.functional.linear(hidden, self.embedding.embedding.weight*self.weight_tying_scale, self.hid2logit_bias)
         
     def _init_states(self, src_hidden: torch.Tensor, src_mask: torch.Tensor=None):
         raise NotImplementedError("Not Implemented `_init_states`")
@@ -426,12 +441,18 @@ class RNNGenerator(Generator):
             hidden_t = torch.cat([hidden_t, embedded_t, context_t], dim=-1)
         
         # logits_t: (batch, step=1, voc_dim)
-        logits_t = self.hid2logit(hidden_t)
+        logits_t = self._forward_hid2logit(hidden_t)
         return logits_t, {'h_tm1': h_t}, atten_weight_t
 
 
 
 class GehringConvGenerator(Generator):
+    """Convolutional sequence decoder by Gehring et al. (2017). 
+    
+    References
+    ----------
+    Gehring, J., et al. 2017. Convolutional Sequence to Sequence Learning. 
+    """
     def __init__(self, config: GeneratorConfig):
         super().__init__(config)
         self.emb2init_hid = torch.nn.Linear(config.emb_dim, config.hid_dim*2)
@@ -508,7 +529,7 @@ class GehringConvGenerator(Generator):
             final_hidden_t = torch.cat([final_hidden_t, embedded_t], dim=-1)
         
         # logits_t: (batch, step=1, voc_dim)
-        logits_t = self.hid2logit(final_hidden_t)
+        logits_t = self._forward_hid2logit(final_hidden_t)
         return logits_t, {'hidden_stack_utm1': hidden_stack_ut}, atten_weight_t
         
         
@@ -548,7 +569,7 @@ class GehringConvGenerator(Generator):
             final_hidden = torch.cat([final_hidden, embedded], dim=-1)
         
         # logits: (batch, step, voc_dim)
-        logits = self.hid2logit(final_hidden)
+        logits = self._forward_hid2logit(final_hidden)
         if return_atten_weight:
             return logits, atten_weight # Only atten_weight on the top layer
         else:
@@ -557,6 +578,12 @@ class GehringConvGenerator(Generator):
 
 
 class TransformerGenerator(Generator):
+    """Transformer decoder by Vaswani et al. (2017). 
+    
+    References
+    ----------
+    Vaswani, A., et al. 2017. Attention is All You Need. 
+    """
     def __init__(self, config: GeneratorConfig):
         super().__init__(config)
         if config.use_emb2init_hid:
@@ -609,7 +636,7 @@ class TransformerGenerator(Generator):
             hidden_t = torch.cat([hidden_t, embedded_t], dim=-1)
         
         # logits_t: (batch, step=1, voc_dim)
-        logits_t = self.hid2logit(hidden_t)
+        logits_t = self._forward_hid2logit(hidden_t)
         return logits_t, {'hidden_stack_utm1': hidden_stack_ut}, cross_atten_weight_t
         
         
@@ -629,7 +656,7 @@ class TransformerGenerator(Generator):
             hidden = torch.cat([hidden, embedded], dim=-1)
         
         # logits: (batch, step, voc_dim)
-        logits = self.hid2logit(hidden)
+        logits = self._forward_hid2logit(hidden)
         if return_atten_weight:
             return logits, cross_atten_weight # Only atten_weight on the top layer
         else:

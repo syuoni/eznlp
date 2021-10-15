@@ -69,11 +69,12 @@ class TestModel(object):
         self._assert_trainable()
         
     @pytest.mark.parametrize("use_emb2init_hid", [False, True])
-    def test_model_with_transformer(self, use_emb2init_hid, multi30k_demo, device):
+    @pytest.mark.parametrize("weight_tying", [False, True])
+    def test_model_with_transformer(self, use_emb2init_hid, weight_tying, multi30k_demo, device):
         self.config = Text2TextConfig(embedder=OneHotConfig(tokens_key='tokens', field='text', emb_dim=128), 
                                       encoder=EncoderConfig(arch='Transformer', use_emb2init_hid=use_emb2init_hid, hid_dim=128), 
                                       decoder=GeneratorConfig(embedding=OneHotConfig(tokens_key='trg_tokens', field='text', emb_dim=128, has_sos=True, has_eos=True, has_positional_emb=True), 
-                                                              arch='Transformer', use_emb2init_hid=use_emb2init_hid))
+                                                              arch='Transformer', use_emb2init_hid=use_emb2init_hid, weight_tying=weight_tying))
         self._setup_case(multi30k_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
@@ -103,7 +104,7 @@ class TestModel(object):
         del states['logits']
         logits_sbs = self.model.decoder.forward2logits_step_by_step(batch, **states)
         logits_aao = self.model.decoder.forward2logits_all_at_once(batch, **states)
-        assert (logits_aao - logits_sbs).abs().max().item() < 1e-6
+        assert (logits_aao - logits_sbs).abs().max().item() < 1e-5
         
         
     @pytest.mark.parametrize("arch", ['LSTM', 'Gehring', 'Transformer'])

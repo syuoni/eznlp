@@ -239,7 +239,8 @@ class ConvEncoder(Encoder):
 
 
 class GehringConvEncoder(Encoder):
-    """
+    """Convolutional sequence encoder by Gehring et al. (2017). 
+    
     References
     ----------
     Gehring, J., et al. 2017. Convolutional Sequence to Sequence Learning. 
@@ -277,7 +278,8 @@ class GehringConvEncoder(Encoder):
 
 
 class TransformerEncoder(Encoder):
-    """
+    """Transformer encoder by Vaswani et al. (2017). 
+    
     References
     ----------
     Vaswani, A., et al. 2017. Attention is All You Need. 
