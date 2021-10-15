@@ -51,7 +51,7 @@ def add_base_arguments(parser: argparse.ArgumentParser):
     group_train.add_argument('--finetune_lr', type=float, default=2e-5, 
                              help="learning rate for finetuning")
     group_train.add_argument('--scheduler', type=str, default='None', 
-                             help='scheduler', choices=['None', 'ReduceLROnPlateau', 'LinearDecayWithWarmup'])
+                             help='scheduler', choices=['None', 'ReduceLROnPlateau', 'LinearDecayWithWarmup', 'PowerDecayWithWarmup'])
     group_train.add_argument('--num_grad_acc_steps', type=int, default=1, 
                              help="number of gradient accumulation steps")
     
@@ -395,18 +395,20 @@ def build_trainer(model, device, num_train_batches: int, args: argparse.Namespac
     assert check_param_groups(model, param_groups)
     optimizer = getattr(torch.optim, args.optimizer)(param_groups)
     
-    schedule_by_step = False
-    if args.scheduler == 'None':
-        scheduler = None
-    elif args.scheduler == 'ReduceLROnPlateau':
+    schedule_by_step = ('warmup' in args.scheduler.lower())
+    if args.scheduler == 'ReduceLROnPlateau':
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=5)
-    else:
-        schedule_by_step = True
-        # lr_lambda = LRLambda.constant_lr()
+    elif args.scheduler == 'LinearDecayWithWarmup':
         num_warmup_epochs = max(2, args.num_epochs // 5)
         lr_lambda = LRLambda.linear_decay_lr_with_warmup(num_warmup_steps=num_train_batches*num_warmup_epochs, 
                                                          num_total_steps=num_train_batches*args.num_epochs)
         scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
+    elif args.scheduler == 'PowerDecayWithWarmup':
+        num_warmup_epochs = max(2, args.num_epochs // 5)
+        lr_lambda = LRLambda.power_decay_lr_with_warmup(num_warmup_steps=num_train_batches*num_warmup_epochs)
+        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
+    else:
+        scheduler = None
     
     return Trainer(model, optimizer=optimizer, scheduler=scheduler, schedule_by_step=schedule_by_step, num_grad_acc_steps=args.num_grad_acc_steps,
                    device=device, grad_clip=args.grad_clip, use_amp=args.use_amp)
