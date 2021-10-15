@@ -94,7 +94,7 @@ class GeneratorConfig(SingleDecoderConfigBase, GeneratorMixin):
         
         # See Vaswani et al. (2017)
         self.weight_tying = kwargs.pop('weight_tying', False)
-        self.weight_tying_scale = kwargs.pop('weight_tying_scale', self.emb_dim**(-0.5))
+        self.weight_tying_scale = kwargs.pop('weight_tying_scale', 1.0)  # self.emb_dim**-0.5
         self.teacher_forcing_rate = kwargs.pop('teacher_forcing_rate', 0.5)
         super().__init__(**kwargs)
         
