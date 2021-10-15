@@ -69,11 +69,14 @@ class TestModel(object):
         self._assert_trainable()
         
     @pytest.mark.parametrize("use_emb2init_hid", [False, True])
+    @pytest.mark.parametrize("sin_positional_emb", [False, True])
     @pytest.mark.parametrize("weight_tying", [False, True])
-    def test_model_with_transformer(self, use_emb2init_hid, weight_tying, multi30k_demo, device):
-        self.config = Text2TextConfig(embedder=OneHotConfig(tokens_key='tokens', field='text', emb_dim=128), 
+    def test_model_with_transformer(self, use_emb2init_hid, sin_positional_emb, weight_tying, multi30k_demo, device):
+        self.config = Text2TextConfig(embedder=OneHotConfig(tokens_key='tokens', field='text', emb_dim=128, 
+                                                            has_positional_emb=True, sin_positional_emb=sin_positional_emb),  
                                       encoder=EncoderConfig(arch='Transformer', use_emb2init_hid=use_emb2init_hid, hid_dim=128), 
-                                      decoder=GeneratorConfig(embedding=OneHotConfig(tokens_key='trg_tokens', field='text', emb_dim=128, has_sos=True, has_eos=True, has_positional_emb=True), 
+                                      decoder=GeneratorConfig(embedding=OneHotConfig(tokens_key='trg_tokens', field='text', emb_dim=128, has_sos=True, has_eos=True, 
+                                                                                     has_positional_emb=True, sin_positional_emb=sin_positional_emb), 
                                                               arch='Transformer', use_emb2init_hid=use_emb2init_hid, weight_tying=weight_tying))
         self._setup_case(multi30k_demo, device)
         self._assert_batch_consistency()

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from .embedding import SinusoidPositionalEncoding
 from .aggregation import SequencePooling, SequenceGroupAggregating, ScalarMix
 from .attention import SequenceAttention
 from .block import FeedForwardBlock, ConvBlock, MultiheadAttention, TransformerEncoderBlock, TransformerDecoderBlock

@@ -5,6 +5,7 @@ import logging
 import torch
 
 from ..token import TokenSequence
+from ..nn import SinusoidPositionalEncoding
 from ..nn.init import reinit_embedding_, reinit_embedding_by_pretrained_, reinit_layer_
 from ..config import Config
 from ..vocab import Vocab
@@ -66,6 +67,7 @@ class OneHotConfig(Config, VocabMixin):
         assert not (self.freeze and self.vectors is None)
         
         self.has_positional_emb = kwargs.pop('has_positional_emb', False)
+        self.sin_positional_emb = kwargs.pop('sin_positional_emb', False)
         
         self.scale_grad_by_freq = kwargs.pop('scale_grad_by_freq', False)
         super().__init__(**kwargs)
@@ -136,8 +138,11 @@ class OneHotEmbedder(torch.nn.Module):
         self.embedding.requires_grad_(not self.freeze)
         
         if config.has_positional_emb:
-            self.pos_embedding = torch.nn.Embedding(config.max_len, config.emb_dim, scale_grad_by_freq=config.scale_grad_by_freq)
-            reinit_embedding_(self.pos_embedding)
+            if config.sin_positional_emb:
+                self.pos_embedding = SinusoidPositionalEncoding(config.max_len, config.emb_dim)
+            else:
+                self.pos_embedding = torch.nn.Embedding(config.max_len, config.emb_dim, scale_grad_by_freq=config.scale_grad_by_freq)
+                reinit_embedding_(self.pos_embedding)
             self.register_buffer('_pos_ids', torch.arange(config.max_len))
         
         
