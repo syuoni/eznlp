@@ -220,7 +220,7 @@ class SpanAttrClassificationDecoder(DecoderBase, SpanAttrClassificationDecoderMi
     def get_logits(self, batch: Batch, full_hidden: torch.Tensor):
         # full_hidden: (batch, step, hid_dim)
         batch_logits = []
-        for k in range(batch.size):
+        for k in range(full_hidden.size(0)):
             if len(batch.chunks_objs[k].chunks) == 0:
                 logits = torch.empty(0, self.hid2logit.out_features, device=full_hidden.device)
                 
@@ -254,7 +254,7 @@ class SpanAttrClassificationDecoder(DecoderBase, SpanAttrClassificationDecoderMi
         losses = [self.criterion(batch_logits[k], batch.chunks_objs[k].attr_label_ids) 
                       if len(batch.chunks_objs[k].chunks) > 0
                       else torch.tensor(0.0, device=full_hidden.device)
-                      for k in range(batch.size)]
+                      for k in range(full_hidden.size(0))]
         return torch.stack(losses)
         
         
@@ -262,7 +262,7 @@ class SpanAttrClassificationDecoder(DecoderBase, SpanAttrClassificationDecoderMi
         batch_logits = self.get_logits(batch, full_hidden)
         
         batch_attributes = []
-        for k in range(batch.size):
+        for k in range(full_hidden.size(0)):
             attributes = []
             if len(batch.chunks_objs[k].chunks) > 0:
                 for chunk, ck_sigmoids in zip(batch.chunks_objs[k].chunks, batch_logits[k].sigmoid()):

@@ -166,7 +166,7 @@ class SpanClassificationDecoder(DecoderBase, SpanClassificationDecoderMixin):
     def get_logits(self, batch: Batch, full_hidden: torch.Tensor):
         # full_hidden: (batch, step, hid_dim)
         batch_logits = []
-        for k in range(batch.size):
+        for k in range(full_hidden.size(0)):
             # span_hidden: (num_spans, span_size, hid_dim) -> (num_spans, hid_dim)
             span_hidden = [full_hidden[k, start:end] for start, end in batch.spans_objs[k].spans]
             span_mask = seq_lens2mask(torch.tensor([h.size(0) for h in span_hidden], dtype=torch.long, device=full_hidden.device))
@@ -187,7 +187,7 @@ class SpanClassificationDecoder(DecoderBase, SpanClassificationDecoderMixin):
     def forward(self, batch: Batch, full_hidden: torch.Tensor):
         batch_logits = self.get_logits(batch, full_hidden)
         
-        losses = [self.criterion(batch_logits[k], batch.spans_objs[k].label_ids) for k in range(batch.size)]
+        losses = [self.criterion(batch_logits[k], batch.spans_objs[k].label_ids) for k in range(full_hidden.size(0))]
         return torch.stack(losses)
         
         
@@ -195,7 +195,7 @@ class SpanClassificationDecoder(DecoderBase, SpanClassificationDecoderMixin):
         batch_logits = self.get_logits(batch, full_hidden)
         
         batch_chunks = []
-        for k in range(batch.size):
+        for k in range(full_hidden.size(0)):
             confidences, label_ids = batch_logits[k].softmax(dim=-1).max(dim=-1)
             labels = [self.idx2label[i] for i in label_ids.cpu().tolist()]
             chunks = [(label, start, end) for label, (start, end) in zip(labels, batch.spans_objs[k].spans) if label != self.none_label]

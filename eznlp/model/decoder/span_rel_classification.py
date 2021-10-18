@@ -244,7 +244,7 @@ class SpanRelClassificationDecoder(DecoderBase, SpanRelClassificationDecoderMixi
     def get_logits(self, batch: Batch, full_hidden: torch.Tensor):
         # full_hidden: (batch, step, hid_dim)
         batch_logits = []
-        for k in range(batch.size):
+        for k in range(full_hidden.size(0)):
             if len(batch.chunk_pairs_objs[k].chunk_pairs) == 0:
                 logits = torch.empty(0, self.hid2logit.out_features, device=full_hidden.device)
                 
@@ -302,7 +302,7 @@ class SpanRelClassificationDecoder(DecoderBase, SpanRelClassificationDecoderMixi
         losses = [self.criterion(batch_logits[k], batch.chunk_pairs_objs[k].rel_label_ids) 
                       if len(batch.chunk_pairs_objs[k].chunk_pairs) > 0
                       else torch.tensor(0.0, device=full_hidden.device)
-                      for k in range(batch.size)]
+                      for k in range(full_hidden.size(0))]
         return torch.stack(losses)
     
     
@@ -310,7 +310,7 @@ class SpanRelClassificationDecoder(DecoderBase, SpanRelClassificationDecoderMixi
         batch_logits = self.get_logits(batch, full_hidden)
         
         batch_relations = []
-        for k in range(batch.size):
+        for k in range(full_hidden.size(0)):
             if len(batch.chunk_pairs_objs[k].chunk_pairs) > 0:
                 rel_labels = [self.idx2rel_label[i] for i in batch_logits[k].argmax(dim=-1).cpu().tolist()]
                 relations = [(rel_label, head, tail) 

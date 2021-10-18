@@ -269,7 +269,7 @@ class Generator(DecoderBase, GeneratorMixin):
     def beam_search(self, beam_size:int, batch: Batch, src_hidden: torch.Tensor, src_mask: torch.Tensor=None):
         batch_best_trg_toks = []
         
-        for k in range(batch.size):
+        for k in range(src_hidden.size(0)):
             # The `k`-th source states
             curr_src_hidden = src_hidden[k].unsqueeze(0)
             curr_src_mask = None if src_mask is None else src_mask[k].unsqueeze(0)
