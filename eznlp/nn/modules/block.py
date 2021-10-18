@@ -3,7 +3,7 @@ import torch
 
 from ..init import reinit_layer_
 from ..utils import _nonlinearity2activation
-from .attention import SequenceAttention
+from .attention import MultiheadAttention
 
 
 class FeedForwardBlock(torch.nn.Module):
@@ -81,39 +81,10 @@ class ConvBlock(torch.nn.Module):
 
 
 
-class MultiheadAttention(torch.nn.Module):
-    def __init__(self, in_dim: int, affine_dim: int, out_dim: int, num_heads: int=8, scoring: str='scaled_dot', drop_rate: float=0.1):
-        super().__init__()
-        self.query_affine = torch.nn.Linear(in_dim, affine_dim)
-        self.key_affine   = torch.nn.Linear(in_dim, affine_dim)
-        self.value_affine = torch.nn.Linear(in_dim, affine_dim)
-        reinit_layer_(self.query_affine, 'linear')
-        reinit_layer_(self.key_affine, 'linear')
-        reinit_layer_(self.value_affine, 'linear')
-        
-        self.attention = SequenceAttention(key_dim=affine_dim, query_dim=affine_dim, num_heads=num_heads, 
-                                           scoring=scoring, drop_rate=drop_rate, external_query=True)
-        self.out_affine = torch.nn.Linear(affine_dim, out_dim)
-        reinit_layer_(self.out_affine, 'linear')
-        
-    def forward(self, query: torch.Tensor, key: torch.Tensor, value: torch.Tensor, mask: torch.Tensor=None, return_atten_weight: bool=False):
-        QW = self.query_affine(query)
-        KW = self.key_affine(key)
-        VW = self.value_affine(value)
-        
-        atten_values, atten_weight = self.attention(VW, mask=mask, query=QW, key=KW, return_atten_weight=True)
-        OW = self.out_affine(atten_values)
-        if return_atten_weight:
-            return OW, atten_weight
-        else:
-            return OW
-
-
-
 class TransformerEncoderBlock(torch.nn.Module):
     def __init__(self, hid_dim: int, ff_dim: int, num_heads: int=8, scoring: str='scaled_dot', drop_rate: float=0.1, nonlinearity: str='relu'):
         super().__init__()
-        self.self_attention = MultiheadAttention(hid_dim, hid_dim, hid_dim, num_heads=num_heads, scoring=scoring, drop_rate=drop_rate)
+        self.self_attention = MultiheadAttention(hid_dim, num_heads=num_heads, scoring=scoring, drop_rate=drop_rate)
         self.self_norm = torch.nn.LayerNorm(hid_dim)
         
         self.ff1 = torch.nn.Linear(hid_dim, ff_dim)
@@ -141,12 +112,12 @@ class TransformerEncoderBlock(torch.nn.Module):
 
 
 class TransformerDecoderBlock(torch.nn.Module):
-    def __init__(self, hid_dim: int, ff_dim: int, num_heads: int=8, scoring: str='scaled_dot', drop_rate: float=0.1, nonlinearity: str='relu'):
+    def __init__(self, hid_dim: int, ff_dim: int, ctx_dim: int=None, num_heads: int=8, scoring: str='scaled_dot', drop_rate: float=0.1, nonlinearity: str='relu'):
         super().__init__()
-        self.self_attention = MultiheadAttention(hid_dim, hid_dim, hid_dim, num_heads=num_heads, scoring=scoring, drop_rate=drop_rate)
+        self.self_attention = MultiheadAttention(hid_dim, num_heads=num_heads, scoring=scoring, drop_rate=drop_rate)
         self.self_norm = torch.nn.LayerNorm(hid_dim)
         
-        self.cross_attention = MultiheadAttention(hid_dim, hid_dim, hid_dim, num_heads=num_heads, scoring=scoring, drop_rate=drop_rate)
+        self.cross_attention = MultiheadAttention(hid_dim, key_dim=ctx_dim, value_dim=ctx_dim, num_heads=num_heads, scoring=scoring, drop_rate=drop_rate)
         self.cross_norm = torch.nn.LayerNorm(hid_dim)
         
         self.ff1 = torch.nn.Linear(hid_dim, ff_dim)

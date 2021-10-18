@@ -66,7 +66,7 @@ def collect_T2T_assembly_config(args: argparse.Namespace):
     trg_emb_config = OneHotConfig(tokens_key='trg_tokens', field='text', min_freq=2, has_sos=True, has_eos=True, 
                                   vectors=trg_vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze, 
                                   has_positional_emb=(args.dec_arch.lower() not in ('lstm', 'gru')), sin_positional_emb=args.sin_positional_emb)
-    gen_config = GeneratorConfig(arch=args.dec_arch, embedding=trg_emb_config, num_layers=args.num_layers, in_drop_rates=drop_rates, 
+    gen_config = GeneratorConfig(arch=args.dec_arch, embedding=trg_emb_config, hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates, 
                                  fl_gamma=args.fl_gamma, sl_epsilon=args.sl_epsilon, 
                                  num_heads=args.atten_num_heads, scoring=args.atten_scoring, 
                                  weight_tying=args.use_weight_tying, teacher_forcing_rate=args.teacher_forcing_rate, 

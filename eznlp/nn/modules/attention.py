@@ -183,3 +183,42 @@ class SequenceAttention(torch.nn.Module):
         
     def __repr__(self):
         return f"{self.__class__.__name__}(key_dim={self.key_dim}, query_dim={self.query_dim}, num_heads={self.num_heads}, scoring={self.scoring}, nonlinearity={self.nonlinearity})"
+
+
+
+class MultiheadAttention(torch.nn.Module):
+    def __init__(self, query_dim: int, key_dim: int=None, value_dim: int=None, affine_dim: int=None, out_dim: int=None, num_heads: int=8, 
+                 scoring: str='scaled_dot', drop_rate: float=0.1, **kwargs):
+        super().__init__()
+        if key_dim is None:
+            key_dim = query_dim
+        if value_dim is None:
+            value_dim = query_dim
+        if affine_dim is None:
+            affine_dim = query_dim
+        if out_dim is None:
+            out_dim = query_dim
+        
+        self.query_affine = torch.nn.Linear(query_dim, affine_dim)
+        self.key_affine   = torch.nn.Linear(key_dim, affine_dim)
+        self.value_affine = torch.nn.Linear(value_dim, affine_dim)
+        reinit_layer_(self.query_affine, 'linear')
+        reinit_layer_(self.key_affine, 'linear')
+        reinit_layer_(self.value_affine, 'linear')
+        
+        self.attention = SequenceAttention(key_dim=affine_dim, query_dim=affine_dim, num_heads=num_heads, 
+                                           scoring=scoring, drop_rate=drop_rate, external_query=True, **kwargs)
+        self.out_affine = torch.nn.Linear(affine_dim, out_dim)
+        reinit_layer_(self.out_affine, 'linear')
+        
+    def forward(self, query: torch.Tensor, key: torch.Tensor, value: torch.Tensor, mask: torch.Tensor=None, return_atten_weight: bool=False):
+        QW = self.query_affine(query)
+        KW = self.key_affine(key)
+        VW = self.value_affine(value)
+        
+        atten_values, atten_weight = self.attention(VW, mask=mask, query=QW, key=KW, return_atten_weight=True)
+        OW = self.out_affine(atten_values)
+        if return_atten_weight:
+            return OW, atten_weight
+        else:
+            return OW

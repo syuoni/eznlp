@@ -55,6 +55,7 @@ class GeneratorMixin(DecoderMixinBase, VocabMixin):
 class GeneratorConfig(SingleDecoderConfigBase, GeneratorMixin):
     def __init__(self, **kwargs):
         self.arch = kwargs.pop('arch', 'LSTM')
+        self.hid_dim = kwargs.pop('hid_dim', 128)
         
         # Attention is the default structure
         if self.arch.lower() in ('lstm', 'gru'):
@@ -104,11 +105,6 @@ class GeneratorConfig(SingleDecoderConfigBase, GeneratorMixin):
         
     @property
     def ctx_dim(self):
-        return self.in_dim
-        
-    @property
-    def hid_dim(self):
-        # `hid_dim` is fixed, equal to `ctx_dim`/`in_dim`
         return self.in_dim
         
     @property
@@ -246,6 +242,7 @@ class Generator(DecoderBase, GeneratorMixin):
         # `logits` accords with steps from 1 to `trg_step`
         # Positions of `pad_idx` will be ignored by `self.criterion`
         losses = [self.criterion(lg, t) for lg, t in zip(logits, batch.trg_tok_ids[:, 1:])]
+        # TODO: doubly stochastic regularization?
         return torch.stack(losses, dim=0)
         
         
@@ -469,11 +466,11 @@ class GehringConvGenerator(Generator):
         )
         self.register_buffer('_pre_padding', torch.zeros(config.hid_dim, config.kernel_size-1))
         
-        self.attention = SequenceAttention(key_dim=config.ctx_dim, query_dim=config.hid_dim, num_heads=config.num_heads, scoring=config.scoring, external_query=True)
         # Maybe always use **affined** hidden states for attention computation branches? 
-        self.pre_atten_affine  = torch.nn.Conv1d(config.hid_dim, config.hid_dim, kernel_size=1) # Use conv-layer of kernel size 1
-        self.post_atten_affine = torch.nn.Linear(config.ctx_dim, config.hid_dim)
+        self.pre_atten_affine = torch.nn.Linear(config.hid_dim, config.ctx_dim) # Use conv-layer of kernel size 1
         reinit_layer_(self.pre_atten_affine, 'linear')
+        self.attention = SequenceAttention(key_dim=config.hid_dim, query_dim=config.hid_dim, num_heads=config.num_heads, scoring=config.scoring, external_query=True)
+        self.post_atten_affine = torch.nn.Linear(config.ctx_dim, config.hid_dim)
         reinit_layer_(self.post_atten_affine, 'linear')
         self.scale = config.scale
         
@@ -511,12 +508,10 @@ class GehringConvGenerator(Generator):
             
             # conved_t: (batch, hid_dim/channels, step=1)
             conved_t = conv_block(hidden_ut[:, :, -self.kernel_size:])
-            conved_t = self.pre_atten_affine(conved_t)
+            init_hidden_conved_t = self.pre_atten_affine((init_hidden_t + conved_t.permute(0, 2, 1))*self.scale)
             
             # context_t: (batch, step=1, ctx_dim=hid_dim)
-            context_t, atten_weight_t = self.attention(src_hidden, mask=src_mask, 
-                                                       query=(hidden_t+conved_t).permute(0, 2, 1)*self.scale, 
-                                                       return_atten_weight=True)
+            context_t, atten_weight_t = self.attention(src_hidden, mask=src_mask, query=init_hidden_conved_t, return_atten_weight=True)
             context_t = self.post_atten_affine(context_t)
             
             # conved_context_t: (batch, hid_dim/channels, step=1)
@@ -551,12 +546,11 @@ class GehringConvGenerator(Generator):
             
             # conved: (batch, hid_dim/channels, step)
             conved = conv_block(hidden_padded) # No need for mask, since padding are all in front
-            conved = self.pre_atten_affine(conved)
+            # TODO: add `hidden` or `init_hidden`? add before or after `pre_atten_affine`?
+            init_hidden_conved = self.pre_atten_affine((init_hidden + conved.permute(0, 2, 1))*self.scale)
             
             # context: (batch, step, ctx_dim=hid_dim)
-            context, atten_weight = self.attention(src_hidden, mask=src_mask, 
-                                                   query=(hidden + conved).permute(0, 2, 1)*self.scale, 
-                                                   return_atten_weight=True)
+            context, atten_weight = self.attention(src_hidden, mask=src_mask, query=init_hidden_conved, return_atten_weight=True)
             context = self.post_atten_affine(context)
             
             # conved_context: (batch, hid_dim/channels, step)
@@ -596,6 +590,7 @@ class TransformerGenerator(Generator):
         self.tf_blocks = torch.nn.ModuleList(
             [TransformerDecoderBlock(hid_dim=config.hid_dim, 
                                      ff_dim=config.ff_dim, 
+                                     ctx_dim=config.ctx_dim, 
                                      num_heads=config.num_heads, 
                                      drop_rate=(0.0 if (k==0 and not config.use_emb2init_hid) else config.hid_drop_rate), 
                                      nonlinearity='relu') for k in range(config.num_layers)]
