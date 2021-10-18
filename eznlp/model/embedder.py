@@ -135,7 +135,6 @@ class OneHotEmbedder(torch.nn.Module):
             reinit_embedding_by_pretrained_(self.embedding, config.vocab.itos, config.vectors, config.oov_init)
         
         self.freeze = config.freeze
-        self.embedding.requires_grad_(not self.freeze)
         
         if config.has_positional_emb:
             if config.sin_positional_emb:
@@ -145,6 +144,15 @@ class OneHotEmbedder(torch.nn.Module):
                 reinit_embedding_(self.pos_embedding)
             self.register_buffer('_pos_ids', torch.arange(config.max_len))
         
+        
+    @property
+    def freeze(self):
+        return self._freeze
+        
+    @freeze.setter
+    def freeze(self, freeze: bool):
+        self._freeze = freeze
+        self.embedding.requires_grad_(not freeze)
         
     def forward(self, x_ids: torch.LongTensor, start_position_id: int=0):
         embedded = self.embedding(x_ids)

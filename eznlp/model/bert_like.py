@@ -22,7 +22,7 @@ class BertLikeConfig(Config):
         self.tokenizer: transformers.PreTrainedTokenizer = kwargs.pop('tokenizer')
         self.bert_like: transformers.PreTrainedModel = kwargs.pop('bert_like')
         self.out_dim = self.bert_like.config.hidden_size
-        self.num_hidden_layers = self.bert_like.config.num_hidden_layers
+        self.num_layers = self.bert_like.config.num_hidden_layers
         
         self.arch = kwargs.pop('arch', 'BERT')
         self.freeze = kwargs.pop('freeze', True)
@@ -55,7 +55,7 @@ class BertLikeConfig(Config):
         ----------
         raw_text : str
             e.g., "I like this movie."
-            
+        
         Returns
         -------
         sub_tok_ids: torch.LongTensor
@@ -78,7 +78,7 @@ class BertLikeConfig(Config):
         ----------
         tokenized_raw_text : List[str]
             e.g., ["I", "like", "this", "movie", "."]
-
+        
         Returns
         -------
         sub_tok_ids: torch.LongTensor
@@ -101,7 +101,7 @@ class BertLikeConfig(Config):
         tokenized_raw_text = tokens.raw_text
         if self.use_truecase:
             tokenized_raw_text = _truecase(tokenized_raw_text)
-            
+        
         if self.from_tokenized:
             sub_tok_ids, ori_indexes = self._token_ids_from_tokenized(tokenized_raw_text)
             return {'sub_tok_ids': sub_tok_ids, 
@@ -110,7 +110,7 @@ class BertLikeConfig(Config):
             # Use rejoined tokenized raw text here
             sub_tok_ids = self._token_ids_from_string(" ".join(tokenized_raw_text))
             return {'sub_tok_ids': sub_tok_ids}
-            
+        
         
     def batchify(self, batch_ex: List[dict]):
         batch_sub_tok_ids = [ex['sub_tok_ids'] for ex in batch_ex]
@@ -132,9 +132,9 @@ class BertLikeConfig(Config):
         
     def instantiate(self):
         return BertLikeEmbedder(self)
-    
-    
-    
+
+
+
 class BertLikeEmbedder(torch.nn.Module):
     """
     An embedder based on BERT representations. 
@@ -156,12 +156,19 @@ class BertLikeEmbedder(torch.nn.Module):
         if self.from_tokenized:
             self.group_aggregating = SequenceGroupAggregating(mode=config.agg_mode)
         if self.mix_layers.lower() == 'trainable':
-            self.scalar_mix = ScalarMix(config.num_hidden_layers + 1)
+            self.scalar_mix = ScalarMix(config.num_layers + 1)
         if self.use_gamma:
             self.gamma = torch.nn.Parameter(torch.tensor(1.0))
-            
-        # Register BERT configurations
-        self.bert_like.requires_grad_(not self.freeze)
+        
+        
+    @property
+    def freeze(self):
+        return self._freeze
+        
+    @freeze.setter
+    def freeze(self, freeze: bool):
+        self._freeze = freeze
+        self.bert_like.requires_grad_(not freeze)
         
         
     def forward(self, 
@@ -196,9 +203,9 @@ class BertLikeEmbedder(torch.nn.Module):
             bert_hidden = self.group_aggregating(bert_hidden, ori_indexes)
             
         return bert_hidden
-    
-    
-    
+
+
+
 def _truecase(tokenized_raw_text: List[str]):
     """
     Get the truecased text. 
@@ -218,13 +225,13 @@ def _truecase(tokenized_raw_text: List[str]):
     
     if len(lst) > 0 and len(lst) == len(word_lst):
         parts = truecase.get_true_case(' '.join(lst)).split()
-
+        
         # the trucaser have its own tokenization ...
         # skip if the number of word dosen't match
         if len(parts) == len(word_lst): 
             for (w, idx), nw in zip(word_lst, parts):
                 new_tokenized[idx] = nw
-                
+    
     return new_tokenized
 
 
@@ -239,7 +246,7 @@ def _tokenized2nested(tokenized_raw_text: List[str], tokenizer: transformers.Pre
             # The tokenizer may return a very long list if the input is a url
             sub_tokens = sub_tokens[:max_len]
         nested_sub_tokens.append(sub_tokens)
-        
+    
     return nested_sub_tokens
 
 
@@ -263,7 +270,7 @@ def truncate_for_bert_like(data: list, tokenizer: transformers.PreTrainedTokeniz
     else:
         head_len = tokenizer.model_max_length // 4
         tail_len = max_len - head_len
-        
+    
     num_truncated = 0
     for data_entry in tqdm.tqdm(data, disable=not verbose, ncols=100, desc="Truncating data"):
         tokens = data_entry['tokens']
@@ -276,12 +283,12 @@ def truncate_for_bert_like(data: list, tokenizer: transformers.PreTrainedTokeniz
             find_head, head_end = find_ascending(cum_lens, head_len)
             if find_head:
                 head_end += 1
-                
+            
             rev_cum_lens = numpy.cumsum(sub_tok_seq_lens[::-1]).tolist()
             find_tail, tail_begin = find_ascending(rev_cum_lens, tail_len)
             if find_tail:
                 tail_begin += 1
-                
+            
             if tail_len == 0:
                 assert head_end > 0
                 data_entry['tokens'] = tokens[:head_end]
@@ -291,9 +298,9 @@ def truncate_for_bert_like(data: list, tokenizer: transformers.PreTrainedTokeniz
             else:
                 assert head_end > 0 and tail_begin > 0
                 data_entry['tokens'] = tokens[:head_end] + tokens[-tail_begin:]
-                
-            num_truncated += 1
             
+            num_truncated += 1
+    
     logger.info(f"Truncated sequences: {num_truncated} ({num_truncated/len(data)*100:.2f}%)")
     return data
 

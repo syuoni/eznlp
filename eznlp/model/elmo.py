@@ -25,7 +25,7 @@ class ELMoConfig(Config):
     @property
     def name(self):
         return self.arch
-    
+        
     def __getstate__(self):
         state = self.__dict__.copy()
         state['elmo'] = None
@@ -41,7 +41,7 @@ class ELMoConfig(Config):
         
     def instantiate(self):
         return ELMoEmbedder(self)
-        
+
 
 
 class ELMoEmbedder(torch.nn.Module):
@@ -77,18 +77,27 @@ class ELMoEmbedder(torch.nn.Module):
         
         # Register ELMo configurations
         self.elmo._elmo_lstm._elmo_lstm.stateful = self.lstm_stateful
-        self.elmo._elmo_lstm.requires_grad_(not self.freeze)
         
         if self.mix_layers.lower() != 'trainable':
             self.elmo.scalar_mix_0.scalar_parameters.requires_grad_(False)
             if self.mix_layers.lower() == 'top':
                 for scalar_param in self.elmo.scalar_mix_0.scalar_parameters[:-1]:
                     scalar_param.data.fill_(-9e10)
-            
+        
         if not self.use_gamma:
             self.elmo.scalar_mix_0.gamma.requires_grad_(False)
-            
-            
+        
+        
+    @property
+    def freeze(self):
+        return self._freeze
+        
+    @freeze.setter
+    def freeze(self, freeze: bool):
+        self._freeze = freeze
+        self.elmo._elmo_lstm.requires_grad_(not freeze)
+        
+        
     def forward(self, char_ids: torch.LongTensor):
         # TODO: use `word_inputs`?
         elmo_outs = self.elmo(inputs=char_ids)
@@ -98,4 +107,3 @@ class ELMoEmbedder(torch.nn.Module):
             self.elmo._elmo_lstm._elmo_lstm.reset_states()
         
         return elmo_outs['elmo_representations'][0]
-        
