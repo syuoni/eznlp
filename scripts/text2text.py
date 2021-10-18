@@ -10,14 +10,13 @@ import numpy
 import torch
 
 from eznlp import auto_device
-from eznlp.vectors import Vectors, GloVe
 from eznlp.dataset import GenerationDataset
 from eznlp.model import OneHotConfig, EncoderConfig, GeneratorConfig
 from eznlp.model import Text2TextConfig
 from eznlp.training import Trainer, count_params, evaluate_generation
 
 from utils import add_base_arguments, parse_to_args
-from utils import load_data, dataset2language, build_trainer, header_format
+from utils import load_data, dataset2language, load_vectors, build_trainer, header_format
 
 
 def parse_arguments(parser: argparse.ArgumentParser):
@@ -53,26 +52,17 @@ def parse_arguments(parser: argparse.ArgumentParser):
 
 
 
-def _get_vectors(language: str, emb_dim: int):
-    if language.lower() == 'english' and emb_dim in (50, 100, 200):
-        return GloVe(f"assets/vectors/glove.6B.{args.emb_dim}d.txt")
-    elif language.lower() == 'english' and emb_dim == 300:
-        return GloVe("assets/vectors/glove.840B.300d.txt")
-    else:
-        return None
-
-
 def collect_T2T_assembly_config(args: argparse.Namespace):
     drop_rates = (0.0, 0.05, args.drop_rate) if args.use_locked_drop else (args.drop_rate, 0.0, 0.0)
     
-    src_vectors = _get_vectors(args.language[0], args.emb_dim)
+    src_vectors = load_vectors(args.language[0], args.emb_dim)
     emb_config = OneHotConfig(tokens_key='tokens', field='text', min_freq=2, 
                               vectors=src_vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze, 
                               has_positional_emb=(args.enc_arch.lower() not in ('lstm', 'gru')), sin_positional_emb=args.sin_positional_emb)
     enc_config = EncoderConfig(arch=args.enc_arch, hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates, 
                                ff_dim=args.ff_dim)
     
-    trg_vectors = _get_vectors(args.language[1], args.emb_dim)
+    trg_vectors = load_vectors(args.language[1], args.emb_dim)
     trg_emb_config = OneHotConfig(tokens_key='trg_tokens', field='text', min_freq=2, has_sos=True, has_eos=True, 
                                   vectors=trg_vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze, 
                                   has_positional_emb=(args.dec_arch.lower() not in ('lstm', 'gru')), sin_positional_emb=args.sin_positional_emb)

@@ -10,7 +10,6 @@ import numpy
 import torch
 
 from eznlp import auto_device
-from eznlp.vectors import Vectors, GloVe
 from eznlp.dataset import Dataset
 from eznlp.config import ConfigDict
 from eznlp.model import OneHotConfig, EncoderConfig
@@ -21,7 +20,7 @@ from eznlp.model.bert_like import truncate_for_bert_like
 from eznlp.training import Trainer, count_params, evaluate_text_classification
 
 from utils import add_base_arguments, parse_to_args
-from utils import load_data, dataset2language, load_pretrained, build_trainer, header_format
+from utils import load_data, dataset2language, load_pretrained, load_vectors, build_trainer, header_format
 
 
 def parse_arguments(parser: argparse.ArgumentParser):
@@ -43,14 +42,7 @@ def collect_TC_assembly_config(args: argparse.Namespace):
     drop_rates = (0.0, 0.05, args.drop_rate) if args.use_locked_drop else (args.drop_rate, 0.0, 0.0)
     
     if args.emb_dim > 0:
-        if args.language.lower() == 'english' and args.emb_dim in (50, 100, 200):
-            vectors = GloVe(f"assets/vectors/glove.6B.{args.emb_dim}d.txt")
-        elif args.language.lower() == 'english' and args.emb_dim == 300:
-            vectors = GloVe("assets/vectors/glove.840B.300d.txt")
-        elif args.language.lower() == 'chinese' and args.emb_dim == 50:
-            vectors = Vectors.load("assets/vectors/gigaword_chn.all.a2b.uni.ite50.vec", encoding='utf-8')
-        else:
-            vectors = None
+        vectors = load_vectors(args.language, args.emb_dim)
         ohots_config = ConfigDict({'text': OneHotConfig(field='text', min_freq=5, vectors=vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze)})
     else:
         ohots_config = None

@@ -16,6 +16,7 @@ import flair
 
 from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO, KarpathyIO, BratIO, Src2TrgIO
 from eznlp.io import PostIO
+from eznlp.vectors import Vectors, GloVe
 from eznlp.training import Trainer, LRLambda, collect_params, check_param_groups
 
 logger = logging.getLogger(__name__)
@@ -379,6 +380,28 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
             PATH = "assets/transformers/nghuyong/ernie-1.0"
             return (transformers.AutoModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.AutoTokenizer.from_pretrained(PATH, model_max_length=512))
+
+
+
+def load_vectors(language: str, emb_dim: int, unigram: bool=False, bigram: bool=True):
+    if language.lower() == 'english':
+        if emb_dim in (50, 100, 200):
+            return GloVe(f"assets/vectors/glove.6B.{emb_dim}d.txt")
+        elif emb_dim == 300:
+            return GloVe("assets/vectors/glove.840B.300d.txt")
+    elif language.lower() == 'chinese':
+        if unigram and emb_dim == 50:
+            return Vectors.load("assets/vectors/gigaword_chn.all.a2b.uni.ite50.vec", encoding='utf-8')
+        elif bigram and emb_dim == 50:
+            return Vectors.load("assets/vectors/gigaword_chn.all.a2b.bi.ite50.vec", encoding='utf-8')
+        else:
+            if emb_dim == 50:
+                return Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
+            elif emb_dim == 200:
+                return Vectors.load("assets/vectors/tencent/Tencent_AILab_ChineseEmbedding.txt", encoding='utf-8', skiprows=0)
+    return None
+
+
 
 
 def header_format(content: str, sep='=', width=100):
