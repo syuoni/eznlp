@@ -214,7 +214,6 @@ def flickr8k_demo():
 def resnet18_with_trans():
     resnet = torchvision.models.resnet18(pretrained=False)
     resnet.load_state_dict(torch.load("assets/resnet/resnet18-5c106cde.pth"))
-    resnet = torch.nn.Sequential(*list(resnet.children())[:-2])
     
     trans = torch.nn.Sequential(torchvision.transforms.Resize((256, 256)), 
                                 torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406],

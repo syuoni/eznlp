@@ -6,33 +6,30 @@ import torchvision
 from ..config import Config
 
 
-class ImageEncoderConfig(Config):
+class ResNetEncoderConfig(Config):
     def __init__(self, **kwargs):
+        self.transforms: torch.nn.Module = kwargs.pop('transforms')
+        self.resnet: torchvision.models.ResNet = kwargs.pop('resnet')
+        last_convs = [conv for key, conv in self.resnet.layer4[-1]._modules.items() if key.startswith('conv')]
+        self.out_dim = last_convs[-1].out_channels
+        
         self.arch = kwargs.pop('arch', 'ResNet')
-        self.backbone = kwargs.pop('backbone', None)
-        self.transforms = kwargs.pop('transforms', None)
+        self.freeze = kwargs.pop('freeze', True)
+        
         self.use_cache = kwargs.pop('use_cache', True)
         
         self.height = kwargs.pop('height', 14)
         self.width = kwargs.pop('width', 14)
         super().__init__(**kwargs)
         
+        
     @property
     def name(self):
         return self.arch
         
-    @property
-    def num_channels(self):
-        last_convs = [conv for key, conv in self.backbone[-1][-1]._modules.items() if key.startswith('conv')]
-        return last_convs[-1].out_channels
-        
-    @property
-    def out_dim(self):
-        return self.num_channels
-        
     def __getstate__(self):
         state = self.__dict__.copy()
-        state['backbone'] = None
+        state['resnet'] = None
         return state
         
     def exemplify(self, entry: dict, training: bool=True):
@@ -52,16 +49,41 @@ class ImageEncoderConfig(Config):
         return {'img': torch.stack([ex['img'] for ex in batch_examples])}
         
     def instantiate(self):
-        return ImageEncoder(self)
+        return ResNetEncoder(self)
 
 
 
-class ImageEncoder(torch.nn.Module):
-    def __init__(self, config: ImageEncoderConfig):
+class ResNetEncoder(torch.nn.Module):
+    def __init__(self, config: ResNetEncoderConfig):
         super().__init__()
-        self.backbone = config.backbone
+        self.resnet = config.resnet
         self.pool = torch.nn.AdaptiveAvgPool2d((config.height, config.width))
         
-    def forward(self, x: torch.FloatTensor):
+        self.freeze = config.freeze
+        
+        
+    @property
+    def freeze(self):
+        return self._freeze
+        
+    @freeze.setter
+    def freeze(self, freeze: bool):
+        self._freeze = freeze
+        self.resnet.requires_grad_(not freeze)
+        
+    def _forward_resnet(self, x: torch.Tensor):
+        # Refer to torchvision/models/resnet.py/ResNet
+        x = self.resnet.conv1(x)
+        x = self.resnet.bn1(x)
+        x = self.resnet.relu(x)
+        x = self.resnet.maxpool(x)
+        
+        x = self.resnet.layer1(x)
+        x = self.resnet.layer2(x)
+        x = self.resnet.layer3(x)
+        x = self.resnet.layer4(x)
+        return x
+        
+    def forward(self, x: torch.Tensor):
         # x: (batch, channel, height, width)
-        return self.pool(self.backbone(x))
+        return self.pool(self._forward_resnet(x))
