@@ -11,14 +11,14 @@ import torch
 import torchvision
 
 from eznlp import auto_device
-from eznlp.vectors import Vectors, GloVe
 from eznlp.dataset import GenerationDataset
-from eznlp.model import ImageEncoderConfig, OneHotConfig, GeneratorConfig
+from eznlp.model import ResNetEncoderConfig, OneHotConfig, GeneratorConfig
 from eznlp.model import Image2TextConfig
 from eznlp.training import Trainer, count_params, evaluate_generation
 
 from utils import add_base_arguments, parse_to_args
-from utils import load_data, dataset2language, build_trainer, header_format
+from utils import load_data, dataset2language, load_vectors, build_trainer, header_format
+
 
 
 def parse_arguments(parser: argparse.ArgumentParser):
@@ -29,10 +29,22 @@ def parse_arguments(parser: argparse.ArgumentParser):
                             help="dataset name")
     
     group_decoder = parser.add_argument_group('decoder configurations')
-    group_decoder.add_argument('--dec_arch', type=str, default='LSTM', choices=['LSTM', 'GRU', 'Conv'], 
+    group_decoder.add_argument('--dec_arch', type=str, default='LSTM', choices=['LSTM', 'GRU', 'Gehring', 'Transformer'], 
                                help="token-level decoder architecture")
-    group_decoder.add_argument('--init_ctx_mode', type=str, default='mean_pooling', 
-                               help="init context vector mode")
+    group_decoder.add_argument('--atten_num_heads', type=int, default=1, 
+                               help="attention number of heads")
+    group_decoder.add_argument('--atten_scoring', type=str, default='biaffine', 
+                               help="attention scoring")
+    group_decoder.add_argument('--sin_positional_emb', default=False, action='store_true', 
+                               help="whether to use sinusoid positional encodings")
+    group_decoder.add_argument('--use_weight_tying', default=False, action='store_true', 
+                               help="whether to use weight tying")
+    group_decoder.add_argument('--teacher_forcing_rate', type=float, default=0.5, 
+                               help="teacher forcing rate")
+    group_decoder.add_argument('--init_ctx_mode', type=str, default='rnn_last', 
+                               help="rnn init context vector mode")
+    group_decoder.add_argument('--ff_dim', type=int, default=512, 
+                               help="transformer position-wise feedforward dim")
     # Loss
     group_decoder.add_argument('--fl_gamma', type=float, default=0.0, 
                                help="Focal Loss gamma")
@@ -41,31 +53,27 @@ def parse_arguments(parser: argparse.ArgumentParser):
     return parse_to_args(parser)
 
 
+
 def collect_I2T_assembly_config(args: argparse.Namespace):
     drop_rates = (0.0, 0.05, args.drop_rate) if args.use_locked_drop else (args.drop_rate, 0.0, 0.0)
     
     resnet = torchvision.models.resnet101(pretrained=False)
     resnet.load_state_dict(torch.load("assets/resnet/resnet101-5d3b4d8f.pth"))
-    resnet = torch.nn.Sequential(*list(resnet.children())[:-2])
     
     trans = torch.nn.Sequential(torchvision.transforms.Resize((256, 256)), 
                                 torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                                                  std =[0.229, 0.224, 0.225]))
-    enc_config = ImageEncoderConfig(backbone=resnet, transforms=trans)
+    enc_config = ResNetEncoderConfig(resnet=resnet, transforms=trans)
     
-    if args.language.lower() == 'english' and args.emb_dim in (50, 100, 200):
-        vectors = GloVe(f"assets/vectors/glove.6B.{args.emb_dim}d.txt")
-    elif args.language.lower() == 'english' and args.emb_dim == 300:
-        vectors = GloVe("assets/vectors/glove.840B.300d.txt")
-    elif args.language.lower() == 'chinese' and args.emb_dim == 50:
-        vectors = Vectors.load("assets/vectors/gigaword_chn.all.a2b.uni.ite50.vec", encoding='utf-8')
-    else:
-        vectors = None
-    
+    vectors = load_vectors(args.language, args.emb_dim)
     emb_config = OneHotConfig(tokens_key='trg_tokens', field='text', min_freq=2, has_sos=True, has_eos=True, 
-                              vectors=vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze)
-    gen_config = GeneratorConfig(arch=args.dec_arch, embedding=emb_config, scoring='biaffine', 
-                                 init_ctx_mode=args.init_ctx_mode, hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
+                              vectors=vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze, 
+                              has_positional_emb=(args.dec_arch.lower() not in ('lstm', 'gru')), sin_positional_emb=args.sin_positional_emb)
+    gen_config = GeneratorConfig(arch=args.dec_arch, embedding=emb_config, num_layers=args.num_layers, in_drop_rates=drop_rates, 
+                                 fl_gamma=args.fl_gamma, sl_epsilon=args.sl_epsilon, 
+                                 num_heads=args.atten_num_heads, scoring=args.atten_scoring, 
+                                 weight_tying=args.use_weight_tying, teacher_forcing_rate=args.teacher_forcing_rate, 
+                                 init_ctx_mode=args.init_ctx_mode, ff_dim=args.ff_dim)
     
     return {'encoder': enc_config, 
             'decoder': gen_config}
@@ -143,9 +151,15 @@ if __name__ == '__main__':
     trainer = Trainer(model, device=device)
     
     logger.info("Evaluating on dev-set")
-    evaluate_generation(trainer, dev_set, batch_size=args.batch_size)
+    evaluate_generation(trainer, dev_set, batch_size=args.batch_size, beam_size=1)
+    evaluate_generation(trainer, dev_set, batch_size=args.batch_size, beam_size=2)
+    evaluate_generation(trainer, dev_set, batch_size=args.batch_size, beam_size=3)
+    evaluate_generation(trainer, dev_set, batch_size=args.batch_size, beam_size=4)
     logger.info("Evaluating on test-set")
-    evaluate_generation(trainer, test_set, batch_size=args.batch_size)
+    evaluate_generation(trainer, test_set, batch_size=args.batch_size, beam_size=1)
+    evaluate_generation(trainer, test_set, batch_size=args.batch_size, beam_size=2)
+    evaluate_generation(trainer, test_set, batch_size=args.batch_size, beam_size=3)
+    evaluate_generation(trainer, test_set, batch_size=args.batch_size, beam_size=4)
     
     logger.info(" ".join(sys.argv))
     logger.info(pprint.pformat(args.__dict__))
