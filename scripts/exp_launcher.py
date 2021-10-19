@@ -202,16 +202,18 @@ if __name__ == '__main__':
                                     bert_arch=['BERT_base', 'RoBERTa_base'])
         
     elif args.task == 'text2text':
-        sampler = OptionSampler(num_epochs=10, 
+        COMMAND = " ".join([COMMAND, "@scripts/options/tf2text.opt"])
+        sampler = OptionSampler(num_epochs=20, 
                                 optimizer=['AdamW'], lr=[1e-3],
                                 batch_size=128, 
+                                scheduler=['PowerDecayWithWarmup'], 
                                 emb_dim=256, 
-                                enc_arch='LSTM', 
-                                dec_arch='LSTM', 
-                                hid_dim=512, 
-                                num_layers=[1, 2], 
-                                init_ctx_mode=['rnn_last', 'mean_pooling', 'max_pooling', 'attention'],
-                                sl_epsilon=0.0)
+                                enc_arch='Transformer', 
+                                dec_arch='Transformer', 
+                                hid_dim=256, 
+                                ff_dim=[512, 1024, 2048], 
+                                num_layers=[3, 6], 
+                                teacher_forcing_rate=[0.5, 1.0])
     
     
     options = sampler.sample(args.num_exps)

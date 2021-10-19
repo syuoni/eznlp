@@ -41,7 +41,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                help="whether to use weight tying")
     group_decoder.add_argument('--teacher_forcing_rate', type=float, default=0.5, 
                                help="teacher forcing rate")
-    group_decoder.add_argument('--init_ctx_mode', type=str, default='rnn_last', 
+    group_decoder.add_argument('--init_ctx_mode', type=str, default='mean_pooling', 
                                help="rnn init context vector mode")
     group_decoder.add_argument('--ff_dim', type=int, default=512, 
                                help="transformer position-wise feedforward dim")
