@@ -158,7 +158,9 @@ class Generator(DecoderBase, GeneratorMixin):
             self.hid2logit_bias = torch.nn.Parameter(torch.zeros(config.voc_dim))
         else:
             self.hid2logit = torch.nn.Linear(config.full_hid_dim, config.voc_dim)
-            reinit_layer_(self.hid2logit, 'sigmoid')
+            # TODO: Kaiming initialization contributes to faster convergence. 
+            # So, Kaiming initialization is suitable for pre-softmax layer? or for large weight matrix? 
+            reinit_layer_(self.hid2logit, 'relu')
         
         # Every token in a batch should be assigned the same weight, so use `sum` as the reduction method. 
         # This will not cause the model to generate shorter sequence, because the loss is summed over the ground-truth tokens, 

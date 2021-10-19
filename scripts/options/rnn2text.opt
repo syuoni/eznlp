@@ -9,6 +9,6 @@ GRU
 --dec_arch
 GRU
 --hid_dim
-768
+512
 --num_layers
 1
