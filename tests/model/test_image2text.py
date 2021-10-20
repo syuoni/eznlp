@@ -4,7 +4,7 @@ import torch
 
 from eznlp.dataset import GenerationDataset
 from eznlp.training import Trainer
-from eznlp.model import ResNetEncoderConfig, GeneratorConfig, Image2TextConfig
+from eznlp.model import ImageEncoderConfig, GeneratorConfig, Image2TextConfig
 
 
 class TestModel(object):
@@ -51,11 +51,15 @@ class TestModel(object):
         assert isinstance(self.config.name, str) and len(self.config.name) > 0
         
         
-    @pytest.mark.parametrize("arch", ['LSTM', 'GRU', 'Gehring', 'Transformer'])
-    def test_model(self, arch, flickr8k_demo, resnet18_with_trans, device):
-        resnet, trans = resnet18_with_trans
-        self.config = Image2TextConfig(encoder=ResNetEncoderConfig(resnet=resnet, transforms=trans), 
-                                       decoder=GeneratorConfig(arch=arch, use_emb2init_hid=True))
+    @pytest.mark.parametrize("enc_arch", ['VGG', 'ResNet'])
+    @pytest.mark.parametrize("dec_arch", ['LSTM', 'GRU', 'Gehring', 'Transformer'])
+    def test_model(self, enc_arch, dec_arch, flickr8k_demo, vgg11_with_trans, resnet18_with_trans, device):
+        if enc_arch.lower() == 'vgg':
+            backbone, trans = vgg11_with_trans
+        else:
+            backbone, trans = resnet18_with_trans
+        self.config = Image2TextConfig(encoder=ImageEncoderConfig(arch=enc_arch, backbone=backbone, transforms=trans), 
+                                       decoder=GeneratorConfig(arch=dec_arch, use_emb2init_hid=True))
         self._setup_case(flickr8k_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
@@ -63,7 +67,7 @@ class TestModel(object):
         
     def test_prediction_without_gold(self, flickr8k_demo, resnet18_with_trans, device):
         resnet, trans = resnet18_with_trans
-        self.config = Image2TextConfig(encoder=ResNetEncoderConfig(resnet=resnet, transforms=trans))
+        self.config = Image2TextConfig(encoder=ImageEncoderConfig(backbone=resnet, transforms=trans))
         self._setup_case(flickr8k_demo, device)
         
         data_wo_gold = [{'img_path': entry['img_path']} for entry in flickr8k_demo]
@@ -78,7 +82,7 @@ class TestModel(object):
 @pytest.mark.parametrize("training", [True, False])
 def test_generation_dataset(training, flickr8k_demo, resnet18_with_trans):
     resnet, trans = resnet18_with_trans
-    config = Image2TextConfig(encoder=ResNetEncoderConfig(resnet=resnet, transforms=trans))
+    config = Image2TextConfig(encoder=ImageEncoderConfig(backbone=resnet, transforms=trans))
     
     dataset = GenerationDataset(flickr8k_demo, config, training=training)
     dataset.build_vocabs_and_dims()
@@ -97,7 +101,7 @@ def test_generation_dataset(training, flickr8k_demo, resnet18_with_trans):
 @pytest.mark.parametrize("use_cache", [True, False])
 def test_image_cache(use_cache, flickr8k_demo, resnet18_with_trans, device):
     resnet, trans = resnet18_with_trans
-    config = Image2TextConfig(encoder=ResNetEncoderConfig(resnet=resnet, transforms=trans, use_cache=use_cache))
+    config = Image2TextConfig(encoder=ImageEncoderConfig(backbone=resnet, transforms=trans, use_cache=use_cache))
     
     dataset = GenerationDataset(flickr8k_demo, config)
     dataset.build_vocabs_and_dims()

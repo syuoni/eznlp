@@ -2,7 +2,7 @@
 from .embedder import OneHotConfig, MultiHotConfig
 from .nested_embedder import NestedOneHotConfig, CharConfig, SoftLexiconConfig
 from .encoder import EncoderConfig
-from .image_encoder import ResNetEncoderConfig
+from .image_encoder import ImageEncoderConfig
 
 from .elmo import ELMoConfig
 from .bert_like import BertLikeConfig

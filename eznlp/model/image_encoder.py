@@ -6,16 +6,21 @@ import torchvision
 from ..config import Config
 
 
-class ResNetEncoderConfig(Config):
+class ImageEncoderConfig(Config):
     def __init__(self, **kwargs):
-        self.transforms: torch.nn.Module = kwargs.pop('transforms')
-        self.resnet: torchvision.models.ResNet = kwargs.pop('resnet')
-        last_convs = [conv for key, conv in self.resnet.layer4[-1]._modules.items() if key.startswith('conv')]
-        self.out_dim = last_convs[-1].out_channels
-        
         self.arch = kwargs.pop('arch', 'ResNet')
-        self.freeze = kwargs.pop('freeze', True)
+        self.transforms: torch.nn.Module = kwargs.pop('transforms')
+        self.backbone: torch.nn.Module = kwargs.pop('backbone')
         
+        if self.arch.lower() == 'vgg':
+            self.out_dim = self.backbone.features[-3].out_channels
+        elif self.arch.lower() == 'resnet':
+            last_convs = [conv for key, conv in self.backbone.layer3[-1]._modules.items() if key.startswith('conv')]
+            self.out_dim = last_convs[-1].out_channels
+        else:
+            raise ValueError(f"Invalid image encoder architecture {self.arch}")
+        
+        self.freeze = kwargs.pop('freeze', True)
         self.use_cache = kwargs.pop('use_cache', True)
         
         self.height = kwargs.pop('height', 14)
@@ -29,7 +34,7 @@ class ResNetEncoderConfig(Config):
         
     def __getstate__(self):
         state = self.__dict__.copy()
-        state['resnet'] = None
+        state['backbone'] = None
         return state
         
     def exemplify(self, entry: dict, training: bool=True):
@@ -49,18 +54,19 @@ class ResNetEncoderConfig(Config):
         return {'img': torch.stack([ex['img'] for ex in batch_examples])}
         
     def instantiate(self):
-        return ResNetEncoder(self)
+        if self.arch.lower() == 'vgg':
+            return VGGEncoder(self)
+        elif self.arch.lower() == 'resnet':
+            return ResNetEncoder(self)
 
 
 
-class ResNetEncoder(torch.nn.Module):
-    def __init__(self, config: ResNetEncoderConfig):
+class ImageEncoder(torch.nn.Module):
+    def __init__(self, config: ImageEncoderConfig):
         super().__init__()
-        self.resnet = config.resnet
+        self.backbone = config.backbone
         self.pool = torch.nn.AdaptiveAvgPool2d((config.height, config.width))
-        
         self.freeze = config.freeze
-        
         
     @property
     def freeze(self):
@@ -69,21 +75,46 @@ class ResNetEncoder(torch.nn.Module):
     @freeze.setter
     def freeze(self, freeze: bool):
         self._freeze = freeze
-        self.resnet.requires_grad_(not freeze)
-        
-    def _forward_resnet(self, x: torch.Tensor):
-        # Refer to torchvision/models/resnet.py/ResNet
-        x = self.resnet.conv1(x)
-        x = self.resnet.bn1(x)
-        x = self.resnet.relu(x)
-        x = self.resnet.maxpool(x)
-        
-        x = self.resnet.layer1(x)
-        x = self.resnet.layer2(x)
-        x = self.resnet.layer3(x)
-        x = self.resnet.layer4(x)
-        return x
+        self.backbone.requires_grad_(not freeze)
         
     def forward(self, x: torch.Tensor):
         # x: (batch, channel, height, width)
-        return self.pool(self._forward_resnet(x))
+        return self.pool(self._forward_backbone(x))
+
+
+
+class VGGEncoder(ImageEncoder):
+    def __init__(self, config: ImageEncoderConfig):
+        super().__init__(config)
+        
+    def _forward_backbone(self, x: torch.Tensor):
+        # Refer to torchvision/models/vgg.py/VGG
+        # (224, 224) -> (7, 7)
+        # return self.backbone.features(x)
+        # (224, 224) -> (14, 14)
+        return self.backbone.features[:-1](x)
+
+
+
+class ResNetEncoder(ImageEncoder):
+    def __init__(self, config: ImageEncoderConfig):
+        super().__init__(config)
+        
+    def _forward_backbone(self, x: torch.Tensor):
+        # Refer to torchvision/models/resnet.py/ResNet
+        # conv1[kernel=3, stride=2, padding=3]: (224, 224) -> (112, 112)
+        x = self.backbone.conv1(x)
+        x = self.backbone.bn1(x)
+        x = self.backbone.relu(x)
+        # maxpool[kernel=2]: (112, 112) -> (56, 56)
+        x = self.backbone.maxpool(x)
+        
+        # layer1: (56, 56) -> (56, 56)
+        x = self.backbone.layer1(x)
+        # layer2: (56, 56) -> (28, 28)
+        x = self.backbone.layer2(x)
+        # layer3: (28, 28) -> (14, 14)
+        x = self.backbone.layer3(x)
+        # layer4: (14, 14) -> (7, 7)
+        # x = self.backbone.layer4(x)
+        return x

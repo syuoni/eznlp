@@ -215,7 +215,22 @@ def resnet18_with_trans():
     resnet = torchvision.models.resnet18(pretrained=False)
     resnet.load_state_dict(torch.load("assets/resnet/resnet18-5c106cde.pth"))
     
-    trans = torch.nn.Sequential(torchvision.transforms.Resize((256, 256)), 
+    # https://pytorch.org/vision/stable/models.html
+    trans = torch.nn.Sequential(torchvision.transforms.Resize(256), 
+                                torchvision.transforms.CenterCrop(224), 
                                 torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                                                  std =[0.229, 0.224, 0.225]))
     return resnet, trans
+
+
+@pytest.fixture
+def vgg11_with_trans():
+    vgg = torchvision.models.vgg11(pretrained=False)
+    vgg.load_state_dict(torch.load("assets/vgg/vgg11-bbd30ac9.pth"))
+    
+    # https://pytorch.org/vision/stable/models.html
+    trans = torch.nn.Sequential(torchvision.transforms.Resize(256), 
+                                torchvision.transforms.CenterCrop(224), 
+                                torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                                                 std =[0.229, 0.224, 0.225]))
+    return vgg, trans
