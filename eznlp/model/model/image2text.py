@@ -53,7 +53,7 @@ class Image2Text(ModelBase):
         
     def pretrained_parameters(self):
         params = []
-        params.extend(self.encoder.resnet.parameters())
+        params.extend(self.encoder.backbone.parameters())
         return params
         
         
