@@ -9,6 +9,7 @@ from ..config import Config
 class ImageEncoderConfig(Config):
     def __init__(self, **kwargs):
         self.arch = kwargs.pop('arch', 'ResNet')
+        self.in_channels = kwargs.pop('in_channels', 3)
         self.transforms: torch.nn.Module = kwargs.pop('transforms')
         self.backbone: torch.nn.Module = kwargs.pop('backbone')
         
@@ -37,13 +38,22 @@ class ImageEncoderConfig(Config):
         state['backbone'] = None
         return state
         
+        
+    def _read_image(self, img_path: str):
+        img = torchvision.io.read_image(img_path).float().div(255)
+        assert img.dim() == 3
+        if img.size(0) == 1 and self.in_channels > 1:
+            img = img.expand(self.in_channels, -1, -1)
+        return img
+        
+        
     def exemplify(self, entry: dict, training: bool=True):
         if self.use_cache:
             if 'img' not in entry:
-                entry['img'] = torchvision.io.read_image(entry['img_path']).float().div(255)
+                entry['img'] = self._read_image(entry['img_path'])
             img = entry['img']
         else:
-            img = torchvision.io.read_image(entry['img_path']).float().div(255)
+            img = self._read_image(entry['img_path'])
         
         # `transforms` may include random augmentation
         return {'img': self.transforms(img)}
