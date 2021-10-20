@@ -132,7 +132,8 @@ dataset2language = {'conll2003': 'English',
                     'THUCNews_10': 'Chinese', 
                     'multi30k': ('German', 'English'), 
                     'flickr8k': 'English', 
-                    'flickr30k': 'English'}
+                    'flickr30k': 'English', 
+                    'mscoco': 'English'}
 
 def load_data(args: argparse.Namespace):
     if args.dataset == 'conll2003':
@@ -297,12 +298,16 @@ def load_data(args: argparse.Namespace):
         test_data  = io.read("data/multi30k/test2016.de", "data/multi30k/test2016.en")
         
     elif args.dataset == 'flickr8k':
-        io = KarpathyIO(img_folder="data/flickr8k/Flicker8k_Dataset")
+        io = KarpathyIO(img_folder="data/flickr8k/Flicker8k_Dataset", check_img_path=True)
         train_data, dev_data, test_data = io.read("data/flickr8k/flickr8k-karpathy2015cvpr.json")
         
     elif args.dataset == 'flickr30k':
-        io = KarpathyIO(img_folder="data/flickr30k/flickr30k-images")
+        io = KarpathyIO(img_folder="data/flickr30k/flickr30k-images", check_img_path=True)
         train_data, dev_data, test_data = io.read("data/flickr30k/flickr30k-karpathy2015cvpr.json")
+        
+    elif args.dataset == 'mscoco':
+        io = KarpathyIO(img_folder="data/mscoco/data2014", check_img_path=True)
+        train_data, dev_data, test_data = io.read("data/mscoco/mscoco-karpathy2015cvpr.json")
         
     else:
         raise Exception("Dataset does NOT exist", args.dataset)

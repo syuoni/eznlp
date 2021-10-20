@@ -195,7 +195,8 @@ class TestKarpathyIO(object):
     """
     References
     ----------
-    [1] Vinyals, et al. 2015. Show and tell: A neural image caption generator. CVPR 2015.
+    [1] Karpathy, et al. 2015. Deep visual-semantic alignments for generating image descriptions. CVPR 2015. 
+    [2] Vinyals, et al. 2015. Show and tell: A neural image caption generator. CVPR 2015.
     """
     def test_flickr8k(self):
         io = KarpathyIO(img_folder="data/flickr8k/Flicker8k_Dataset")
@@ -213,3 +214,12 @@ class TestKarpathyIO(object):
         assert len(train_data) == 29_000
         assert len(dev_data) == 1_014
         assert len(test_data) == 1_000
+        
+        
+    def test_mscoco(self):
+        io = KarpathyIO(img_folder="data/mscoco/data2014")
+        train_data, dev_data, test_data = io.read("data/mscoco/mscoco-karpathy2015cvpr.json")
+        
+        assert len(train_data) == 113_287
+        assert len(dev_data) == 5_000
+        assert len(test_data) == 5_000

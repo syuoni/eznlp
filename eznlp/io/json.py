@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from typing import List
+import os
 import logging
 import json
 
@@ -206,8 +207,9 @@ class KarpathyIO(IO):
     ----------
     [1] Karpathy and Li. 2015. Deep visual-semantic alignments for generating image descriptions. CVPR, 2015.
     """
-    def __init__(self, img_folder: str, encoding=None, verbose: bool=True, **token_kwargs):
+    def __init__(self, img_folder: str, check_img_path: bool=False, encoding=None, verbose: bool=True, **token_kwargs):
         self.img_folder = img_folder
+        self.check_img_path = check_img_path
         super().__init__(is_tokenized=True, tokenize_callback=None, encoding=encoding, verbose=verbose, **token_kwargs)
         
     def read(self, file_path):
@@ -219,6 +221,9 @@ class KarpathyIO(IO):
         for raw_entry in raw_data:
             entry = {'img_path': f"{self.img_folder}/{raw_entry['filename']}", 
                      'full_trg_tokens': [self._build_tokens(sent['tokens']) for sent in raw_entry['sentences']]}
+            
+            if self.check_img_path:
+                assert os.path.exists(entry['img_path'])
             
             if raw_entry['split'].lower().startswith(('dev', 'val')):
                 dev_data.append(entry)
