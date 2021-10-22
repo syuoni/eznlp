@@ -27,12 +27,12 @@ class TestSrc2TrgIO(object):
         
     def test_wmt14_en_de(self):
         io = Src2TrgIO(tokenize_callback=None, trg_tokenize_callback=None, encoding='utf-8', case_mode='Lower', number_mode='None')
-        # train_data = io.read("data/wmt14/train.tok.clean.bpe.32000.de", "data/wmt14/train.tok.clean.bpe.32000.en")
-        dev_data   = io.read("data/wmt14/newstest2013.tok.bpe.32000.de", "data/wmt14/newstest2013.tok.bpe.32000.en")
-        test_data  = io.read("data/wmt14/newstest2014.tok.bpe.32000.de", "data/wmt14/newstest2014.tok.bpe.32000.en")
+        # train_data = io.read("data/wmt17_en_de/train.de", "data/wmt17_en_de/train.en")
+        dev_data   = io.read("data/wmt17_en_de/valid.de", "data/wmt17_en_de/valid.en")
+        test_data  = io.read("data/wmt17_en_de/test.de", "data/wmt17_en_de/test.en")
         
-        # assert len(train_data) == 4_500_966
-        assert len(dev_data) == 3_000
+        # assert len(train_data) == 3_961_179
+        assert len(dev_data) == 40_058
         assert len(test_data) == 3_003
         
         
@@ -44,4 +44,15 @@ class TestSrc2TrgIO(object):
         
         # assert len(train_data) == 35_762_532
         assert len(dev_data) == 26_854
+        assert len(test_data) == 3_003
+        
+        
+    def test_wmt14_en_de_from_torchtext(self):
+        io = Src2TrgIO(tokenize_callback=None, trg_tokenize_callback=None, encoding='utf-8', case_mode='Lower', number_mode='None')
+        # train_data = io.read("data/wmt14/train.tok.clean.bpe.32000.de", "data/wmt14/train.tok.clean.bpe.32000.en")
+        dev_data   = io.read("data/wmt14/newstest2013.tok.bpe.32000.de", "data/wmt14/newstest2013.tok.bpe.32000.en")
+        test_data  = io.read("data/wmt14/newstest2014.tok.bpe.32000.de", "data/wmt14/newstest2014.tok.bpe.32000.en")
+        
+        # assert len(train_data) == 4_500_966
+        assert len(dev_data) == 3_000
         assert len(test_data) == 3_003
