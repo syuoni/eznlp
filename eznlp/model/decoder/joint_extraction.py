@@ -87,6 +87,7 @@ class JointExtractionDecoderConfig(Config, JointExtractionDecoderMixin):
         
         # It seems that pytorch does not recommend to share weights outside two modules. 
         # See https://discuss.pytorch.org/t/how-to-create-model-with-sharing-weight/398/2
+        # TODO: Refer to transformers/modeling_utils/PreTrainedModel/_tie_or_clone_weights
         self.share_embeddings = kwargs.pop('share_embeddings', False)
         super().__init__(**kwargs)
         
