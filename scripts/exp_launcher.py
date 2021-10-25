@@ -215,6 +215,21 @@ if __name__ == '__main__':
                                 num_layers=[3, 6], 
                                 teacher_forcing_rate=[0.5, 1.0])
     
+    elif args.task == 'image2text':
+        COMMAND = " ".join([COMMAND, "@scripts/options/rnn2text.opt"])
+        sampler = OptionSampler(num_epochs=20, 
+                                optimizer=['AdamW'], 
+                                lr=numpy.logspace(-4.5, -3, num=100, base=10).tolist(),
+                                batch_size=80, 
+                                scheduler=['None', 'LinearDecayWithWarmup'], 
+                                img_arch='VGG',
+                                use_cache=False, 
+                                emb_dim=512, 
+                                dec_arch=['GRU', 'LSTM'], 
+                                hid_dim=512, 
+                                num_layers=1, 
+                                teacher_forcing_rate=[0.5, 1.0])
+    
     
     options = sampler.sample(args.num_exps)
     commands = [" ".join([COMMAND, *option]) for option in options]

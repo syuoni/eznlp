@@ -12,7 +12,7 @@ import torchvision
 
 from eznlp import auto_device
 from eznlp.dataset import GenerationDataset
-from eznlp.model import ResNetEncoderConfig, OneHotConfig, GeneratorConfig
+from eznlp.model import ImageEncoderConfig, OneHotConfig, GeneratorConfig
 from eznlp.model import Image2TextConfig
 from eznlp.training import Trainer, count_params, evaluate_generation
 
@@ -27,6 +27,12 @@ def parse_arguments(parser: argparse.ArgumentParser):
     group_data = parser.add_argument_group('dataset')
     group_data.add_argument('--dataset', type=str, default='flickr8k', 
                             help="dataset name")
+    
+    group_image = parser.add_argument_group('image encoder configurations')
+    group_image.add_argument('--img_arch', type=str, default='ResNet', choices=['VGG', 'ResNet'], 
+                             help="image encoder architecture")
+    group_image.add_argument('--use_cache', default=False, action='store_true', 
+                             help="whether to use cache for images")
     
     group_decoder = parser.add_argument_group('decoder configurations')
     group_decoder.add_argument('--dec_arch', type=str, default='LSTM', choices=['LSTM', 'GRU', 'Gehring', 'Transformer'], 
@@ -57,13 +63,19 @@ def parse_arguments(parser: argparse.ArgumentParser):
 def collect_I2T_assembly_config(args: argparse.Namespace):
     drop_rates = (0.0, 0.05, args.drop_rate) if args.use_locked_drop else (args.drop_rate, 0.0, 0.0)
     
-    resnet = torchvision.models.resnet101(pretrained=False)
-    resnet.load_state_dict(torch.load("assets/resnet/resnet101-5d3b4d8f.pth"))
+    if args.img_arch.lower() == 'vgg':
+        backbone = torchvision.models.vgg19(pretrained=False)
+        backbone.load_state_dict(torch.load("assets/vgg/vgg19-dcbb9e9d.pth"))
+    else:
+        backbone = torchvision.models.resnet101(pretrained=False)
+        backbone.load_state_dict(torch.load("assets/resnet/resnet101-5d3b4d8f.pth"))
     
-    trans = torch.nn.Sequential(torchvision.transforms.Resize((256, 256)), 
+    # https://pytorch.org/vision/stable/models.html
+    trans = torch.nn.Sequential(torchvision.transforms.Resize(256), 
+                                torchvision.transforms.CenterCrop(224), 
                                 torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                                                  std =[0.229, 0.224, 0.225]))
-    enc_config = ResNetEncoderConfig(resnet=resnet, transforms=trans)
+    enc_config = ImageEncoderConfig(arch=args.img_arch, backbone=backbone, transforms=trans, use_cache=args.use_cache)
     
     vectors = load_vectors(args.language, args.emb_dim)
     emb_config = OneHotConfig(tokens_key='trg_tokens', field='text', min_freq=2, has_sos=True, has_eos=True, 
@@ -126,8 +138,8 @@ if __name__ == '__main__':
     test_set  = GenerationDataset(test_data, config=train_set.config, training=False)
     
     logger.info(train_set.summary)
-    train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
-    dev_loader   = torch.utils.data.DataLoader(dev_set,   batch_size=args.batch_size, shuffle=False, collate_fn=dev_set.collate)
+    train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  num_workers=4, collate_fn=train_set.collate)
+    dev_loader   = torch.utils.data.DataLoader(dev_set,   batch_size=args.batch_size, shuffle=False, num_workers=4, collate_fn=dev_set.collate)
     
     
     logger.info(header_format("Building", sep='-'))
