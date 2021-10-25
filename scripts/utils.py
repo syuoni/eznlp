@@ -130,7 +130,8 @@ dataset2language = {'conll2003': 'English',
                     'yelp_full': 'English', 
                     'ChnSentiCorp': 'Chinese', 
                     'THUCNews_10': 'Chinese', 
-                    'multi30k': ('German', 'English'), 
+                    'multi30k': ('English', 'German'), 
+                    'iwslt14': ('English', 'German'), 
                     'flickr8k': 'English', 
                     'flickr30k': 'English', 
                     'mscoco': 'English'}
@@ -293,9 +294,15 @@ def load_data(args: argparse.Namespace):
     elif args.dataset == 'multi30k':
         io = Src2TrgIO(tokenize_callback=spacy_nlp_de, trg_tokenize_callback=spacy_nlp_en, encoding='utf-8', verbose=args.log_terminal, 
                        case_mode='Lower', number_mode='None')
-        train_data = io.read("data/multi30k/train.de", "data/multi30k/train.en")
-        dev_data   = io.read("data/multi30k/val.de", "data/multi30k/val.en")
-        test_data  = io.read("data/multi30k/test2016.de", "data/multi30k/test2016.en")
+        train_data = io.read("data/multi30k/train.en", "data/multi30k/train.de")
+        dev_data   = io.read("data/multi30k/val.en", "data/multi30k/val.de")
+        test_data  = io.read("data/multi30k/test2016.en", "data/multi30k/test2016.de")
+        
+    elif args.dataset == 'iwslt14':
+        io = Src2TrgIO(tokenize_callback=None, trg_tokenize_callback=None, encoding='utf-8', case_mode='Lower', number_mode='None')
+        train_data = io.read("data/iwslt14.tokenized.de-en/train.en", "data/iwslt14.tokenized.de-en/train.de")
+        dev_data   = io.read("data/iwslt14.tokenized.de-en/valid.en", "data/iwslt14.tokenized.de-en/valid.de")
+        test_data  = io.read("data/iwslt14.tokenized.de-en/test.en", "data/iwslt14.tokenized.de-en/test.de")
         
     elif args.dataset == 'flickr8k':
         io = KarpathyIO(img_folder="data/flickr8k/Flicker8k_Dataset", check_img_path=True)
@@ -385,6 +392,11 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
             PATH = "assets/transformers/nghuyong/ernie-1.0"
             return (transformers.AutoModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.AutoTokenizer.from_pretrained(PATH, model_max_length=512))
+            
+        elif pretrained_str.lower().startswith('hwamei'):
+            PATH = "assets/transformers/hwamei/bert-1.98G"
+            return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
+                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512))
 
 
 
