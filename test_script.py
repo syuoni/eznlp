@@ -22,6 +22,7 @@ from eznlp import auto_device
 from eznlp.utils import find_ascending, ChunksTagsTranslator
 from eznlp.token import Token, TokenSequence, LexiconTokenizer
 from eznlp.metrics import precision_recall_f1_report
+from eznlp.vocab import Vocab
 from eznlp.vectors import Vectors, GloVe, Senna
 from eznlp.wrapper import Batch
 
@@ -29,6 +30,8 @@ from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, BratIO, JsonIO, SQuAD
 from eznlp.io import PostIO
 
 from eznlp.dataset import Dataset, GenerationDataset
+
+from eznlp.nn import SinusoidPositionalEncoding
 
 from eznlp.config import ConfigList, ConfigDict
 from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig
@@ -51,7 +54,7 @@ from eznlp.language_modeling import MaskedLMConfig
 from eznlp.language_modeling import MaskedLMDataset, FolderLikeMaskedLMDataset, MaskedLMTrainer
 
 from eznlp.training import Trainer
-from eznlp.training import collect_params, check_param_groups
+from eznlp.training import collect_params, check_param_groups, LRLambda
 
 
 
