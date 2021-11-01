@@ -141,6 +141,8 @@ dmypy.json
 !/data/conlleval/*.txt
 !/data/*/fix_*.py
 !/data/ontonotesv4/*.py
+!/data/ace-lu2015emnlp/*.py
+!/data/ace-luan2019naacl/*.py
 !/data/GENIA/*.py
 
 !/publications/
