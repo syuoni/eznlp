@@ -32,6 +32,8 @@ def parse_arguments(parser: argparse.ArgumentParser):
                             help="dataset name")
     group_data.add_argument('--doc_level', default=False, action='store_true', 
                             help="whether to load data at document level")
+    group_data.add_argument('--corrupt_rate', type=float, default=0.0, 
+                            help="boundary corrupt rate")
     group_data.add_argument('--pipeline', default=False, action='store_true', 
                             help="whether to save predicted chunks for pipeline")
     
@@ -75,6 +77,8 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                help="Boundary smoothing loss epsilon")
     group_decoder.add_argument('--sb_size', type=int, default=1, 
                                help="Boundary smoothing window size")
+    group_decoder.add_argument('--sb_adj_factor', type=float, default=1.0, 
+                               help="Boundary smoothing probability adjust factor")
     return parse_to_args(parser)
 
 
@@ -178,6 +182,7 @@ def build_ER_config(args: argparse.Namespace):
                                                         hard_neg_sampling_size=args.hard_neg_sampling_size, 
                                                         sb_epsilon=args.sb_epsilon, 
                                                         sb_size=args.sb_size,
+                                                        sb_adj_factor=args.sb_adj_factor, 
                                                         hid_drop_rates=drop_rates)
     return ExtractorConfig(**collect_IE_assembly_config(args), decoder=decoder_config)
 
@@ -185,12 +190,12 @@ def build_ER_config(args: argparse.Namespace):
 def process_IE_data(train_data, dev_data, test_data, args, config):
     if (config.bert_like is not None and 
             ((args.dataset in ('SIGHAN2006', 'yidu_s4k')) or 
-             (args.dataset in ('conll2003', 'conll2012') and getattr(args, 'doc_level', False)))):
+             (args.dataset in ('conll2003', 'conll2012') and args.doc_level))):
         train_data = segment_uniformly_for_bert_like(train_data, config.bert_like.tokenizer, verbose=args.log_terminal)
         dev_data   = segment_uniformly_for_bert_like(dev_data,   config.bert_like.tokenizer, verbose=args.log_terminal)
         test_data  = segment_uniformly_for_bert_like(test_data,  config.bert_like.tokenizer, verbose=args.log_terminal)
     
-    if getattr(args, 'use_softword', False) or getattr(args, 'use_softlexicon', False):
+    if args.use_softword or args.use_softlexicon:
         if config.nested_ohots is not None and 'softlexicon' in config.nested_ohots.keys():
             vectors = config.nested_ohots['softlexicon'].vectors
         else:
@@ -278,6 +283,8 @@ if __name__ == '__main__':
     trainer.train_steps(train_loader=train_loader, dev_loader=dev_loader, num_epochs=args.num_epochs, 
                         save_callback=save_callback, save_by_loss=False)
     
+    # Save the final version
+    # torch.save(model, f"{save_path}/{config.name}.fv.pth")
     
     logger.info(header_format("Evaluating", sep='-'))
     model = torch.load(f"{save_path}/{config.name}.pth", map_location=device)

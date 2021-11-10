@@ -6,7 +6,7 @@ import torch
 
 from ...wrapper import TargetWrapper, Batch
 from ...utils.chunk import detect_nested, filter_clashed_by_priority
-from ...nn.modules import CombinedDropout, SmoothLabelCrossEntropyLoss, SoftLabelCrossEntropyLoss
+from ...nn.modules import CombinedDropout, SoftLabelCrossEntropyLoss
 from ...nn.init import reinit_embedding_, reinit_layer_
 from ...metrics import precision_recall_f1_report
 from ..encoder import EncoderConfig
@@ -116,11 +116,13 @@ class Boundaries(TargetWrapper):
             self.non_mask = pos_non_mask | (neg_sampled & non_mask)
         
         if self.chunks is not None:
-            if config.sb_epsilon <= 0:
+            if config.sb_epsilon <= 0 and config.sl_epsilon <= 0:
+                # Cross entropy loss
                 self.boundary2label_id = torch.full((num_tokens, num_tokens), config.none_idx, dtype=torch.long)
                 for label, start, end in self.chunks:
                     self.boundary2label_id[start, end-1] = config.label2idx[label]
             else:
+                # Soft label loss for either boundary or label smoothing 
                 self.boundary2label_id = torch.zeros(num_tokens, num_tokens, config.voc_dim, dtype=torch.float)
                 for label, start, end in self.chunks:
                     label_id = config.label2idx[label]
@@ -130,11 +132,21 @@ class Boundaries(TargetWrapper):
                         eps_per_span = config.sb_epsilon / (config.sb_size * dist * 4)
                         sur_spans = list(_spans_from_surrounding((start, end), dist, num_tokens))
                         for sur_start, sur_end in sur_spans:
-                            self.boundary2label_id[sur_start, sur_end-1, label_id] += eps_per_span
+                            self.boundary2label_id[sur_start, sur_end-1, label_id] += (eps_per_span*config.sb_adj_factor)
                         # Absorb the probabilities assigned to illegal positions
                         self.boundary2label_id[start, end-1, label_id] += eps_per_span * (dist * 4 - len(sur_spans))
                 
+                # In very rare cases (e.g., ACE 2005), multiple entities may have the same span but different types
+                overflow_indic = (self.boundary2label_id.sum(dim=-1) > 1)
+                if overflow_indic.any().item():
+                    self.boundary2label_id[overflow_indic] = torch.nn.functional.normalize(self.boundary2label_id[overflow_indic], p=1, dim=-1)
                 self.boundary2label_id[:, :, config.none_idx] = 1 - self.boundary2label_id.sum(dim=-1)
+                
+                if config.sl_epsilon > 0:
+                    # Do not smooth to `<none>` label
+                    pos_indic = (torch.arange(config.voc_dim) != config.none_idx)
+                    self.boundary2label_id[:, :, pos_indic] = (self.boundary2label_id[:, :, pos_indic] * (1-config.sl_epsilon) + 
+                                                               self.boundary2label_id[:, :, pos_indic].sum(dim=-1, keepdim=True)*config.sl_epsilon / (config.voc_dim-1))
 
 
 
@@ -161,6 +173,7 @@ class BoundarySelectionDecoderConfig(SingleDecoderConfigBase, BoundarySelectionD
         # Boundary smoothing epsilon
         self.sb_epsilon = kwargs.pop('sb_epsilon', 0.0)
         self.sb_size = kwargs.pop('sb_size', 1)
+        self.sb_adj_factor = kwargs.pop('sb_adj_factor', 1.0)
         super().__init__(**kwargs)
         
         
@@ -183,16 +196,15 @@ class BoundarySelectionDecoderConfig(SingleDecoderConfigBase, BoundarySelectionD
     @property
     def criterion(self):
         if self.sb_epsilon > 0:
-            return f"SB({self.sb_epsilon:.2f}, {self.sl_epsilon:.2f})"
+            return f"SB({self.sb_epsilon:.2f}, {self.sb_size})"
         else:
             return super().criterion
         
     def instantiate_criterion(self, **kwargs):
-        if self.criterion.lower().startswith('sb'):
-            if self.sl_epsilon > 0:
-                return SmoothLabelCrossEntropyLoss(epsilon=self.sl_epsilon, **kwargs)
-            else:
-                return SoftLabelCrossEntropyLoss(**kwargs)
+        if self.criterion.lower().startswith(('sb', 'sl')):
+            # For boundary/label smoothing, the `Boundaries` object has been accordingly changed; 
+            # hence, do not use `SmoothLabelCrossEntropyLoss`
+            return SoftLabelCrossEntropyLoss(**kwargs)
         else:
             return super().instantiate_criterion(**kwargs)
         

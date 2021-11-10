@@ -40,7 +40,7 @@ class BertLikeConfig(Config):
     @property
     def name(self):
         return self.arch
-    
+        
     def __getstate__(self):
         state = self.__dict__.copy()
         state['bert_like'] = None
@@ -160,7 +160,6 @@ class BertLikeEmbedder(torch.nn.Module):
         if self.use_gamma:
             self.gamma = torch.nn.Parameter(torch.tensor(1.0))
         
-        
     @property
     def freeze(self):
         return self._freeze
@@ -179,7 +178,7 @@ class BertLikeEmbedder(torch.nn.Module):
         # pooler_output: (batch, hid_dim)
         # hidden: a tuple of (batch, sub_tok_step+2, hid_dim)
         bert_outs = self.bert_like(input_ids=sub_tok_ids, 
-                                   attention_mask=(~sub_mask).type(torch.long), 
+                                   attention_mask=(~sub_mask).long(), 
                                    output_hidden_states=True)
         bert_hidden = bert_outs['hidden_states']
         
@@ -201,7 +200,7 @@ class BertLikeEmbedder(torch.nn.Module):
         if self.from_tokenized:
             # bert_hidden: (batch, tok_step, hid_dim)
             bert_hidden = self.group_aggregating(bert_hidden, ori_indexes)
-            
+        
         return bert_hidden
 
 

@@ -53,18 +53,17 @@ if __name__ == '__main__':
                 exp_res['logging_timestamp'] = fn.split(os.path.sep)[2]
                 
                 num_metrics = 0
-                for m_name, m_re in metircs_re.items():
-                    metirc_list = m_re.findall(log_text)
-                    curr_num_metrics, num_res = divmod(len(metirc_list), 2)
+                for m_name, m_re in metrics_re.items():
+                    metric_list = m_re.findall(log_text)
+                    curr_num_metrics, num_res = divmod(len(metric_list), 2)
                     assert num_res == 0
                     num_metrics += curr_num_metrics
                     
                     for k in range(curr_num_metrics):
-                        exp_res[f'dev_{m_name}_{k}'] = float(metirc_list[k])
-                        exp_res[f'test_{m_name}_{k}'] = float(metirc_list[curr_num_metrics+k])
+                        exp_res[f'dev_{m_name}_{k}'] = float(metric_list[k])
+                        exp_res[f'test_{m_name}_{k}'] = float(metric_list[curr_num_metrics+k])
                 
-                if num_metrics == 0:
-                    raise RuntimeError("Results not found")
+                assert num_metrics > 0
                 
             except:
                 logger.warning(f"Failed to parse {fn}")
