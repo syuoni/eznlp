@@ -86,6 +86,8 @@ class Spans(TargetWrapper):
         self.span_size_ids = torch.tensor([end-start-1 for start, end in self.spans], dtype=torch.long)
         self.span_size_ids.masked_fill_(self.span_size_ids>=config.max_span_size, config.max_span_size-1)
         
+        # TODO: boundary/label smoothing
+        # Do not smooth to `<none>` label
         if self.chunks is not None:
             span2label = {(start, end): label for label, start, end in self.chunks}
             labels = [span2label.get(span, config.none_label) for span in self.spans]
@@ -199,9 +201,11 @@ class SpanClassificationDecoder(DecoderBase, SpanClassificationDecoderMixin):
             confidences, label_ids = batch_logits[k].softmax(dim=-1).max(dim=-1)
             labels = [self.idx2label[i] for i in label_ids.cpu().tolist()]
             chunks = [(label, start, end) for label, (start, end) in zip(labels, batch.spans_objs[k].spans) if label != self.none_label]
+            confidences = [conf for label, conf in zip(labels, confidences.cpu().tolist()) if label != self.none_label]
+            assert len(confidences) == len(chunks)
             
             # Sort chunks from high to low confidences
-            chunks = [ck for _, ck in sorted(zip(confidences.cpu().tolist(), chunks), reverse=True)]
+            chunks = [ck for _, ck in sorted(zip(confidences, chunks), reverse=True)]
             chunks = filter_clashed_by_priority(chunks, allow_nested=self.allow_nested)
             
             batch_chunks.append(chunks)

@@ -66,11 +66,11 @@ def sequence_pooling(x: torch.FloatTensor,
     
     elif mode.lower() == 'wtd_mean':
         if mask is None:
-            weight_norm = torch.nn.functional.normalize(weight.type(torch.float), p=1, dim=1)
+            weight_norm = torch.nn.functional.normalize(weight.float(), p=1, dim=1)
             return weight_norm.unsqueeze(1).bmm(x).squeeze(1)
         else:
             weight_masked = weight.masked_fill(mask, 0)
-            weight_masked_norm = torch.nn.functional.normalize(weight_masked.type(torch.float), p=1, dim=1)
+            weight_masked_norm = torch.nn.functional.normalize(weight_masked.float(), p=1, dim=1)
             # x_wtd_mean: (batch, hid_dim)
             return weight_masked_norm.unsqueeze(1).bmm(x).squeeze(1)
     
@@ -118,13 +118,13 @@ def sequence_group_aggregating(x: torch.FloatTensor, group_by: torch.LongTensor,
     
 def _make_pos_proj_weight(pos_proj: torch.BoolTensor, agg_mode='mean'):
     if agg_mode.lower() == 'mean':
-        return torch.nn.functional.normalize(pos_proj.type(torch.float), p=1, dim=2)
+        return torch.nn.functional.normalize(pos_proj.float(), p=1, dim=2)
     elif agg_mode.lower() == 'first':
         pos_proj_weight = pos_proj & (pos_proj.cumsum(dim=-1) == 1)
-        return pos_proj_weight.type(torch.float)
+        return pos_proj_weight.float()
     elif agg_mode.lower() == 'last':
         pos_proj_weight = pos_proj & (pos_proj.cumsum(dim=-1) == pos_proj.sum(dim=-1, keepdim=True))
-        return pos_proj_weight.type(torch.float)
+        return pos_proj_weight.float()
     
     
 def _execute_pos_proj(x: torch.FloatTensor, pos_proj: torch.BoolTensor, agg_mode='max'):
@@ -156,6 +156,12 @@ def _reduce_losses(losses: torch.Tensor, sample_weight: torch.Tensor=None, reduc
         return losses
 
 
+def _check_soft_target(x: torch.Tensor):
+    assert x.dim() == 2
+    assert (x >= 0).all().item()
+    assert (x.sum(dim=-1) - 1).abs().max().item() < 1e-6
+
+
 def soft_label_cross_entropy(logits: torch.Tensor, soft_target: torch.Tensor, weight: torch.Tensor=None, reduction: str='none'):
     """Soft label cross entropy loss.
     
@@ -168,7 +174,9 @@ def soft_label_cross_entropy(logits: torch.Tensor, soft_target: torch.Tensor, we
     weight : torch.Tensor (logit_dim, )
         A manual rescaling weight given to each class. 
     """
-    log_prob = torch.nn.functional.log_softmax(logits, dim=-1)
+    _check_soft_target(soft_target)
+    
+    log_prob = logits.log_softmax(dim=-1)
     
     if weight is not None:
         log_prob = log_prob * weight
@@ -191,17 +199,18 @@ def smooth_label_cross_entropy(logits: torch.Tensor, target: torch.LongTensor,
     weight : torch.Tensor (logit_dim, )
         A manual rescaling weight given to each class. 
     """
-    log_prob = torch.nn.functional.log_softmax(logits, dim=-1)
     num_classes = logits.size(dim=-1)
     
     if target.dim() == 1:
-        if weight is None:
-            sample_weight = (target != ignore_index).type(torch.float)
-        else:
-            sample_weight = weight.gather(dim=0, index=target) * (target != ignore_index).type(torch.float)
+        log_prob = logits.log_softmax(dim=-1)
+        
+        sample_weight = (target != ignore_index).float()
+        if weight is not None:
+            sample_weight = sample_weight * weight.gather(dim=0, index=target)
         target_wo_ignore_index = target.masked_fill(target==ignore_index, 0)
         
-        smooth_target = torch.nn.functional.one_hot(target_wo_ignore_index, num_classes=num_classes) * (1 - epsilon) + epsilon / num_classes
+        onehot_target = torch.nn.functional.one_hot(target_wo_ignore_index, num_classes=num_classes)
+        smooth_target = onehot_target * (1-epsilon) + epsilon/num_classes
         losses = -(log_prob * smooth_target).sum(dim=-1)
         
         losses = losses * sample_weight
@@ -209,7 +218,7 @@ def smooth_label_cross_entropy(logits: torch.Tensor, target: torch.LongTensor,
         
     else:
         # `ignore_index` is ignored here
-        smooth_target = target * (1 - epsilon) + epsilon / num_classes
+        smooth_target = target * (1-epsilon) + epsilon/num_classes
         return soft_label_cross_entropy(logits, smooth_target, weight=weight, reduction=reduction)
 
 
@@ -234,12 +243,11 @@ def focal_loss(logits: torch.Tensor, target: torch.LongTensor,
     ----------
     [1] Lin et al. (2017). Focal Loss for Dense Object Detection. ICCV 2017. 
     """
-    log_prob = torch.nn.functional.log_softmax(logits, dim=-1)
+    log_prob = logits.log_softmax(dim=-1)
     
-    if weight is None:
-        sample_weight = (target != ignore_index).type(torch.float)
-    else:
-        sample_weight = weight.gather(dim=0, index=target) * (target != ignore_index).type(torch.float)
+    sample_weight = (target != ignore_index).float()
+    if weight is not None:
+        sample_weight = sample_weight * weight.gather(dim=0, index=target)
     target_wo_ignore_index = target.masked_fill(target==ignore_index, 0)
     log_prob_t = log_prob.gather(dim=1, index=target_wo_ignore_index.unsqueeze(-1)).squeeze(-1)
     

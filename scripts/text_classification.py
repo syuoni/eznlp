@@ -42,57 +42,50 @@ def parse_arguments(parser: argparse.ArgumentParser):
 def collect_TC_assembly_config(args: argparse.Namespace):
     drop_rates = (0.0, 0.05, args.drop_rate) if args.use_locked_drop else (args.drop_rate, 0.0, 0.0)
     
-    if args.command in ('from_scratch', 'fs'):
+    if args.emb_dim > 0:
         if args.language.lower() == 'english' and args.emb_dim in (50, 100, 200):
             vectors = GloVe(f"assets/vectors/glove.6B.{args.emb_dim}d.txt")
         elif args.language.lower() == 'english' and args.emb_dim == 300:
             vectors = GloVe("assets/vectors/glove.840B.300d.txt")
-        elif args.language.lower() == 'chinese' and args.emb_dim == 200:
-            vectors = Vectors.load("assets/vectors/tencent/Tencent_AILab_ChineseEmbedding.txt", encoding='utf-8', skiprows=0)
+        elif args.language.lower() == 'chinese' and args.emb_dim == 50:
+            vectors = Vectors.load("assets/vectors/gigaword_chn.all.a2b.uni.ite50.vec", encoding='utf-8')
         else:
             vectors = None
         ohots_config = ConfigDict({'text': OneHotConfig(field='text', min_freq=5, vectors=vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze)})
-        
-        if args.use_interm1:
-            interm1_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
-        else:
-            interm1_config = None
-            
-        interm2_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
-        
-        if args.language.lower() == 'english' and args.use_elmo:
-            elmo_config = ELMoConfig(elmo=load_pretrained('elmo'))
-        else:
-            elmo_config = None
-            
-        if args.language.lower() == 'english' and args.use_flair:
-            flair_fw_lm, flair_bw_lm = load_pretrained('flair')
-            flair_fw_config, flair_bw_config = FlairConfig(flair_lm=flair_fw_lm), FlairConfig(flair_lm=flair_bw_lm)
-            interm2_config.in_proj = True
-        else:
-            flair_fw_config, flair_bw_config = None, None
-            
-        bert_like_config = None
-        
-    elif args.command in ('finetune', 'ft'):
+    else:
         ohots_config = None
+    
+    if args.use_interm1:
+        interm1_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
+    else:
         interm1_config = None
-        
-        if args.use_interm2:
-            interm2_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
-        else:
-            interm2_config = None
-        
+    
+    if args.use_interm2:
+        interm2_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
+    else:
+        interm2_config = None
+    
+    if args.language.lower() == 'english' and args.use_elmo:
+        elmo_config = ELMoConfig(elmo=load_pretrained('elmo'))
+    else:
         elmo_config = None
+    
+    if args.language.lower() == 'english' and args.use_flair:
+        flair_fw_lm, flair_bw_lm = load_pretrained('flair')
+        flair_fw_config, flair_bw_config = FlairConfig(flair_lm=flair_fw_lm), FlairConfig(flair_lm=flair_bw_lm)
+        if interm2_config is not None:
+            interm2_config.in_proj = True
+    else:
         flair_fw_config, flair_bw_config = None, None
-        
+    
+    if args.bert_arch.lower() != 'none':
         # Uncased tokenizer for text classification
         bert_like, tokenizer = load_pretrained(args.bert_arch, args, cased=False)
         bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert_like, arch=args.bert_arch, 
                                           freeze=False, use_truecase='cased' in os.path.basename(bert_like.name_or_path).split('-'))
     else:
-        raise Exception("No sub-command specified")
-        
+        bert_like_config = None
+    
     return {'ohots': ohots_config, 
             'intermediate1': interm1_config, 
             'elmo': elmo_config, 
@@ -109,7 +102,8 @@ def build_TC_config(args: argparse.Namespace):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                     fromfile_prefix_chars='@')
     args = parse_arguments(parser)
     
     # Use micro-seconds to ensure different timestamps while adopting multiprocessing
@@ -143,11 +137,17 @@ if __name__ == '__main__':
     # train_data, dev_data, test_data = train_data[:1000], dev_data[:1000], test_data[:1000]
     config = build_TC_config(args)
     
-    if args.command in ('finetune', 'ft'):
+    # Truncate too long sentences
+    if config.bert_like is not None:
         train_data = truncate_for_bert_like(train_data, config.bert_like.tokenizer, verbose=args.log_terminal)
         dev_data   = truncate_for_bert_like(dev_data,   config.bert_like.tokenizer, verbose=args.log_terminal)
         test_data  = truncate_for_bert_like(test_data,  config.bert_like.tokenizer, verbose=args.log_terminal)
-        
+    elif args.dataset in ('ChnSentiCorp', 'THUCNews_10'):
+        for data in [train_data, dev_data, test_data]:
+            for data_entry in data:
+                if len(data_entry['tokens']) > 1200:
+                    data_entry['tokens'] = data_entry['tokens'][:300] + data_entry['tokens'][-900:]
+    
     train_set = Dataset(train_data, config, training=True)
     train_set.build_vocabs_and_dims(dev_data, test_data)
     dev_set   = Dataset(dev_data,  train_set.config, training=False)
@@ -166,7 +166,7 @@ if __name__ == '__main__':
     trainer = build_trainer(model, device, len(train_loader), args)
     if args.pdb: 
         pdb.set_trace()
-        
+    
     torch.save(config, f"{save_path}/{config.name}-config.pth")
     def save_callback(model):
         torch.save(model, f"{save_path}/{config.name}.pth")

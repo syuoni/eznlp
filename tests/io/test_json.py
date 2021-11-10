@@ -11,8 +11,76 @@ class TestJsonIO(object):
     
     References
     ----------
-    [1] Eberts and Ulges. 2019. Span-based joint entity and relation extraction with Transformer pre-training. ECAI 2020.
+    [1] Lu and Roth. 2015. Joint Mention Extraction and Classification with Mention Hypergraphs. EMNLP 2015.
+    [2] Eberts and Ulges. 2019. Span-based joint entity and relation extraction with Transformer pre-training. ECAI 2020.
+    [3] Luan et al. 2019. A general framework for information extraction using dynamic span graphs. NAACL 2019. 
+    [4] Zhong and Chen. 2020. A frustratingly easy approach for joint entity and relation extraction. NAACL 2020. 
     """
+    def test_ace2004(self):
+        io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end')
+        train_data = io.read("data/ace-lu2015emnlp/ACE2004/train.json")
+        dev_data   = io.read("data/ace-lu2015emnlp/ACE2004/dev.json")
+        test_data  = io.read("data/ace-lu2015emnlp/ACE2004/test.json")
+        
+        assert len(train_data) == 6_799
+        assert sum(len(ex['chunks']) for ex in train_data) == 22_207
+        assert max(ck[2]-ck[1] for ex in train_data for ck in ex['chunks']) == 57
+        assert len(dev_data) == 829
+        assert sum(len(ex['chunks']) for ex in dev_data) == 2_511
+        assert max(ck[2]-ck[1] for ex in dev_data for ck in ex['chunks']) == 35
+        assert len(test_data) == 879
+        assert sum(len(ex['chunks']) for ex in test_data) == 3_031
+        assert max(ck[2]-ck[1] for ex in test_data for ck in ex['chunks']) == 43
+        
+        
+    def test_ace2005(self):
+        io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end')
+        train_data = io.read("data/ace-lu2015emnlp/ACE2005/train.json")
+        dev_data   = io.read("data/ace-lu2015emnlp/ACE2005/dev.json")
+        test_data  = io.read("data/ace-lu2015emnlp/ACE2005/test.json")
+        
+        assert len(train_data) == 7_336
+        assert sum(len(ex['chunks']) for ex in train_data) == 24_687
+        assert max(ck[2]-ck[1] for ex in train_data for ck in ex['chunks']) == 49
+        assert len(dev_data) == 958
+        assert sum(len(ex['chunks']) for ex in dev_data) == 3_217
+        assert max(ck[2]-ck[1] for ex in dev_data for ck in ex['chunks']) == 30
+        assert len(test_data) == 1_047
+        assert sum(len(ex['chunks']) for ex in test_data) == 3_027
+        assert max(ck[2]-ck[1] for ex in test_data for ck in ex['chunks']) == 27
+        
+        
+    def test_ace2004_rel(self):
+        io = JsonIO(relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail')
+        train_data = io.read("data/ace-luan2019naacl/ace04/cv0.train.json")
+        test_data  = io.read("data/ace-luan2019naacl/ace04/cv0.test.json")
+        
+        # #train + #test = 8683
+        assert len(train_data) == 6_898
+        assert sum(len(ex['chunks']) for ex in train_data) == 18_065
+        assert sum(len(ex['relations']) for ex in train_data) == 3_292
+        assert len(test_data) == 1_785
+        assert sum(len(ex['chunks']) for ex in test_data) == 4_670
+        assert sum(len(ex['relations']) for ex in test_data) == 795
+        
+        
+    def test_ace2005_rel(self):
+        io = JsonIO(relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail')
+        train_data = io.read("data/ace-luan2019naacl/ace05/train.json")
+        dev_data   = io.read("data/ace-luan2019naacl/ace05/dev.json")
+        test_data  = io.read("data/ace-luan2019naacl/ace05/test.json")
+        
+        assert len(train_data) == 10_051
+        assert sum(len(ex['chunks']) for ex in train_data) == 26_473
+        assert sum(len(ex['relations']) for ex in train_data) == 4_788
+        assert len(dev_data) == 2_424
+        assert sum(len(ex['chunks']) for ex in dev_data) == 6_338
+        assert sum(len(ex['relations']) for ex in dev_data) == 1_131
+        assert len(test_data) == 2_050
+        assert sum(len(ex['chunks']) for ex in test_data) == 5_476
+        assert sum(len(ex['relations']) for ex in test_data) == 1_151
+        
+        
     def test_conll2004(self):
         json_io = JsonIO(text_key='tokens', 
                          chunk_key='entities', 

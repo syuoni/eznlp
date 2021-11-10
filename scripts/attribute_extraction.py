@@ -17,7 +17,7 @@ from eznlp.training import Trainer, count_params, evaluate_attribute_extraction
 
 from utils import add_base_arguments, parse_to_args
 from utils import load_data, dataset2language, load_pretrained, build_trainer, header_format
-from entity_recognition import collect_IE_assembly_config
+from entity_recognition import collect_IE_assembly_config, process_IE_data
 
 
 def parse_arguments(parser: argparse.ArgumentParser):
@@ -32,7 +32,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
     group_decoder = parser.add_argument_group('decoder configurations')
     group_decoder.add_argument('--attr_decoder', type=str, default='span_attr_classification', 
                                help="attribute decoding method", choices=['span_attr_classification'])
-
+    
     # Span-based
     group_decoder.add_argument('--agg_mode', type=str, default='max_pooling', 
                                help="aggregating mode")
@@ -60,7 +60,8 @@ def build_AE_config(args: argparse.Namespace):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter, 
+                                     fromfile_prefix_chars='@')
     args = parse_arguments(parser)
     
     # Use micro-seconds to ensure different timestamps while adopting multiprocessing
@@ -87,7 +88,7 @@ if __name__ == '__main__':
     device = auto_device()
     if device.type.startswith('cuda'):
         torch.cuda.set_device(device)
-        
+    
     if len(args.pipeline_path) > 0:
         if not os.path.exists(f"{args.pipeline_path}/data-with-chunks-pred.pth"):
             raise RuntimeError("`pipeline_path` is specified but not existing")
@@ -98,13 +99,14 @@ if __name__ == '__main__':
         train_data, dev_data, test_data = load_data(args)
     args.language = dataset2language[args.dataset]
     config = build_AE_config(args)
+    train_data, dev_data, test_data = process_IE_data(train_data, dev_data, test_data, args, config)
     
     if not args.train_with_dev:
         train_set = Dataset(train_data, config, training=True)
         train_set.build_vocabs_and_dims(dev_data, test_data)
         dev_set   = Dataset(dev_data,  train_set.config, training=False)
         test_set  = Dataset(test_data, train_set.config, training=False)
-
+        
         train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
         dev_loader   = torch.utils.data.DataLoader(dev_set,   batch_size=args.batch_size, shuffle=False, collate_fn=dev_set.collate)
     else:
@@ -112,7 +114,7 @@ if __name__ == '__main__':
         train_set.build_vocabs_and_dims(test_data)
         dev_set   = Dataset([],        train_set.config, training=False)
         test_set  = Dataset(test_data, train_set.config, training=False)
-
+        
         train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
         dev_loader   = None
     
@@ -126,7 +128,7 @@ if __name__ == '__main__':
     trainer = build_trainer(model, device, len(train_loader), args)
     if args.pdb: 
         pdb.set_trace()
-        
+    
     torch.save(config, f"{save_path}/{config.name}-config.pth")
     def save_callback(model):
         torch.save(model, f"{save_path}/{config.name}.pth")

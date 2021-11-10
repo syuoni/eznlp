@@ -21,7 +21,7 @@ from eznlp.training import Trainer, count_params, evaluate_joint_extraction
 
 from utils import add_base_arguments, parse_to_args
 from utils import load_data, dataset2language, load_pretrained, build_trainer, header_format
-from entity_recognition import collect_IE_assembly_config
+from entity_recognition import collect_IE_assembly_config, process_IE_data
 
 
 def parse_arguments(parser: argparse.ArgumentParser):
@@ -38,7 +38,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                help="attribute decoding method", choices=['None', 'span_attr_classification'])
     group_decoder.add_argument('--rel_decoder', type=str, default='span_rel_classification', 
                                help="relation decoding method", choices=['None', 'span_rel_classification'])
-
+    
     # Loss
     group_decoder.add_argument('--fl_gamma', type=float, default=0.0, 
                                help="Focal Loss gamma")
@@ -66,7 +66,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                help="number of sampling negative relations")
     group_decoder.add_argument('--max_pair_distance', type=int, default=100, 
                                help="maximum pair distance")
-
+    
     # Boundary selection
     group_decoder.add_argument('--no_biaffine', dest='use_biaffine', default=True, action='store_false', 
                                help="whether to use biaffine")
@@ -111,7 +111,7 @@ def build_joint_config(args: argparse.Namespace):
                                                                   ck_size_emb_dim=args.ck_size_emb_dim, 
                                                                   ck_label_emb_dim=args.ck_label_emb_dim, 
                                                                   in_drop_rates=drop_rates)
-
+    
     if args.rel_decoder == 'None':
         rel_decoder_config = None
     elif args.rel_decoder == 'span_rel_classification':
@@ -124,7 +124,7 @@ def build_joint_config(args: argparse.Namespace):
                                                                 ck_size_emb_dim=args.ck_size_emb_dim, 
                                                                 ck_label_emb_dim=args.ck_label_emb_dim, 
                                                                 in_drop_rates=drop_rates)
-
+    
     decoder_config = JointExtractionDecoderConfig(ck_decoder=ck_decoder_config, 
                                                   attr_decoder = attr_decoder_config,
                                                   rel_decoder=rel_decoder_config)
@@ -133,7 +133,8 @@ def build_joint_config(args: argparse.Namespace):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                     fromfile_prefix_chars='@')
     args = parse_arguments(parser)
     
     # Use micro-seconds to ensure different timestamps while adopting multiprocessing
@@ -141,7 +142,7 @@ if __name__ == '__main__':
     save_path =  f"cache/{args.dataset}-Joint/{timestamp}"
     if not os.path.exists(save_path):
         os.makedirs(save_path)
-        
+    
     handlers = [logging.FileHandler(f"{save_path}/training.log")]
     if args.log_terminal:
         handlers.append(logging.StreamHandler(sys.stdout))
@@ -160,10 +161,11 @@ if __name__ == '__main__':
     device = auto_device()
     if device.type.startswith('cuda'):
         torch.cuda.set_device(device)
-        
+    
     train_data, dev_data, test_data = load_data(args)
     args.language = dataset2language[args.dataset]
     config = build_joint_config(args)
+    train_data, dev_data, test_data = process_IE_data(train_data, dev_data, test_data, args, config)
     
     if not args.train_with_dev:
         train_set = Dataset(train_data, config, training=True)
@@ -181,9 +183,9 @@ if __name__ == '__main__':
         
         train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
         dev_loader   = None
-
+    
     logger.info(train_set.summary)
-
+    
     logger.info(header_format("Building", sep='-'))
     model = config.instantiate().to(device)
     count_params(model)
@@ -192,8 +194,7 @@ if __name__ == '__main__':
     trainer = build_trainer(model, device, len(train_loader), args)
     if args.pdb: 
         pdb.set_trace()
-        
-        
+    
     torch.save(config, f"{save_path}/{config.name}-config.pth")
     def save_callback(model):
         torch.save(model, f"{save_path}/{config.name}.pth")

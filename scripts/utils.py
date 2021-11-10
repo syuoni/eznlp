@@ -5,6 +5,7 @@ import re
 import spacy
 import jieba
 import random
+import time
 import numpy
 import sklearn.model_selection
 import torch
@@ -12,11 +13,10 @@ import allennlp.modules
 import transformers
 import flair
 
-from eznlp.token import LexiconTokenizer
-from eznlp.vectors import Vectors
 from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO, BratIO
 from eznlp.io import PostIO
 from eznlp.training import Trainer, LRLambda, collect_params, check_param_groups
+from eznlp.metrics import precision_recall_f1_report
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,8 @@ def add_base_arguments(parser: argparse.ArgumentParser):
     group_debug = parser.add_argument_group('debug')
     group_debug.add_argument('--pdb', default=False, action='store_true', 
                              help="whether to use pdb for debug")
+    group_debug.add_argument('--profile', default=False, action='store_true', 
+                             help="whether to profile")
     group_debug.add_argument('--no_log_terminal', dest='log_terminal', default=True, action='store_false', 
                              help="whether log to terminal")
     
@@ -54,6 +56,19 @@ def add_base_arguments(parser: argparse.ArgumentParser):
                              help="number of gradient accumulation steps")
     
     group_model = parser.add_argument_group('model configurations')
+    group_model.add_argument('--emb_dim', type=int, default=100, 
+                             help="embedding dim (`0` for w/o embeddings)")
+    group_model.add_argument('--emb_freeze', default=False, action='store_true', 
+                             help="whether to freeze embedding weights")
+    group_model.add_argument('--char_arch', type=str, default='None', choices=['None', 'LSTM', 'GRU', 'Conv'], 
+                             help="character-level encoder architecture (None for w/o character-level encoder)")
+    group_model.add_argument('--use_bigram', default=False, action='store_true', 
+                             help="whether to use bigram")
+    group_model.add_argument('--use_softword', default=False, action='store_true', 
+                             help="whether to use softword")
+    group_model.add_argument('--use_softlexicon', default=False, action='store_true', 
+                             help="whether to use softlexicon")
+    
     group_model.add_argument('--hid_dim', type=int, default=200, 
                              help="hidden dim")
     group_model.add_argument('--num_layers', type=int, default=1, 
@@ -62,39 +77,19 @@ def add_base_arguments(parser: argparse.ArgumentParser):
                              help="dropout rate")
     group_model.add_argument('--use_locked_drop', default=False, action='store_true', 
                              help="whether to use locked dropout")
+    group_model.add_argument('--use_interm1', default=False, action='store_true', 
+                             help="whether to use intermediate1")
     
-    subparsers = parser.add_subparsers(dest='command', help="sub-commands")
-    parser_fs = subparsers.add_parser('from_scratch', aliases=['fs'], 
-                                      help="train from scratch, or with freezed pretrained models", 
-                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser_fs.add_argument('--emb_dim', type=int, default=100, 
-                           help="embedding dim")
-    parser_fs.add_argument('--emb_freeze', default=False, action='store_true', 
-                           help="whether to freeze embedding weights")
-    parser_fs.add_argument('--char_arch', type=str, default='LSTM', 
-                           help="character-level encoder architecture")
-    parser_fs.add_argument('--use_interm1', default=False, action='store_true', 
-                           help="whether to use intermediate1")
-    parser_fs.add_argument('--use_elmo', default=False, action='store_true', 
-                           help="whether to use ELMo")
-    parser_fs.add_argument('--use_flair', default=False, action='store_true', 
-                           help="whether to use Flair")
-    parser_fs.add_argument('--use_bigram', default=False, action='store_true', 
-                           help="whether to use bigram")
-    parser_fs.add_argument('--use_softword', default=False, action='store_true', 
-                           help="whether to use softword")
-    parser_fs.add_argument('--use_softlexicon', default=False, action='store_true', 
-                           help="whether to use softlexicon")
-    
-    parser_ft = subparsers.add_parser('finetune', aliases=['ft'], 
-                                      help="train by finetuning pretrained models", 
-                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser_ft.add_argument('--bert_arch', type=str, default='BERT_base', 
-                           help="bert-like architecture")
-    parser_ft.add_argument('--bert_drop_rate', type=float, default=0.2, 
-                           help="dropout rate for BERT")
-    parser_ft.add_argument('--use_interm2', default=False, action='store_true', 
-                           help="whether to use intermediate2")
+    group_model.add_argument('--use_elmo', default=False, action='store_true', 
+                             help="whether to use ELMo")
+    group_model.add_argument('--use_flair', default=False, action='store_true', 
+                             help="whether to use Flair")
+    group_model.add_argument('--bert_arch', type=str, default='None', 
+                             help="bert-like architecture (None for w/o bert-like)")
+    group_model.add_argument('--bert_drop_rate', type=float, default=0.2, 
+                             help="dropout rate for BERT")
+    group_model.add_argument('--use_interm2', default=False, action='store_true', 
+                             help="whether to use intermediate2")
     return parser
 
 
@@ -114,6 +109,8 @@ spacy_nlp_en = spacy.load("en_core_web_sm", disable=['tagger', 'parser', 'ner'])
 
 dataset2language = {'conll2003': 'English', 
                     'conll2012': 'English', 
+                    'ace2004': 'English', 
+                    'ace2005': 'English', 
                     'conll2004': 'English', 
                     'SciERC': 'English', 
                     'ResumeNER': 'Chinese', 
@@ -133,7 +130,7 @@ dataset2language = {'conll2003': 'English',
 
 def load_data(args: argparse.Namespace):
     if args.dataset == 'conll2003':
-        if getattr(args, 'doc_level', False):
+        if args.doc_level:
             io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', document_sep_starts=["-DOCSTART-"], document_level=True, case_mode='None', number_mode='Zeros')
         else:
             io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', case_mode='None', number_mode='Zeros')
@@ -141,14 +138,51 @@ def load_data(args: argparse.Namespace):
         dev_data   = io.read("data/conll2003/eng.testa")
         test_data  = io.read("data/conll2003/eng.testb")
         
+        if args.corrupt_rate > 0 and args.doc_level:
+            set_chunks_gold = [ex['chunks'] for ex in train_data]
+            
+            json_io = JsonIO(is_tokenized=True, case_mode='None', number_mode='Zeros')
+            train_data = json_io.read(f"data/conll2003/eng.train.corrupted({args.corrupt_rate:.1f}, 1).json")
+            # train_data = json_io.read(f"data/conll2003/eng.train.sys.corrupted({args.corrupt_rate:.1f}, 1).json")
+            set_chunks_corr = [ex['chunks'] for ex in train_data]
+            scores, ave_scores = precision_recall_f1_report(set_chunks_gold, set_chunks_corr)
+            logger.warning(f"Loading data with corruption rate of {args.corrupt_rate:.1f} \n"
+                           f"Corruption Retrieval F1-score: {ave_scores['micro']['f1']*100:2.3f}%")
+        
+        
     elif args.dataset == 'conll2012':
-        if getattr(args, 'doc_level', False):
+        if args.doc_level:
             io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end", "pt/"], document_sep_starts=["#begin"], document_level=True, encoding='utf-8', case_mode='None', number_mode='Zeros')
         else:
             io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end", "pt/"], document_sep_starts=["#begin"], encoding='utf-8', case_mode='None', number_mode='Zeros')
         train_data = io.read("data/conll2012/train.english.v4_gold_conll")
         dev_data   = io.read("data/conll2012/dev.english.v4_gold_conll")
         test_data  = io.read("data/conll2012/test.english.v4_gold_conll")
+        
+    elif args.dataset == 'ace2004':
+        io = JsonIO(text_key='tokens', 
+                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', 
+                    case_mode='None', number_mode='Zeros')
+        train_data = io.read("data/ace-lu2015emnlp/ACE2004/train.json")
+        dev_data   = io.read("data/ace-lu2015emnlp/ACE2004/dev.json")
+        test_data  = io.read("data/ace-lu2015emnlp/ACE2004/test.json")
+        
+    elif args.dataset == 'ace2005':
+        io = JsonIO(text_key='tokens', 
+                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', 
+                    case_mode='None', number_mode='Zeros')
+        train_data = io.read("data/ace-lu2015emnlp/ACE2005/train.json")
+        dev_data   = io.read("data/ace-lu2015emnlp/ACE2005/dev.json")
+        test_data  = io.read("data/ace-lu2015emnlp/ACE2005/test.json")
+        
+        if args.corrupt_rate > 0:
+            set_chunks_gold = [ex['chunks'] for ex in train_data]
+            train_data = io.read(f"data/ace-lu2015emnlp/ACE2005/train.corrupted({args.corrupt_rate:.1f}, 1).json")
+            # train_data = io.read(f"data/ace-lu2015emnlp/ACE2005/train.sys.corrupted({args.corrupt_rate:.1f}, 1).json")
+            set_chunks_corr = [ex['chunks'] for ex in train_data]
+            scores, ave_scores = precision_recall_f1_report(set_chunks_gold, set_chunks_corr)
+            logger.warning(f"Loading data with corruption rate of {args.corrupt_rate:.1f} \n"
+                           f"Corruption Retrieval F1-score: {ave_scores['micro']['f1']*100:2.3f}%")
         
     elif args.dataset == 'conll2004':
         json_io = JsonIO(text_key='tokens', 
@@ -210,7 +244,7 @@ def load_data(args: argparse.Namespace):
         for data in [train_data, dev_data, test_data]:
             for entry in data:
                 entry['chunks'] = [ck for ck in entry['chunks'] if ck[0] in ('PERSON', 'LOC', 'ORG', 'GPE')]
-
+        
     elif args.dataset == 'yidu_s4k':
         io = JsonIO(is_tokenized=False, tokenize_callback='char', 
                     text_key='originalText', chunk_key='entities', chunk_type_key='label_type', chunk_start_key='start_pos', chunk_end_key='end_pos', 
@@ -290,20 +324,6 @@ def load_data(args: argparse.Namespace):
         
     else:
         raise Exception("Dataset does NOT exist", args.dataset)
-        
-    if getattr(args, 'use_softword', False) or getattr(args, 'use_softlexicon', False):
-        ctb50 = Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
-        tokenizer = LexiconTokenizer(ctb50.itos)
-        for data in [train_data, dev_data, test_data]:
-            for data_entry in data:
-                data_entry['tokens'].build_softwords(tokenizer.tokenize)
-                data_entry['tokens'].build_softlexicons(tokenizer.tokenize)
-    
-    if args.dataset in ('ChnSentiCorp', 'THUCNews_10'):
-        for data in [train_data, dev_data, test_data]:
-            for data_entry in data:
-                if len(data_entry['tokens']) > 1200:
-                    data_entry['tokens'] = data_entry['tokens'][:300] + data_entry['tokens'][-900:]
     
     return train_data, dev_data, test_data
 
@@ -314,11 +334,11 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
         return allennlp.modules.Elmo(options_file="assets/allennlp/elmo_2x4096_512_2048cnn_2xhighway_options.json", 
                                      weight_file="assets/allennlp/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5", 
                                      num_output_representations=1)
-    
+        
     elif pretrained_str.lower() == 'flair':
         return (flair.models.LanguageModel.load_language_model("assets/flair/news-forward-0.4.1.pt"), 
                 flair.models.LanguageModel.load_language_model("assets/flair/news-backward-0.4.1.pt"))
-    
+        
     elif args.language.lower() == 'english':
         if pretrained_str.lower().startswith('bert'):
             if 'wwm' in pretrained_str.lower():
@@ -329,7 +349,7 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
                 PATH = "assets/transformers/bert-large-cased" if cased else "assets/transformers/bert-large-uncased"
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.BertTokenizer.from_pretrained(PATH))
-        
+            
         elif pretrained_str.lower().startswith('roberta'):
             if 'base' in pretrained_str.lower():
                 PATH = "assets/transformers/roberta-base"
@@ -337,14 +357,14 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
                 PATH = "assets/transformers/roberta-large"
             return (transformers.RobertaModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.RobertaTokenizer.from_pretrained(PATH, add_prefix_space=True))
-        
+            
         elif pretrained_str.lower().startswith('albert'):
             size = re.search("x*(base|large)", pretrained_str.lower())
             if size is not None:
                 PATH = f"assets/transformers/albert-{size.group()}-v2"
             return (transformers.AlbertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.AlbertTokenizer.from_pretrained(PATH))
-        
+            
         elif pretrained_str.lower().startswith('spanbert'):
             if 'base' in pretrained_str.lower():
                 PATH = "assets/transformers/SpanBERT/spanbert-base-cased"
@@ -358,7 +378,7 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
             PATH = "assets/transformers/hfl/chinese-bert-wwm-ext"
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512))
-        
+            
         elif pretrained_str.lower().startswith('roberta'):
             # RoBERTa-like BERT
             # https://github.com/ymcui/Chinese-BERT-wwm#faq
@@ -373,7 +393,7 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
                 PATH = "assets/transformers/hfl/chinese-macbert-large"
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512))
-
+            
         elif pretrained_str.lower().startswith('ernie'):
             PATH = "assets/transformers/nghuyong/ernie-1.0"
             return (transformers.AutoModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
@@ -409,3 +429,20 @@ def build_trainer(model, device, num_train_batches: int, args: argparse.Namespac
     
     return Trainer(model, optimizer=optimizer, scheduler=scheduler, schedule_by_step=schedule_by_step, num_grad_acc_steps=args.num_grad_acc_steps,
                    device=device, grad_clip=args.grad_clip, use_amp=args.use_amp)
+
+
+
+def profile(trainer, dataloader):
+    # raise "out of memory" error if use_cuda=Ture
+    with torch.autograd.profiler.profile(use_cuda=False) as prof:
+        t0 = time.time()
+        prof_loader = [batch for _, batch in zip(range(10), dataloader)]
+        logger.info(f"Data loading time: {time.time()-t0:.3f}s")
+        t0 = time.time()
+        trainer.train_epoch(prof_loader)
+        logger.info(f"Model training time: {time.time()-t0:.3f}s")
+    
+    sort_by = "cuda_time_total" if trainer.device.type.startswith('cuda') else "cpu_time_total"
+    prof_table = prof.key_averages().table(sort_by=sort_by, row_limit=10)
+    logger.info(f"\n{prof_table}")
+    return prof

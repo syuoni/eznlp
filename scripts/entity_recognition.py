@@ -11,6 +11,7 @@ import torch
 
 from eznlp import auto_device
 from eznlp.vectors import Vectors, GloVe
+from eznlp.token import LexiconTokenizer
 from eznlp.dataset import Dataset
 from eznlp.config import ConfigDict
 from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig, CharConfig, SoftLexiconConfig
@@ -21,7 +22,7 @@ from eznlp.model.bert_like import segment_uniformly_for_bert_like
 from eznlp.training import Trainer, count_params, evaluate_entity_recognition
 
 from utils import add_base_arguments, parse_to_args
-from utils import load_data, dataset2language, load_pretrained, build_trainer, header_format
+from utils import load_data, dataset2language, load_pretrained, build_trainer, header_format, profile
 
 
 def parse_arguments(parser: argparse.ArgumentParser):
@@ -32,6 +33,8 @@ def parse_arguments(parser: argparse.ArgumentParser):
                             help="dataset name")
     group_data.add_argument('--doc_level', default=False, action='store_true', 
                             help="whether to load data at document level")
+    group_data.add_argument('--corrupt_rate', type=float, default=0.0, 
+                            help="boundary corrupt rate")
     group_data.add_argument('--pipeline', default=False, action='store_true', 
                             help="whether to save predicted chunks for pipeline")
     
@@ -65,15 +68,26 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                help="whether to use biaffine")
     group_decoder.add_argument('--affine_arch', type=str, default='FFN', 
                                help="affine encoder architecture")
+    group_decoder.add_argument('--neg_sampling_rate', type=float, default=1.0, 
+                               help="Negative sampling rate")
+    group_decoder.add_argument('--hard_neg_sampling_rate', type=float, default=1.0, 
+                               help="Hard negative sampling rate")
+    group_decoder.add_argument('--hard_neg_sampling_size', type=int, default=5, 
+                               help="Hard negative sampling window size")
     group_decoder.add_argument('--sb_epsilon', type=float, default=0.0, 
                                help="Boundary smoothing loss epsilon")
+    group_decoder.add_argument('--sb_size', type=int, default=1, 
+                               help="Boundary smoothing window size")
+    group_decoder.add_argument('--sb_adj_factor', type=float, default=1.0, 
+                               help="Boundary smoothing probability adjust factor")
     return parse_to_args(parser)
 
 
 def collect_IE_assembly_config(args: argparse.Namespace):
     drop_rates = (0.0, 0.05, args.drop_rate) if args.use_locked_drop else (args.drop_rate, 0.0, 0.0)
     
-    if args.command in ('from_scratch', 'fs'):
+    ohots_config = {}
+    if args.emb_dim > 0:
         if args.language.lower() == 'english' and args.emb_dim in (50, 100, 200):
             vectors = GloVe(f"assets/vectors/glove.6B.{args.emb_dim}d.txt")
         elif args.language.lower() == 'english' and args.emb_dim == 300:
@@ -82,70 +96,62 @@ def collect_IE_assembly_config(args: argparse.Namespace):
             vectors = Vectors.load("assets/vectors/gigaword_chn.all.a2b.uni.ite50.vec", encoding='utf-8')
         else:
             vectors = None
-        ohots_config = ConfigDict({'text': OneHotConfig(field='text', vectors=vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze)})
+        ohots_config['text'] = OneHotConfig(field='text', vectors=vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze)
         
-        if args.language.lower() == 'chinese' and args.use_bigram:
-            giga_bi = Vectors.load("assets/vectors/gigaword_chn.all.a2b.bi.ite50.vec", encoding='utf-8')
-            ohots_config['bigram'] = OneHotConfig(field='bigram', vectors=giga_bi, emb_dim=50, freeze=args.emb_freeze)
-        
-        if args.language.lower() == 'chinese' and args.use_softword:
-            mhots_config = ConfigDict({'softword': MultiHotConfig(field='softword', use_emb=False)})
-        else:
-            mhots_config = None
-            
-        if args.language.lower() == 'english':
-            char_config = CharConfig(emb_dim=16, 
-                                     encoder=EncoderConfig(arch=args.char_arch, hid_dim=128, num_layers=1, 
-                                                           in_drop_rates=(args.drop_rate, 0.0, 0.0)))
-            nested_ohots_config = ConfigDict({'char': char_config})
-        elif args.language.lower() == 'chinese' and args.use_softlexicon:
-            ctb50 = Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
-            nested_ohots_config = ConfigDict({'softlexicon': SoftLexiconConfig(vectors=ctb50, emb_dim=50, freeze=args.emb_freeze)})
-        else:
-            nested_ohots_config = None
-        
-        if args.use_interm1:
-            interm1_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
-        else:
-            interm1_config = None
-            
-        interm2_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
-        
-        if args.language.lower() == 'english' and args.use_elmo:
-            elmo_config = ELMoConfig(elmo=load_pretrained('elmo'))
-        else:
-            elmo_config = None
-            
-        if args.language.lower() == 'english' and args.use_flair:
-            flair_fw_lm, flair_bw_lm = load_pretrained('flair')
-            flair_fw_config, flair_bw_config = FlairConfig(flair_lm=flair_fw_lm), FlairConfig(flair_lm=flair_bw_lm)
-            interm2_config.in_proj = True
-        else:
-            flair_fw_config, flair_bw_config = None, None
-            
-        bert_like_config = None
-        
-    elif args.command in ('finetune', 'ft'):
-        ohots_config = None
+    if args.language.lower() == 'chinese' and args.use_bigram:
+        giga_bi = Vectors.load("assets/vectors/gigaword_chn.all.a2b.bi.ite50.vec", encoding='utf-8')
+        ohots_config['bigram'] = OneHotConfig(field='bigram', vectors=giga_bi, emb_dim=50, freeze=args.emb_freeze)
+    
+    ohots_config = ConfigDict(ohots_config) if len(ohots_config) > 0 else None
+    
+    
+    if args.language.lower() == 'chinese' and args.use_softword:
+        mhots_config = ConfigDict({'softword': MultiHotConfig(field='softword', use_emb=False)})
+    else:
         mhots_config = None
+    
+    if args.language.lower() == 'english' and args.char_arch.lower() != 'none':
+        char_config = CharConfig(emb_dim=16,  
+                                 encoder=EncoderConfig(arch=args.char_arch, hid_dim=128, num_layers=1, 
+                                                       in_drop_rates=(args.drop_rate, 0.0, 0.0)))
+        nested_ohots_config = ConfigDict({'char': char_config})
+    elif args.language.lower() == 'chinese' and args.use_softlexicon:
+        ctb50 = Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
+        nested_ohots_config = ConfigDict({'softlexicon': SoftLexiconConfig(vectors=ctb50, emb_dim=50, freeze=args.emb_freeze)})
+    else:
         nested_ohots_config = None
+    
+    if args.use_interm1:
+        interm1_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
+    else:
         interm1_config = None
-        
-        if args.use_interm2:
-            interm2_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
-        else:
-            interm2_config = None
-        
+    
+    if args.use_interm2:
+        interm2_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
+    else:
+        interm2_config = None
+    
+    if args.language.lower() == 'english' and args.use_elmo:
+        elmo_config = ELMoConfig(elmo=load_pretrained('elmo'))
+    else:
         elmo_config = None
+    
+    if args.language.lower() == 'english' and args.use_flair:
+        flair_fw_lm, flair_bw_lm = load_pretrained('flair')
+        flair_fw_config, flair_bw_config = FlairConfig(flair_lm=flair_fw_lm), FlairConfig(flair_lm=flair_bw_lm)
+        if interm2_config is not None:
+            interm2_config.in_proj = True
+    else:
         flair_fw_config, flair_bw_config = None, None
-        
+    
+    if args.bert_arch.lower() != 'none':
         # Cased tokenizer for NER task
         bert_like, tokenizer = load_pretrained(args.bert_arch, args, cased=True)
         bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert_like, arch=args.bert_arch, 
-                                          freeze=False, use_truecase='cased' in os.path.basename(bert_like.name_or_path).split('-'))
+                                            freeze=False, use_truecase='cased' in os.path.basename(bert_like.name_or_path).split('-'))
     else:
-        raise Exception("No sub-command specified")
-        
+        bert_like_config = None
+    
     return {'ohots': ohots_config, 
             'mhots': mhots_config, 
             'nested_ohots': nested_ohots_config, 
@@ -179,13 +185,41 @@ def build_ER_config(args: argparse.Namespace):
                                                         affine=EncoderConfig(arch=args.affine_arch, hid_dim=150, num_layers=1, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2), 
                                                         fl_gamma=args.fl_gamma,
                                                         sl_epsilon=args.sl_epsilon, 
-                                                        sb_epsilon=args.sb_epsilon,
+                                                        neg_sampling_rate=args.neg_sampling_rate, 
+                                                        hard_neg_sampling_rate=args.hard_neg_sampling_rate, 
+                                                        hard_neg_sampling_size=args.hard_neg_sampling_size, 
+                                                        sb_epsilon=args.sb_epsilon, 
+                                                        sb_size=args.sb_size,
+                                                        sb_adj_factor=args.sb_adj_factor, 
                                                         hid_drop_rates=drop_rates)
     return ExtractorConfig(**collect_IE_assembly_config(args), decoder=decoder_config)
 
 
+def process_IE_data(train_data, dev_data, test_data, args, config):
+    if (config.bert_like is not None and 
+            ((args.dataset in ('SIGHAN2006', 'yidu_s4k')) or 
+             (args.dataset in ('conll2003', 'conll2012') and args.doc_level))):
+        train_data = segment_uniformly_for_bert_like(train_data, config.bert_like.tokenizer, verbose=args.log_terminal)
+        dev_data   = segment_uniformly_for_bert_like(dev_data,   config.bert_like.tokenizer, verbose=args.log_terminal)
+        test_data  = segment_uniformly_for_bert_like(test_data,  config.bert_like.tokenizer, verbose=args.log_terminal)
+    
+    if args.use_softword or args.use_softlexicon:
+        if config.nested_ohots is not None and 'softlexicon' in config.nested_ohots.keys():
+            ctb50 = config.nested_ohots['softlexicon'].vectors
+        else:
+            ctb50 = Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
+        tokenizer = LexiconTokenizer(ctb50.itos)
+        for data in [train_data, dev_data, test_data]:
+            for data_entry in data:
+                data_entry['tokens'].build_softwords(tokenizer.tokenize)
+                data_entry['tokens'].build_softlexicons(tokenizer.tokenize)
+    
+    return train_data, dev_data, test_data
+
+
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                     fromfile_prefix_chars='@')
     args = parse_arguments(parser)
     
     # Use micro-seconds to ensure different timestamps while adopting multiprocessing
@@ -193,7 +227,7 @@ if __name__ == '__main__':
     save_path =  f"cache/{args.dataset}-ER/{timestamp}"
     if not os.path.exists(save_path):
         os.makedirs(save_path)
-        
+    
     handlers = [logging.FileHandler(f"{save_path}/training.log")]
     if args.log_terminal:
         handlers.append(logging.StreamHandler(sys.stdout))
@@ -213,24 +247,18 @@ if __name__ == '__main__':
     if device.type.startswith('cuda'):
         torch.cuda.set_device(device)
         temp = torch.randn(100).to(device)
-        
+    
     train_data, dev_data, test_data = load_data(args)
     args.language = dataset2language[args.dataset]
     config = build_ER_config(args)
-    
-    if (args.command in ('finetune', 'ft') and 
-            ((args.dataset in ('SIGHAN2006', 'yidu_s4k')) or 
-             (args.dataset in ('conll2003', 'conll2012') and getattr(args, 'doc_level', False)))):
-        train_data = segment_uniformly_for_bert_like(train_data, config.bert_like.tokenizer, verbose=args.log_terminal)
-        dev_data   = segment_uniformly_for_bert_like(dev_data,   config.bert_like.tokenizer, verbose=args.log_terminal)
-        test_data  = segment_uniformly_for_bert_like(test_data,  config.bert_like.tokenizer, verbose=args.log_terminal)
+    train_data, dev_data, test_data = process_IE_data(train_data, dev_data, test_data, args, config)
     
     if not args.train_with_dev:
         train_set = Dataset(train_data, config, training=True)
         train_set.build_vocabs_and_dims(dev_data, test_data)
         dev_set   = Dataset(dev_data,  train_set.config, training=False)
         test_set  = Dataset(test_data, train_set.config, training=False)
-
+        
         train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
         dev_loader   = torch.utils.data.DataLoader(dev_set,   batch_size=args.batch_size, shuffle=False, collate_fn=dev_set.collate)
     else:
@@ -238,10 +266,10 @@ if __name__ == '__main__':
         train_set.build_vocabs_and_dims(test_data)
         dev_set   = Dataset([],        train_set.config, training=False)
         test_set  = Dataset(test_data, train_set.config, training=False)
-
+        
         train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
         dev_loader   = None
-
+    
     logger.info(train_set.summary)
     
     logger.info(header_format("Building", sep='-'))
@@ -252,14 +280,19 @@ if __name__ == '__main__':
     trainer = build_trainer(model, device, len(train_loader), args)
     if args.pdb: 
         pdb.set_trace()
-        
-        
+    
+    if args.profile:
+        prof = profile(trainer, train_loader)
+        pdb.set_trace()
+    
     torch.save(config, f"{save_path}/{config.name}-config.pth")
     def save_callback(model):
         torch.save(model, f"{save_path}/{config.name}.pth")
     trainer.train_steps(train_loader=train_loader, dev_loader=dev_loader, num_epochs=args.num_epochs, 
                         save_callback=save_callback, save_by_loss=False)
     
+    # Save the final version
+    # torch.save(model, f"{save_path}/{config.name}.fv.pth")
     
     logger.info(header_format("Evaluating", sep='-'))
     model = torch.load(f"{save_path}/{config.name}.pth", map_location=device)
@@ -277,7 +310,7 @@ if __name__ == '__main__':
             # Retrieve the original splits
             train_set = Dataset(train_data, train_set.config, training=True)
             dev_set   = Dataset(dev_data,   train_set.config, training=False)
-
+        
         train_set_chunks_pred = trainer.predict(train_set, batch_size=args.batch_size)
         for ex, chunks_pred in zip(train_data, train_set_chunks_pred):
             ex['chunks'] = ex['chunks'] + [ck for ck in chunks_pred if ck not in ex['chunks']]

@@ -17,7 +17,7 @@ from eznlp.training import Trainer, count_params, evaluate_relation_extraction
 
 from utils import add_base_arguments, parse_to_args
 from utils import load_data, dataset2language, load_pretrained, build_trainer, header_format
-from entity_recognition import collect_IE_assembly_config
+from entity_recognition import collect_IE_assembly_config, process_IE_data
 
 
 def parse_arguments(parser: argparse.ArgumentParser):
@@ -38,7 +38,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                help="Focal Loss gamma")
     group_decoder.add_argument('--sl_epsilon', type=float, default=0.0, 
                                help="Label smoothing loss epsilon")
-
+    
     # Span-based
     group_decoder.add_argument('--agg_mode', type=str, default='max_pooling', 
                                help="aggregating mode")
@@ -75,7 +75,8 @@ def build_RE_config(args: argparse.Namespace):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                     fromfile_prefix_chars='@')
     args = parse_arguments(parser)
     
     # Use micro-seconds to ensure different timestamps while adopting multiprocessing
@@ -83,7 +84,7 @@ if __name__ == '__main__':
     save_path =  f"cache/{args.dataset}-RE/{timestamp}"
     if not os.path.exists(save_path):
         os.makedirs(save_path)
-        
+    
     handlers = [logging.FileHandler(f"{save_path}/training.log")]
     if args.log_terminal:
         handlers.append(logging.StreamHandler(sys.stdout))
@@ -102,7 +103,7 @@ if __name__ == '__main__':
     device = auto_device()
     if device.type.startswith('cuda'):
         torch.cuda.set_device(device)
-        
+    
     if len(args.pipeline_path) > 0:
         if not os.path.exists(f"{args.pipeline_path}/data-with-chunks-pred.pth"):
             raise RuntimeError("`pipeline_path` is specified but not existing")
@@ -113,6 +114,7 @@ if __name__ == '__main__':
         train_data, dev_data, test_data = load_data(args)
     args.language = dataset2language[args.dataset]
     config = build_RE_config(args)
+    train_data, dev_data, test_data = process_IE_data(train_data, dev_data, test_data, args, config)
     
     if not args.train_with_dev:
         train_set = Dataset(train_data, config, training=True)
@@ -141,7 +143,7 @@ if __name__ == '__main__':
     trainer = build_trainer(model, device, len(train_loader), args)
     if args.pdb: 
         pdb.set_trace()
-        
+    
     torch.save(config, f"{save_path}/{config.name}-config.pth")
     def save_callback(model):
         torch.save(model, f"{save_path}/{config.name}.pth")

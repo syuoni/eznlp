@@ -40,7 +40,7 @@ class BertLikeConfig(Config):
     @property
     def name(self):
         return self.arch
-    
+        
     def __getstate__(self):
         state = self.__dict__.copy()
         state['bert_like'] = None
@@ -78,7 +78,7 @@ class BertLikeConfig(Config):
         ----------
         tokenized_raw_text : List[str]
             e.g., ["I", "like", "this", "movie", "."]
-
+        
         Returns
         -------
         sub_tok_ids: torch.LongTensor
@@ -132,9 +132,9 @@ class BertLikeConfig(Config):
         
     def instantiate(self):
         return BertLikeEmbedder(self)
-    
-    
-    
+
+
+
 class BertLikeEmbedder(torch.nn.Module):
     """
     An embedder based on BERT representations. 
@@ -159,7 +159,7 @@ class BertLikeEmbedder(torch.nn.Module):
             self.scalar_mix = ScalarMix(config.num_hidden_layers + 1)
         if self.use_gamma:
             self.gamma = torch.nn.Parameter(torch.tensor(1.0))
-            
+        
         # Register BERT configurations
         self.bert_like.requires_grad_(not self.freeze)
         
@@ -172,7 +172,7 @@ class BertLikeEmbedder(torch.nn.Module):
         # pooler_output: (batch, hid_dim)
         # hidden: a tuple of (batch, sub_tok_step+2, hid_dim)
         bert_outs = self.bert_like(input_ids=sub_tok_ids, 
-                                   attention_mask=(~sub_mask).type(torch.long), 
+                                   attention_mask=(~sub_mask).long(), 
                                    output_hidden_states=True)
         bert_hidden = bert_outs['hidden_states']
         
@@ -194,11 +194,11 @@ class BertLikeEmbedder(torch.nn.Module):
         if self.from_tokenized:
             # bert_hidden: (batch, tok_step, hid_dim)
             bert_hidden = self.group_aggregating(bert_hidden, ori_indexes)
-            
+        
         return bert_hidden
-    
-    
-    
+
+
+
 def _truecase(tokenized_raw_text: List[str]):
     """
     Get the truecased text. 
@@ -218,13 +218,13 @@ def _truecase(tokenized_raw_text: List[str]):
     
     if len(lst) > 0 and len(lst) == len(word_lst):
         parts = truecase.get_true_case(' '.join(lst)).split()
-
+    
         # the trucaser have its own tokenization ...
         # skip if the number of word dosen't match
         if len(parts) == len(word_lst): 
             for (w, idx), nw in zip(word_lst, parts):
                 new_tokenized[idx] = nw
-                
+    
     return new_tokenized
 
 
@@ -239,7 +239,7 @@ def _tokenized2nested(tokenized_raw_text: List[str], tokenizer: transformers.Pre
             # The tokenizer may return a very long list if the input is a url
             sub_tokens = sub_tokens[:max_len]
         nested_sub_tokens.append(sub_tokens)
-        
+    
     return nested_sub_tokens
 
 
@@ -263,7 +263,7 @@ def truncate_for_bert_like(data: list, tokenizer: transformers.PreTrainedTokeniz
     else:
         head_len = tokenizer.model_max_length // 4
         tail_len = max_len - head_len
-        
+    
     num_truncated = 0
     for data_entry in tqdm.tqdm(data, disable=not verbose, ncols=100, desc="Truncating data"):
         tokens = data_entry['tokens']
@@ -276,12 +276,12 @@ def truncate_for_bert_like(data: list, tokenizer: transformers.PreTrainedTokeniz
             find_head, head_end = find_ascending(cum_lens, head_len)
             if find_head:
                 head_end += 1
-                
+            
             rev_cum_lens = numpy.cumsum(sub_tok_seq_lens[::-1]).tolist()
             find_tail, tail_begin = find_ascending(rev_cum_lens, tail_len)
             if find_tail:
                 tail_begin += 1
-                
+            
             if tail_len == 0:
                 assert head_end > 0
                 data_entry['tokens'] = tokens[:head_end]
@@ -291,9 +291,9 @@ def truncate_for_bert_like(data: list, tokenizer: transformers.PreTrainedTokeniz
             else:
                 assert head_end > 0 and tail_begin > 0
                 data_entry['tokens'] = tokens[:head_end] + tokens[-tail_begin:]
-                
-            num_truncated += 1
             
+            num_truncated += 1
+    
     logger.info(f"Truncated sequences: {num_truncated} ({num_truncated/len(data)*100:.2f}%)")
     return data
 
