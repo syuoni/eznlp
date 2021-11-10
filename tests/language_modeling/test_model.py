@@ -12,10 +12,10 @@ class TestMaskedLM(object):
         self.model.eval()
         
         bert_like4mlm_outs012 = self.model(input_ids=self.batch.mlm_tok_ids[:3], 
-                                           attention_mask=(~self.batch.attention_mask[:3]).type(torch.long), 
+                                           attention_mask=(~self.batch.attention_mask[:3]).long(), 
                                            labels=self.batch.mlm_lab_ids[:3])
         bert_like4mlm_outs123 = self.model(input_ids=self.batch.mlm_tok_ids[1:], 
-                                           attention_mask=(~self.batch.attention_mask[1:]).type(torch.long), 
+                                           attention_mask=(~self.batch.attention_mask[1:]).long(), 
                                            labels=self.batch.mlm_lab_ids[1:])
         mlm_logits012 = bert_like4mlm_outs012['logits']
         mlm_logits123 = bert_like4mlm_outs123['logits']

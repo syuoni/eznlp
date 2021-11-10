@@ -32,7 +32,7 @@ class TestFocalLoss(object):
     @pytest.mark.parametrize("gamma", [1.0, 2.0, 3.0])
     def test_loss_value_against_CE(self, gamma):
         # From badly-classified to well-classified
-        logits = torch.stack([torch.arange(-5, 6), -torch.arange(-5, 6)]).T.type(torch.float)
+        logits = torch.stack([torch.arange(-5, 6), -torch.arange(-5, 6)]).T.float()
         target = torch.zeros(logits.size(0), dtype=torch.long)
         
         cross_entropy = torch.nn.CrossEntropyLoss(reduction='none')
@@ -99,7 +99,7 @@ class TestSmoothLabel(object):
     @pytest.mark.parametrize("epsilon", [0.1, 0.2, 0.3])
     def test_loss_value_against_CE(self, epsilon):
         # From badly-classified to well-classified
-        logits = torch.stack([torch.arange(-5, 6), -torch.arange(-5, 6)]).T.type(torch.float)
+        logits = torch.stack([torch.arange(-5, 6), -torch.arange(-5, 6)]).T.float()
         target = torch.zeros(logits.size(0), dtype=torch.long)
         
         cross_entropy = torch.nn.CrossEntropyLoss(reduction='none')
@@ -131,5 +131,5 @@ class TestSmoothLabel(object):
         assert (SL_losses - CE_losses).abs().max().item() < 1e-6
 
         # Covert target to onehot encoding
-        SL_losses = smooth(logits, torch.nn.functional.one_hot(target, num_classes=5).type(torch.float))
+        SL_losses = smooth(logits, torch.nn.functional.one_hot(target, num_classes=5).float())
         assert (SL_losses - CE_losses).abs().max().item() < 1e-6

@@ -19,7 +19,7 @@ def test_locked_dropout(dropout_rate):
     
     dropout.train()
     x_locked_dropouted = dropout(x)
-    assert set(x_locked_dropouted.sum(dim=1).type(torch.long).flatten().tolist()) == {0, int(round(MAX_LEN/(1-dropout_rate)))}
+    assert set(x_locked_dropouted.sum(dim=1).long().flatten().tolist()) == {0, int(round(MAX_LEN/(1-dropout_rate)))}
     assert abs(x_locked_dropouted.mean().item() - 1) < 0.05
 
 
@@ -38,5 +38,5 @@ def test_word_dropout(dropout_rate):
     
     dropout.train()
     x_word_dropouted = dropout(x)
-    assert set(x_word_dropouted.sum(dim=2).type(torch.long).flatten().tolist()) == {0, int(round(HID_DIM/(1-dropout_rate)))}
+    assert set(x_word_dropouted.sum(dim=2).long().flatten().tolist()) == {0, int(round(HID_DIM/(1-dropout_rate)))}
     assert abs(x_word_dropouted.mean().item() - 1) < 0.05
