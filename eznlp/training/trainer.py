@@ -98,7 +98,7 @@ class Trainer(object):
                 self.scaler.unscale_(self.optimizer)
                 # torch.nn.utils.clip_grad_value_(self.model.parameters(), self.grad_clip)
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
-                
+            
             # Update weights
             self.scaler.step(self.optimizer)
             self.scaler.update()
@@ -110,7 +110,9 @@ class Trainer(object):
             self.scheduler.step()
         
         
-    def predict(self, dataset: Dataset, batch_size: int=32):
+    def predict(self, dataset: Dataset, batch_size: int=32, beam_size: int=1):
+        assert self.num_metrics == 1 or beam_size <= 1
+        
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, collate_fn=dataset.collate)
         
         self.model.eval()
@@ -118,12 +120,18 @@ class Trainer(object):
         with torch.no_grad():
             for batch in dataloader:
                 batch = batch.to(self.device)
+                
                 # `dataset` may not have ground-truths, so avoid computing loss here 
-                states = self.model.forward2states(batch)
-                batch_y_pred = self.model.decoder._unsqueezed_decode(batch, **states)
-                for k in range(self.num_metrics):
-                    set_y_pred[k].extend(batch_y_pred[k])
-                    
+                if beam_size <= 1:
+                    states = self.model.forward2states(batch)
+                    batch_y_pred = self.model.decoder._unsqueezed_decode(batch, **states)
+                    for k in range(self.num_metrics):
+                        set_y_pred[k].extend(batch_y_pred[k])
+                else:
+                    # `num_metrics` must be 1
+                    batch_y_pred = self.model.beam_search(beam_size, batch)
+                    set_y_pred[0].extend(batch_y_pred)
+        
         if self.num_metrics == 1:
             return set_y_pred[0]
         else:
@@ -155,10 +163,10 @@ class Trainer(object):
                 for k in range(self.num_metrics):
                     epoch_y_gold[k].extend(batch_y_gold[k])
                     epoch_y_pred[k].extend(batch_y_pred[k])
-                    
+            
             self.backward_batch(loss)
             epoch_losses.append(loss.item())
-            
+        
         if self.num_metrics == 0:
             return numpy.mean(epoch_losses)
         else:
@@ -186,9 +194,9 @@ class Trainer(object):
                     for k in range(self.num_metrics):
                         epoch_y_gold[k].extend(batch_y_gold[k])
                         epoch_y_pred[k].extend(batch_y_pred[k])
-                        
-                epoch_losses.append(loss.item())
                 
+                epoch_losses.append(loss.item())
+        
         if self.num_metrics == 0:
             return numpy.mean(epoch_losses)
         else:
@@ -231,7 +239,7 @@ class Trainer(object):
         eval_every_steps = len(train_loader) if eval_every_steps is None else eval_every_steps
         if eval_every_steps % disp_every_steps != 0:
             raise ValueError(f"`eval_every_steps` {eval_every_steps} should be multiples of `disp_every_steps` {disp_every_steps}")
-            
+        
         self.model.train()
         
         best_dev_loss = numpy.inf
@@ -259,7 +267,7 @@ class Trainer(object):
                     for k in range(self.num_metrics):
                         train_y_gold[k].extend(batch_y_gold[k])
                         train_y_pred[k].extend(batch_y_pred[k])
-                        
+                    
                 self.backward_batch(loss)
                 train_losses.append(loss.item())
                 
@@ -282,7 +290,7 @@ class Trainer(object):
                         dev_loss = loss_with_possible_metric
                     else:
                         dev_loss, *dev_metric = loss_with_possible_metric
-                        
+                    
                     elapsed_secs = int(time.time() - t0)
                     disp_running_info(elapsed_secs=elapsed_secs, 
                                       loss=dev_loss, 
@@ -293,12 +301,12 @@ class Trainer(object):
                         best_dev_loss = dev_loss
                         if (save_callback is not None) and save_by_loss:
                             save_callback(self.model)
-                            
+                    
                     if self.num_metrics > 0 and numpy.mean(dev_metric) > best_dev_metric:
                         best_dev_metric = numpy.mean(dev_metric)
                         if (save_callback is not None) and (not save_by_loss):
                             save_callback(self.model)
-                            
+                    
                     if self.scheduler is not None and not self.schedule_by_step:
                         if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
                             if save_by_loss:
@@ -309,14 +317,14 @@ class Trainer(object):
                                 self.scheduler.step(numpy.mean(dev_metric))
                         else:
                             self.scheduler.step()
-                            
+                    
                     self.model.train()
                     t0 = time.time()
-                    
+                
                 if (sidx+1) % eval_every_steps == 0 and dev_loader is None:
                     if save_callback is not None:
                         save_callback(self.model)
-                    
+                
                 if (sidx+1) >= max_steps:
                     done_training = True
                     break
@@ -338,7 +346,7 @@ def disp_running_info(eidx=None, sidx=None, lrs=None, elapsed_secs=None, loss=No
         disp_text.append("LR: (" + "/".join(f"{lr:.6f}" for lr in lrs) + ")")
     if len(disp_text) > 0:
         logger.info(" | ".join(disp_text))
-        
+    
     if partition.lower().startswith('train'):
         partition = "Train"
     elif partition.lower().startswith('dev'):
@@ -347,7 +355,7 @@ def disp_running_info(eidx=None, sidx=None, lrs=None, elapsed_secs=None, loss=No
         partition = "Test "
     else:
         raise ValueError("Invalid partition {partition}")
-        
+    
     disp_text = []
     assert loss is not None
     disp_text.append(f"\t{partition} Loss: {loss:.3f}")

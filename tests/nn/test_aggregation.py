@@ -25,6 +25,34 @@ def test_sequence_pooling(mode, f_agg):
 
 
 
+@pytest.mark.parametrize("use_mask", [True, False])
+def test_rnn_last(use_mask):
+    BATCH_SIZE = 100
+    MAX_LEN = 20
+    HID_DIM = 50
+    
+    rnn = torch.nn.LSTM(HID_DIM, HID_DIM, num_layers=2, bidirectional=True, batch_first=True)
+    x = torch.randn(BATCH_SIZE, MAX_LEN, HID_DIM)
+    
+    if use_mask:
+        seq_lens = torch.randint(0, MAX_LEN, size=(BATCH_SIZE, )) + 1
+        mask = seq_lens2mask(seq_lens, max_len=MAX_LEN)
+        
+        packed_x = torch.nn.utils.rnn.pack_padded_sequence(x, lengths=seq_lens, batch_first=True, enforce_sorted=False)
+        packed_y, (hidden, _) = rnn(packed_x)
+        y, _ = torch.nn.utils.rnn.pad_packed_sequence(packed_y, batch_first=True, padding_value=0)
+    else:
+        mask = None
+        y, (hidden, _) = rnn(x)
+    
+    # The last hidden states on the top layer
+    last_hidden_gold = torch.cat([hidden[-2], hidden[-1]], dim=-1)
+    last_hidden_agg  = SequencePooling(mode='rnn_last')(y, mask)
+    assert (last_hidden_agg == last_hidden_gold).all().item()
+
+
+
+
 @pytest.mark.parametrize("x, group_by", [(torch.randn(1, 10, 20), 
                                           torch.tensor([[0, 0, 1, 1, 2, 3, 3, 3, 3, -1]])), 
                                          (torch.randn(16, 10, 20), 

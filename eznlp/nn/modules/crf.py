@@ -62,7 +62,7 @@ class CRF(torch.nn.Module):
         self.pad_idx = pad_idx
         self.batch_first = batch_first
         
-    
+        
     def extra_repr(self):
         return f"tag_dim={self.tag_dim}, pad_idx={self.pad_idx}, batch_first={self.batch_first}"
         
@@ -75,12 +75,12 @@ class CRF(torch.nn.Module):
             emissions = emissions.permute(1, 0, 2)
             tag_ids   = tag_ids.permute(1, 0)
             mask      = mask.permute(1, 0)
-            
+        
         log_scores = self._compute_log_scores(emissions, tag_ids, mask)
         log_partitions = self._compute_log_partitions(emissions, mask)
         return log_partitions - log_scores
         
-    
+        
     def decode(self, emissions: torch.Tensor, mask: torch.BoolTensor):
         if self.batch_first:
             emissions = emissions.permute(1, 0, 2)
@@ -106,11 +106,11 @@ class CRF(torch.nn.Module):
             
             # Preserve the values where masked. 
             log_scores = torch.where(mask[t], log_scores, next_log_scores)
-            
+        
         log_scores = log_scores + self.eos_transitions[tag_ids[step-1-mask.sum(dim=0), batch_arange]]
         return log_scores
-    
-    
+        
+        
     def _compute_log_partitions(self, emissions: torch.Tensor, mask: torch.BoolTensor):
         """
         Compute the denominator of the conditional probability in log space. 
@@ -134,8 +134,8 @@ class CRF(torch.nn.Module):
         # log_partitions: (batch, tag_dim) -> (batch, )
         log_partitions = (log_partitions + self.eos_transitions).logsumexp(dim=1)
         return log_partitions
-    
-    
+        
+        
     def _viterbi_decode(self, emissions: torch.Tensor, mask: torch.BoolTensor):
         """
         Decode the best paths. 
@@ -175,9 +175,7 @@ class CRF(torch.nn.Module):
             # retrieve the best path backward
             for indices in history[:step-1-mask[:, k].sum()][::-1]:
                 best_path.append(indices[k, best_path[-1]].item())
-                
+            
             # reverse the order of best path
             best_paths.append(best_path[::-1])
         return best_paths
-    
-    

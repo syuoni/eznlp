@@ -11,24 +11,24 @@ import flair
 from eznlp import auto_device
 from eznlp.token import TokenSequence
 from eznlp.vectors import Vectors, GloVe
-from eznlp.io import TabularIO, ConllIO, JsonIO, BratIO
+from eznlp.io import TabularIO, ConllIO, JsonIO, KarpathyIO, BratIO, Src2TrgIO
 
 
 def pytest_addoption(parser):
     parser.addoption('--device', type=str, default='auto', help="device to run tests (`auto`, `cpu` or `cuda:x`)")
     parser.addoption('--runslow', default=False, action='store_true', help="whether to run slow tests")
-    
+
 def pytest_configure(config):
     config.addinivalue_line("markers", "slow: mark test as slow")
-    
+
 def pytest_collection_modifyitems(config, items):
     if not config.getoption("--runslow"):
         skip_slow = pytest.mark.skip(reason="need --runslow option to run")
         for item in items:
             if "slow" in item.keywords:
                 item.add_marker(skip_slow)
-    
-    
+
+
 @pytest.fixture(scope='session')
 def device(request):
     device_str = request.config.getoption('--device')
@@ -36,11 +36,15 @@ def device(request):
         return auto_device()
     else:
         return torch.device(device_str)
-    
-    
+
+
 @pytest.fixture
 def spacy_nlp_en():
     return spacy.load("en_core_web_sm", disable=['tagger', 'parser', 'ner'])
+
+@pytest.fixture
+def spacy_nlp_de():
+    return spacy.load("de_core_news_sm", disable=['tagger', 'parser', 'ner'])
 
 
 @pytest.fixture
@@ -190,24 +194,43 @@ def flair_lm(request, flair_fw_lm, flair_bw_lm):
         return flair_bw_lm
 
 
+@pytest.fixture
+def multi30k_demo(spacy_nlp_en, spacy_nlp_de):
+    return Src2TrgIO(tokenize_callback=spacy_nlp_de, 
+                     trg_tokenize_callback=spacy_nlp_en, 
+                     encoding='utf-8', 
+                     case_mode='Lower', 
+                     number_mode='None').read("data/multi30k/demo.train.de", "data/multi30k/demo.train.en")
+
 
 @pytest.fixture
-def flickr8k_demo_with_folder():
-    data = TabularIO(text_col_id=1, label_col_id=0, sep='\t').read("data/flickr8k/demo.Flickr8k.token.txt")
-    for entry in data:
-        entry['trg_tokens'] = entry.pop('tokens')
-        entry['img_fn'], entry['cap_no'] = entry.pop('label').split('#')
-    folder = "data/flickr8k/Flicker8k_Dataset"
-    return data, folder
+def flickr8k_demo():
+    io = KarpathyIO(img_folder="data/flickr8k/Flicker8k_Dataset")
+    train_data, *_ = io.read("data/flickr8k/demo.flickr8k-karpathy2015cvpr.json")
+    return train_data
 
 
 @pytest.fixture
 def resnet18_with_trans():
     resnet = torchvision.models.resnet18(pretrained=False)
     resnet.load_state_dict(torch.load("assets/resnet/resnet18-5c106cde.pth"))
-    resnet = torch.nn.Sequential(*list(resnet.children())[:-2])
     
-    trans = torch.nn.Sequential(torchvision.transforms.Resize((256, 256)), 
+    # https://pytorch.org/vision/stable/models.html
+    trans = torch.nn.Sequential(torchvision.transforms.Resize(256), 
+                                torchvision.transforms.CenterCrop(224), 
                                 torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                                                  std =[0.229, 0.224, 0.225]))
     return resnet, trans
+
+
+@pytest.fixture
+def vgg11_with_trans():
+    vgg = torchvision.models.vgg11(pretrained=False)
+    vgg.load_state_dict(torch.load("assets/vgg/vgg11-bbd30ac9.pth"))
+    
+    # https://pytorch.org/vision/stable/models.html
+    trans = torch.nn.Sequential(torchvision.transforms.Resize(256), 
+                                torchvision.transforms.CenterCrop(224), 
+                                torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                                                 std =[0.229, 0.224, 0.225]))
+    return vgg, trans

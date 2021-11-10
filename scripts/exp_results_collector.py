@@ -10,8 +10,9 @@ import pandas
 
 
 dict_re = re.compile("\{[^\{\}]+\}")
-metrics_re = {'acc': re.compile("(?<=Accuracy: )\d+\.\d+(?=%)"), 
-              'micro_f1': re.compile("(?<=Micro F1-score: )\d+\.\d+(?=%)")}
+metircs_re = {'acc': re.compile("(?<=Accuracy: )\d+\.\d+(?=%)"), 
+              'micro_f1': re.compile("(?<=Micro F1-score: )\d+\.\d+(?=%)"), 
+              'bleu4': re.compile("(?<=BLEU-4: )\d+\.\d+(?=%)")}
 
 
 if __name__ == '__main__':

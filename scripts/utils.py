@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import os
 import argparse
 import logging
 import re
@@ -13,8 +14,9 @@ import allennlp.modules
 import transformers
 import flair
 
-from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO, BratIO
+from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO, KarpathyIO, BratIO, Src2TrgIO
 from eznlp.io import PostIO
+from eznlp.vectors import Vectors, GloVe
 from eznlp.training import Trainer, LRLambda, collect_params, check_param_groups
 from eznlp.metrics import precision_recall_f1_report
 
@@ -51,7 +53,7 @@ def add_base_arguments(parser: argparse.ArgumentParser):
     group_train.add_argument('--finetune_lr', type=float, default=2e-5, 
                              help="learning rate for finetuning")
     group_train.add_argument('--scheduler', type=str, default='None', 
-                             help='scheduler', choices=['None', 'ReduceLROnPlateau', 'LinearDecayWithWarmup'])
+                             help='scheduler', choices=['None', 'ReduceLROnPlateau', 'LinearDecayWithWarmup', 'PowerDecayWithWarmup'])
     group_train.add_argument('--num_grad_acc_steps', type=int, default=1, 
                              help="number of gradient accumulation steps")
     
@@ -69,6 +71,8 @@ def add_base_arguments(parser: argparse.ArgumentParser):
     group_model.add_argument('--use_softlexicon', default=False, action='store_true', 
                              help="whether to use softlexicon")
     
+    group_model.add_argument('--enc_arch', type=str, default='LSTM', choices=['LSTM', 'GRU', 'Conv', 'Gehring', 'Transformer'], 
+                             help="token-level encoder architecture")
     group_model.add_argument('--hid_dim', type=int, default=200, 
                              help="hidden dim")
     group_model.add_argument('--num_layers', type=int, default=1, 
@@ -106,6 +110,8 @@ def parse_to_args(parser: argparse.ArgumentParser):
 
 
 spacy_nlp_en = spacy.load("en_core_web_sm", disable=['tagger', 'parser', 'ner'])
+spacy_nlp_de = spacy.load("de_core_news_sm", disable=['tagger', 'parser', 'ner'])
+
 
 dataset2language = {'conll2003': 'English', 
                     'conll2012': 'English', 
@@ -125,8 +131,11 @@ dataset2language = {'conll2003': 'English',
                     'yelp_full': 'English', 
                     'ChnSentiCorp': 'Chinese', 
                     'THUCNews_10': 'Chinese', 
+                    'multi30k': ('English', 'German'), 
+                    'iwslt14': ('English', 'German'), 
                     'flickr8k': 'English', 
-                    'flickr30k': 'English'}
+                    'flickr30k': 'English', 
+                    'mscoco': 'English'}
 
 def load_data(args: argparse.Namespace):
     if args.dataset == 'conll2003':
@@ -304,23 +313,30 @@ def load_data(args: argparse.Namespace):
         dev_data   = tabular_io.read("data/THUCNews-10/cnews.val.txt")
         test_data  = tabular_io.read("data/THUCNews-10/cnews.test.txt")
         
-    elif args.dataset == 'flickr8k':
-        io = TabularIO(text_col_id=1, label_col_id=0, sep='\t', verbose=args.log_terminal, case_mode='None', number_mode='None')
-        data = io.read("data/flickr8k/Flickr8k.token.txt")
-        for entry in data:
-            entry['trg_tokens'] = entry.pop('tokens')
-            entry['img_fn'], entry['cap_no'] = entry.pop('label').split('#')
+    elif args.dataset == 'multi30k':
+        io = Src2TrgIO(tokenize_callback=spacy_nlp_de, trg_tokenize_callback=spacy_nlp_en, encoding='utf-8', verbose=args.log_terminal, 
+                       case_mode='Lower', number_mode='None')
+        train_data = io.read("data/multi30k/train.en", "data/multi30k/train.de")
+        dev_data   = io.read("data/multi30k/val.en", "data/multi30k/val.de")
+        test_data  = io.read("data/multi30k/test2016.en", "data/multi30k/test2016.de")
         
-        with open("data/flickr8k/Flickr_8k.trainImages.txt") as f:
-            train_fns = set([line.strip() for line in f])
-        with open("data/flickr8k/Flickr_8k.devImages.txt") as f:
-            dev_fns = set([line.strip() for line in f])
-        with open("data/flickr8k/Flickr_8k.testImages.txt") as f:
-            test_fns = set([line.strip() for line in f])
-            
-        train_data = [entry for entry in data if entry['img_fn'] in train_fns]
-        dev_data   = [entry for entry in data if entry['img_fn'] in dev_fns]
-        test_data  = [entry for entry in data if entry['img_fn'] in test_fns]
+    elif args.dataset == 'iwslt14':
+        io = Src2TrgIO(tokenize_callback=None, trg_tokenize_callback=None, encoding='utf-8', case_mode='Lower', number_mode='None')
+        train_data = io.read("data/iwslt14.tokenized.de-en/train.en", "data/iwslt14.tokenized.de-en/train.de")
+        dev_data   = io.read("data/iwslt14.tokenized.de-en/valid.en", "data/iwslt14.tokenized.de-en/valid.de")
+        test_data  = io.read("data/iwslt14.tokenized.de-en/test.en", "data/iwslt14.tokenized.de-en/test.de")
+        
+    elif args.dataset == 'flickr8k':
+        io = KarpathyIO(img_folder="data/flickr8k/Flicker8k_Dataset", check_img_path=True)
+        train_data, dev_data, test_data = io.read("data/flickr8k/flickr8k-karpathy2015cvpr.json")
+        
+    elif args.dataset == 'flickr30k':
+        io = KarpathyIO(img_folder="data/flickr30k/flickr30k-images", check_img_path=True)
+        train_data, dev_data, test_data = io.read("data/flickr30k/flickr30k-karpathy2015cvpr.json")
+        
+    elif args.dataset == 'mscoco':
+        io = KarpathyIO(img_folder="data/mscoco/data2014", check_img_path=True)
+        train_data, dev_data, test_data = io.read("data/mscoco/mscoco-karpathy2015cvpr.json")
         
     else:
         raise Exception("Dataset does NOT exist", args.dataset)
@@ -398,6 +414,33 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
             PATH = "assets/transformers/nghuyong/ernie-1.0"
             return (transformers.AutoModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.AutoTokenizer.from_pretrained(PATH, model_max_length=512))
+            
+        elif pretrained_str.lower().startswith('hwamei'):
+            PATH = "assets/transformers/hwamei/bert-1.98G"
+            return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
+                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512))
+
+
+
+def load_vectors(language: str, emb_dim: int, unigram: bool=False, bigram: bool=True):
+    if language.lower() == 'english':
+        if emb_dim in (50, 100, 200):
+            return GloVe(f"assets/vectors/glove.6B.{emb_dim}d.txt")
+        elif emb_dim == 300:
+            return GloVe("assets/vectors/glove.840B.300d.txt")
+    elif language.lower() == 'chinese':
+        if unigram and emb_dim == 50:
+            return Vectors.load("assets/vectors/gigaword_chn.all.a2b.uni.ite50.vec", encoding='utf-8')
+        elif bigram and emb_dim == 50:
+            return Vectors.load("assets/vectors/gigaword_chn.all.a2b.bi.ite50.vec", encoding='utf-8')
+        else:
+            if emb_dim == 50:
+                return Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
+            elif emb_dim == 200:
+                return Vectors.load("assets/vectors/tencent/Tencent_AILab_ChineseEmbedding.txt", encoding='utf-8', skiprows=0)
+    return None
+
+
 
 
 def header_format(content: str, sep='=', width=100):
@@ -414,18 +457,20 @@ def build_trainer(model, device, num_train_batches: int, args: argparse.Namespac
     assert check_param_groups(model, param_groups)
     optimizer = getattr(torch.optim, args.optimizer)(param_groups)
     
-    schedule_by_step = False
-    if args.scheduler == 'None':
-        scheduler = None
-    elif args.scheduler == 'ReduceLROnPlateau':
+    schedule_by_step = ('warmup' in args.scheduler.lower())
+    if args.scheduler == 'ReduceLROnPlateau':
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=5)
-    else:
-        schedule_by_step = True
-        # lr_lambda = LRLambda.constant_lr()
+    elif args.scheduler == 'LinearDecayWithWarmup':
         num_warmup_epochs = max(2, args.num_epochs // 5)
         lr_lambda = LRLambda.linear_decay_lr_with_warmup(num_warmup_steps=num_train_batches*num_warmup_epochs, 
                                                          num_total_steps=num_train_batches*args.num_epochs)
         scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
+    elif args.scheduler == 'PowerDecayWithWarmup':
+        num_warmup_epochs = max(2, args.num_epochs // 5)
+        lr_lambda = LRLambda.power_decay_lr_with_warmup(num_warmup_steps=num_train_batches*num_warmup_epochs)
+        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
+    else:
+        scheduler = None
     
     return Trainer(model, optimizer=optimizer, scheduler=scheduler, schedule_by_step=schedule_by_step, num_grad_acc_steps=args.num_grad_acc_steps,
                    device=device, grad_clip=args.grad_clip, use_amp=args.use_amp)

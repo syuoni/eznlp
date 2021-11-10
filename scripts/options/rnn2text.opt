@@ -1,0 +1,14 @@
+--optimizer
+AdamW
+--batch_size
+128
+--emb_dim
+256
+--enc_arch
+GRU
+--dec_arch
+GRU
+--hid_dim
+512
+--num_layers
+1

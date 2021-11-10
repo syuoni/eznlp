@@ -2,9 +2,9 @@
 from typing import List
 from collections import Counter
 import torch
-import torchtext
 
 from ..token import TokenSequence
+from ..vocab import Vocab
 from ..nn.modules import SequencePooling
 from ..nn.functional import seq_lens2mask
 from .embedder import OneHotConfig, OneHotEmbedder
@@ -60,17 +60,17 @@ class NestedOneHotConfig(OneHotConfig):
             for data_entry in data:
                 for inner_seq in self._inner_sequences(data_entry[self.tokens_key]):
                     counter.update(inner_seq)
-        self.vocab = torchtext.vocab.Vocab(counter, 
-                                           min_freq=self.min_freq, 
-                                           specials=('<unk>', '<pad>'), 
-                                           specials_first=True)
+                    if self.max_len is None or len(inner_seq) > self.max_len:
+                        self.max_len = len(inner_seq)
+        
+        self.vocab = Vocab(counter, min_freq=self.min_freq, specials=self.specials, specials_first=True)
         
         
     def exemplify(self, tokens: TokenSequence):
         inner_ids_list = []
         for inner_seq in self._inner_sequences(tokens):
             inner_ids_list.append(torch.tensor([self.vocab[x] for x in inner_seq]))
-            
+        
         # inner_ids: (step*num_channels, inner_step)
         return {'inner_ids': inner_ids_list}
         
@@ -98,9 +98,7 @@ class NestedOneHotEmbedder(OneHotEmbedder):
             self.encoder = config.encoder.instantiate()
         
         self.agg_mode = config.agg_mode
-        if self.agg_mode.lower() == 'rnn_last':
-            assert isinstance(self.encoder, RNNEncoder)
-        elif self.agg_mode.lower().endswith('_pooling'):
+        if self.agg_mode.lower().endswith('_pooling') or self.agg_mode.lower().startswith('rnn_last'):
             self.aggregating = SequencePooling(mode=self.agg_mode.replace('_pooling', ''))
         
         
@@ -124,19 +122,17 @@ class NestedOneHotEmbedder(OneHotEmbedder):
         # embedded: (batch*step*num_channels, inner_step, emb_dim)
         embedded = self.embedding(inner_ids)
         
+        # TODO: positional embedding?
+        
         # encoding -> aggregating
         # hidden: (batch*step*num_channels, inner_step, hid_dim)
         # agg_hidden: (batch*step*num_channels, hid_dim)
         if hasattr(self, 'encoder'):
-            if self.agg_mode.lower() == 'rnn_last':
-                agg_hidden = self.encoder.forward2last_hidden(embedded, inner_mask)
-            else:
-                hidden = self.encoder(embedded, inner_mask)
-                agg_hidden = self.aggregating(hidden, inner_mask, weight=inner_weight)
-                
+            hidden = self.encoder(embedded, inner_mask)
+            agg_hidden = self.aggregating(hidden, inner_mask, weight=inner_weight)
         else:
             agg_hidden = self.aggregating(embedded, inner_mask, weight=inner_weight)
-            
+        
         # Restore outer shapes (token-level steps)
         return self._restore_outer_shapes(agg_hidden, seq_lens)
 
@@ -188,7 +184,7 @@ class SoftLexiconConfig(NestedOneHotConfig):
         inner_freqs_list = []
         for inner_seq in self._inner_sequences(tokens):
             inner_freqs_list.append(torch.tensor([self.freqs[x] for x in inner_seq]))
-            
+        
         example['inner_freqs'] = inner_freqs_list
         return example
         
@@ -221,7 +217,7 @@ class CharConfig(NestedOneHotConfig):
         elif kwargs['encoder'].arch.lower() in ('conv', 'gehring'):
             kwargs['agg_mode'] = kwargs.pop('agg_mode', 'max_pooling')
         super().__init__(**kwargs)
-    
+        
     @property
     def name(self):
         return f"Char{self.encoder.arch}"

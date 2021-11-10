@@ -13,7 +13,7 @@ class LRLambda(object):
     @staticmethod
     def constant_lr():
         return lambda step: 1.0
-    
+        
     @staticmethod
     def constant_lr_with_warmup(num_warmup_steps: int):
         assert num_warmup_steps >= 1
@@ -24,7 +24,7 @@ class LRLambda(object):
             else:
                 return 1.0
         return lr_lambda
-    
+        
     @staticmethod
     def linear_decay_lr_with_warmup(num_warmup_steps: int, num_total_steps: int):
         assert num_warmup_steps >= 1
@@ -38,9 +38,9 @@ class LRLambda(object):
             else:
                 return 0.0
         return lr_lambda
-    
+        
     @staticmethod
-    def exp_decay_lr_with_warmup(num_warmup_steps: int, num_period_steps: int=None, gamma: float=0.9):
+    def exponential_decay_lr_with_warmup(num_warmup_steps: int, num_period_steps: int=None, gamma: float=0.9):
         if num_period_steps is None:
             num_period_steps = num_warmup_steps
         assert num_warmup_steps >= 1
@@ -53,7 +53,19 @@ class LRLambda(object):
             else:
                 return gamma ** ((step - num_warmup_steps) / num_period_steps)
         return lr_lambda
-    
+        
+    @staticmethod
+    def power_decay_lr_with_warmup(num_warmup_steps: int, alpha: float=0.5):
+        assert num_warmup_steps >= 1
+        assert 0 < alpha < 1
+        
+        def lr_lambda(step: int):
+            if step < num_warmup_steps:
+                return step / num_warmup_steps
+            else:
+                return (step / num_warmup_steps) ** (-alpha)
+        return lr_lambda
+        
     @staticmethod
     def plot_lr_lambda(lr_lambda, num_total_steps: int):
         x = numpy.arange(0, num_total_steps, num_total_steps//200)
@@ -61,8 +73,9 @@ class LRLambda(object):
         
         fig, ax = matplotlib.pyplot.subplots(figsize=(8, 3))
         ax.plot(x, y)
-        
-        
+        matplotlib.pyplot.show()
+
+
 
 def collect_params(model: torch.nn.Module, param_groups: list):
     """

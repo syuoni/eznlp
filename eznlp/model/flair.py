@@ -45,7 +45,7 @@ class FlairConfig(Config):
         tokenized_raw_text = tokens.raw_text
         if not self.is_forward:
             tokenized_raw_text = [tok[::-1] for tok in tokenized_raw_text[::-1]]
-            
+        
         padded_text = self.sos + self.sep.join(tokenized_raw_text) + self.eos
         ori_indexes = [i for i, tok in enumerate(tokenized_raw_text) for _ in range(len(tok)+len(self.sep))]
         if not self.is_forward:
@@ -58,7 +58,7 @@ class FlairConfig(Config):
         return {'char_ids': torch.tensor(char_ids), 
                 'ori_indexes': torch.tensor(ori_indexes)}
         
-    
+        
     def batchify(self, batch_ex: List[dict]):
         batch_char_ids = [ex['char_ids'] for ex in batch_ex]
         batch_ori_indexes = [ex['ori_indexes'] for ex in batch_ex]
@@ -69,13 +69,12 @@ class FlairConfig(Config):
         return {'char_ids': batch_char_ids, 
                 'ori_indexes': batch_ori_indexes}
         
-    
+        
     def instantiate(self):
         return FlairEmbedder(self)
-    
-    
-        
-    
+
+
+
 class FlairEmbedder(torch.nn.Module):
     """
     An embedder based on flair representations. 
@@ -102,10 +101,16 @@ class FlairEmbedder(torch.nn.Module):
         if self.use_gamma:
             self.gamma = torch.nn.Parameter(torch.tensor(1.0))
         
-        # Register Flair configurations
-        self.flair_lm.requires_grad_(not self.freeze)
-    
-    
+        
+    @property
+    def freeze(self):
+        return self._freeze
+        
+    @freeze.setter
+    def freeze(self, freeze: bool):
+        self._freeze = freeze
+        self.flair_lm.requires_grad_(not freeze)
+        
     def forward(self, char_ids: torch.LongTensor, ori_indexes: torch.LongTensor):
         # flair_hidden: (char_step, batch, hid_dim)
         _, flair_hidden, _ = self.flair_lm(char_ids, hidden=None)
@@ -116,4 +121,3 @@ class FlairEmbedder(torch.nn.Module):
             return self.gamma * agg_flair_hidden
         else:
             return agg_flair_hidden
-            

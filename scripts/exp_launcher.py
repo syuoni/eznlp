@@ -134,7 +134,7 @@ if __name__ == '__main__':
             #                         bert_drop_rate=0.2, 
             #                         use_interm2=[False, True], 
             #                         bert_arch=['BERT_base', 'RoBERTa_base'])
-            
+        
     elif args.task == 'entity_recognition' and args.language.lower() == 'chinese':
         if not args.use_bert:
             sampler = OptionSampler(num_epochs=100, 
@@ -156,7 +156,7 @@ if __name__ == '__main__':
                                     use_interm2=[False, True], 
                                     bert_arch=['BERT_base', 'RoBERTa_base', 
                                                'MacBERT_base', 'MacBERT_large', 'ERNIE'])
-            
+        
     elif args.task == 'relation_extraction':
         if not args.use_bert:
             sampler = OptionSampler(num_epochs=100, 
@@ -176,7 +176,7 @@ if __name__ == '__main__':
                                     bert_drop_rate=0.2, 
                                     use_interm2=[False, True], 
                                     bert_arch=['BERT_base', 'RoBERTa_base'])
-            
+        
     elif args.task == 'joint_extraction':
         if not args.use_bert:
             sampler = OptionSampler(num_epochs=100, 
@@ -200,6 +200,36 @@ if __name__ == '__main__':
                                     bert_drop_rate=0.2, 
                                     use_interm2=[False, True], 
                                     bert_arch=['BERT_base', 'RoBERTa_base'])
+        
+    elif args.task == 'text2text':
+        COMMAND = " ".join([COMMAND, "@scripts/options/tf2text.opt"])
+        sampler = OptionSampler(num_epochs=20, 
+                                optimizer=['AdamW'], lr=[1e-3],
+                                batch_size=128, 
+                                scheduler=['PowerDecayWithWarmup'], 
+                                emb_dim=256, 
+                                enc_arch='Transformer', 
+                                dec_arch='Transformer', 
+                                hid_dim=256, 
+                                ff_dim=[512, 1024, 2048], 
+                                num_layers=[3, 6], 
+                                teacher_forcing_rate=[0.5, 1.0])
+    
+    elif args.task == 'image2text':
+        COMMAND = " ".join([COMMAND, "@scripts/options/rnn2text.opt"])
+        sampler = OptionSampler(num_epochs=20, 
+                                optimizer=['AdamW'], 
+                                lr=numpy.logspace(-4.5, -3, num=100, base=10).tolist(),
+                                batch_size=80, 
+                                scheduler=['None', 'LinearDecayWithWarmup'], 
+                                img_arch='VGG',
+                                use_cache=False, 
+                                emb_dim=512, 
+                                dec_arch=['GRU', 'LSTM'], 
+                                hid_dim=512, 
+                                num_layers=1, 
+                                teacher_forcing_rate=[0.5, 1.0])
+    
     
     options = sampler.sample(args.num_exps)
     commands = [" ".join([COMMAND, *option]) for option in options]

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+import nltk
 
 from ..metrics import precision_recall_f1_report
 from ..dataset import Dataset
@@ -14,14 +15,14 @@ def evaluate_text_classification(trainer: Trainer, dataset: Dataset, batch_size:
     set_labels_gold = [ex['label'] for ex in dataset.data]
     
     acc = trainer.model.decoder.evaluate(set_labels_gold, set_labels_pred)
-    logger.info(f"TC Accuracy: {acc*100:2.3f}%")
+    logger.info(f"TC | Accuracy: {acc*100:2.3f}%")
 
 
 def disp_prf(ave_scores: dict, task: str='ER'):
     for key_text, key in zip(['Precision', 'Recall', 'F1-score'], ['precision', 'recall', 'f1']):
-        logger.info(f"{task} Micro {key_text}: {ave_scores['micro'][key]*100:2.3f}%")
+        logger.info(f"{task} | Micro {key_text}: {ave_scores['micro'][key]*100:2.3f}%")
     for key_text, key in zip(['Precision', 'Recall', 'F1-score'], ['precision', 'recall', 'f1']):
-        logger.info(f"{task} Macro {key_text}: {ave_scores['macro'][key]*100:2.3f}%")
+        logger.info(f"{task} | Macro {key_text}: {ave_scores['macro'][key]*100:2.3f}%")
 
 
 def evaluate_entity_recognition(trainer: Trainer, dataset: Dataset, batch_size: int=32):
@@ -74,3 +75,12 @@ def evaluate_joint_extraction(trainer: Trainer, dataset: Dataset, has_attr: bool
 
         scores, ave_scores = precision_recall_f1_report(set_relations_gold, set_relations_pred)
         disp_prf(ave_scores, task='RE')
+
+
+
+def evaluate_generation(trainer: Trainer, dataset: Dataset, batch_size: int=32, beam_size: int=1):
+    set_trg_pred = trainer.predict(dataset, batch_size=batch_size, beam_size=beam_size)
+    set_trg_gold = [[tokens.text for tokens in ex['full_trg_tokens']] for ex in dataset.data]
+    
+    bleu4 = nltk.translate.bleu_score.corpus_bleu(list_of_references=set_trg_gold, hypotheses=set_trg_pred)
+    logger.info(f"Beam Size: {beam_size} | BLEU-4: {bleu4*100:2.3f}%")

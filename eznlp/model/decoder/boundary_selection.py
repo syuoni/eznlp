@@ -293,7 +293,7 @@ class BoundarySelectionDecoder(DecoderBase, BoundarySelectionDecoderMixin):
             # size_embedded: (start_step, end_step, emb_dim)
             size_embedded = self.size_embedding(self._get_span_size_ids(full_hidden.size(1)))
             # affined_cat: (batch, start_step, end_step, affine_dim*2 + emb_dim)
-            affined_cat = torch.cat([affined_cat, self.dropout(size_embedded).unsqueeze(0).expand(batch.size, -1, -1, -1)], dim=-1)
+            affined_cat = torch.cat([affined_cat, self.dropout(size_embedded).unsqueeze(0).expand(full_hidden.size(0), -1, -1, -1)], dim=-1)
         
         # scores2: (voc_dim, affine_dim*2 + emb_dim) * (batch, start_step, end_step, affine_dim*2 + emb_dim, 1) -> (batch, start_step, end_step, voc_dim, 1)
         scores2 = self.W.matmul(affined_cat.unsqueeze(-1))

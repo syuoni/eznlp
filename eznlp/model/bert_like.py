@@ -22,7 +22,7 @@ class BertLikeConfig(Config):
         self.tokenizer: transformers.PreTrainedTokenizer = kwargs.pop('tokenizer')
         self.bert_like: transformers.PreTrainedModel = kwargs.pop('bert_like')
         self.out_dim = self.bert_like.config.hidden_size
-        self.num_hidden_layers = self.bert_like.config.num_hidden_layers
+        self.num_layers = self.bert_like.config.num_hidden_layers
         
         self.arch = kwargs.pop('arch', 'BERT')
         self.freeze = kwargs.pop('freeze', True)
@@ -55,7 +55,7 @@ class BertLikeConfig(Config):
         ----------
         raw_text : str
             e.g., "I like this movie."
-            
+        
         Returns
         -------
         sub_tok_ids: torch.LongTensor
@@ -101,7 +101,7 @@ class BertLikeConfig(Config):
         tokenized_raw_text = tokens.raw_text
         if self.use_truecase:
             tokenized_raw_text = _truecase(tokenized_raw_text)
-            
+        
         if self.from_tokenized:
             sub_tok_ids, ori_indexes = self._token_ids_from_tokenized(tokenized_raw_text)
             return {'sub_tok_ids': sub_tok_ids, 
@@ -110,7 +110,7 @@ class BertLikeConfig(Config):
             # Use rejoined tokenized raw text here
             sub_tok_ids = self._token_ids_from_string(" ".join(tokenized_raw_text))
             return {'sub_tok_ids': sub_tok_ids}
-            
+        
         
     def batchify(self, batch_ex: List[dict]):
         batch_sub_tok_ids = [ex['sub_tok_ids'] for ex in batch_ex]
@@ -156,12 +156,18 @@ class BertLikeEmbedder(torch.nn.Module):
         if self.from_tokenized:
             self.group_aggregating = SequenceGroupAggregating(mode=config.agg_mode)
         if self.mix_layers.lower() == 'trainable':
-            self.scalar_mix = ScalarMix(config.num_hidden_layers + 1)
+            self.scalar_mix = ScalarMix(config.num_layers + 1)
         if self.use_gamma:
             self.gamma = torch.nn.Parameter(torch.tensor(1.0))
         
-        # Register BERT configurations
-        self.bert_like.requires_grad_(not self.freeze)
+    @property
+    def freeze(self):
+        return self._freeze
+        
+    @freeze.setter
+    def freeze(self, freeze: bool):
+        self._freeze = freeze
+        self.bert_like.requires_grad_(not freeze)
         
         
     def forward(self, 
@@ -218,7 +224,7 @@ def _truecase(tokenized_raw_text: List[str]):
     
     if len(lst) > 0 and len(lst) == len(word_lst):
         parts = truecase.get_true_case(' '.join(lst)).split()
-    
+        
         # the trucaser have its own tokenization ...
         # skip if the number of word dosen't match
         if len(parts) == len(word_lst): 

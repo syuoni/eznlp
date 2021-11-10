@@ -10,7 +10,6 @@ import numpy
 import torch
 
 from eznlp import auto_device
-from eznlp.vectors import Vectors, GloVe
 from eznlp.token import LexiconTokenizer
 from eznlp.dataset import Dataset
 from eznlp.config import ConfigDict
@@ -22,7 +21,7 @@ from eznlp.model.bert_like import segment_uniformly_for_bert_like
 from eznlp.training import Trainer, count_params, evaluate_entity_recognition
 
 from utils import add_base_arguments, parse_to_args
-from utils import load_data, dataset2language, load_pretrained, build_trainer, header_format, profile
+from utils import load_data, dataset2language, load_pretrained, load_vectors, build_trainer, header_format, profile
 
 
 def parse_arguments(parser: argparse.ArgumentParser):
@@ -88,19 +87,12 @@ def collect_IE_assembly_config(args: argparse.Namespace):
     
     ohots_config = {}
     if args.emb_dim > 0:
-        if args.language.lower() == 'english' and args.emb_dim in (50, 100, 200):
-            vectors = GloVe(f"assets/vectors/glove.6B.{args.emb_dim}d.txt")
-        elif args.language.lower() == 'english' and args.emb_dim == 300:
-            vectors = GloVe("assets/vectors/glove.840B.300d.txt")
-        elif args.language.lower() == 'chinese' and args.emb_dim == 50:
-            vectors = Vectors.load("assets/vectors/gigaword_chn.all.a2b.uni.ite50.vec", encoding='utf-8')
-        else:
-            vectors = None
+        vectors = load_vectors(args.language, args.emb_dim, unigram=True)
         ohots_config['text'] = OneHotConfig(field='text', vectors=vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze)
         
     if args.language.lower() == 'chinese' and args.use_bigram:
-        giga_bi = Vectors.load("assets/vectors/gigaword_chn.all.a2b.bi.ite50.vec", encoding='utf-8')
-        ohots_config['bigram'] = OneHotConfig(field='bigram', vectors=giga_bi, emb_dim=50, freeze=args.emb_freeze)
+        vectors = load_vectors(args.language, 50, bigram=True)
+        ohots_config['bigram'] = OneHotConfig(field='bigram', vectors=vectors, emb_dim=50, freeze=args.emb_freeze)
     
     ohots_config = ConfigDict(ohots_config) if len(ohots_config) > 0 else None
     
@@ -116,18 +108,18 @@ def collect_IE_assembly_config(args: argparse.Namespace):
                                                        in_drop_rates=(args.drop_rate, 0.0, 0.0)))
         nested_ohots_config = ConfigDict({'char': char_config})
     elif args.language.lower() == 'chinese' and args.use_softlexicon:
-        ctb50 = Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
-        nested_ohots_config = ConfigDict({'softlexicon': SoftLexiconConfig(vectors=ctb50, emb_dim=50, freeze=args.emb_freeze)})
+        vectors = load_vectors(args.language, 50)
+        nested_ohots_config = ConfigDict({'softlexicon': SoftLexiconConfig(vectors=vectors, emb_dim=50, freeze=args.emb_freeze)})
     else:
         nested_ohots_config = None
     
     if args.use_interm1:
-        interm1_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
+        interm1_config = EncoderConfig(arch=args.enc_arch, hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
     else:
         interm1_config = None
     
     if args.use_interm2:
-        interm2_config = EncoderConfig(arch='LSTM', hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
+        interm2_config = EncoderConfig(arch=args.enc_arch, hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
     else:
         interm2_config = None
     
@@ -148,7 +140,7 @@ def collect_IE_assembly_config(args: argparse.Namespace):
         # Cased tokenizer for NER task
         bert_like, tokenizer = load_pretrained(args.bert_arch, args, cased=True)
         bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert_like, arch=args.bert_arch, 
-                                            freeze=False, use_truecase='cased' in os.path.basename(bert_like.name_or_path).split('-'))
+                                          freeze=False, use_truecase='cased' in os.path.basename(bert_like.name_or_path).split('-'))
     else:
         bert_like_config = None
     
@@ -205,10 +197,10 @@ def process_IE_data(train_data, dev_data, test_data, args, config):
     
     if args.use_softword or args.use_softlexicon:
         if config.nested_ohots is not None and 'softlexicon' in config.nested_ohots.keys():
-            ctb50 = config.nested_ohots['softlexicon'].vectors
+            vectors = config.nested_ohots['softlexicon'].vectors
         else:
-            ctb50 = Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
-        tokenizer = LexiconTokenizer(ctb50.itos)
+            vectors = load_vectors(args.language, 50)
+        tokenizer = LexiconTokenizer(vectors.itos)
         for data in [train_data, dev_data, test_data]:
             for data_entry in data:
                 data_entry['tokens'].build_softwords(tokenizer.tokenize)

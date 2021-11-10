@@ -2,7 +2,7 @@
 from typing import Union, List
 import torch
 
-from ..functional import sequence_pooling, sequence_group_aggregating
+from ..functional import sequence_pooling, rnn_last_selecting, sequence_group_aggregating
 
 
 class SequencePooling(torch.nn.Module):
@@ -13,21 +13,25 @@ class SequencePooling(torch.nn.Module):
     x: torch.FloatTensor (batch, step, hid_dim)
     mask: torch.BoolTensor (batch, step)
     mode: str
-        'mean', 'max', 'min', 'wtd_mean'
+        'mean', 'max', 'min', 'wtd_mean', 'rnn_last'
     """
     def __init__(self, mode: str='mean'):
         super().__init__()
-        if mode.lower() not in ('mean', 'max', 'min', 'wtd_mean'):
+        if mode.lower() not in ('mean', 'max', 'min', 'wtd_mean', 'rnn_last'):
             raise ValueError(f"Invalid pooling mode {mode}")
         self.mode = mode
         
     def forward(self, x: torch.FloatTensor, mask: torch.BoolTensor=None, weight: torch.FloatTensor=None):
-        return sequence_pooling(x, mask, weight=weight, mode=self.mode)
-    
+        if self.mode.lower() == 'rnn_last':
+            return rnn_last_selecting(x, mask)
+        else:
+            return sequence_pooling(x, mask, weight=weight, mode=self.mode)
+        
     def extra_repr(self):
         return f"mode={self.mode}"
-    
-    
+
+
+
 class SequenceGroupAggregating(torch.nn.Module):
     """Aggregating values over steps by groups. 
     
@@ -50,7 +54,7 @@ class SequenceGroupAggregating(torch.nn.Module):
         
     def forward(self, x: torch.FloatTensor, group_by: torch.LongTensor, agg_step: int=None):
         return sequence_group_aggregating(x, group_by, agg_mode=self.mode, agg_step=agg_step)
-    
+        
     def extra_repr(self):
         return f"mode={self.mode}"
 

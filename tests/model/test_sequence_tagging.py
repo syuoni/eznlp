@@ -61,7 +61,7 @@ class TestModel(object):
                                                                (False, 2.0, 0.0),
                                                                (False, 0.0, 0.1)])
     def test_model(self, arch, shortcut, use_crf, fl_gamma, sl_epsilon, conll2003_demo, device):
-        self.config = ExtractorConfig(intermediate2=EncoderConfig(arch=arch, shortcut=shortcut), 
+        self.config = ExtractorConfig(intermediate2=EncoderConfig(arch=arch, shortcut=shortcut, use_emb2init_hid=True), 
                                       decoder=SequenceTaggingDecoderConfig(use_crf=use_crf, fl_gamma=fl_gamma, sl_epsilon=sl_epsilon))
         self._setup_case(conll2003_demo, device)
         self._assert_batch_consistency()
@@ -157,4 +157,3 @@ class TestModel(object):
         trainer = Trainer(self.model, device=device)
         set_chunks_pred = trainer.predict(dataset_wo_gold)
         assert len(set_chunks_pred) == len(data_wo_gold)
-        
