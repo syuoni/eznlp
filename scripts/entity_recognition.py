@@ -291,6 +291,8 @@ if __name__ == '__main__':
     trainer.train_steps(train_loader=train_loader, dev_loader=dev_loader, num_epochs=args.num_epochs, 
                         save_callback=save_callback, save_by_loss=False)
     
+    # Save the final version
+    # torch.save(model, f"{save_path}/{config.name}.fv.pth")
     
     logger.info(header_format("Evaluating", sep='-'))
     model = torch.load(f"{save_path}/{config.name}.pth", map_location=device)
