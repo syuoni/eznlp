@@ -1,0 +1,322 @@
+\documentclass{article}
+\usepackage{arxiv}
+\usepackage[utf8]{inputenc}
+
+\usepackage{natbib}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{makecell}
+\usepackage{hyperref}
+
+
+\title{Named Entity Recognition}
+\author{Enwei Zhu}
+% \date{}
+
+\begin{document}
+
+\maketitle
+
+\section{English Tasks}
+\subsection{Settings}
+\begin{itemize}
+    \item Tagging scheme: BIOES
+    \item Word embeddings are initialized with GloVe
+    \item From scratch (sequence tagging)
+    \begin{itemize}
+        \item Optimizer: SGD (lr=0.1)
+        \item Batch size: 32
+        \item Number of epochs: 100
+    \end{itemize}
+    \item From scratch (span classification)
+    \begin{itemize}
+        \item Optimizer: Adadelta (lr=1.0)
+        \item Batch size: 64
+        \item Number of epochs: 100
+    \end{itemize}
+    \item Fine tuning 
+    \begin{itemize}
+        \item Optimizer: AdamW (lr=1e-3/2e-3, ft\_lr=1e-5)
+        \item Batch size: 48
+        \item Number of epochs: 50
+        \item Scheduler: Learning rate warmup at the first 20\% steps followed by linear decay
+        \item PLMs are loaded with dropout rate of 0.2
+        \item BERT-uncased models inputs are converted to \href{https://github.com/daltonfury42/truecase}{truecase}
+    \end{itemize}
+\end{itemize}
+
+\subsection{Results}
+\subsubsection{CoNLL 2003}
+\begin{table}[H]
+    \centering
+    \begin{tabular}{lcccc}
+    \toprule
+    Model & Paper & Reported F1 & Our Imp. F1 & Notes \\
+    \midrule
+    CharLSTM + LSTM + CRF       & \citet{lample2016neural} & 90.94         & 91.28 & num\_layers=1 \\
+    CharCNN + LSTM + CRF        & \citet{ma2016end}        & 91.21         & 90.70 & num\_layers=1 \\
+    ELMo + Char + LSTM + CRF    & \citet{peters2018deep}   & 92.22 (0.10)  & 92.60 & num\_layers=1 \\
+    Flair + Char + LSTM + CRF   & \citet{akbik2018contextual} & 93.09$^\dagger$ (0.12) & 92.60 & num\_layers=1 \\
+    ELMo + Flair + Char + LSTM + CRF & --                  & --            & 92.67 & num\_layers=1 \\
+    \midrule
+    BERT-base + Softmax         & \citet{devlin2019bert} & 92.4          & 92.02 \\ 
+    BERT-base + CRF             & --                     & --            & 92.38 \\ 
+    BERT-base + LSTM + CRF      & --                     & --            & 92.40 \\ 
+    BERT-large + Softmax        & \citet{devlin2019bert} & 92.8          & 92.34 \\ 
+    BERT-large + CRF            & --                     & --            & 92.64 \\ 
+    BERT-large + LSTM + CRF     & --                     & --            & 92.80 \\ 
+    \midrule
+    RoBERTa-base + Softmax      & \citet{liu2019roberta} & --            & 92.39 \\ 
+    RoBERTa-base + CRF          & --                     & --            & 92.59 (93.31$^\ddagger$) \\
+    RoBERTa-base + LSTM + CRF   & --                     & --            & 92.71 (93.39$^\ddagger$) \\
+    RoBERTa-large + Softmax     & \citet{liu2019roberta} & --            & 92.81 \\
+    RoBERTa-large + CRF         & --                     & --            & 93.20 (93.37$^\ddagger$) \\
+    RoBERTa-large + LSTM + CRF  & --                     & --            & 93.26 (93.31$^\ddagger$) \\
+    \midrule
+    BERT-large-wwm + CRF        & \citet{devlin2019bert} & -- & 92.60 \\
+    BERT-large-wwm + LSTM + CRF & --                     & -- & 92.68 \\
+    \midrule
+    ALBERT-base + CRF           & \citet{lan2019albert}  & -- & 90.19 \\
+    ALBERT-base + LSTM + CRF    & --                     & -- & 90.39 \\
+    ALBERT-xxlarge + CRF        & \citet{lan2019albert}  & -- & 92.30 \\
+    ALBERT-xxlarge + LSTM + CRF & --                     & -- & 92.46 \\
+    \midrule
+    SpanBERT-base + CRF         & \citet{joshi2020spanbert} & -- & 92.29 \\
+    SpanBERT-base + LSTM + CRF  & --                        & -- & 92.27 \\
+    SpanBERT-large + CRF        & \citet{joshi2020spanbert} & -- & 93.07 \\
+    SpanBERT-large + LSTM + CRF & --                        & -- & 93.04 \\
+    \midrule
+    SpERT (w/ CharLSTM + LSTM)     & --                     & -- & 91.22 & num\_layers=2 \\
+    SpERT (w/ BERT-base)           & \citet{eberts2019span} & -- & 91.97 \\
+    SpERT (w/ BERT-base + LSTM)    & --                     & -- & 92.62 \\
+    SpERT (w/ RoBERTa-base)        & --                     & -- & 92.36 \\
+    SpERT (w/ RoBERTa-base + LSTM) & --                     & -- & 92.50 \\ 
+    \midrule
+    Biaffine (w/ CharLSTM + LSTM)     & --                  & --         & 91.05 & num\_layers=2 \\
+    Biaffine (w/ BERT-base)           & --                  & --         & 92.47 \\ 
+    Biaffine (w/ BERT-base + LSTM)    & --                  & --         & 92.74 \\ 
+    Biaffine (w/ BERT-large)          & \citet{yu2020named} & 93.5$^{\dagger\ddagger}$ & 92.67 \\
+    Biaffine (w/ RoBERTa-base)        & --                  & --         & 92.56 \\ 
+    Biaffine (w/ RoBERTa-base + LSTM) & --                  & --         & 92.77 \\ 
+    Biaffine (w/ RoBERTa-large)       & --                  & --         & 93.26 \\
+    \bottomrule
+    \end{tabular}
+    \caption{Results on CoNLL 2003. $\dagger$ means that both training and development splits are used for training (see \href{https://github.com/juntaoy/biaffine-ner/issues/16}{Biaffine repo}); $\ddagger$ means that document-level (cross-sentence) context is used.}
+\end{table}
+
+
+\subsubsection{OntoNotes 5 (CoNLL 2012)}
+\begin{table}[H]
+    \centering
+    \begin{tabular}{lcccc}
+    \toprule
+    Model & Paper & Reported F1 & Our Imp. F1 & Notes \\
+    \midrule
+    CharLSTM + LSTM + CRF       & \citet{lample2016neural}    & --            & 87.68 & num\_layers=2 \\
+    CharCNN + LSTM + CRF        & \citet{chiu2016named}       & 86.17 (0.22)  & 87.43 & num\_layers=2 \\
+    ELMo + Char + LSTM + CRF    & \citet{peters2018deep}      & --            & 89.71 & num\_layers=2 \\
+    Flair + Char + LSTM + CRF   & \citet{akbik2018contextual} & 89.3$^{\dagger}$ & 89.02 & num\_layers=2 \\
+    ELMo + Flair + Char + LSTM + CRF & --                     & --            & 89.55 & num\_layers=2 \\
+    \midrule
+    BERT-base + Softmax         & \citet{devlin2019bert} & --            & 89.35 \\
+    BERT-base + CRF             & --                     & --            & 90.14 \\
+    BERT-base + LSTM + CRF      & --                     & --            & 89.89 \\
+    Biaffine (w/ BERT-large)    & \citet{yu2020named}    & 91.3$^{\dagger\ddagger}$ \\
+    RoBERTa-base + Softmax      & \citet{liu2019roberta} & --            & 90.22 \\
+    RoBERTa-base + CRF          & --                     & --            & 90.83 \\
+    RoBERTa-base + LSTM + CRF   & --                     & --            & 91.05 \\
+    \bottomrule
+    \end{tabular}
+    \caption{Results on OntoNotes 5. $\dagger$ means that both training and development splits are used for training (see \href{https://github.com/juntaoy/biaffine-ner/issues/16}{Biaffine repo}); $\ddagger$ means that document-level (cross-sentence) context is used.} 
+\end{table}
+
+
+\newpage
+\section{Chinese Tasks}
+\subsection{Settings}
+\begin{itemize}
+    \item Character-based
+    \item Tagging scheme: BIOES
+    \item From scratch (sequence tagging)
+    \begin{itemize}
+        \item Optimizer: AdamW (lr=1e-3)
+        \item Batch size: 32
+        \item Number of epochs: 100
+    \end{itemize}
+    \item Fine tuning 
+    \begin{itemize}
+        \item Optimizer: AdamW (lr=1e-3/2e-3, ft\_lr=1e-5)
+        \item Batch size: 48
+        \item Number of epochs: 50
+        \item Scheduler: Learning rate warmup at the first 20\% steps followed by linear decay
+        \item PLMs are loaded with dropout rate of 0.2
+        \item BERT refers to BERT-wwm \citep{cui2019pretraining}
+    \end{itemize}
+\end{itemize}
+
+
+\subsection{Results}
+\subsubsection{MSRA (SIGHAN 2006)}
+\begin{table}[H]
+    \centering
+    \begin{tabular}{lcccc}
+    \toprule
+    Model & Paper & Reported F1 & Our Imp. F1 & Notes \\
+    \midrule
+    LSTM + CRF                  & \citet{zhang2018chinese} & 88.81 & 89.49 & num\_layers=2 \\
+    Bichar + LSTM + CRF         & \citet{zhang2018chinese} & 91.87 & 92.02 & num\_layers=2 \\
+    Lattice-LSTM + CRF          & \citet{zhang2018chinese} & 93.18 \\
+    FLAT + CRF                  & \citet{li2020flat}       & 94.35 \\
+    SoftLexicon + LSTM + CRF    & \citet{ma2020simplify}   & 93.66 & 93.64 & \makecell{num\_layers=2; \\Adamax (lr=1e-3)} \\
+    \midrule
+    BERT + CRF                  & \citet{ma2020simplify}   & 93.76 & 95.92 \\
+    BERT + LSTM + CRF           & \citet{ma2020simplify}   & 94.83 & 96.18 \\
+    FLAT + BERT + CRF           & \citet{li2020flat}       & 96.09 \\
+    SoftLexicon + BERT + CRF    & \citet{ma2020simplify}   & 95.42 \\
+    \midrule
+    ERNIEv1 + CRF               & \citet{sun2019ernie}     & 93.8* & 95.87 \\
+    ERNIEv1 + LSTM + CRF        & \citet{sun2019ernie}     & --    & 96.24 \\
+    \midrule
+    MacBERT-base + CRF          & \citet{cui2020revisiting} & --    & 95.72 \\
+    MacBERT-base + LSTM + CRF   & \citet{cui2020revisiting} & --    & 96.13 \\
+    \bottomrule
+    \end{tabular}
+    \caption{Results on MSRA (SIGHAN 2006). All experiments use testing split as development split (see \href{https://github.com/v-mipeng/LexiconAugmentedNER/issues/3}{SoftLexicon repo}).} 
+\end{table}
+
+
+\subsubsection{Weibo NER}
+\begin{table}[H]
+    \centering
+    \begin{tabular}{lcccc}
+    \toprule
+    Model & Paper & Reported F1 & Our Imp. F1 & Notes \\
+    \midrule
+    LSTM + CRF                  & \citet{zhang2018chinese} & 52.77 & 50.19 & num\_layers=2 \\
+    Bichar + LSTM + CRF         & \citet{zhang2018chinese} & 56.75 & 57.18 & num\_layers=2 \\
+    Lattice-LSTM + CRF          & \citet{zhang2018chinese} & 58.79 \\
+    FLAT + CRF                  & \citet{li2020flat}      & 63.42 \\
+    SoftLexicon + LSTM + CRF    & \citet{ma2020simplify}      & 61.42 & 61.17 & \makecell{num\_layers=2; \\Adamax (lr=5e-3)} \\
+    \midrule
+    BERT + CRF                  & \citet{ma2020simplify}      & 63.80 & 68.79 \\
+    BERT + LSTM + CRF           & \citet{ma2020simplify}      & 67.33 & 70.48 \\
+    FLAT + BERT + CRF           & \citet{li2020flat}      & 68.55 \\
+    SoftLexicon + BERT + CRF    & \citet{ma2020simplify}      & 70.50 \\
+    \midrule
+    ERNIEv1 + CRF               & \citet{sun2019ernie}     & --    & 66.59 \\
+    ERNIEv1 + LSTM + CRF        & \citet{sun2019ernie}     & --    & 70.81 \\
+    \midrule
+    MacBERT-base + CRF          & \citet{cui2020revisiting}     & --    & 67.73 \\
+    MacBERT-base + LSTM + CRF   & \citet{cui2020revisiting}     & --    & 70.71 \\
+    MacBERT-large + CRF         & \citet{cui2020revisiting}     & --    & 70.01 \\
+    MacBERT-large + LSTM + CRF  & \citet{cui2020revisiting}     & --    & 70.24 \\
+    \bottomrule
+    \end{tabular}
+    \caption{Results on Weibo NER v2.}
+\end{table}
+
+
+\subsubsection{Resume NER}
+\begin{table}[H]
+    \centering
+    \begin{tabular}{lcccc}
+    \toprule
+    Model & Paper & Reported F1 & Our Imp. F1 & Notes \\
+    \midrule
+    LSTM + CRF                  & \citet{zhang2018chinese} & 93.48 & 94.93 & num\_layers=2 \\
+    Bichar + LSTM + CRF         & \citet{zhang2018chinese} & 94.41 & 94.51 & num\_layers=2 \\
+    Lattice-LSTM + CRF          & \citet{zhang2018chinese} & 94.46 \\
+    FLAT + CRF                  & \citet{li2020flat}       & 94.93 \\
+    SoftLexicon + LSTM + CRF    & \citet{ma2020simplify}   & 95.53 & 95.48 & \makecell{num\_layers=2; \\Adamax (lr=2e-3)} \\
+    \midrule
+    BERT + CRF                  & \citet{ma2020simplify}   & 95.68 & 95.68 \\
+    BERT + LSTM + CRF           & \citet{ma2020simplify}   & 95.51 & 95.97 \\
+    FLAT + BERT + CRF           & \citet{li2020flat}       & 95.86 \\
+    SoftLexicon + BERT + CRF    & \citet{ma2020simplify}   & 96.11 \\
+    \midrule
+    ERNIEv1 + CRF               & \citet{sun2019ernie}     & --    & 95.95 \\
+    ERNIEv1 + LSTM + CRF        & \citet{sun2019ernie}     & --    & 96.25 \\
+    \midrule
+    MacBERT-base + CRF          & \citet{cui2020revisiting} & --    & 95.80 \\
+    MacBERT-base + LSTM + CRF   & \citet{cui2020revisiting} & --    & 96.32 \\
+    MacBERT-large + CRF         & \citet{cui2020revisiting} & --    & 95.60 \\
+    MacBERT-large + LSTM + CRF  & \citet{cui2020revisiting} & --    & 95.63 \\
+    \bottomrule
+    \end{tabular}
+    \caption{Results on Resume NER.}
+\end{table}
+
+
+\subsubsection{OntoNotes 4}
+\begin{table}[H]
+    \centering
+    \begin{tabular}{lcccc}
+    \toprule
+    Model & Paper & Reported F1 & Our Imp. F1 & Notes \\
+    \midrule
+    LSTM + CRF                  & \citet{zhang2018chinese} & 64.30 & 65.92 & num\_layers=2 \\
+    Bichar + LSTM + CRF         & \citet{zhang2018chinese} & 71.89 & 70.40 & num\_layers=2 \\
+    Lattice-LSTM + CRF          & \citet{zhang2018chinese} & 73.88 \\
+    FLAT + CRF                  & \citet{li2020flat}       & 76.45 \\
+    SoftLexicon + LSTM + CRF    & \citet{ma2020simplify}   & 75.64 & 74.43 & \makecell{num\_layers=2; \\Adamax (lr=1e-3)} \\
+    \midrule
+    BERT + CRF                  & \citet{ma2020simplify}   & 77.93 & 82.43 \\
+    BERT + LSTM + CRF           & \citet{ma2020simplify}   & 81.82 & 82.29 \\
+    FLAT + BERT + CRF           & \citet{li2020flat}       & 81.82 \\
+    SoftLexicon + BERT + CRF    & \citet{ma2020simplify}   & 82.81 \\
+    \midrule
+    ERNIEv1 + CRF               & \citet{sun2019ernie}     & --    & 81.63 \\
+    ERNIEv1 + LSTM + CRF        & \citet{sun2019ernie}     & --    & 82.04 \\
+    \midrule
+    MacBERT-base + CRF          & \citet{cui2020revisiting} & --    & 82.04 \\
+    MacBERT-base + LSTM + CRF   & \citet{cui2020revisiting} & --    & 82.31 \\
+    \bottomrule
+    \end{tabular}
+    \caption{Results on OntoNotes 4. Data split follow \citet{che2013named}.} 
+\end{table}
+
+
+\subsubsection{OntoNotes 5 (CoNLL 2012)}
+\begin{table}[H]
+    \centering
+    \begin{tabular}{lcccc}
+    \toprule
+    Model & Paper & Reported F1 & Our Imp. F1 & Notes \\
+    \midrule
+    LSTM + CRF                  & --                & --    & 73.30 & num\_layers=2 \\
+    Bichar + LSTM + CRF         & --                & --    & 75.36 & num\_layers=2 \\
+    Lattice-LSTM + CRF          & \citet{jie2019dependency} & 76.67 \\
+    SoftLexicon + LSTM + CRF    & \citet{ma2020simplify}    & --    & 76.13 & \makecell{num\_layers=2; \\Adamax (lr=2e-3)} \\
+    \midrule
+    BERT + CRF                  & --                & --    & 80.34 \\
+    BERT + LSTM + CRF           & --                & --    & 80.31 \\
+    \bottomrule
+    \end{tabular}
+    \caption{Results on OntoNotes 5.} 
+\end{table}
+
+
+\subsubsection{Yidu S4K (CCKS 2019)}
+\begin{table}[H]
+    \centering
+    \begin{tabular}{lcccc}
+    \toprule
+    Model & Paper & Reported F1 & Our Imp. F1 & Notes \\
+    \midrule
+    LSTM + CRF                  & --                                                  & --    & 80.43 & num\_layers=2 \\
+    Bichar + LSTM + CRF         & \href{https://github.com/loujie0822/DeepIE}{DeepIE} & 81.76 & 81.04 & num\_layers=2 \\
+    SoftLexicon + LSTM + CRF    & \href{https://github.com/loujie0822/DeepIE}{DeepIE} & 82.76 & 82.70 & \makecell{num\_layers=2; \\Adamax (lr=2e-3)} \\
+    \midrule
+    BERT + CRF                  & \href{https://github.com/loujie0822/DeepIE}{DeepIE} & 83.49 & 82.97 \\
+    BERT + LSTM + CRF           & --                                                  & --    & 82.94 \\
+    \bottomrule
+    \end{tabular}
+    \caption{Results on Yidu S4K.} 
+\end{table}
+
+
+\newpage
+\bibliographystyle{plainnat}
+\bibliography{references} 
+
+\end{document}
