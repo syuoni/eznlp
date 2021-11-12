@@ -12,7 +12,7 @@
 * Image Captioning
 
 
-## Experiment Results
+## Experimental Results
 ### Text Classification 
 | Dataset      | Language | Our Best Acc. | Model |
 |:------------:|:--------:|:------------------:|:-------------------:|
@@ -80,26 +80,4 @@ $ python scripts/relation_extraction.py --dataset <dataset> [options]
 ### Attribute extraction
 ```bash
 $ python scripts/attribute_extraction.py --dataset <dataset> [options]
-```
-
-
-## Citation
-If you find our code useful, please cite the following papers: 
-
-```
-@article{zhu2021boundary,
-  title={Boundary Smoothing for Named Entity Recognition},
-  author={Zhu, Enwei and Cai, Ting and Li, Jinpeng},
-  journal={Working Paper},
-  year={2021}
-}
-```
-
-```
-@article{zhu2021framework,
-  title={A Unified Framework of Medical Information Annotation and Extraction for {Chinese} Clinical Text},
-  author={Zhu, Enwei and Sheng, Qilin and Yang, Huanwan and Li, Jinpeng},
-  journal={Working Paper},
-  year={2021}
-}
 ```
