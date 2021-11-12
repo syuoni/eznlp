@@ -47,9 +47,9 @@ class SingleDecoderConfigBase(Config):
     def __init__(self, **kwargs):
         self.in_dim = kwargs.pop('in_dim', None)
         
-        # gamma set as 0 for cross entropy loss, 2.0 for focal loss by default
+        # focal loss `gamma`: 0 fallback to cross entropy
         self.fl_gamma = kwargs.pop('fl_gamma', 0.0) 
-        # epsilon set as 0 for cross entropy loss, 0.1 for label smoothing loss by default
+        # label smoothing `epsilon`: 0 fallback to cross entropy
         self.sl_epsilon = kwargs.pop('sl_epsilon', 0.0)
         super().__init__(**kwargs)
         
