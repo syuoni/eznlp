@@ -389,6 +389,11 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=False))
             
+        elif pretrained_str.lower().startswith('scibert'):
+            PATH = "assets/transformers/allenai/scibert_scivocab_cased" if cased else "assets/transformers/allenai/scibert_scivocab_uncased"
+            return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
+                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512))
+            
     elif args.language.lower() == 'chinese':
         if pretrained_str.lower().startswith('bert'):
             PATH = "assets/transformers/hfl/chinese-bert-wwm-ext"
