@@ -119,6 +119,7 @@ dataset2language = {'conll2003': 'English',
                     'ace2005': 'English', 
                     'conll2004': 'English', 
                     'SciERC': 'English', 
+                    'ace2005_rel': 'English',
                     'ResumeNER': 'Chinese', 
                     'WeiboNER': 'Chinese', 
                     'SIGHAN2006': 'Chinese', 
@@ -136,6 +137,9 @@ dataset2language = {'conll2003': 'English',
                     'flickr8k': 'English', 
                     'flickr30k': 'English', 
                     'mscoco': 'English'}
+dataset2language.update({f'ADE_cv{k}': 'English' for k in range(10)})
+dataset2language.update({f'ace2004_rel_cv{k}': 'English' for k in range(5)})
+
 
 def load_data(args: argparse.Namespace):
     if args.dataset == 'conll2003':
@@ -194,22 +198,49 @@ def load_data(args: argparse.Namespace):
                            f"Corruption Retrieval F1-score: {ave_scores['micro']['f1']*100:2.3f}%")
         
     elif args.dataset == 'conll2004':
-        json_io = JsonIO(text_key='tokens', 
-                         chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', 
-                         relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
-                         case_mode='None', number_mode='Zeros')
-        train_data = json_io.read("data/conll2004/conll04_train.json")
-        dev_data   = json_io.read("data/conll2004/conll04_dev.json")
-        test_data  = json_io.read("data/conll2004/conll04_test.json")
+        io = JsonIO(text_key='tokens', 
+                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', 
+                    relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
+                    case_mode='None', number_mode='Zeros')
+        train_data = io.read("data/conll2004/conll04_train.json")
+        dev_data   = io.read("data/conll2004/conll04_dev.json")
+        test_data  = io.read("data/conll2004/conll04_test.json")
         
     elif args.dataset == 'SciERC':
-        json_io = JsonIO(text_key='tokens', 
-                         chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', 
-                         relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
-                         case_mode='None', number_mode='Zeros')
-        train_data = json_io.read("data/SciERC/scierc_train.json")
-        dev_data   = json_io.read("data/SciERC/scierc_dev.json")
-        test_data  = json_io.read("data/SciERC/scierc_test.json")
+        io = JsonIO(text_key='tokens', 
+                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', 
+                    relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
+                    case_mode='None', number_mode='Zeros')
+        train_data = io.read("data/SciERC/scierc_train.json")
+        dev_data   = io.read("data/SciERC/scierc_dev.json")
+        test_data  = io.read("data/SciERC/scierc_test.json")
+        
+    elif args.dataset.startswith('ADE_cv'):
+        io = JsonIO(text_key='tokens', 
+                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', 
+                    relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
+                    case_mode='None', number_mode='Zeros')
+        k = int(args.dataset.replace('ADE_cv', ''))
+        train_data = io.read(f"data/ADE/ade_split_{k}_train.json")
+        dev_data   = []
+        test_data  = io.read(f"data/ADE/ade_split_{k}_test.json")
+        args.train_with_dev = True
+        
+    elif args.dataset.startswith('ace2004_rel_cv'):
+        io = JsonIO(relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
+                    case_mode='None', number_mode='Zeros')
+        k = int(args.dataset.replace('ace2004_rel_cv', ''))
+        train_data = io.read(f"data/ace-luan2019naacl/ace04/cv{k}.train.json")
+        dev_data   = []
+        test_data  = io.read(f"data/ace-luan2019naacl/ace04/cv{k}.test.json")
+        args.train_with_dev = True
+        
+    elif args.dataset == 'ace2005_rel':
+        io = JsonIO(relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
+                    case_mode='None', number_mode='Zeros')
+        train_data = io.read("data/ace-luan2019naacl/ace05/train.json")
+        dev_data   = io.read("data/ace-luan2019naacl/ace05/dev.json")
+        test_data  = io.read("data/ace-luan2019naacl/ace05/test.json")
         
     elif args.dataset == 'ResumeNER':
         conll_io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BMES', encoding='utf-8', token_sep="", pad_token="")
@@ -388,6 +419,11 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
                 PATH = "assets/transformers/SpanBERT/spanbert-large-cased"
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=False))
+            
+        elif pretrained_str.lower().startswith('scibert'):
+            PATH = "assets/transformers/allenai/scibert_scivocab_cased" if cased else "assets/transformers/allenai/scibert_scivocab_uncased"
+            return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
+                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512))
             
     elif args.language.lower() == 'chinese':
         if pretrained_str.lower().startswith('bert'):

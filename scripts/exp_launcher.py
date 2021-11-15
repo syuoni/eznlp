@@ -193,13 +193,15 @@ if __name__ == '__main__':
                                     ck_label_emb_dim=[10, 25])
         else:
             sampler = OptionSampler(num_epochs=50, 
-                                    lr=[1e-3, 2e-3], 
-                                    finetune_lr=[1e-5, 2e-5], 
+                                    # lr=[1e-3, 2e-3], 
+                                    lr=numpy.logspace(-3.0, -2.5, num=100, base=10).tolist(), # 1e-3 ~ 3e-3
+                                    # finetune_lr=[5e-5, 1e-4], 
+                                    finetune_lr=numpy.logspace(-4.5, -4.0, num=100, base=10).tolist(), # 3e-5 ~ 1e-4
                                     batch_size=48, 
                                     ck_decoder='span_classification',
                                     bert_drop_rate=0.2, 
                                     use_interm2=[False, True], 
-                                    bert_arch=['BERT_base', 'RoBERTa_base'])
+                                    bert_arch=['BERT_base', 'RoBERTa_base', 'SciBERT'])
         
     elif args.task == 'text2text':
         COMMAND = " ".join([COMMAND, "@scripts/options/tf2text.opt"])
