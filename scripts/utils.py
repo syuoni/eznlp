@@ -429,14 +429,14 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
         if pretrained_str.lower().startswith('bert'):
             PATH = "assets/transformers/hfl/chinese-bert-wwm-ext"
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
-                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512))
+                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=True))
             
         elif pretrained_str.lower().startswith('roberta'):
             # RoBERTa-like BERT
             # https://github.com/ymcui/Chinese-BERT-wwm#faq
             PATH = "assets/transformers/hfl/chinese-roberta-wwm-ext"
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
-                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512))
+                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=True))
             
         elif pretrained_str.lower().startswith('macbert'):
             if 'base' in pretrained_str.lower():
@@ -444,17 +444,17 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
             elif 'large' in pretrained_str.lower():
                 PATH = "assets/transformers/hfl/chinese-macbert-large"
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
-                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512))
+                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=True))
             
         elif pretrained_str.lower().startswith('ernie'):
             PATH = "assets/transformers/nghuyong/ernie-1.0"
             return (transformers.AutoModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
-                    transformers.AutoTokenizer.from_pretrained(PATH, model_max_length=512))
+                    transformers.AutoTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=True))
             
         elif pretrained_str.lower().startswith('hwamei'):
             PATH = "assets/transformers/hwamei/bert-1.98G"
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
-                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512))
+                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=True))
 
 
 
