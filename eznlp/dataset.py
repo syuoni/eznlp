@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
-from typing import List
+from typing import List, Any
 import torch
 
 from .nn.functional import seq_lens2mask
 from .wrapper import Batch
 from .model.model import ModelConfigBase
+from .plm import PreTrainingConfig
 
 
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self, data: List[dict], config: ModelConfigBase=None, training: bool=True):
+    def __init__(self, data: List[dict], config: ModelConfigBase, training: bool=True):
         """
         Parameters
         ----------
@@ -128,3 +129,36 @@ class GenerationDataset(Dataset):
             return entry
         else:
             return self.data[i]
+
+
+
+class PreTrainingDataset(torch.utils.data.Dataset):
+    """Dataset for Pre-training. 
+    """
+    def __init__(self, data: List[Any], config: PreTrainingConfig, training: bool=True, mp_rank=0, mp_world_size=0):
+        super().__init__()
+        # if mp_world_size > 0:
+        #     assert 0 <= mp_rank < mp_world_size
+            
+        #     text_paths = text_paths[_slice_chunk(mp_rank, mp_world_size, len(text_paths))]
+        # logger.info(f"Totally {len(text_paths)} text files in the {mp_rank}-th process")
+        
+        self.data = data
+        self.config = config
+        self.training = training
+        
+        
+    def __len__(self):
+        return len(self.data)
+        
+        
+    def __getitem__(self, i):
+        entry = self.data[i]
+        
+        example = self.config.exemplify(entry, training=self.training)
+        return example
+        
+        
+    def collate(self, batch_examples: List[str]):
+        batch = self.config.batchify(batch_examples)
+        return Batch(**batch)

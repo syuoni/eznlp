@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-import glob
 import torch
 
-from eznlp.language_modeling import MaskedLMConfig
-from eznlp.language_modeling import MaskedLMDataset, FolderLikeMaskedLMDataset
-from eznlp.language_modeling import MaskedLMTrainer
+from eznlp.io import RawTextIO
+from eznlp.plm import MaskedLMConfig
+from eznlp.dataset import PreTrainingDataset
+from eznlp.training import MaskedLMTrainer
 
 
 class TestMaskedLM(object):
@@ -12,10 +12,10 @@ class TestMaskedLM(object):
         self.model.eval()
         
         bert_like4mlm_outs012 = self.model(input_ids=self.batch.mlm_tok_ids[:3], 
-                                           attention_mask=(~self.batch.attention_mask[:3]).long(), 
+                                           attention_mask=(~self.batch.mlm_att_mask[:3]).long(), 
                                            labels=self.batch.mlm_lab_ids[:3])
         bert_like4mlm_outs123 = self.model(input_ids=self.batch.mlm_tok_ids[1:], 
-                                           attention_mask=(~self.batch.attention_mask[1:]).long(), 
+                                           attention_mask=(~self.batch.mlm_att_mask[1:]).long(), 
                                            labels=self.batch.mlm_lab_ids[1:])
         mlm_logits012 = bert_like4mlm_outs012['logits']
         mlm_logits123 = bert_like4mlm_outs123['logits']
@@ -32,11 +32,11 @@ class TestMaskedLM(object):
         
     def test_conll2003(self, bert_like4mlm_with_tokenizer, conll2003_demo, device):
         bert_like4mlm, tokenizer = bert_like4mlm_with_tokenizer
-        self.config = MaskedLMConfig(tokenizer=tokenizer)
+        self.config = MaskedLMConfig(bert_like=bert_like4mlm, tokenizer=tokenizer)
         
         self.device = device
-        self.dataset = MaskedLMDataset(conll2003_demo, self.config)
-        self.model = bert_like4mlm.to(self.device)
+        self.dataset = PreTrainingDataset(conll2003_demo, self.config)
+        self.model = self.config.instantiate().to(self.device)
         
         self.batch = self.dataset.collate([self.dataset[i] for i in range(4)]).to(self.device)
         self._assert_batch_consistency()
@@ -45,16 +45,14 @@ class TestMaskedLM(object):
         
     def test_PMC(self, bert_like4mlm_with_tokenizer, device):
         bert_like4mlm, tokenizer = bert_like4mlm_with_tokenizer
-        self.config = MaskedLMConfig(tokenizer=tokenizer)
+        self.config = MaskedLMConfig(bert_like=bert_like4mlm, tokenizer=tokenizer)
+        
         self.device = device
+        io = RawTextIO(tokenizer.tokenize, max_len=128, encoding='utf-8')
+        data = io.read("data/PMC/comm_use/Cells/Cells_2012_Apr_23_1(2)_35-50.txt")
+        self.dataset = PreTrainingDataset(data, self.config)
+        self.model = self.config.instantiate().to(self.device)
         
-        text_paths = glob.glob("data/PMC/comm_use/Cells/*.txt")
-        self.dataset = FolderLikeMaskedLMDataset(text_paths=text_paths, config=self.config, max_len=128)
-        self.model = bert_like4mlm.to(self.device)
-        
-        dataloader = torch.utils.data.DataLoader(self.dataset, batch_size=4, collate_fn=self.dataset.collate)
-        self.batch = next(iter(dataloader)).to(self.device)
+        self.batch = self.dataset.collate([self.dataset[i] for i in range(4)]).to(self.device)
         self._assert_batch_consistency()
         self._assert_trainable()
-        
-        

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import torch
-from ..training import Trainer
+from .trainer import Trainer
 
 
 class MaskedLMTrainer(Trainer):
@@ -10,14 +10,12 @@ class MaskedLMTrainer(Trainer):
         
     def forward_batch(self, batch):
         mlm_outs = self.model(input_ids=batch.mlm_tok_ids, 
-                              attention_mask=(~batch.attention_mask).long(), 
+                              attention_mask=(~batch.mlm_att_mask).long(), 
                               labels=batch.mlm_lab_ids)
         loss = mlm_outs['loss']
         
-        # In case of Multi-GPU
+        # In case of multi-GPU
         if loss.dim() > 0:
             loss = loss.mean()
-            
+        
         return loss
-    
-    

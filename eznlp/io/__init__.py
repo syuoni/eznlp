@@ -6,4 +6,5 @@ from .brat import BratIO
 from .json import JsonIO, SQuADIO, KarpathyIO
 from .chip import ChipIO
 from .src2trg import Src2TrgIO
+from .raw_text import RawTextIO
 from .processing import PostIO
