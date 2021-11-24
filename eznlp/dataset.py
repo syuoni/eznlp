@@ -151,6 +151,13 @@ class PreTrainingDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.data)
         
+    @property
+    def summary(self):
+        summary = []
+        num_seqs = len(self.data)
+        summary.append(f"The dataset consists {num_seqs:,} sequences")
+        return "\n".join(summary)
+        
         
     def __getitem__(self, i):
         entry = self.data[i]
