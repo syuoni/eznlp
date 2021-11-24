@@ -10,13 +10,22 @@ logger = logging.getLogger(__name__)
 
 class RawTextIO(IO):
     """An IO interface of raw text files. 
+    
+    document_sep_starts: List[str]
+        * For Conll2003, `document_sep_starts` should be `["-DOCSTART-"]`
+        * For Wikipedia, `document_sep_starts` should be `["<doc", "</doc"]`
     """
-    def __init__(self, tokenize_callback=None, max_len: int=None, encoding=None, verbose: bool=True):
+    def __init__(self, 
+                 tokenize_callback=None, 
+                 max_len: int=None, 
+                 document_sep_starts=None, 
+                 encoding=None, 
+                 verbose: bool=True):
         super().__init__(is_tokenized=False, tokenize_callback=tokenize_callback, encoding=encoding, verbose=verbose)
         
         assert not (tokenize_callback is not None and max_len is None)
         self.max_len = max_len
-        self.document_seperator = "-DOCSTART-"
+        self.document_sep_starts = [] if document_sep_starts is None else document_sep_starts
         
         
     def read(self, file_path):
@@ -35,7 +44,7 @@ class RawTextIO(IO):
             for byte_line in tqdm.tqdm(byte_lines, disable=not self.verbose, ncols=100, desc="Loading raw text data"):
                 line = byte_line.decode(self.encoding)
                 
-                if line.startswith(self.document_seperator):
+                if self._is_breaking(line):
                     if len(tokenized_doc) > 0:
                         for start, end in segment_text_uniformly(tokenized_doc, max_span_size=self.max_len):
                             data.append(" ".join(tokenized_doc[start:end]))
@@ -51,6 +60,16 @@ class RawTextIO(IO):
                     data.append(" ".join(tokenized_doc[start:end]))
         
         return data
+        
+        
+    def _is_document_seperator(self, line: str):
+        for start in self.document_sep_starts:
+            if line.startswith(start):
+                return True
+        return False
+        
+    def _is_breaking(self, line: str):
+        return self._is_document_seperator(line)
         
         
     def write(self, data, file_path):
