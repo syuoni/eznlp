@@ -29,6 +29,7 @@ class Trainer(object):
                  schedule_by_step: bool=False, 
                  num_grad_acc_steps: int=None, 
                  device: torch.device=None, 
+                 non_blocking: bool=False,
                  grad_clip: float=None, 
                  use_amp: bool=False):
         self.model = model
@@ -47,6 +48,7 @@ class Trainer(object):
         
         assert device is not None
         self.device = device
+        self.non_blocking = non_blocking
         self.grad_clip = grad_clip
         self.use_amp = use_amp
         self.scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
@@ -119,7 +121,7 @@ class Trainer(object):
         set_y_pred = [[] for k in range(self.num_metrics)]
         with torch.no_grad():
             for batch in dataloader:
-                batch = batch.to(self.device)
+                batch = batch.to(self.device, non_blocking=self.non_blocking)
                 
                 # `dataset` may not have ground-truths, so avoid computing loss here 
                 if beam_size <= 1:
@@ -150,7 +152,7 @@ class Trainer(object):
         epoch_y_gold = [[] for k in range(self.num_metrics)]
         epoch_y_pred = [[] for k in range(self.num_metrics)]
         for batch in dataloader:
-            batch = batch.to(self.device)
+            batch = batch.to(self.device, non_blocking=self.non_blocking)
             with torch.cuda.amp.autocast(enabled=self.use_amp):
                 loss_with_possible_y_pred = self.forward_batch(batch)
             
@@ -182,7 +184,7 @@ class Trainer(object):
         epoch_y_pred = [[] for k in range(self.num_metrics)]
         with torch.no_grad():
             for batch in dataloader:
-                batch = batch.to(self.device)
+                batch = batch.to(self.device, non_blocking=self.non_blocking)
                 loss_with_possible_y_pred = self.forward_batch(batch)
                 
                 if self.num_metrics == 0:
@@ -236,7 +238,7 @@ class Trainer(object):
         """
         max_steps = numpy.inf if max_steps is None else max_steps
         disp_every_steps = len(train_loader) if disp_every_steps is None else disp_every_steps
-        eval_every_steps = len(train_loader) if eval_every_steps is None else eval_every_steps
+        eval_every_steps = disp_every_steps  if eval_every_steps is None else eval_every_steps
         if eval_every_steps % disp_every_steps != 0:
             raise ValueError(f"`eval_every_steps` {eval_every_steps} should be multiples of `disp_every_steps` {disp_every_steps}")
         
@@ -254,7 +256,7 @@ class Trainer(object):
         
         while eidx < num_epochs:
             for batch in train_loader:
-                batch = batch.to(self.device)
+                batch = batch.to(self.device, non_blocking=self.non_blocking)
                 with torch.cuda.amp.autocast(enabled=self.use_amp):
                     loss_with_possible_y_pred = self.forward_batch(batch)
                     
@@ -322,6 +324,8 @@ class Trainer(object):
                     t0 = time.time()
                 
                 if (sidx+1) % eval_every_steps == 0 and dev_loader is None:
+                    # Always save the model if `dev_loader` is None
+                    # Save multiple models by accordlingly defining `save_callback`
                     if save_callback is not None:
                         save_callback(self.model)
                 
