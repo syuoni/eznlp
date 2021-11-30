@@ -21,6 +21,12 @@ from utils import add_base_arguments, parse_to_args
 from utils import header_format
 
 
+"""See: https://github.com/tczhangzhi/pytorch-distributed
+
+CUDA_VISIBLE_DEVICES=0,1,2,3 python -m torch.distributed.launch --nproc_per_node=4 scripts/pretraining.py @scripts/options/pt_bert.opt
+"""
+
+
 def parse_arguments(parser: argparse.ArgumentParser):
     parser = add_base_arguments(parser)
     
@@ -41,13 +47,11 @@ def parse_arguments(parser: argparse.ArgumentParser):
 
 
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      fromfile_prefix_chars='@')
     args = parse_arguments(parser)
     
-    # See: https://github.com/tczhangzhi/pytorch-distributed
     is_main_rank = (args.local_rank <= 0)
     use_ddp = (args.local_rank >= 0)
     args.log_terminal = (args.log_terminal and is_main_rank)
