@@ -427,7 +427,10 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
             
     elif args.language.lower() == 'chinese':
         if pretrained_str.lower().startswith('bert'):
-            PATH = "assets/transformers/hfl/chinese-bert-wwm-ext"
+            if 'wwm' in pretrained_str.lower():
+                PATH = "assets/transformers/hfl/chinese-bert-wwm-ext"
+            else:
+                PATH = "assets/transformers/bert-base-chinese"
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=True))
             
@@ -451,8 +454,9 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
             return (transformers.AutoModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.AutoTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=True))
             
-        elif pretrained_str.lower().startswith('hwamei'):
-            PATH = "assets/transformers/hwamei/bert-1.98G"
+        elif pretrained_str.lower().startswith('syuoni_'):
+            pretrained_str = pretrained_str.replace('syuoni_', '').replace('_', '-')
+            PATH = f"assets/transformers/syuoni/{pretrained_str}"
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=True))
 

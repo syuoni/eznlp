@@ -91,7 +91,7 @@ if __name__ == '__main__':
         torch.cuda.set_device(device)
         temp = torch.randn(100).to(device)
     
-    PATH = "assets/transformers/bert-base-chinese"
+    PATH = "assets/transformers/syuoni/bert-base-chinese-fixed"
     bert4pt = transformers.BertForMaskedLM.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate)
     tokenizer = transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=True)
     
@@ -134,7 +134,7 @@ if __name__ == '__main__':
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, betas=(0.9, 0.980), eps=1e-6, weight_decay=0.01)  # RoBERTa
     
     num_total_steps = len(train_loader) * args.num_epochs
-    num_warmup_steps = min(10_000*args.num_grad_acc_steps, num_total_steps // 5)
+    num_warmup_steps = min(10_000*args.num_grad_acc_steps, num_total_steps//5)
     logger.info(f"Warmup steps: {num_warmup_steps:,}")
     logger.info(f"Total steps: {num_total_steps:,}")
     
