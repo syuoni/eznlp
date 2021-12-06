@@ -43,6 +43,8 @@ class MaskedLMConfig(PreTrainingConfig):
     def __init__(self, **kwargs):
         self.bert_like: transformers.PreTrainedModel = kwargs.pop('bert_like')
         
+        self.use_wwm = kwargs.pop('use_wwm', False)
+        
         self.masking_rate = kwargs.pop('masking_rate', 0.15)
         self.random_word_rate = kwargs.pop('random_word_rate', 0.1)
         self.unchange_rate = kwargs.pop('unchange_rate', 0.1)
@@ -66,8 +68,10 @@ class MaskedLMConfig(PreTrainingConfig):
             str: A string, which is tokenized by `tokenizer` and re-joined with spaces. 
             List[str]: A list of string, which is tokenized by `tokenizer`.
         """
-        if isinstance(entry, dict):
+        if isinstance(entry, dict) and 'tokens' in entry:
             tokenized_text = self.tokenizer.tokenize(" ".join(entry['tokens'].raw_text))
+        elif isinstance(entry, dict) and 'rejoined_text' in entry:
+            tokenized_text = entry['rejoined_text'].split(" ")
         elif isinstance(entry, str):
             # String inputs are always regarded as re-joined with spaces
             # Never pass raw, un-tokenized text here

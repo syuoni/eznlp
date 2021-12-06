@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
+import jieba
 import torch
+import transformers
 
 from eznlp.io import RawTextIO
 from eznlp.plm import MaskedLMConfig
@@ -43,13 +45,15 @@ class TestMaskedLM(object):
         self._assert_trainable()
         
         
-    def test_PMC(self, bert_like4mlm_with_tokenizer, device):
-        bert_like4mlm, tokenizer = bert_like4mlm_with_tokenizer
+    def test_wikipedia(self, device):
+        PATH = "assets/transformers/bert-base-chinese"
+        bert_like4mlm = transformers.BertForMaskedLM.from_pretrained(PATH)
+        tokenizer = transformers.BertTokenizer.from_pretrained(PATH)
         self.config = MaskedLMConfig(bert_like=bert_like4mlm, tokenizer=tokenizer)
         
         self.device = device
-        io = RawTextIO(tokenizer.tokenize, max_len=128, encoding='utf-8')
-        data = io.read("data/PMC/comm_use/Cells/Cells_2012_Apr_23_1(2)_35-50.txt")
+        io = RawTextIO(tokenizer.tokenize, jieba.tokenize, max_len=128, document_sep_starts=["-DOCSTART-", "<doc", "</doc"], encoding='utf-8')
+        data = io.read("data/Wikipedia/text-zh/AA/wiki_00")
         self.dataset = PreTrainingDataset(data, self.config)
         self.model = self.config.instantiate().to(self.device)
         
