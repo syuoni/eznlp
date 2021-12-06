@@ -23,6 +23,7 @@ from utils import header_format
 
 """See: https://github.com/tczhangzhi/pytorch-distributed
 
+NCCL_P2P_DISABLE=1 
 CUDA_VISIBLE_DEVICES=0,1,2,3 python -m torch.distributed.launch --nproc_per_node=4 scripts/pretraining.py @scripts/options/pt_bert.opt
 """
 
@@ -38,11 +39,14 @@ def parse_arguments(parser: argparse.ArgumentParser):
     group_data.add_argument('--prepare_data', default=False, action='store_true', 
                             help="whether to prepare data")
     
-    group_etc = parser.add_argument_group('etc')
-    group_etc.add_argument('--disp_every_steps', type=int, default=1000, 
-                           help="step number for display")
-    group_etc.add_argument('--local_rank', default=-1, type=int,
-                           help='node rank for distributed training')
+    group_train = parser.add_argument_group('training etc')
+    group_train.add_argument('--disp_every_steps', type=int, default=1000, 
+                             help="step number for display")
+    group_train.add_argument('--local_rank', type=int, default=-1, 
+                             help='node rank for distributed training')
+    group_train.add_argument('--ddp_backend', type=str, default='nccl', 
+                             help='DDP backend', choices=['nccl', 'gloo'])
+    
     return parse_to_args(parser)
 
 
@@ -82,7 +86,7 @@ if __name__ == '__main__':
     logger.info(header_format("Preparing", sep='-'))
    
     if use_ddp:
-        torch.distributed.init_process_group(backend='nccl')
+        torch.distributed.init_process_group(backend=args.ddp_backend)
         device = torch.device('cuda', args.local_rank)
     else:
         device = auto_device()
