@@ -147,10 +147,10 @@ class JsonIO(IO):
 
         with open(file_path, 'w', encoding=self.encoding) as f:
             if self.is_whole_piece:
-                json.dump(raw_data, f)
+                json.dump(raw_data, f, ensure_ascii=False)
             else:
                 for raw_entry in raw_data:
-                    f.write(json.dumps(raw_entry))
+                    f.write(json.dumps(raw_entry, ensure_ascii=False))
                     f.write("\n")
 
 

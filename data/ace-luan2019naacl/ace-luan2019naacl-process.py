@@ -39,4 +39,4 @@ for partition in ['train', 'dev', 'test']:
     
     
     with open(trg_fn, 'w') as f:
-        json.dump(new_data, f)
+        json.dump(new_data, f, ensure_ascii=False)
