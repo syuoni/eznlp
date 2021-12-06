@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from typing import Union, List
+from typing import List
 import random
 import torch
 import transformers
@@ -60,25 +60,13 @@ class MaskedLMConfig(PreTrainingConfig):
         return -100
         
         
-    def exemplify(self, entry: Union[dict, str, List[str]], training: bool=True):
+    def exemplify(self, entry: dict, training: bool=True):
         """Use dynamic masking. 
         
         entry: dict / str / List[str]
-            dict: {'tokens': TokenSequence, ...}
-            str: A string, which is tokenized by `tokenizer` and re-joined with spaces. 
-            List[str]: A list of string, which is tokenized by `tokenizer`.
+            {'rejoined_text': str, 'wwm_spans': List[tuple], ...}
         """
-        if isinstance(entry, dict) and 'tokens' in entry:
-            tokenized_text = self.tokenizer.tokenize(" ".join(entry['tokens'].raw_text))
-        elif isinstance(entry, dict) and 'rejoined_text' in entry:
-            tokenized_text = entry['rejoined_text'].split(" ")
-        elif isinstance(entry, str):
-            # String inputs are always regarded as re-joined with spaces
-            # Never pass raw, un-tokenized text here
-            tokenized_text = entry.split(" ")
-        else:
-            assert isinstance(entry, list) and isinstance(entry[0], str)
-            tokenized_text = entry
+        tokenized_text = entry['rejoined_text'].split(" ")
         
         mlm_tok_ids = [self.cls_id] + self.tokenizer.convert_tokens_to_ids(tokenized_text) + [self.sep_id]
         mlm_lab_ids = []

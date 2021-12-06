@@ -116,6 +116,14 @@ class RawTextIO(IO):
             return self._parse_raw(byte_lines)
         
         
+    def setup_data_with_tokens(self, data: List[dict]):
+        for entry in data:
+            tokenized_text = self.tokenize_callback(" ".join(entry['tokens'].raw_text))
+            entry.update({'rejoined_text': " ".join(tokenized_text), 
+                          'wwm_spans': self._detect_wwm_spans(tokenized_text)})
+        return data
+        
+        
     def _is_document_seperator(self, line: str):
         for start in self.document_sep_starts:
             if line.startswith(start):

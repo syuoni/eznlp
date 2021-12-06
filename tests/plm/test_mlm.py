@@ -32,12 +32,16 @@ class TestMaskedLM(object):
         trainer.train_epoch([self.batch])
         
         
-    def test_conll2003(self, bert_like4mlm_with_tokenizer, conll2003_demo, device):
-        bert_like4mlm, tokenizer = bert_like4mlm_with_tokenizer
+    def test_ResumeNER(self, ResumeNER_demo, device):
+        PATH = "assets/transformers/bert-base-chinese"
+        bert_like4mlm = transformers.BertForMaskedLM.from_pretrained(PATH)
+        tokenizer = transformers.BertTokenizer.from_pretrained(PATH)
         self.config = MaskedLMConfig(bert_like=bert_like4mlm, tokenizer=tokenizer)
         
         self.device = device
-        self.dataset = PreTrainingDataset(conll2003_demo, self.config)
+        io = RawTextIO(tokenizer.tokenize, jieba.tokenize, max_len=128, document_sep_starts=["-DOCSTART-", "<doc", "</doc"], encoding='utf-8')
+        data = io.setup_data_with_tokens(ResumeNER_demo)
+        self.dataset = PreTrainingDataset(data, self.config)
         self.model = self.config.instantiate().to(self.device)
         
         self.batch = self.dataset.collate([self.dataset[i] for i in range(4)]).to(self.device)
