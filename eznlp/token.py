@@ -10,7 +10,22 @@ import jieba
 import numpy
 
 
-zh_punctuation = "！？｡。＂＃＄％＆＇（）＊＋，－——／：；＜＝＞＠［＼］＾＿｀｛｜｝～｟｠｢｣､、〃《》「」『』【】〔〕〖〗〘〙〚〛〜〝〞〟〰〾〿–—‘’‛“”„‟…‧﹏"
+# "".join([chr(i) for i in range(8211, 8232)])
+# "".join([chr(i) for i in range(12289, 12352)])
+# "".join([chr(i) for i in range(65091, 65511)])
+zh_punctuation = ("–—―‖‗‘’‚‛“”„‟†‡•‣․‥…‧" + 
+                  "、。〃〄々〆〇〈〉《》「」『』【】〒〓〔〕〖〗〘〙〚〛〜〝〞〟〠〡〢〣〤〥〦〧〨〩〪〭〮〯〫〬〰〱〲〳〴〵〶〷〸〹〺〻〼〽〾〿" + 
+                  "﹃﹄﹅﹆﹇﹈﹉﹊﹋﹌﹍﹎﹏﹐﹑﹒﹔﹕﹖﹗﹘﹙﹚﹛﹜﹝﹞﹟﹠﹡﹢﹣﹤﹥﹦﹨﹩﹪﹫" + 
+                  "！＂＃＄％＆＇（）＊＋，－．／：；＜＝＞？＠［＼］＾＿｀｛｜｝～｟｠｡｢｣､･" + 
+                  "￥￦")
+
+# Full-width characters
+fw_digits = "０１２３４５６７８９"
+fw_uppercase = "ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ"
+fw_lowercase = "ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚ"
+
+assert not any(c.isascii() for c in zh_punctuation + fw_digits + fw_uppercase + fw_lowercase)
+
 
 ascii_re = re.compile('[\x00-\xff]')
 lower_re = re.compile('[a-z]')
@@ -18,7 +33,13 @@ upper_re = re.compile('[A-Z]')
 digit_re = re.compile('\d')
 punct_re = re.compile('[' + ''.join("\\" + p for p in string.punctuation) + ']')
 non_ascii_re = re.compile('[^\x00-\xff]')
+
+zh_char_re = re.compile('[\u4e00-\u9fa5]')
 zh_punct_re = re.compile('[' + zh_punctuation + ']')
+fw_lower_re = re.compile('[' + fw_lowercase + ']')
+fw_upper_re = re.compile('[' + fw_uppercase + ']')
+fw_digit_re = re.compile('[' + fw_digits + ']')
+
 
 en_title_word_re = re.compile('[A-Z]{1}[a-z]{1,}')
 en_upper_word_re = re.compile('[A-Z]{2,}')
