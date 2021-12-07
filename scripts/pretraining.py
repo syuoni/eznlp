@@ -34,10 +34,20 @@ def parse_arguments(parser: argparse.ArgumentParser):
     group_data = parser.add_argument_group('dataset')
     group_data.add_argument('--dataset', type=str, default='Wikipedia_zh', 
                             help="dataset name")
-    group_data.add_argument('--file_path', type=str, default='data/Wikipedia/text-zh/AA/wiki_00', 
-                            help="raw text file path(s); accept patterns like '**/*.txt', if enclosed in quotes")
-    group_data.add_argument('--prepare_data', default=False, action='store_true', 
-                            help="whether to prepare data")
+    group_data.add_argument('--file_path', type=str, default='data/Wikipedia/text-zh/AA/wiki_00.cache', 
+                            help="prepared pretraining data file path(s); accept patterns like '**/*.cache', if enclosed in quotes")
+    
+    group_pretrain = parser.add_argument_group('pretrain')
+    group_pretrain.add_argument('--vocab_fix', default=False, action='store_true', 
+                                help="whether to load the vocab fixed BERT")
+    group_pretrain.add_argument('--masking_rate', type=float, default=0.15, 
+                                help="masking rate")
+    group_pretrain.add_argument('--masking_rate_dev', type=float, default=0.0, 
+                                help="masking rate deviation")
+    group_pretrain.add_argument('--use_wwm', default=False, action='store_true', 
+                                help="whether to use whole word masking")
+    group_pretrain.add_argument('--use_ngram', default=False, action='store_true', 
+                                help="whether to use N-gram masking")
     
     group_train = parser.add_argument_group('training etc')
     group_train.add_argument('--disp_every_steps', type=int, default=1000, 
@@ -95,7 +105,10 @@ if __name__ == '__main__':
         torch.cuda.set_device(device)
         temp = torch.randn(100).to(device)
     
-    PATH = "assets/transformers/syuoni/bert-base-chinese-fixed"
+    if args.vocab_fix:
+        PATH = "assets/transformers/syuoni/bert-base-chinese-vf"
+    else:
+        PATH = "assets/transformers/bert-base-chinese"
     bert4pt = transformers.BertForMaskedLM.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate)
     tokenizer = transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=True)
     
@@ -103,20 +116,14 @@ if __name__ == '__main__':
     assert len(file_paths) > 0
     logger.info(f"Text data files: {len(file_paths)}")
     
+    io = RawTextIO(encoding='utf-8', verbose=args.log_terminal)
     train_data = []
-    if args.prepare_data:
-        io = RawTextIO(tokenizer.tokenize, max_len=510, document_sep_starts=["-DOCSTART-", "<doc", "</doc"], encoding='utf-8', verbose=args.log_terminal)
-        for fn in file_paths:
-            data = io.read(fn)
-            io.write(data, f"{fn}.cache")
-            train_data += data
-    else:
-        io = RawTextIO(encoding='utf-8', verbose=args.log_terminal)
-        for fn in file_paths:
-            data = io.read(f"{fn}.cache")
-            train_data += data
+    for fn in file_paths:
+        train_data += io.read(fn)
     
-    config = MaskedLMConfig(bert_like=bert4pt, tokenizer=tokenizer)
+    config = MaskedLMConfig(bert_like=bert4pt, tokenizer=tokenizer, 
+                            masking_rate=args.masking_rate, masking_rate_dev=args.masking_rate_dev, 
+                            use_wwm=args.use_wwm, ngram_weights=(0.5, 0.35, 0.15) if args.use_ngram else (1.0, ))
     train_set = PreTrainingDataset(train_data, config)
     
     logger.info(train_set.summary)
