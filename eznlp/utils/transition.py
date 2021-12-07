@@ -25,7 +25,7 @@ class ChunksTagsTranslator(object):
     https://github.com/chakki-works/seqeval
     """
     def __init__(self, scheme='BIOES', sep: str='-', breaking_for_types: bool=True):
-        assert scheme in ('BIO1', 'BIO2', 'BIOES', 'BMES', 'BILOU', 'OntoNotes', 'zh-wwm')
+        assert scheme in ('BIO1', 'BIO2', 'BIOES', 'BMES', 'BILOU', 'OntoNotes', 'wwm')
         self.scheme = scheme
         
         dirname = os.path.dirname(__file__)
@@ -219,18 +219,20 @@ def _token2wwm_tag(tok: str, subword_prefix: str='##'):
     if tok.startswith('[') and tok.endswith(']'):
         return 'SP-SP'
     
-    # Chinese characters are never following `##`
+    # Theoretically, Chinese characters never follow `##`
     # Chinese punctuations belong to `ETC`, and may follow `##`
-    if zh_char_re.fullmatch(tok):  # zh_punct_re.fullmatch(tok)
-        return 'ZH-ZH'
     
     if tok.startswith(subword_prefix):
         if tok[2:].isascii():
             return '##EN-EN'  # The returning prefix `##` corresponds to that in `transition.xlsx`
+        elif zh_char_re.fullmatch(tok[2:]):  # zh_punct_re.fullmatch(tok[2:])
+            return '##ZH-ZH'
         else:
             return '##ETC-ETC'
     else:
         if tok.isascii():
             return 'EN-EN'
+        elif zh_char_re.fullmatch(tok):
+            return 'ZH-ZH'
         else:
             return 'ETC-ETC'

@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 class RawTextIO(IO):
     """An IO interface of raw text files. 
-    Note: The wwm strategy currently supports Chinese only. 
     
     document_sep_starts: List[str]
         * For Conll2003, `document_sep_starts` should be `["-DOCSTART-"]`
@@ -29,12 +28,11 @@ class RawTextIO(IO):
         super().__init__(is_tokenized=False, tokenize_callback=tokenize_callback, encoding=encoding, verbose=verbose)
         
         if tokenize_callback is not None:
-            assert zh_tokenize_callback is not None
             assert max_len is not None
         
         self.zh_tokenize_callback = zh_tokenize_callback
-        self.translator = ChunksTagsTranslator(scheme='zh-wwm', breaking_for_types=False)
-        self.en_wwm_span_max_len = 4
+        self.translator = ChunksTagsTranslator(scheme='wwm', breaking_for_types=False)
+        self.wwm_span_max_len = 10
         self.min_len = 10
         self.max_len = max_len
         self.document_sep_starts = [] if document_sep_starts is None else document_sep_starts
@@ -46,17 +44,24 @@ class RawTextIO(IO):
         wwm_spans = []
         for ck_type, start, end in chunks:
             if ck_type == 'ZH':
+                # Exception cases: (1) `##ZH` exists; (2) `ZH` is followed by `##EN` or `##ETC`. 
+                # While these exceptions SHOULD NOT exist if `tokenize_callback` is proper. 
                 assert all(len(c) == 1 for c in tokenized_text[start:end])
-                wwm_spans.extend([(start+tok_start, start+tok_end)
-                                  for _, tok_start, tok_end 
-                                  in self.zh_tokenize_callback("".join(tokenized_text[start:end]))])
+                
+                if self.zh_tokenize_callback is not None:
+                    wwm_spans.extend([(start+tok_start, start+tok_end)
+                                      for _, tok_start, tok_end 
+                                      in self.zh_tokenize_callback("".join(tokenized_text[start:end]))])
+                else:
+                    wwm_spans.extend([(k, k+1) for k in range(start, end)])
+                
             elif ck_type in ('EN', 'ETC'):
-                if end - start <= self.en_wwm_span_max_len:
+                if end - start <= self.wwm_span_max_len:
                     wwm_spans.append((start, end))
                 else:
                     wwm_spans.extend([(start+sub_start, start+sub_end)
                                       for sub_start, sub_end 
-                                      in segment_text_uniformly(tokenized_text[start:end], max_span_size=self.en_wwm_span_max_len)])
+                                      in segment_text_uniformly(tokenized_text[start:end], max_span_size=self.wwm_span_max_len)])
             else:
                 wwm_spans.append((start, end))
         
