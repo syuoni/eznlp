@@ -66,12 +66,13 @@ class MaskedLMConfig(PreTrainingConfig):
         """Use dynamic masking. 
         
         entry: dict / str / List[str]
-            {'rejoined_text': str, 'wwm_spans': List[tuple], ...}
+            {'rejoined_text': str, 'wwm_cuts': List[int], ...}
         """
         tokenized_text = entry['rejoined_text'].split(" ")
         
         if self.use_wwm:
-            wwm_spans = entry['wwm_spans']
+            wwm_cuts = entry['wwm_cuts']
+            wwm_spans = [(start, end) for start, end in zip(wwm_cuts[:-1], wwm_cuts[1:])]
         else:
             wwm_spans = [(k, k+1) for k in range(len(tokenized_text))]
         

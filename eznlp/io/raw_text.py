@@ -38,7 +38,7 @@ class RawTextIO(IO):
         self.document_sep_starts = [] if document_sep_starts is None else document_sep_starts
         
         
-    def _detect_wwm_spans(self, tokenized_text: List[str]):
+    def _detect_wwm_cuts(self, tokenized_text: List[str]):
         wwm_tags = [_token2wwm_tag(tok) for tok in tokenized_text]
         chunks = self.translator.tags2chunks(wwm_tags)
         wwm_spans = []
@@ -68,7 +68,10 @@ class RawTextIO(IO):
         assert wwm_spans[0][0] == 0
         assert wwm_spans[-1][1] == len(tokenized_text)
         assert all(pre_end == next_start for (_, pre_end), (next_start, _) in zip(wwm_spans[:-1], wwm_spans[1:]))
-        return wwm_spans
+        
+        # Use `wwm_cuts` to reduce memory usage
+        wwm_cuts = [0] + [end for _, end in wwm_spans]
+        return wwm_cuts
         
         
     def _parse_raw(self, byte_lines: List[bytes]):
@@ -83,7 +86,7 @@ class RawTextIO(IO):
                     for start, end in segment_text_uniformly(tokenized_doc, max_span_size=self.max_len):
                         tokenized_text = tokenized_doc[start:end]
                         data.append({'rejoined_text': " ".join(tokenized_text), 
-                                     'wwm_spans': self._detect_wwm_spans(tokenized_text)})
+                                     'wwm_cuts': self._detect_wwm_cuts(tokenized_text)})
                 tokenized_doc = []
                 
             elif self.tokenize_callback is None:
@@ -95,7 +98,7 @@ class RawTextIO(IO):
             for start, end in segment_text_uniformly(tokenized_doc, max_span_size=self.max_len):
                 tokenized_text = tokenized_doc[start:end]
                 data.append({'rejoined_text': " ".join(tokenized_text), 
-                             'wwm_spans': self._detect_wwm_spans(tokenized_text)})
+                             'wwm_cuts': self._detect_wwm_cuts(tokenized_text)})
         
         return data
         
@@ -105,8 +108,6 @@ class RawTextIO(IO):
         for byte_line in tqdm.tqdm(byte_lines, disable=not self.verbose, ncols=100, desc="Loading raw text data"):
             # `tokenize_callback` must be None
             entry = json.loads(byte_line.decode(self.encoding))
-            # json does not natively support serialization for tuple
-            entry['wwm_spans'] = [tuple(span) for span in entry['wwm_spans']]
             data.append(entry)
         return data
         
@@ -125,7 +126,7 @@ class RawTextIO(IO):
         for entry in data:
             tokenized_text = self.tokenize_callback(" ".join(entry['tokens'].raw_text))
             entry.update({'rejoined_text': " ".join(tokenized_text), 
-                          'wwm_spans': self._detect_wwm_spans(tokenized_text)})
+                          'wwm_cuts': self._detect_wwm_cuts(tokenized_text)})
         return data
         
         
