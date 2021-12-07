@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import pytest
 import jieba
 import torch
 import transformers
@@ -49,11 +50,13 @@ class TestMaskedLM(object):
         self._assert_trainable()
         
         
-    def test_wikipedia(self, device):
+    @pytest.mark.parametrize("use_wwm", [False, True])
+    @pytest.mark.parametrize("ngram_weights", [(1.0, ), (0.4, 0.3, 0.3)])
+    def test_wikipedia(self, use_wwm, ngram_weights, device):
         PATH = "assets/transformers/bert-base-chinese"
         bert_like4mlm = transformers.BertForMaskedLM.from_pretrained(PATH)
         tokenizer = transformers.BertTokenizer.from_pretrained(PATH)
-        self.config = MaskedLMConfig(bert_like=bert_like4mlm, tokenizer=tokenizer)
+        self.config = MaskedLMConfig(bert_like=bert_like4mlm, tokenizer=tokenizer, use_wwm=use_wwm, ngram_weights=ngram_weights)
         
         self.device = device
         io = RawTextIO(tokenizer.tokenize, jieba.tokenize, max_len=128, document_sep_starts=["-DOCSTART-", "<doc", "</doc"], encoding='utf-8')
