@@ -1,2 +1,3 @@
 # -*- coding: utf-8 -*-
-from .mlm import PreTrainingConfig, MaskedLMConfig
+from .base import PreTrainingConfig
+from .mlm import MaskedLMConfig

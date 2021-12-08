@@ -5,51 +5,27 @@ import torch
 import transformers
 
 from ..nn.functional import seq_lens2mask
-from ..config import Config
-
-
-class PreTrainingConfig(Config):
-    def __init__(self, **kwargs):
-        self.tokenizer: transformers.PreTrainedTokenizer = kwargs.pop('tokenizer')
-        self.stoi = self.tokenizer.get_vocab()
-        self.special_ids = list(set(self.tokenizer.all_special_ids))
-        self.non_special_ids = [idx for idx in self.stoi.values() if idx not in self.special_ids]
-        
-        super().__init__(**kwargs)
-        
-    @property
-    def cls_id(self):
-        return self.tokenizer.cls_token_id
-        
-    @property
-    def sep_id(self):
-        return self.tokenizer.sep_token_id
-        
-    @property
-    def unk_id(self):
-        return self.tokenizer.unk_token_id
-        
-    @property
-    def pad_id(self):
-        return self.tokenizer.pad_token_id
-        
-    @property
-    def mask_id(self):
-        return self.tokenizer.mask_token_id
+from .base import PreTrainingConfig
 
 
 
 class MaskedLMConfig(PreTrainingConfig):
+    """Configurations for masked LM pretraining, optionally with a sentence pair task (e.g., NSP, SOP). 
+    
+    """
     def __init__(self, **kwargs):
         self.bert_like: transformers.PreTrainedModel = kwargs.pop('bert_like')
         
-        self.use_wwm = kwargs.pop('use_wwm', False)
-        self.ngram_weights = kwargs.pop('ngram_weights', (1.0, ))
-        
+        # Masked LM 
         self.masking_rate = kwargs.pop('masking_rate', 0.15)
         self.masking_rate_dev = kwargs.pop('masking_rate_dev', 0.0)
         self.random_word_rate = kwargs.pop('random_word_rate', 0.1)
         self.unchange_rate = kwargs.pop('unchange_rate', 0.1)
+        self.use_wwm = kwargs.pop('use_wwm', False)
+        self.ngram_weights = kwargs.pop('ngram_weights', (1.0, ))
+        
+        # TODO: Sentence pair task: None/NSP/SOP
+        self.paired_task = kwargs.pop('paired_task', 'None')
         
         super().__init__(**kwargs)
         
