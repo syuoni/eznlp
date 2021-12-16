@@ -48,6 +48,8 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                 help="whether to use whole word masking")
     group_pretrain.add_argument('--use_ngram', default=False, action='store_true', 
                                 help="whether to use N-gram masking")
+    group_pretrain.add_argument('--paired_task', type=str, default='None', 
+                                help="paired task", choices=['None', 'NSP', 'SOP'])
     
     group_train = parser.add_argument_group('training etc')
     group_train.add_argument('--disp_every_steps', type=int, default=1000, 
@@ -109,7 +111,10 @@ if __name__ == '__main__':
         PATH = "assets/transformers/syuoni/bert-base-chinese-vf"
     else:
         PATH = "assets/transformers/bert-base-chinese"
-    bert4pt = transformers.BertForMaskedLM.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate)
+    if args.paired_task.lower() == 'none':
+        bert4pt = transformers.BertForMaskedLM.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate)
+    else:
+        bert4pt = transformers.BertForPreTraining.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate)
     tokenizer = transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=True)
     
     file_paths = glob.glob(args.file_path)
@@ -123,7 +128,8 @@ if __name__ == '__main__':
     
     config = MaskedLMConfig(bert_like=bert4pt, tokenizer=tokenizer, 
                             masking_rate=args.masking_rate, masking_rate_dev=args.masking_rate_dev, 
-                            use_wwm=args.use_wwm, ngram_weights=(0.5, 0.35, 0.15) if args.use_ngram else (1.0, ))
+                            use_wwm=args.use_wwm, ngram_weights=(0.5, 0.35, 0.15) if args.use_ngram else (1.0, ), 
+                            paired_task=args.paired_task)
     train_set = PreTrainingDataset(train_data, config)
     
     logger.info(train_set.summary)
