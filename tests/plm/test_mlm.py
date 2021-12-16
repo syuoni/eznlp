@@ -21,7 +21,7 @@ class TestMaskedLM(object):
                            'attention_mask': (~self.batch.mlm_att_mask[1:]).long(), 
                            'labels': self.batch.mlm_lab_ids[1:]}
         
-        if isinstance(self.model, transformers.BertForPreTraining):
+        if hasattr(self.batch, 'paired_lab_ids'):
             batch_inputs012.update({'token_type_ids': self.batch.tok_type_ids[:3], 
                                     'next_sentence_label': self.batch.paired_lab_ids[:3]})
             batch_inputs123.update({'token_type_ids': self.batch.tok_type_ids[1:], 
@@ -30,7 +30,7 @@ class TestMaskedLM(object):
         bert_like_outs012 = self.model(**batch_inputs012)
         bert_like_outs123 = self.model(**batch_inputs123)
         
-        if isinstance(self.model, transformers.BertForPreTraining):
+        if hasattr(self.batch, 'paired_lab_ids'):
             mlm_logits012 = bert_like_outs012['prediction_logits']
             mlm_logits123 = bert_like_outs123['prediction_logits']
         else:
@@ -69,10 +69,10 @@ class TestMaskedLM(object):
     @pytest.mark.parametrize("paired_task", ['None', 'NSP', 'SOP'])
     def test_wikipedia(self, use_wwm, ngram_weights, paired_task, device):
         PATH = "assets/transformers/bert-base-chinese"
-        if paired_task.lower() != 'none':
-            bert_like = transformers.BertForPreTraining.from_pretrained(PATH)
-        else:
+        if paired_task.lower() == 'none':
             bert_like = transformers.BertForMaskedLM.from_pretrained(PATH)
+        else:
+            bert_like = transformers.BertForPreTraining.from_pretrained(PATH)
         tokenizer = transformers.BertTokenizer.from_pretrained(PATH)
         self.config = MaskedLMConfig(bert_like=bert_like, tokenizer=tokenizer, use_wwm=use_wwm, ngram_weights=ngram_weights, paired_task=paired_task)
         
