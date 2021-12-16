@@ -14,14 +14,28 @@ class TestMaskedLM(object):
     def _assert_batch_consistency(self):
         self.model.eval()
         
-        bert_like4mlm_outs012 = self.model(input_ids=self.batch.mlm_tok_ids[:3], 
-                                           attention_mask=(~self.batch.mlm_att_mask[:3]).long(), 
-                                           labels=self.batch.mlm_lab_ids[:3])
-        bert_like4mlm_outs123 = self.model(input_ids=self.batch.mlm_tok_ids[1:], 
-                                           attention_mask=(~self.batch.mlm_att_mask[1:]).long(), 
-                                           labels=self.batch.mlm_lab_ids[1:])
-        mlm_logits012 = bert_like4mlm_outs012['logits']
-        mlm_logits123 = bert_like4mlm_outs123['logits']
+        batch_inputs012 = {'input_ids': self.batch.mlm_tok_ids[:3], 
+                           'attention_mask': (~self.batch.mlm_att_mask[:3]).long(), 
+                           'labels': self.batch.mlm_lab_ids[:3]}
+        batch_inputs123 = {'input_ids': self.batch.mlm_tok_ids[1:], 
+                           'attention_mask': (~self.batch.mlm_att_mask[1:]).long(), 
+                           'labels': self.batch.mlm_lab_ids[1:]}
+        
+        if isinstance(self.model, transformers.BertForPreTraining):
+            batch_inputs012.update({'token_type_ids': self.batch.tok_type_ids[:3], 
+                                    'next_sentence_label': self.batch.paired_lab_ids[:3]})
+            batch_inputs123.update({'token_type_ids': self.batch.tok_type_ids[1:], 
+                                    'next_sentence_label': self.batch.paired_lab_ids[1:]})
+        
+        bert_like_outs012 = self.model(**batch_inputs012)
+        bert_like_outs123 = self.model(**batch_inputs123)
+        
+        if isinstance(self.model, transformers.BertForPreTraining):
+            mlm_logits012 = bert_like_outs012['prediction_logits']
+            mlm_logits123 = bert_like_outs123['prediction_logits']
+        else:
+            mlm_logits012 = bert_like_outs012['logits']
+            mlm_logits123 = bert_like_outs123['logits']
         
         min_step = min(mlm_logits012.size(1), mlm_logits123.size(1))
         delta_mlm_logits = mlm_logits012[1:, :min_step] - mlm_logits123[:-1, :min_step]
@@ -35,9 +49,9 @@ class TestMaskedLM(object):
         
     def test_ResumeNER(self, ResumeNER_demo, device):
         PATH = "assets/transformers/bert-base-chinese"
-        bert_like4mlm = transformers.BertForMaskedLM.from_pretrained(PATH)
+        bert_like = transformers.BertForMaskedLM.from_pretrained(PATH)
         tokenizer = transformers.BertTokenizer.from_pretrained(PATH)
-        self.config = MaskedLMConfig(bert_like=bert_like4mlm, tokenizer=tokenizer)
+        self.config = MaskedLMConfig(bert_like=bert_like, tokenizer=tokenizer)
         
         self.device = device
         io = RawTextIO(tokenizer.tokenize, jieba.tokenize, max_len=128, document_sep_starts=["-DOCSTART-", "<doc", "</doc"], encoding='utf-8')
@@ -52,11 +66,15 @@ class TestMaskedLM(object):
         
     @pytest.mark.parametrize("use_wwm", [False, True])
     @pytest.mark.parametrize("ngram_weights", [(1.0, ), (0.4, 0.3, 0.3)])
-    def test_wikipedia(self, use_wwm, ngram_weights, device):
+    @pytest.mark.parametrize("paired_task", ['None', 'NSP', 'SOP'])
+    def test_wikipedia(self, use_wwm, ngram_weights, paired_task, device):
         PATH = "assets/transformers/bert-base-chinese"
-        bert_like4mlm = transformers.BertForMaskedLM.from_pretrained(PATH)
+        if paired_task.lower() != 'none':
+            bert_like = transformers.BertForPreTraining.from_pretrained(PATH)
+        else:
+            bert_like = transformers.BertForMaskedLM.from_pretrained(PATH)
         tokenizer = transformers.BertTokenizer.from_pretrained(PATH)
-        self.config = MaskedLMConfig(bert_like=bert_like4mlm, tokenizer=tokenizer, use_wwm=use_wwm, ngram_weights=ngram_weights)
+        self.config = MaskedLMConfig(bert_like=bert_like, tokenizer=tokenizer, use_wwm=use_wwm, ngram_weights=ngram_weights, paired_task=paired_task)
         
         self.device = device
         io = RawTextIO(tokenizer.tokenize, jieba.tokenize, max_len=128, document_sep_starts=["-DOCSTART-", "<doc", "</doc"], encoding='utf-8')

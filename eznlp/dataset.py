@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from typing import List, Any
+import random
 import torch
 
 from .nn.functional import seq_lens2mask
@@ -162,7 +163,12 @@ class PreTrainingDataset(torch.utils.data.Dataset):
     def __getitem__(self, i):
         entry = self.data[i]
         
-        example = self.config.exemplify(entry, training=self.training)
+        if getattr(self.config, 'paired_task', 'None').lower() == 'nsp':
+            paired_entry = random.choice(self.data)
+        else:
+            paired_entry = None
+        
+        example = self.config.exemplify(entry, paired_entry=paired_entry, training=self.training)
         return example
         
         

@@ -26,6 +26,10 @@ class MaskedLMConfig(PreTrainingConfig):
         
         # Sentence pair task: None/NSP/SOP
         self.paired_task = kwargs.pop('paired_task', 'None')
+        if self.paired_task.lower() == 'none':
+            assert isinstance(self.bert_like, transformers.BertForMaskedLM)
+        else:
+            assert isinstance(self.bert_like, transformers.BertForPreTraining)
         
         super().__init__(**kwargs)
         
