@@ -16,6 +16,7 @@ class PreTrainingConfig(Config):
         
         super().__init__(**kwargs)
         
+        
     @property
     def cls_id(self):
         return self.tokenizer.cls_token_id
