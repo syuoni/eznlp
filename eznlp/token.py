@@ -34,6 +34,10 @@ digit_re = re.compile('\d')
 punct_re = re.compile('[' + ''.join("\\" + p for p in string.punctuation) + ']')
 non_ascii_re = re.compile('[^\x00-\xff]')
 
+# CJK Unified Ideographs
+# https://zh.wikipedia.org/wiki/%E4%B8%AD%E6%97%A5%E9%9F%93%E7%B5%B1%E4%B8%80%E8%A1%A8%E6%84%8F%E6%96%87%E5%AD%97
+unihan93_re = re.compile('[\u4e00-\u9fa5〇﨎﨏﨑﨓﨔﨟﨡﨣﨤﨧﨨﨩]')
+
 zh_char_re = re.compile('[\u4e00-\u9fa5]')
 zh_punct_re = re.compile('[' + zh_punctuation + ']')
 fw_lower_re = re.compile('[' + fw_lowercase + ']')
