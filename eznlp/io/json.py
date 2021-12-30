@@ -40,6 +40,7 @@ class JsonIO(IO):
                  relation_tail_key=None, 
                  drop_duplicated=True, 
                  is_whole_piece: bool=True, 
+                 retain_meta: bool=False, 
                  encoding=None, 
                  verbose: bool=True, 
                  **token_kwargs):
@@ -49,14 +50,14 @@ class JsonIO(IO):
         self.chunk_start_key = chunk_start_key
         self.chunk_end_key = chunk_end_key
         self.chunk_text_key = chunk_text_key
-
+        
         if all(key is not None for key in [attribute_key, attribute_type_key, attribute_chunk_key]):
             self.attribute_key = attribute_key
             self.attribute_type_key = attribute_type_key
             self.attribute_chunk_key = attribute_chunk_key
         else:
             self.attribute_key = None
-
+        
         if all(key is not None for key in [relation_key, relation_type_key, relation_head_key, relation_tail_key]):
             self.relation_key = relation_key
             self.relation_type_key = relation_type_key
@@ -67,6 +68,7 @@ class JsonIO(IO):
         
         self.drop_duplicated = drop_duplicated
         self.is_whole_piece = is_whole_piece
+        self.retain_meta = retain_meta
         
         super().__init__(is_tokenized=is_tokenized, tokenize_callback=tokenize_callback, encoding=encoding, verbose=verbose, **token_kwargs)
         if not self.is_tokenized:
@@ -102,7 +104,7 @@ class JsonIO(IO):
                 attributes = [(attr[self.attribute_type_key], 
                                chunks[attr[self.attribute_chunk_key]]) for attr in raw_entry[self.attribute_key]]
                 entry.update({'attributes': [(attr_type, ck) for attr_type, ck in attributes if ck is not None]})
-
+            
             if self.relation_key is not None:
                 relations = [(rel[self.relation_type_key], 
                               chunks[rel[self.relation_head_key]], 
@@ -115,7 +117,10 @@ class JsonIO(IO):
                     entry['attributes'] = _filter_duplicated(entry['attributes'])
                 if self.relation_key is not None:
                     entry['relations'] = _filter_duplicated(entry['relations'])
-
+            
+            if self.retain_meta:
+                entry.update({k:v for k, v in raw_entry.items() if k not in (self.text_key, self.chunk_key, self.attribute_key, self.relation_key)})
+            
             data.append(entry)
             
         if len(errors) > 0 or len(mismatches) > 0:
@@ -127,7 +132,7 @@ class JsonIO(IO):
             return data
         
         
-    def write(self, data: List[dict], file_path, retain_meta: bool=False):
+    def write(self, data: List[dict], file_path):
         raw_data = []
         for entry in data:
             raw_entry = {self.text_key: entry['tokens'].raw_text}
@@ -144,7 +149,7 @@ class JsonIO(IO):
                                                  self.relation_head_key: chunk2idx[head], 
                                                  self.relation_tail_key: chunk2idx[tail]} for rel_type, head, tail in entry['relations']]
             
-            if retain_meta:
+            if self.retain_meta:
                 raw_entry.update({k: v for k, v in entry.items() if k not in ('tokens', 'chunks', 'attributes', 'relations')})
             
             raw_data.append(raw_entry)
