@@ -125,9 +125,9 @@ class JsonIO(IO):
             return data, errors, mismatches
         else:
             return data
-
-
-    def write(self, data: List[dict], file_path):
+        
+        
+    def write(self, data: List[dict], file_path, retain_meta: bool=False):
         raw_data = []
         for entry in data:
             raw_entry = {self.text_key: entry['tokens'].raw_text}
@@ -143,8 +143,12 @@ class JsonIO(IO):
                 raw_entry[self.relation_key] = [{self.relation_type_key: rel_type, 
                                                  self.relation_head_key: chunk2idx[head], 
                                                  self.relation_tail_key: chunk2idx[tail]} for rel_type, head, tail in entry['relations']]
+            
+            if retain_meta:
+                raw_entry.update({k: v for k, v in entry.items() if k not in ('tokens', 'chunks', 'attributes', 'relations')})
+            
             raw_data.append(raw_entry)
-
+        
         with open(file_path, 'w', encoding=self.encoding) as f:
             if self.is_whole_piece:
                 json.dump(raw_data, f, ensure_ascii=False)
