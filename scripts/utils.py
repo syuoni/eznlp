@@ -3,6 +3,7 @@ import os
 import argparse
 import logging
 import re
+import json
 import spacy
 import jieba
 import random
@@ -139,7 +140,7 @@ dataset2language = {'conll2003': 'English',
                     'mscoco': 'English'}
 dataset2language.update({f'ADE_cv{k}': 'English' for k in range(10)})
 dataset2language.update({f'ace2004_rel_cv{k}': 'English' for k in range(5)})
-
+dataset2language.update({f'HwaMei_{s}': 'Chinese' for s in range(500, 1201, 100)})
 
 def load_data(args: argparse.Namespace):
     if args.dataset == 'conll2003':
@@ -308,6 +309,27 @@ def load_data(args: argparse.Namespace):
         train_data = post_io.map(train_data, **kwargs)
         dev_data   = post_io.map(dev_data, **kwargs)
         test_data  = post_io.map(test_data, **kwargs)
+        
+        
+    elif args.dataset.startswith('HwaMei'):
+        io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', chunk_text_key=None, 
+                    attribute_key='attributes', attribute_type_key='type', attribute_chunk_key='entity', 
+                    relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
+                    is_whole_piece=False, retain_meta=True, encoding='utf-8', token_sep="", pad_token="")
+        train_data = io.read("data/HwaMei/v20211230/train.json")
+        dev_data   = io.read("data/HwaMei/v20211230/dev.json")
+        test_data  = io.read("data/HwaMei/v20211230/test.json")
+        
+        size = int(args.dataset.split('_')[-1])
+        if size > 500:
+            with open("data/HwaMei/v20211230/splits.json", 'r', encoding='utf-8') as f:
+                splits = json.load(f)
+            ext_ids = (splits['reserve'] + splits['iaa'])[:size-500]
+            ext_data = io.read("data/HwaMei/v20211230/reserve.json") + io.read("data/HwaMei/v20211230/iaa.json")
+            ext_data = [entry for entry in ext_data if entry['visit_id'] in ext_ids]
+            train_data += ext_data
+        assert len(set([entry['visit_id'] for entry in train_data])) == size - 200
+        
         
     elif args.dataset == 'yelp2013':
         tabular_io = TabularIO(text_col_id=3, label_col_id=2, sep="\t\t", mapping={"<sssss>": "\n"}, encoding='utf-8', verbose=args.log_terminal, 
