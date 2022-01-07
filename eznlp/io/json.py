@@ -18,6 +18,7 @@ def _filter_duplicated(tuples: List[tuple]):
     return filtered_tuples
 
 
+# TODO: rename as InfoExIO?
 class JsonIO(IO):
     """An IO Interface of Json files. 
     
@@ -242,3 +243,60 @@ class KarpathyIO(IO):
                 train_data.append(entry)
         
         return train_data, dev_data, test_data
+
+
+
+class TextClsIO(IO):
+    """An IO interface of (single or paired) text classification dataset in json files. 
+    
+    """
+    def __init__(self, 
+                 is_tokenized: bool=False, 
+                 tokenize_callback=None, 
+                 text_key='text', 
+                 paired_text_key=None, 
+                 label_key='label', 
+                 is_whole_piece: bool=True, 
+                 retain_meta: bool=False, 
+                 mapping=None, 
+                 encoding=None, 
+                 verbose: bool=True, 
+                 **token_kwargs):
+        self.text_key = text_key
+        self.paired_text_key = paired_text_key
+        self.label_key = label_key
+        self.is_whole_piece = is_whole_piece
+        self.retain_meta = retain_meta
+        self.mapping = {} if mapping is None else mapping
+        super().__init__(is_tokenized=is_tokenized, tokenize_callback=tokenize_callback, encoding=encoding, verbose=verbose, **token_kwargs)
+        
+        
+    def read(self, file_path):
+        with open(file_path, 'r', encoding=self.encoding) as f:
+            if self.is_whole_piece:
+                raw_data = json.load(f)
+            else:
+                raw_data = [json.loads(line) for line in f if len(line.strip()) > 0]
+        
+        data = []
+        for raw_entry in raw_data:
+            raw_text = raw_entry[self.text_key]
+            for pattern, repl in self.mapping.items():
+                raw_text = raw_text.replace(pattern, repl)
+            entry = {'tokens': self._build_tokens(raw_text)}
+            
+            if self.paired_text_key is not None:
+                paired_raw_text = raw_entry[self.paired_text_key]
+                for pattern, repl in self.mapping.items():
+                    paired_raw_text = paired_raw_text.replace(pattern, repl)
+                entry.update({'paired_tokens': self._build_tokens(paired_raw_text)})
+            
+            if self.label_key in raw_entry:
+                entry.update({'label': raw_entry[self.label_key]})
+            
+            if self.retain_meta:
+                entry.update({k:v for k, v in raw_entry.items() if k not in (self.text_key, self.paired_text_key, self.label_key)})
+            
+            data.append(entry)
+        
+        return data
