@@ -118,6 +118,7 @@ dataset2language = {'conll2003': 'English',
                     'conll2012': 'English', 
                     'ace2004': 'English', 
                     'ace2005': 'English', 
+                    'genia': 'English', 
                     'conll2004': 'English', 
                     'SciERC': 'English', 
                     'ace2005_rel': 'English',
@@ -197,6 +198,14 @@ def load_data(args: argparse.Namespace):
             scores, ave_scores = precision_recall_f1_report(set_chunks_gold, set_chunks_corr)
             logger.warning(f"Loading data with corruption rate of {args.corrupt_rate:.1f} \n"
                            f"Corruption Retrieval F1-score: {ave_scores['micro']['f1']*100:2.3f}%")
+        
+    elif args.dataset == 'genia':
+        io = JsonIO(text_key='tokens', 
+                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', 
+                    case_mode='None', number_mode='Zeros')
+        train_data = io.read("data/genia/term.train.json")
+        dev_data   = []
+        test_data  = io.read("data/genia/term.test.json")
         
     elif args.dataset == 'conll2004':
         io = JsonIO(text_key='tokens', 

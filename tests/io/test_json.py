@@ -50,6 +50,17 @@ class TestJsonIO(object):
         assert max(ck[2]-ck[1] for ex in test_data for ck in ex['chunks']) == 27
         
         
+    def test_genia(self):
+        io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end')
+        train_data = io.read("data/genia/term.train.json")
+        test_data  = io.read("data/genia/term.test.json")
+        
+        assert len(train_data) == 16_528
+        assert sum(len(ex['chunks']) for ex in train_data) == 50_133
+        assert len(test_data) == 1_836
+        assert sum(len(ex['chunks']) for ex in test_data) == 5_466
+        
+        
     def test_ace2004_rel(self):
         io = JsonIO(relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail')
         train_data = io.read("data/ace-luan2019naacl/ace04/cv0.train.json")
