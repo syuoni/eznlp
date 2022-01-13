@@ -128,6 +128,8 @@ dataset2language = {'conll2003': 'English',
                     'conll2012_zh': 'Chinese', 
                     'ontonotesv4_zh': 'Chinese',
                     'yidu_s4k': 'Chinese', 
+                    'cmeee': 'Chinese', 
+                    'cmeie': 'Chinese', 
                     'CLERD': 'Chinese', 
                     'yelp2013': 'English', 
                     'imdb': 'English', 
@@ -300,8 +302,28 @@ def load_data(args: argparse.Namespace):
                     text_key='originalText', chunk_key='entities', chunk_type_key='label_type', chunk_start_key='start_pos', chunk_end_key='end_pos', 
                     is_whole_piece=False, encoding='utf-8-sig', token_sep="", pad_token="")
         train_data = io.read("data/yidu_s4k/subtask1_training_part1.txt") + io.read("data/yidu_s4k/subtask1_training_part2.txt")
+        # train_data, dev_data = sklearn.model_selection.train_test_split(train_data, test_size=0.2, random_state=args.seed)
+        dev_data   = []
         test_data  = io.read("data/yidu_s4k/subtask1_test_set_with_answer.json")
-        train_data, dev_data = sklearn.model_selection.train_test_split(train_data, test_size=0.2, random_state=args.seed)
+        
+        
+    elif args.dataset == 'cmeee':
+        io = JsonIO(is_tokenized=False, tokenize_callback='char', text_key='text', 
+                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start_idx', chunk_end_key='end_idx', 
+                    encoding='utf-8', token_sep="", pad_token="")
+        train_data = io.read("data/cblue/CMeEE/CMeEE_train_vz.json")
+        dev_data   = io.read("data/cblue/CMeEE/CMeEE_dev_vz.json")
+        test_data  = io.read("data/cblue/CMeEE/CMeEE_test_vz.json")
+        
+    elif args.dataset == 'cmeie':
+        io = JsonIO(is_tokenized=False, tokenize_callback='char', text_key='text', 
+                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', 
+                    relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
+                    encoding='utf-8', token_sep="", pad_token="")
+        train_data = io.read("data/cblue/CMeIE/CMeIE_train_vz.json")
+        dev_data   = io.read("data/cblue/CMeIE/CMeIE_dev_vz.json")
+        test_data  = io.read("data/cblue/CMeIE/CMeIE_test_vz.json")
+        
         
     elif args.dataset == 'CLERD':
         io = BratIO(tokenize_callback='char', has_ins_space=False, parse_attrs=False, parse_relations=True, 
