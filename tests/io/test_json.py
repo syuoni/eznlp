@@ -196,6 +196,43 @@ class TestJsonIO(object):
         
         assert not any(detect_nested(ex['chunks']) for data in [train_data, test_data] for ex in data)
         assert all(filter_clashed_by_priority(ex['chunks'], allow_nested=False) == ex['chunks'] for data in [train_data, test_data] for ex in data)
+        
+        
+    def test_cmeee(self):
+        io = JsonIO(is_tokenized=False, tokenize_callback='char', text_key='text', 
+                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start_idx', chunk_end_key='end_idx', 
+                    encoding='utf-8')
+        train_data, train_errors, train_mismatches = io.read("data/cblue/CMeEE/CMeEE_train_vz.json", return_errors=True)
+        dev_data,   dev_errors,   dev_mismatches   = io.read("data/cblue/CMeEE/CMeEE_dev_vz.json", return_errors=True)
+        test_data  = io.read("data/cblue/CMeEE/CMeEE_test_vz.json")
+        
+        assert len(train_data) == 15_000
+        assert sum(len(ex['chunks']) for ex in train_data) == 61_796
+        assert len(train_errors) == 0
+        assert len(train_mismatches) == 0
+        assert len(dev_data) == 5_000
+        assert sum(len(ex['chunks']) for ex in dev_data) == 20_300
+        assert len(dev_errors) == 0
+        assert len(dev_mismatches) == 0
+        assert len(test_data) == 3_000
+        
+        
+    def test_cmeie(self):
+        io = JsonIO(is_tokenized=False, tokenize_callback='char', text_key='text', 
+                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', 
+                    relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
+                    encoding='utf-8')
+        train_data = io.read("data/cblue/CMeIE/CMeIE_train_vz.json")
+        dev_data   = io.read("data/cblue/CMeIE/CMeIE_dev_vz.json")
+        test_data  = io.read("data/cblue/CMeIE/CMeIE_test_vz.json")
+        
+        assert len(train_data) == 14_339
+        assert sum(len(ex['chunks']) for ex in train_data) == 57_880
+        assert sum(len(ex['relations']) for ex in train_data) == 43_629
+        assert len(dev_data) == 3_585
+        assert sum(len(ex['chunks']) for ex in dev_data) == 14_167
+        assert sum(len(ex['relations']) for ex in dev_data) == 10_613
+        assert len(test_data) == 4_482
 
 
 
@@ -272,8 +309,11 @@ class TestKarpathyIO(object):
 
 class TestTextClsIO(object):
     """
-    https://github.com/CBLUEbenchmark/CBLUE
-    https://tianchi.aliyun.com/dataset/dataDetail?dataId=113223
+    References
+    ----------
+    [1] Zhang et al. 2021. CBLUE: A Chinese Biomedical Language Understanding Evaluation Benchmark. 
+    [2] https://github.com/CBLUEbenchmark/CBLUE
+    [3] https://tianchi.aliyun.com/dataset/dataDetail?dataId=113223
     """
     def test_chip_ctc(self):
         io = TextClsIO(is_tokenized=False, tokenize_callback=jieba.tokenize, text_key='text', mapping={" ": ""}, encoding='utf-8')
