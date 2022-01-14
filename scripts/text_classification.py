@@ -10,6 +10,7 @@ import numpy
 import torch
 
 from eznlp import auto_device
+from eznlp.token import TokenSequence
 from eznlp.dataset import Dataset
 from eznlp.config import ConfigDict
 from eznlp.model import OneHotConfig, EncoderConfig
@@ -73,8 +74,9 @@ def collect_TC_assembly_config(args: argparse.Namespace):
     if args.bert_arch.lower() != 'none':
         # Uncased tokenizer for text classification
         bert_like, tokenizer = load_pretrained(args.bert_arch, args, cased=False)
-        bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert_like, arch=args.bert_arch, 
-                                          freeze=False, use_truecase='cased' in os.path.basename(bert_like.name_or_path).split('-'))
+        bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert_like, arch=args.bert_arch, freeze=False, 
+                                          paired_inputs=args.paired_inputs, 
+                                          use_truecase='cased' in os.path.basename(bert_like.name_or_path).split('-'))
     else:
         bert_like_config = None
     
@@ -91,6 +93,29 @@ def build_TC_config(args: argparse.Namespace):
     drop_rates = (0.0, 0.05, args.drop_rate) if args.use_locked_drop else (args.drop_rate, 0.0, 0.0)
     decoder_config = TextClassificationDecoderConfig(agg_mode=args.agg_mode, in_drop_rates=drop_rates)
     return ClassifierConfig(**collect_TC_assembly_config(args), decoder=decoder_config)
+
+
+def process_TC_data(train_data, dev_data, test_data, args, config):
+    # Truncate too long sentences
+    if config.bert_like is not None:
+        train_data = truncate_for_bert_like(train_data, config.bert_like.tokenizer, verbose=args.log_terminal)
+        dev_data   = truncate_for_bert_like(dev_data,   config.bert_like.tokenizer, verbose=args.log_terminal)
+        test_data  = truncate_for_bert_like(test_data,  config.bert_like.tokenizer, verbose=args.log_terminal)
+        
+    elif args.dataset in ('ChnSentiCorp', 'THUCNews_10'):
+        # Too long sentences even for RNN
+        for data in [train_data, dev_data, test_data]:
+            for entry in data:
+                if len(entry['tokens']) > 1200:
+                    entry['tokens'] = entry['tokens'][:300] + entry['tokens'][-900:]
+    
+    if config.bert_like is not None and config.bert_like.paired_inputs:
+        for data in [train_data, dev_data, test_data]:
+            for entry in data:
+                entry['tokens'] = entry['tokens'] + TokenSequence.from_tokenized_text([config.bert_like.tokenizer.sep_token]) + entry['paired_tokens']
+    
+    return train_data, dev_data, test_data
+
 
 
 if __name__ == '__main__':
@@ -126,19 +151,10 @@ if __name__ == '__main__':
         
     train_data, dev_data, test_data = load_data(args)
     args.language = dataset2language[args.dataset]
+    args.paired_inputs = ('paired_tokens' in train_data[0])
     # train_data, dev_data, test_data = train_data[:1000], dev_data[:1000], test_data[:1000]
     config = build_TC_config(args)
-    
-    # Truncate too long sentences
-    if config.bert_like is not None:
-        train_data = truncate_for_bert_like(train_data, config.bert_like.tokenizer, verbose=args.log_terminal)
-        dev_data   = truncate_for_bert_like(dev_data,   config.bert_like.tokenizer, verbose=args.log_terminal)
-        test_data  = truncate_for_bert_like(test_data,  config.bert_like.tokenizer, verbose=args.log_terminal)
-    elif args.dataset in ('ChnSentiCorp', 'THUCNews_10'):
-        for data in [train_data, dev_data, test_data]:
-            for data_entry in data:
-                if len(data_entry['tokens']) > 1200:
-                    data_entry['tokens'] = data_entry['tokens'][:300] + data_entry['tokens'][-900:]
+    train_data, dev_data, test_data = process_TC_data(train_data, dev_data, test_data, args, config)
     
     train_set = Dataset(train_data, config, training=True)
     train_set.build_vocabs_and_dims(dev_data)

@@ -15,7 +15,7 @@ import allennlp.modules
 import transformers
 import flair
 
-from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO, KarpathyIO, BratIO, Src2TrgIO
+from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO, TextClsIO, KarpathyIO, BratIO, Src2TrgIO
 from eznlp.io import PostIO
 from eznlp.vectors import Vectors, GloVe
 from eznlp.training import Trainer, LRLambda, collect_params, check_param_groups
@@ -130,6 +130,8 @@ dataset2language = {'conll2003': 'English',
                     'yidu_s4k': 'Chinese', 
                     'cmeee': 'Chinese', 
                     'cmeie': 'Chinese', 
+                    'chip_ctc': 'Chinese', 
+                    'chip_sts': 'Chinese', 
                     'CLERD': 'Chinese', 
                     'yelp2013': 'English', 
                     'imdb': 'English', 
@@ -396,6 +398,21 @@ def load_data(args: argparse.Namespace):
         train_data = tabular_io.read("data/THUCNews-10/cnews.train.txt")
         dev_data   = tabular_io.read("data/THUCNews-10/cnews.val.txt")
         test_data  = tabular_io.read("data/THUCNews-10/cnews.test.txt")
+        
+    elif args.dataset == 'chip_ctc':
+        io = TextClsIO(is_tokenized=False, tokenize_callback=jieba.tokenize, text_key='text', mapping={" ": ""}, encoding='utf-8', verbose=args.log_terminal, 
+                       case_mode='Lower', number_mode='None')
+        train_data = io.read("data/cblue/CHIP-CTC/CHIP-CTC_train.json")
+        dev_data   = io.read("data/cblue/CHIP-CTC/CHIP-CTC_dev.json")
+        test_data  = io.read("data/cblue/CHIP-CTC/CHIP-CTC_test.json")
+        
+    elif args.dataset == 'chip_sts':
+        io = TextClsIO(is_tokenized=False, tokenize_callback=jieba.tokenize, text_key='text1', paired_text_key='text2', mapping={" ": ""}, encoding='utf-8', verbose=args.log_terminal, 
+                       case_mode='Lower', number_mode='None')
+        train_data = io.read("data/cblue/CHIP-STS/CHIP-STS_train.json")
+        dev_data   = io.read("data/cblue/CHIP-STS/CHIP-STS_dev.json")
+        test_data  = io.read("data/cblue/CHIP-STS/CHIP-STS_test.json")
+        
         
     elif args.dataset == 'multi30k':
         io = Src2TrgIO(tokenize_callback=spacy_nlp_de, trg_tokenize_callback=spacy_nlp_en, encoding='utf-8', verbose=args.log_terminal, 
