@@ -27,6 +27,7 @@ class BertLikeConfig(Config):
         self.arch = kwargs.pop('arch', 'BERT')
         self.freeze = kwargs.pop('freeze', True)
         
+        self.paired_inputs = kwargs.pop('paired_inputs', False)
         self.from_tokenized = kwargs.pop('from_tokenized', True)
         self.pre_truncation = kwargs.pop('pre_truncation', False)
         self.use_truecase = kwargs.pop('use_truecase', False)
@@ -45,6 +46,17 @@ class BertLikeConfig(Config):
         state = self.__dict__.copy()
         state['bert_like'] = None
         return state
+        
+    @property
+    def sentence_A_id(self):
+        # token_type_ids: 
+        # - 0 corresponds to a `sentence A` token,
+        # - 1 corresponds to a `sentence B` token.
+        return 0 
+        
+    @property
+    def sentence_B_id(self):
+        return 1
         
         
     def _token_ids_from_string(self, raw_text: str):
@@ -66,8 +78,16 @@ class BertLikeConfig(Config):
         assert len(sub_tokens) <= self.tokenizer.model_max_length - 2
         
         sub_tok_ids = [self.tokenizer.cls_token_id] + self.tokenizer.convert_tokens_to_ids(sub_tokens) + [self.tokenizer.sep_token_id]
-        # (step+2, )
-        return torch.tensor(sub_tok_ids)
+        
+        if self.paired_inputs:
+            # NOTE: `[SEP]` will be retained by tokenizer, instead of being tokenized
+            sep_loc = sub_tokens.index(self.tokenizer.sep_token)
+            sub_tok_type_ids = [self.sentence_A_id] * (sep_loc+1 +1) + [self.sentence_B_id] * (len(sub_tokens)-sep_loc-1 +1)  # `[CLS]` and `[SEP]` at the ends
+        else:
+            sub_tok_type_ids = None
+        
+        # (step+2, ), (step+2, )
+        return sub_tok_ids, sub_tok_type_ids
         
         
     def _token_ids_from_tokenized(self, tokenized_raw_text: List[str]):
@@ -93,8 +113,16 @@ class BertLikeConfig(Config):
         assert len(sub_tokens) <= self.tokenizer.model_max_length - 2
         
         sub_tok_ids = [self.tokenizer.cls_token_id] + self.tokenizer.convert_tokens_to_ids(sub_tokens) + [self.tokenizer.sep_token_id]
-        # (step+2, ), (step, )
-        return torch.tensor(sub_tok_ids), torch.tensor(ori_indexes)
+        
+        if self.paired_inputs:
+            # NOTE: `[SEP]` will be retained by tokenizer, instead of being tokenized
+            sep_loc = sub_tokens.index(self.tokenizer.sep_token)
+            sub_tok_type_ids = [self.sentence_A_id] * (sep_loc+1 +1) + [self.sentence_B_id] * (len(sub_tokens)-sep_loc-1 +1)  # `[CLS]` and `[SEP]` at the ends
+        else:
+            sub_tok_type_ids = None
+        
+        # (step+2, ), (step+2, ), (step, )
+        return sub_tok_ids, sub_tok_type_ids, ori_indexes
         
         
     def exemplify(self, tokens: TokenSequence):
@@ -103,13 +131,17 @@ class BertLikeConfig(Config):
             tokenized_raw_text = _truecase(tokenized_raw_text)
         
         if self.from_tokenized:
-            sub_tok_ids, ori_indexes = self._token_ids_from_tokenized(tokenized_raw_text)
-            return {'sub_tok_ids': sub_tok_ids, 
-                    'ori_indexes': ori_indexes}
+            sub_tok_ids, sub_tok_type_ids, ori_indexes = self._token_ids_from_tokenized(tokenized_raw_text)
+            example = {'sub_tok_ids': torch.tensor(sub_tok_ids), 
+                       'ori_indexes': torch.tensor(ori_indexes)}
         else:
-            # Use rejoined tokenized raw text here
-            sub_tok_ids = self._token_ids_from_string(" ".join(tokenized_raw_text))
-            return {'sub_tok_ids': sub_tok_ids}
+            # AD-HOC: Use rejoined tokenized raw text here
+            sub_tok_ids, sub_tok_type_ids = self._token_ids_from_string(" ".join(tokenized_raw_text))
+            example = {'sub_tok_ids': torch.tensor(sub_tok_ids)}
+        
+        if self.paired_inputs:
+            example.update({'sub_tok_type_ids': torch.tensor(sub_tok_type_ids)})
+        return example
         
         
     def batchify(self, batch_ex: List[dict]):
@@ -123,12 +155,21 @@ class BertLikeConfig(Config):
         if self.from_tokenized:
             batch_ori_indexes = [ex['ori_indexes'] for ex in batch_ex]
             batch_ori_indexes = torch.nn.utils.rnn.pad_sequence(batch_ori_indexes, batch_first=True, padding_value=-1)
-            return {'sub_tok_ids': batch_sub_tok_ids, 
-                    'sub_mask': batch_sub_mask, 
-                    'ori_indexes': batch_ori_indexes}
+            batch = {'sub_tok_ids': batch_sub_tok_ids, 
+                     'sub_mask': batch_sub_mask, 
+                     'ori_indexes': batch_ori_indexes}
         else:
-            return {'sub_tok_ids': batch_sub_tok_ids, 
-                    'sub_mask': batch_sub_mask}
+            batch = {'sub_tok_ids': batch_sub_tok_ids, 
+                     'sub_mask': batch_sub_mask}
+        
+        if self.paired_inputs:
+            batch_sub_tok_type_ids = [ex['sub_tok_type_ids'] for ex in batch_ex]
+            batch_sub_tok_type_ids = torch.nn.utils.rnn.pad_sequence(batch_sub_tok_type_ids, 
+                                                                     batch_first=True, 
+                                                                     padding_value=self.sentence_A_id)
+            batch.update({'sub_tok_type_ids': batch_sub_tok_type_ids})
+        return batch
+        
         
     def instantiate(self):
         return BertLikeEmbedder(self)
@@ -249,7 +290,43 @@ def _tokenized2nested(tokenized_raw_text: List[str], tokenizer: transformers.Pre
     return nested_sub_tokens
 
 
-def truncate_for_bert_like(data: list, tokenizer: transformers.PreTrainedTokenizer, mode: str='head+tail', verbose=True):
+
+def _truncate_tokens(tokens: TokenSequence, sub_tok_seq_lens: List[int], max_len: int, mode: str='head+tail'):
+    if mode.lower() == 'head-only':
+        head_len, tail_len = max_len, 0
+    elif mode.lower() == 'tail-only':
+        head_len, tail_len = 0, max_len
+    else:
+        head_len = (max_len + 2) // 4
+        tail_len = max_len - head_len
+    
+    # head_end/tail_begin will be 0 if head_len/tail_len == 0
+    cum_lens = numpy.cumsum(sub_tok_seq_lens).tolist()
+    find_head, head_end = find_ascending(cum_lens, head_len)
+    if find_head:
+        head_end += 1
+    
+    rev_cum_lens = numpy.cumsum(sub_tok_seq_lens[::-1]).tolist()
+    find_tail, tail_begin = find_ascending(rev_cum_lens, tail_len)
+    if find_tail:
+        tail_begin += 1
+    
+    if tail_len == 0:
+        assert head_end > 0
+        return tokens[:head_end]
+    elif head_len == 0:
+        assert tail_begin > 0
+        return tokens[-tail_begin:]
+    else:
+        assert head_end > 0 and tail_begin > 0
+        return tokens[:head_end] + tokens[-tail_begin:]
+
+
+
+def truncate_for_bert_like(data: list, 
+                           tokenizer: transformers.PreTrainedTokenizer, 
+                           mode: str='head+tail', 
+                           verbose=True):
     """Truncate overlong tokens in `data`, typically for text classification. 
     
     Truncation methods:
@@ -261,44 +338,39 @@ def truncate_for_bert_like(data: list, tokenizer: transformers.PreTrainedTokeniz
     ----------
     [1] Sun et al. 2019. How to fine-tune BERT for text classification? CCL 2019. 
     """
-    max_len = tokenizer.model_max_length - 2
-    if mode.lower() == 'head-only':
-        head_len, tail_len = max_len, 0
-    elif mode.lower() == 'tail-only':
-        head_len, tail_len = 0, max_len
-    else:
-        head_len = tokenizer.model_max_length // 4
-        tail_len = max_len - head_len
-    
     num_truncated = 0
-    for data_entry in tqdm.tqdm(data, disable=not verbose, ncols=100, desc="Truncating data"):
-        tokens = data_entry['tokens']
+    for entry in tqdm.tqdm(data, disable=not verbose, ncols=100, desc="Truncating data"):
+        tokens = entry['tokens']
         nested_sub_tokens = _tokenized2nested(tokens.raw_text, tokenizer)
         sub_tok_seq_lens = [len(tok) for tok in nested_sub_tokens]
         
-        if sum(sub_tok_seq_lens) > max_len:
-            # head_end/tail_begin will be 0 if head_len/tail_len == 0
-            cum_lens = numpy.cumsum(sub_tok_seq_lens).tolist()
-            find_head, head_end = find_ascending(cum_lens, head_len)
-            if find_head:
-                head_end += 1
+        if 'paired_tokens' not in entry:
+            # Case for single sentence 
+            max_len = tokenizer.model_max_length - 2
+            if sum(sub_tok_seq_lens) > max_len:
+                entry['tokens'] = _truncate_tokens(tokens, sub_tok_seq_lens, max_len, mode=mode)
+                num_truncated += 1
+        
+        else:
+            # Case for paired sentences
+            p_tokens = entry['paired_tokens']
+            p_nested_sub_tokens = _tokenized2nested(p_tokens.raw_text, tokenizer)
+            p_sub_tok_seq_lens = [len(tok) for tok in p_nested_sub_tokens]
             
-            rev_cum_lens = numpy.cumsum(sub_tok_seq_lens[::-1]).tolist()
-            find_tail, tail_begin = find_ascending(rev_cum_lens, tail_len)
-            if find_tail:
-                tail_begin += 1
+            max_len = tokenizer.model_max_length - 3
+            num_sub_toks, num_p_sub_toks = sum(sub_tok_seq_lens), sum(p_sub_tok_seq_lens)
             
-            if tail_len == 0:
-                assert head_end > 0
-                data_entry['tokens'] = tokens[:head_end]
-            elif head_len == 0:
-                assert tail_begin > 0
-                data_entry['tokens'] = tokens[-tail_begin:]
-            else:
-                assert head_end > 0 and tail_begin > 0
-                data_entry['tokens'] = tokens[:head_end] + tokens[-tail_begin:]
-            
-            num_truncated += 1
+            if num_sub_toks + num_p_sub_toks > max_len:
+                # AD-HOC: Other ratio?
+                max_len1 = max_len // 2
+                if num_sub_toks <= max_len1:
+                    entry['paired_tokens'] = _truncate_tokens(p_tokens, p_sub_tok_seq_lens, max_len-num_sub_toks, mode=mode)
+                elif num_p_sub_toks <= max_len-max_len1:
+                    entry['tokens'] = _truncate_tokens(tokens, sub_tok_seq_lens, max_len-num_p_sub_toks, mode=mode)
+                else:
+                    entry['tokens'] = _truncate_tokens(tokens, sub_tok_seq_lens, max_len1, mode=mode)
+                    entry['paired_tokens'] = _truncate_tokens(p_tokens, p_sub_tok_seq_lens, max_len-max_len1, mode=mode)
+                num_truncated += 1
     
     logger.info(f"Truncated sequences: {num_truncated} ({num_truncated/len(data)*100:.2f}%)")
     return data

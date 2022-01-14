@@ -341,14 +341,18 @@ class TokenSequence(object):
                                  none_token=self.none_token)
         else:
             raise TypeError(f"Invalid subscript type of {i}")
-            
+        
     def __add__(self, other):
+        assert isinstance(other, TokenSequence)
+        assert other.token_sep == self.token_sep
+        assert other.pad_token == self.pad_token
+        assert other.none_token == self.none_token
         return TokenSequence(self.token_list + other.token_list, 
                              token_sep=self.token_sep, 
                              pad_token=self.pad_token, 
                              none_token=self.none_token)
-    
-    
+        
+        
     def build_pseudo_boundaries(self, sep_width: int=None):
         if sep_width is None:
             sep_width = len(self.token_sep)
