@@ -214,12 +214,14 @@ class BertLikeEmbedder(torch.nn.Module):
     def forward(self, 
                 sub_tok_ids: torch.LongTensor, 
                 sub_mask: torch.BoolTensor, 
+                sub_tok_type_ids: torch.BoolTensor=None, 
                 ori_indexes: torch.LongTensor=None):
         # last_hidden: (batch, sub_tok_step+2, hid_dim)
         # pooler_output: (batch, hid_dim)
         # hidden: a tuple of (batch, sub_tok_step+2, hid_dim)
         bert_outs = self.bert_like(input_ids=sub_tok_ids, 
                                    attention_mask=(~sub_mask).long(), 
+                                   token_type_ids=sub_tok_type_ids, 
                                    output_hidden_states=True)
         bert_hidden = bert_outs['hidden_states']
         
