@@ -34,8 +34,10 @@ def parse_arguments(parser: argparse.ArgumentParser):
                             help="whether to load data at document level")
     group_data.add_argument('--corrupt_rate', type=float, default=0.0, 
                             help="boundary corrupt rate")
+    group_data.add_argument('--save_predictions', default=False, action='store_true', 
+                            help="whether to save predictions on the test split (typically in case without ground truth)")
     group_data.add_argument('--pipeline', default=False, action='store_true', 
-                            help="whether to save predicted chunks for pipeline")
+                            help="whether to save predictions on all splits for pipeline modeling")
     
     group_decoder = parser.add_argument_group('decoder configurations')
     group_decoder.add_argument('--ck_decoder', type=str, default='sequence_tagging', 
@@ -292,9 +294,15 @@ if __name__ == '__main__':
     
     logger.info("Evaluating on dev-set")
     evaluate_entity_recognition(trainer, dev_set, batch_size=args.batch_size)
-    logger.info("Evaluating on test-set")
-    evaluate_entity_recognition(trainer, test_set, batch_size=args.batch_size)
-    
+    if not args.save_predictions:
+        logger.info("Evaluating on test-set")
+        evaluate_entity_recognition(trainer, test_set, batch_size=args.batch_size)
+    else:
+        logger.info("Saving on test-set")
+        test_set_chunks_pred = trainer.predict(test_set, batch_size=args.batch_size)
+        for ex, chunks_pred in zip(test_data, test_set_chunks_pred):
+            ex['chunks'] = chunks_pred
+        torch.save(test_data, f"{save_path}/test-data-with-predictions.pth")
     
     if args.pipeline:
         # Replace gold chunks with predicted chunks for pipeline
@@ -314,7 +322,7 @@ if __name__ == '__main__':
         test_set_chunks_pred = trainer.predict(test_set, batch_size=args.batch_size)
         for ex, chunks_pred in zip(test_data, test_set_chunks_pred):
             ex['chunks'] = chunks_pred
-            
+        
         torch.save((train_data, dev_data, test_data), f"{save_path}/data-with-chunks-pred.pth")
     
     

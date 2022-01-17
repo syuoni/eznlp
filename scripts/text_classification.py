@@ -30,6 +30,8 @@ def parse_arguments(parser: argparse.ArgumentParser):
     group_data = parser.add_argument_group('dataset')
     group_data.add_argument('--dataset', type=str, default='imdb', 
                             help="dataset name")
+    group_data.add_argument('--save_predictions', default=False, action='store_true', 
+                            help="whether to save predictions on the test split (typically in case without ground truth)")
     
     group_decoder = parser.add_argument_group('decoder configurations')
     group_decoder.add_argument('--agg_mode', type=str, default='multiplicative_attention', 
@@ -110,6 +112,7 @@ def process_TC_data(train_data, dev_data, test_data, args, config):
                     entry['tokens'] = entry['tokens'][:300] + entry['tokens'][-900:]
     
     if config.bert_like is not None and config.bert_like.paired_inputs:
+        logger.info("Paired text exists, concatenating as input...")
         for data in [train_data, dev_data, test_data]:
             for entry in data:
                 entry['tokens'] = entry['tokens'] + TokenSequence.from_tokenized_text([config.bert_like.tokenizer.sep_token]) + entry['paired_tokens']
@@ -152,6 +155,7 @@ if __name__ == '__main__':
     train_data, dev_data, test_data = load_data(args)
     args.language = dataset2language[args.dataset]
     args.paired_inputs = ('paired_tokens' in train_data[0])
+    
     # train_data, dev_data, test_data = train_data[:1000], dev_data[:1000], test_data[:1000]
     config = build_TC_config(args)
     train_data, dev_data, test_data = process_TC_data(train_data, dev_data, test_data, args, config)
@@ -187,8 +191,16 @@ if __name__ == '__main__':
     
     logger.info("Evaluating on dev-set")
     evaluate_text_classification(trainer, dev_set, batch_size=args.batch_size)
-    logger.info("Evaluating on test-set")
-    evaluate_text_classification(trainer, test_set, batch_size=args.batch_size)
+    if not args.save_predictions:
+        logger.info("Evaluating on test-set")
+        evaluate_text_classification(trainer, test_set, batch_size=args.batch_size)
+    else:
+        logger.info("Saving on test-set")
+        test_set_labels_pred = trainer.predict(test_set, batch_size=args.batch_size)
+        for ex, label_pred in zip(test_data, test_set_labels_pred):
+            ex['label'] = label_pred
+        torch.save(test_data, f"{save_path}/test-data-with-predictions.pth")
+    
     
     logger.info(" ".join(sys.argv))
     logger.info(pprint.pformat(args.__dict__))

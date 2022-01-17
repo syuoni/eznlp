@@ -132,6 +132,9 @@ dataset2language = {'conll2003': 'English',
                     'cmeie': 'Chinese', 
                     'chip_ctc': 'Chinese', 
                     'chip_sts': 'Chinese', 
+                    'kuake_qic': 'Chinese', 
+                    'kuake_qtr': 'Chinese', 
+                    'kuake_qqr': 'Chinese', 
                     'CLERD': 'Chinese', 
                     'yelp2013': 'English', 
                     'imdb': 'English', 
@@ -412,6 +415,27 @@ def load_data(args: argparse.Namespace):
         train_data = io.read("data/cblue/CHIP-STS/CHIP-STS_train.json")
         dev_data   = io.read("data/cblue/CHIP-STS/CHIP-STS_dev.json")
         test_data  = io.read("data/cblue/CHIP-STS/CHIP-STS_test.json")
+        
+    elif args.dataset == 'kuake_qic':
+        io = TextClsIO(is_tokenized=False, tokenize_callback=jieba.tokenize, text_key='query', mapping={" ": ""}, encoding='utf-8', verbose=args.log_terminal, 
+                       case_mode='Lower', number_mode='None')
+        train_data = io.read("data/cblue/KUAKE-QIC/KUAKE-QIC_train.json")
+        dev_data   = io.read("data/cblue/KUAKE-QIC/KUAKE-QIC_dev.json")
+        test_data  = io.read("data/cblue/KUAKE-QIC/KUAKE-QIC_test.json")
+        
+    elif args.dataset == 'kuake_qtr':
+        io = TextClsIO(is_tokenized=False, tokenize_callback=jieba.tokenize, text_key='query', paired_text_key='title', mapping={" ": ""}, encoding='utf-8', verbose=args.log_terminal, 
+                       case_mode='Lower', number_mode='None')
+        train_data = io.read("data/cblue/KUAKE-QTR/KUAKE-QTR_train.json")
+        dev_data   = io.read("data/cblue/KUAKE-QTR/KUAKE-QTR_dev.json")
+        test_data  = io.read("data/cblue/KUAKE-QTR/KUAKE-QTR_test.json")
+        
+    elif args.dataset == 'kuake_qqr':
+        io = TextClsIO(is_tokenized=False, tokenize_callback=jieba.tokenize, text_key='query1', paired_text_key='query2', mapping={" ": ""}, encoding='utf-8', verbose=args.log_terminal, 
+                       case_mode='Lower', number_mode='None')
+        train_data = io.read("data/cblue/KUAKE-QQR/KUAKE-QQR_train.json")
+        dev_data   = io.read("data/cblue/KUAKE-QQR/KUAKE-QQR_dev.json")
+        test_data  = io.read("data/cblue/KUAKE-QQR/KUAKE-QQR_test.json")
         
         
     elif args.dataset == 'multi30k':
