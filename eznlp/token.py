@@ -306,7 +306,10 @@ class TokenSequence(object):
         # it is good for implementing a fallback for missing attributes. While, `__getattribute__`
         # is invoked before looking at the actual attributes on the object. 
         # See: https://stackoverflow.com/questions/3278077/difference-between-getattr-vs-getattribute
-        if hasattr(self.token_list[0], name):
+        if len(self.token_list) == 0: 
+            # Unable to check attribute existence, return an empty list anyway
+            return []
+        elif hasattr(self.token_list[0], name):
             return [getattr(tok, name) for tok in self.token_list]
         else:
             raise AttributeError(f"{self.__class__.__name__} has no attribute {name}")
