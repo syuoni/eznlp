@@ -379,15 +379,19 @@ def truncate_for_bert_like(data: list,
 
 
 
-def segment_uniformly_for_bert_like(data: list, tokenizer: transformers.PreTrainedTokenizer, verbose=True):
-    """Segment overlong tokens in `data`, typically for entity recognition. 
-    """
-    max_len = tokenizer.model_max_length - 2
+def segment_uniformly_for_bert_like(data: list, tokenizer: transformers.PreTrainedTokenizer, update_raw_idx: bool=False, verbose=True):
+    """Segment overlong tokens in `data`. 
     
+    Notes: Currently only supports entity recognition. 
+    """
+    assert 'relations' not in data[0]
+    assert 'attributes' not in data[0]
+    
+    max_len = tokenizer.model_max_length - 2
     new_data = []
     num_segmented = 0
-    for data_entry in tqdm.tqdm(data, disable=not verbose, ncols=100, desc="Segmenting data"):
-        tokens, chunks = data_entry['tokens'], data_entry['chunks']
+    for raw_idx, entry in enumerate(tqdm.tqdm(data, disable=not verbose, ncols=100, desc="Segmenting data")):
+        tokens, chunks = entry['tokens'], entry['chunks']
         nested_sub_tokens = _tokenized2nested(tokens.raw_text, tokenizer)
         sub_tok_seq_lens = [len(tok) for tok in nested_sub_tokens]
         
@@ -414,20 +418,25 @@ def segment_uniformly_for_bert_like(data: list, tokenizer: transformers.PreTrain
                     span_end = len(tokens)
                 assert sum(sub_tok_seq_lens[span_start:span_end]) <= max_len
                 
-                new_entry = {k: v for k, v in data_entry.items() if k not in ('tokens', 'chunks')}
+                new_entry = {k: v for k, v in entry.items() if k not in ('tokens', 'chunks')}
                 new_entry['tokens'] = tokens[span_start:span_end]
                 new_entry['chunks'] = [(label, start-span_start, end-span_start) for label, start, end in chunks if span_start <= start and end <= span_end]
                 new_entries.append(new_entry)
                 span_start = span_end
             
             assert len(new_entries) == num_spans
-            assert [text for entry in new_entries for text in entry['tokens'].raw_text] == data_entry['tokens'].raw_text
-            assert [label for entry in new_entries for label, *_ in entry['chunks']] == [label for label, *_ in data_entry['chunks']]
-            new_data.extend(new_entries)
+            assert [text for entry in new_entries for text in entry['tokens'].raw_text] == entry['tokens'].raw_text
+            assert [label for entry in new_entries for label, *_ in entry['chunks']] == [label for label, *_ in entry['chunks']]
             num_segmented += 1
             
         else:
-            new_data.append(data_entry)
+            new_entries = [entry]
+        
+        if update_raw_idx:
+            for new_entry in new_entries:
+                new_entry['raw_idx'] = raw_idx
+        
+        new_data.extend(new_entries)
     
     logger.info(f"Segmented sequences: {num_segmented} ({num_segmented/len(data)*100:.2f}%)")
     return new_data
