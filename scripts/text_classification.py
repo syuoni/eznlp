@@ -30,7 +30,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
     group_data = parser.add_argument_group('dataset')
     group_data.add_argument('--dataset', type=str, default='imdb', 
                             help="dataset name")
-    group_data.add_argument('--save_predictions', default=False, action='store_true', 
+    group_data.add_argument('--save_preds', default=False, action='store_true', 
                             help="whether to save predictions on the test split (typically in case without ground truth)")
     
     group_decoder = parser.add_argument_group('decoder configurations')
@@ -151,7 +151,7 @@ if __name__ == '__main__':
     if device.type.startswith('cuda'):
         torch.cuda.set_device(device)
         temp = torch.randn(100).to(device)
-        
+    
     train_data, dev_data, test_data = load_data(args)
     args.language = dataset2language[args.dataset]
     args.paired_inputs = ('paired_tokens' in train_data[0])
@@ -191,16 +191,10 @@ if __name__ == '__main__':
     
     logger.info("Evaluating on dev-set")
     evaluate_text_classification(trainer, dev_set, batch_size=args.batch_size)
-    if not args.save_predictions:
-        logger.info("Evaluating on test-set")
-        evaluate_text_classification(trainer, test_set, batch_size=args.batch_size)
-    else:
-        logger.info("Saving on test-set")
-        test_set_labels_pred = trainer.predict(test_set, batch_size=args.batch_size)
-        for ex, label_pred in zip(test_data, test_set_labels_pred):
-            ex['label'] = label_pred
-        torch.save(test_data, f"{save_path}/test-data-with-predictions.pth")
-    
+    logger.info("Evaluating on test-set")
+    evaluate_text_classification(trainer, test_set, batch_size=args.batch_size, save_preds=args.save_preds)
+    if args.save_preds:
+        torch.save(test_data, f"{save_path}/test-data-with-preds.pth")
     
     logger.info(" ".join(sys.argv))
     logger.info(pprint.pformat(args.__dict__))

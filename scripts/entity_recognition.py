@@ -34,7 +34,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
                             help="whether to load data at document level")
     group_data.add_argument('--corrupt_rate', type=float, default=0.0, 
                             help="boundary corrupt rate")
-    group_data.add_argument('--save_predictions', default=False, action='store_true', 
+    group_data.add_argument('--save_preds', default=False, action='store_true', 
                             help="whether to save predictions on the test split (typically in case without ground truth)")
     group_data.add_argument('--pipeline', default=False, action='store_true', 
                             help="whether to save predictions on all splits for pipeline modeling")
@@ -193,9 +193,9 @@ def process_IE_data(train_data, dev_data, test_data, args, config):
     if (config.bert_like is not None and 
             ((args.dataset in ('SIGHAN2006', 'yidu_s4k', 'cmeee')) or 
              (args.dataset in ('conll2003', 'conll2012') and args.doc_level))):
-        train_data = segment_uniformly_for_bert_like(train_data, config.bert_like.tokenizer, verbose=args.log_terminal)
-        dev_data   = segment_uniformly_for_bert_like(dev_data,   config.bert_like.tokenizer, verbose=args.log_terminal)
-        test_data  = segment_uniformly_for_bert_like(test_data,  config.bert_like.tokenizer, verbose=args.log_terminal)
+        train_data = segment_uniformly_for_bert_like(train_data, config.bert_like.tokenizer, update_raw_idx=True, verbose=args.log_terminal)
+        dev_data   = segment_uniformly_for_bert_like(dev_data,   config.bert_like.tokenizer, update_raw_idx=True, verbose=args.log_terminal)
+        test_data  = segment_uniformly_for_bert_like(test_data,  config.bert_like.tokenizer, update_raw_idx=True, verbose=args.log_terminal)
     
     if args.use_softword or args.use_softlexicon:
         if config.nested_ohots is not None and 'softlexicon' in config.nested_ohots.keys():
@@ -294,15 +294,10 @@ if __name__ == '__main__':
     
     logger.info("Evaluating on dev-set")
     evaluate_entity_recognition(trainer, dev_set, batch_size=args.batch_size)
-    if not args.save_predictions:
-        logger.info("Evaluating on test-set")
-        evaluate_entity_recognition(trainer, test_set, batch_size=args.batch_size)
-    else:
-        logger.info("Saving on test-set")
-        test_set_chunks_pred = trainer.predict(test_set, batch_size=args.batch_size)
-        for ex, chunks_pred in zip(test_data, test_set_chunks_pred):
-            ex['chunks'] = chunks_pred
-        torch.save(test_data, f"{save_path}/test-data-with-predictions.pth")
+    logger.info("Evaluating on test-set")
+    evaluate_entity_recognition(trainer, test_set, batch_size=args.batch_size, save_preds=args.save_preds)
+    if args.save_preds:
+        torch.save(test_data, f"{save_path}/test-data-with-preds.pth")
     
     if args.pipeline:
         # Replace gold chunks with predicted chunks for pipeline
@@ -323,8 +318,7 @@ if __name__ == '__main__':
         for ex, chunks_pred in zip(test_data, test_set_chunks_pred):
             ex['chunks'] = chunks_pred
         
-        torch.save((train_data, dev_data, test_data), f"{save_path}/data-with-chunks-pred.pth")
-    
+        torch.save((train_data, dev_data, test_data), f"{save_path}/data-for-pipeline.pth")
     
     logger.info(" ".join(sys.argv))
     logger.info(pprint.pformat(args.__dict__))
