@@ -22,7 +22,8 @@ def evaluate_text_classification(trainer: Trainer, dataset: Dataset, batch_size:
         logger.info(f"TC | Accuracy: {acc*100:2.3f}%")
 
 
-def disp_prf(ave_scores: dict, task: str='ER'):
+
+def _disp_prf(ave_scores: dict, task: str='ER'):
     for key_text, key in zip(['Precision', 'Recall', 'F1-score'], ['precision', 'recall', 'f1']):
         logger.info(f"{task} | Micro {key_text}: {ave_scores['micro'][key]*100:2.3f}%")
     for key_text, key in zip(['Precision', 'Recall', 'F1-score'], ['precision', 'recall', 'f1']):
@@ -38,7 +39,28 @@ def evaluate_entity_recognition(trainer: Trainer, dataset: Dataset, batch_size: 
     else:
         set_y_gold = [ex['chunks'] for ex in dataset.data]
         scores, ave_scores = precision_recall_f1_report(set_y_gold, set_y_pred)
-        disp_prf(ave_scores, task='ER')
+        _disp_prf(ave_scores, task='ER')
+
+
+
+def _eval_attr(set_y_gold, set_y_pred):
+    scores, ave_scores = precision_recall_f1_report(set_y_gold, set_y_pred)
+    _disp_prf(ave_scores, task='AE+')
+    
+    set_y_gold = [[(attr_type, chunk[1:]) for attr_type, chunk in attributes] for attributes in set_y_gold]
+    set_y_pred = [[(attr_type, chunk[1:]) for attr_type, chunk in attributes] for attributes in set_y_pred]
+    scores, ave_scores = precision_recall_f1_report(set_y_gold, set_y_pred)
+    _disp_prf(ave_scores, task='AE')
+
+
+def _eval_rel(set_y_gold, set_y_pred):
+    scores, ave_scores = precision_recall_f1_report(set_y_gold, set_y_pred)
+    _disp_prf(ave_scores, task='RE+')
+    
+    set_y_gold = [[(rel_type, head[1:], tail[1:]) for rel_type, head, tail in relations] for relations in set_y_gold]
+    set_y_pred = [[(rel_type, head[1:], tail[1:]) for rel_type, head, tail in relations] for relations in set_y_pred]
+    scores, ave_scores = precision_recall_f1_report(set_y_gold, set_y_pred)
+    _disp_prf(ave_scores, task='RE')
 
 
 def evaluate_attribute_extraction(trainer: Trainer, dataset: Dataset, batch_size: int=32, save_preds: bool=False):
@@ -49,12 +71,10 @@ def evaluate_attribute_extraction(trainer: Trainer, dataset: Dataset, batch_size
         logger.info("AE | Predictions saved")
     else:
         set_y_gold = [ex['attributes'] for ex in dataset.data]
-        scores, ave_scores = precision_recall_f1_report(set_y_gold, set_y_pred)
-        disp_prf(ave_scores, task='AE')
+        _eval_attr(set_y_gold, set_y_pred)
 
 
-def evaluate_relation_extraction(trainer: Trainer, dataset: Dataset, eval_chunk_type_for_relation: bool=True, 
-                                 batch_size: int=32, save_preds: bool=False):
+def evaluate_relation_extraction(trainer: Trainer, dataset: Dataset, batch_size: int=32, save_preds: bool=False):
     set_y_pred = trainer.predict(dataset, batch_size=batch_size)
     if save_preds:
         for ex, rels_pred in zip(dataset.data, set_y_pred):
@@ -62,15 +82,10 @@ def evaluate_relation_extraction(trainer: Trainer, dataset: Dataset, eval_chunk_
         logger.info("RE | Predictions saved")
     else:
         set_y_gold = [ex['relations'] for ex in dataset.data]
-        if not eval_chunk_type_for_relation:
-            set_y_gold = [[(rel_type, head[1:], tail[1:]) for rel_type, head, tail in relations] for relations in set_y_gold]
-            set_y_pred = [[(rel_type, head[1:], tail[1:]) for rel_type, head, tail in relations] for relations in set_y_pred]
-        scores, ave_scores = precision_recall_f1_report(set_y_gold, set_y_pred)
-        disp_prf(ave_scores, task='RE')
+        _eval_rel(set_y_gold, set_y_pred)
 
 
-def evaluate_joint_extraction(trainer: Trainer, dataset: Dataset, has_attr: bool=False, has_rel: bool=True, eval_chunk_type_for_relation: bool=True, 
-                              batch_size: int=32, save_preds: bool=False):
+def evaluate_joint_extraction(trainer: Trainer, dataset: Dataset, has_attr: bool=False, has_rel: bool=True, batch_size: int=32, save_preds: bool=False):
     set_y_pred = trainer.predict(dataset, batch_size=batch_size)
     set_chunks_pred = set_y_pred[0]
     if has_attr:
@@ -91,19 +106,13 @@ def evaluate_joint_extraction(trainer: Trainer, dataset: Dataset, has_attr: bool
     else:
         set_chunks_gold = [ex['chunks'] for ex in dataset.data]
         scores, ave_scores = precision_recall_f1_report(set_chunks_gold, set_chunks_pred)
-        disp_prf(ave_scores, task='ER')
+        _disp_prf(ave_scores, task='ER')
         if has_attr:
             set_attrs_gold = [ex['attributes'] for ex in dataset.data]
-            scores, ave_scores = precision_recall_f1_report(set_attrs_gold, set_attrs_pred)
-            disp_prf(ave_scores, task='AE')
+            _eval_attr(set_attrs_gold, set_attrs_pred)
         if has_rel:
             set_rels_gold = [ex['relations'] for ex in dataset.data]
-            if not eval_chunk_type_for_relation:
-                set_rels_gold = [[(rel_type, head[1:], tail[1:]) for rel_type, head, tail in relations] for relations in set_rels_gold]
-                set_rels_pred = [[(rel_type, head[1:], tail[1:]) for rel_type, head, tail in relations] for relations in set_rels_pred]
-            scores, ave_scores = precision_recall_f1_report(set_rels_gold, set_rels_pred)
-            disp_prf(ave_scores, task='RE')
-
+            _eval_rel(set_rels_gold, set_rels_pred)
 
 
 def evaluate_generation(trainer: Trainer, dataset: Dataset, batch_size: int=32, beam_size: int=1):
