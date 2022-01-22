@@ -216,6 +216,10 @@ class TestJsonIO(object):
         assert len(dev_mismatches) == 0
         assert len(test_data) == 3_000
         
+        assert any(detect_nested(ex['chunks']) for data in [train_data, dev_data] for ex in data)
+        # TODO: clashed chunks?
+        # assert all(filter_clashed_by_priority(ex['chunks'], allow_nested=True) == ex['chunks'] for data in [train_data, dev_data] for ex in data)
+        
         
     def test_cmeie(self):
         io = JsonIO(is_tokenized=False, tokenize_callback='char', text_key='text', 
