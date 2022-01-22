@@ -81,3 +81,15 @@ $ python scripts/relation_extraction.py --dataset <dataset> [options]
 ```bash
 $ python scripts/attribute_extraction.py --dataset <dataset> [options]
 ```
+
+
+## Future Plans
+- [ ] Unify the data interchange format as a dict, i.e., `entry`
+- [ ] Reorganize `JsonIO`
+- [ ] Memory optimization for large dataset for training PLM
+- [ ] More relation extraction models
+- [ ] Multihot classification
+- [ ] Unify the aggregation interface of pooling and attention
+- [ ] Radical-level features
+- [ ] Data augmentation
+- [ ] Loss increases in later training phases -> LR finder?

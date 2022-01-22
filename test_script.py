@@ -18,6 +18,7 @@ import allennlp.modules
 import transformers
 import flair
 
+import eznlp
 from eznlp import auto_device
 from eznlp.utils import find_ascending, ChunksTagsTranslator
 from eznlp.token import Token, TokenSequence, LexiconTokenizer
@@ -26,7 +27,7 @@ from eznlp.vocab import Vocab
 from eznlp.vectors import Vectors, GloVe, Senna
 from eznlp.wrapper import Batch
 
-from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, BratIO, JsonIO, SQuADIO, ChipIO, KarpathyIO, Src2TrgIO
+from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, BratIO, JsonIO, SQuADIO, ChipIO, KarpathyIO, Src2TrgIO, RawTextIO
 from eznlp.io import PostIO
 
 from eznlp.dataset import Dataset, GenerationDataset
@@ -49,9 +50,6 @@ from eznlp.model import (TextClassificationDecoderConfig,
                          JointExtractionDecoderConfig, 
                          GeneratorConfig)
 from eznlp.model import ExtractorConfig, Text2TextConfig, Image2TextConfig
-
-from eznlp.language_modeling import MaskedLMConfig
-from eznlp.language_modeling import MaskedLMDataset, FolderLikeMaskedLMDataset, MaskedLMTrainer
 
 from eznlp.training import Trainer
 from eznlp.training import collect_params, check_param_groups, LRLambda
@@ -121,4 +119,14 @@ if __name__ == '__main__':
     #     model = transformers.AutoModelForPreTraining.from_pretrained(model_name)
     #     tokenizer.save_pretrained(f"assets/transformers/{model_name}")
     #     model.save_pretrained(f"assets/transformers/{model_name}")
+    
+    # TODO: Test the MLM model pretrained on HwaMei corpus
+    PATH = "assets/transformers/syuoni/bert-base-chinese-vf"
+    # PATH = "assets/transformers/syuoni/bert-base-jt-20e"
+    bert = transformers.BertForMaskedLM.from_pretrained(PATH)
+    tokenizer = transformers.BertTokenizer.from_pretrained(PATH)
+    # unmasker = transformers.pipeline("fill-mask", tokenizer=tokenizer, model=bert)
+    
+    # io = RawTextIO(encoding='utf-8')
+    # data = io.read("data/Wikipedia/text-zh/AA/wiki_00.cache")
     

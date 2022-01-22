@@ -147,4 +147,4 @@ dmypy.json
 
 !/publications/
 /publications/*
-!publications/framework/
+!publications/framework/scheme.pdf

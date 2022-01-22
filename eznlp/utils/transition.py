@@ -5,6 +5,8 @@ import re
 from collections import Counter
 import pandas
 
+from ..token import zh_char_re, zh_punct_re
+
 
 class ChunksTagsTranslator(object):
     """The translator between chunks and tags. 
@@ -23,7 +25,7 @@ class ChunksTagsTranslator(object):
     https://github.com/chakki-works/seqeval
     """
     def __init__(self, scheme='BIOES', sep: str='-', breaking_for_types: bool=True):
-        assert scheme in ('BIO1', 'BIO2', 'BIOES', 'BMES', 'BILOU', 'OntoNotes')
+        assert scheme in ('BIO1', 'BIO2', 'BIOES', 'BMES', 'BILOU', 'OntoNotes', 'wwm')
         self.scheme = scheme
         
         dirname = os.path.dirname(__file__)
@@ -210,3 +212,27 @@ class ChunksTagsTranslator(object):
             chunks.append((chunk_type, chunk_start, len(tags)))
             
         return chunks
+
+
+
+def _token2wwm_tag(tok: str, subword_prefix: str='##'):
+    if tok.startswith('[') and tok.endswith(']'):
+        return 'SP-SP'
+    
+    # Theoretically, Chinese characters never follow `##`
+    # Chinese punctuations belong to `ETC`, and may follow `##`
+    
+    if tok.startswith(subword_prefix):
+        if tok[2:].isascii():
+            return '##EN-EN'  # The returning prefix `##` corresponds to that in `transition.xlsx`
+        elif zh_char_re.fullmatch(tok[2:]):  # zh_punct_re.fullmatch(tok[2:])
+            return '##ZH-ZH'
+        else:
+            return '##ETC-ETC'
+    else:
+        if tok.isascii():
+            return 'EN-EN'
+        elif zh_char_re.fullmatch(tok):
+            return 'ZH-ZH'
+        else:
+            return 'ETC-ETC'

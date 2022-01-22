@@ -144,11 +144,6 @@ def bert_with_tokenizer():
             transformers.BertTokenizer.from_pretrained(BERT_PATH))
 
 @pytest.fixture
-def bert4mlm_with_tokenizer():
-    return (transformers.BertForMaskedLM.from_pretrained(BERT_PATH), 
-            transformers.BertTokenizer.from_pretrained(BERT_PATH))
-
-@pytest.fixture
 def roberta_with_tokenizer():
     """
     The GPT-2/RoBERTa tokenizer expects a space before all the words. 
@@ -158,24 +153,12 @@ def roberta_with_tokenizer():
     return (transformers.RobertaModel.from_pretrained(ROBERTA_PATH), 
             transformers.RobertaTokenizer.from_pretrained(ROBERTA_PATH, add_prefix_space=True))
 
-@pytest.fixture
-def roberta4mlm_with_tokenizer():
-    return (transformers.RobertaForMaskedLM.from_pretrained(ROBERTA_PATH), 
-            transformers.RobertaTokenizer.from_pretrained(ROBERTA_PATH, add_prefix_space=True))
-
 @pytest.fixture(params=['bert', 'roberta'])
 def bert_like_with_tokenizer(request, bert_with_tokenizer, roberta_with_tokenizer):
     if request.param == 'bert':
         return bert_with_tokenizer
     elif request.param == 'roberta':
         return roberta_with_tokenizer
-
-@pytest.fixture(params=['bert', 'roberta'])
-def bert_like4mlm_with_tokenizer(request, bert4mlm_with_tokenizer, roberta4mlm_with_tokenizer):
-    if request.param == 'bert':
-        return bert4mlm_with_tokenizer
-    elif request.param == 'roberta':
-        return roberta4mlm_with_tokenizer
 
 
 @pytest.fixture

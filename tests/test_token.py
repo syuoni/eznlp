@@ -3,21 +3,27 @@ import pytest
 import pickle
 
 from eznlp.token import Full2Half
+from eznlp.token import zh_punct_re, zh_char_re
 from eznlp.token import Token, TokenSequence, LexiconTokenizer
 
 
 def test_full2half():
     assert Full2Half.full2half("，；：？！") == ",;:?!"
     assert Full2Half.half2full(",;:?!") == "，；：？！"
-    
-    
+
+
+def test_regex():
+    assert all(zh_punct_re.fullmatch(c) for c in "、，；。？！……：‘’“”《》")
+    assert all(zh_char_re.fullmatch(c) for c in "你我他憂郁的烏龜")
+
+
 class TestToken(object):
     def test_assign_attr(self):
         tok = Token("-5.44", chunking='B-NP')
         assert hasattr(tok, 'chunking')
         assert tok.chunking == 'B-NP'
         
-    
+        
     @pytest.mark.parametrize("raw_text, lowered_text, expected_en_pattern, expected_en_pattern_sum", 
                              [("Of", "of", "Aa", "Aa"), 
                               ("THE", "the", "AAA", "A"), 
@@ -172,9 +178,9 @@ class TestToken(object):
         tok = Token(raw_text, number_mode='Zeros')
         assert tok.raw_text == raw_text
         assert tok.text == zeros_text
-        
-        
-        
+
+
+
 class TestTokenSequence(object):
     def test_text(self):
         token_list = [Token(tok, case_mode='Lower', number_mode='Marks') for tok in "This is a -3.14 demo .".split()]
@@ -233,14 +239,14 @@ class TestTokenSequence(object):
             pickle.dump(tokens, f)
         with open("cache/tokens-demo.pkl", 'rb') as f:
             tokens_loaded = pickle.load(f)
-            
+        
         assert tokens_loaded.text == tokens.text
         assert tokens_loaded.raw_text == tokens.raw_text
         assert tokens_loaded.token_sep == tokens.token_sep
         assert tokens_loaded.pad_token == tokens.pad_token
-        
-        
-        
+
+
+
 class TestLexiconTokenizer(object):
     @pytest.mark.parametrize("lexicon, text", 
                              [(["李明", "中山", "中山西路", "山西", "山西路", "西路"], "李明住在中山西路。"), 
@@ -251,7 +257,5 @@ class TestLexiconTokenizer(object):
         
         for w, start, end in tokenized:
             assert text[start:end] == w
-            
+        
         assert set(lexicon) == set([w for w, *_ in tokenized])
-        
-        

@@ -34,4 +34,4 @@ for task in ['ACE2004', 'ACE2005']:
         # max(ent['end']-ent['start'] for entry in data for ent in entry['entities'])
         
         with open(f"{task}/{partition}.json", 'w') as f:
-            json.dump(data, f)
+            json.dump(data, f, ensure_ascii=False)
