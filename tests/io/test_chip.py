@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
-import pytest
-import jieba
-
 from eznlp.io import ChipIO
-from eznlp.utils.chunk import detect_nested, filter_clashed_by_priority
+from eznlp.utils.chunk import detect_overlapping_level, filter_clashed_by_priority, ARBITRARY
 
 class TestChipIO(object):
     """
@@ -26,6 +23,5 @@ class TestChipIO(object):
         assert len(dev_errors) == 0
         assert len(dev_mismatches) == 0
         
-        assert any(detect_nested(ex['chunks']) for data in [train_data, dev_data] for ex in data)
-        # TODO: 
-        # assert all(filter_clashed_by_priority(ex['chunks'], allow_nested=True) == ex['chunks'] for data in [train_data, dev_data] for ex in data)
+        assert max(detect_overlapping_level(ex['chunks']) for data in [train_data, dev_data] for ex in data) == ARBITRARY
+        assert all(filter_clashed_by_priority(ex['chunks'], allow_level=ARBITRARY) == ex['chunks'] for data in [train_data, dev_data] for ex in data)

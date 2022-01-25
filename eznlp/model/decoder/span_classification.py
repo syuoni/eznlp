@@ -6,7 +6,7 @@ import logging
 import torch
 
 from ...wrapper import TargetWrapper, Batch
-from ...utils.chunk import detect_nested, filter_clashed_by_priority
+from ...utils.chunk import detect_overlapping_level, filter_clashed_by_priority
 from ...nn.modules import SequencePooling, SequenceAttention, CombinedDropout
 from ...nn.functional import seq_lens2mask
 from ...nn.init import reinit_embedding_, reinit_layer_
@@ -107,8 +107,7 @@ class SpanClassificationDecoderConfig(SingleDecoderConfigBase, SpanClassificatio
         
         self.none_label = kwargs.pop('none_label', '<none>')
         self.idx2label = kwargs.pop('idx2label', None)
-        # Note: non-nested overlapping chunks are never allowed
-        self.allow_nested = kwargs.pop('allow_nested', None)
+        self.overlapping_level = kwargs.pop('overlapping_level', None)
         super().__init__(**kwargs)
         
         
@@ -124,11 +123,8 @@ class SpanClassificationDecoderConfig(SingleDecoderConfigBase, SpanClassificatio
         counter = Counter(label for data in partitions for entry in data for label, start, end in entry['chunks'])
         self.idx2label = [self.none_label] + list(counter.keys())
         
-        self.allow_nested = any(detect_nested(entry['chunks']) for data in partitions for entry in data)
-        if self.allow_nested:
-            logger.info("Nested chunks detected, nested chunks are allowed in decoding...")
-        else:
-            logger.info("No nested chunks detected, only flat chunks are allowed in decoding...")
+        self.overlapping_level = max(detect_overlapping_level(entry['chunks']) for data in partitions for entry in data)
+        logger.info(f"Overlapping level: {self.overlapping_level}")
         
         size_counter = Counter(end-start for data in partitions for entry in data for label, start, end in entry['chunks'])
         num_spans = sum(size_counter.values())
@@ -147,7 +143,7 @@ class SpanClassificationDecoder(DecoderBase, SpanClassificationDecoderMixin):
         super().__init__()
         self.none_label = config.none_label
         self.idx2label = config.idx2label
-        self.allow_nested = config.allow_nested
+        self.overlapping_level = config.overlapping_level
         
         if config.agg_mode.lower().endswith('_pooling'):
             self.aggregating = SequencePooling(mode=config.agg_mode.replace('_pooling', ''))
@@ -206,7 +202,7 @@ class SpanClassificationDecoder(DecoderBase, SpanClassificationDecoderMixin):
             
             # Sort chunks from high to low confidences
             chunks = [ck for _, ck in sorted(zip(confidences, chunks), reverse=True)]
-            chunks = filter_clashed_by_priority(chunks, allow_nested=self.allow_nested)
+            chunks = filter_clashed_by_priority(chunks, allow_level=self.overlapping_level)
             
             batch_chunks.append(chunks)
         return batch_chunks
