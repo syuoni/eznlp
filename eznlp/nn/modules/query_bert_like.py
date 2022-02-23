@@ -5,10 +5,7 @@ import torch
 import transformers
 
 
-class SpanBertLikeSelfAttention(torch.nn.Module):
-    """
-    Ref: transformers/models/bert/modeling_bert.py
-    """
+class QueryBertLikeSelfAttention(torch.nn.Module):
     def __init__(self, origin: transformers.models.bert.modeling_bert.BertSelfAttention):
         super().__init__()
         self.num_attention_heads = origin.num_attention_heads
@@ -61,10 +58,10 @@ class SpanBertLikeSelfAttention(torch.nn.Module):
 
 
 
-class SpanBertLikeAttention(torch.nn.Module):
+class QueryBertLikeAttention(torch.nn.Module):
     def __init__(self, origin: transformers.models.bert.modeling_bert.BertAttention):
         super().__init__()
-        self.self = SpanBertLikeSelfAttention(origin.self)
+        self.self = QueryBertLikeSelfAttention(origin.self)
         self.output = copy.deepcopy(origin.output)
         
     def forward(self, query_states, hidden_states, **kwargs):
@@ -75,10 +72,10 @@ class SpanBertLikeAttention(torch.nn.Module):
 
 
 
-class SpanBertLikeLayer(torch.nn.Module):
+class QueryBertLikeLayer(torch.nn.Module):
     def __init__(self, origin: transformers.models.bert.modeling_bert.BertLayer):
         super().__init__()
-        self.attention = SpanBertLikeAttention(origin.attention)
+        self.attention = QueryBertLikeAttention(origin.attention)
         self.intermediate = copy.deepcopy(origin.intermediate)
         self.output = copy.deepcopy(origin.output)
         
@@ -96,10 +93,18 @@ class SpanBertLikeLayer(torch.nn.Module):
 
 
 
-class SpanBertLikeEncoder(torch.nn.Module):
+class QueryBertLikeEncoder(torch.nn.Module):
+    """A module of architecture corresponding to `BertEncoder`, where the `query_states` are different from `hidden_states`. 
+    Typically, the `hidden_states` are pre-calculated by a `BertModel`. 
+    To some extent, this module replaces the self-attention with cross-attention in `BertEncoder`. 
+    
+    References
+    ----------
+    transformers/models/bert/modeling_bert.py
+    """
     def __init__(self, origin: transformers.models.bert.modeling_bert.BertEncoder):
         super().__init__()
-        self.layer = torch.nn.ModuleList([SpanBertLikeLayer(layer) for layer in origin.layer])
+        self.layer = torch.nn.ModuleList([QueryBertLikeLayer(layer) for layer in origin.layer])
         
     def forward(self, 
                 query_states, 
@@ -136,7 +141,3 @@ class SpanBertLikeEncoder(torch.nn.Module):
             return tuple(v for v in [query_states, all_query_states, all_self_attentions])
         else:
             return dict(query_states=query_states, all_query_states=all_query_states, all_self_attentions=all_self_attentions)
-
-
-
-
