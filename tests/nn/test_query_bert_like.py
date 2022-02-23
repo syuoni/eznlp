@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import pytest
 import torch
 
 from eznlp.nn.modules.query_bert_like import QueryBertLikeLayer, QueryBertLikeEncoder
@@ -25,8 +24,8 @@ def test_query_bert_like_encoder(bert_like_with_tokenizer):
     bert_outs = bert_like(x_ids, output_hidden_states=True)
     x = bert_like.embeddings(x_ids)
     query_enc_outs = query_encoder(x, bert_outs['hidden_states'], output_query_states=True)
-    assert (query_enc_outs['query_states'] - bert_outs['last_hidden_state']).abs().max().item() < 1e-6
-    assert (torch.stack(query_enc_outs['all_query_states']) - torch.stack(bert_outs['hidden_states'])).abs().max().item() < 1e-6
+    assert (query_enc_outs['last_query_state'] - bert_outs['last_hidden_state']).abs().max().item() < 1e-6
+    assert (torch.stack(query_enc_outs['query_states']) - torch.stack(bert_outs['hidden_states'])).abs().max().item() < 1e-6
     
     query_enc_outs = query_encoder(x[:, :5], bert_outs['hidden_states'])
-    assert query_enc_outs['query_states'].size(1) == 5
+    assert query_enc_outs['last_query_state'].size(1) == 5

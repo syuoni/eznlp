@@ -140,4 +140,4 @@ class QueryBertLikeEncoder(torch.nn.Module):
         if not return_dict:
             return tuple(v for v in [query_states, all_query_states, all_self_attentions])
         else:
-            return dict(query_states=query_states, all_query_states=all_query_states, all_self_attentions=all_self_attentions)
+            return dict(last_query_state=query_states, query_states=all_query_states, attentions=all_self_attentions)
