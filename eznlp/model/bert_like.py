@@ -35,6 +35,7 @@ class BertLikeConfig(Config):
         self.mix_layers = kwargs.pop('mix_layers', 'top')
         self.use_gamma = kwargs.pop('use_gamma', False)
         
+        self.output_hidden_states = kwargs.pop('output_hidden_states', False)
         super().__init__(**kwargs)
         
         
@@ -193,6 +194,7 @@ class BertLikeEmbedder(torch.nn.Module):
         self.freeze = config.freeze
         self.mix_layers = config.mix_layers
         self.use_gamma = config.use_gamma
+        self.output_hidden_states = config.output_hidden_states
         
         if self.from_tokenized:
             self.group_aggregating = SequenceGroupAggregating(mode=config.agg_mode)
@@ -223,15 +225,14 @@ class BertLikeEmbedder(torch.nn.Module):
                                    attention_mask=(~sub_mask).long(), 
                                    token_type_ids=sub_tok_type_ids, 
                                    output_hidden_states=True)
-        bert_hidden = bert_outs['hidden_states']
         
         # bert_hidden: (batch, sub_tok_step+2, hid_dim)
         if self.mix_layers.lower() == 'trainable':
-            bert_hidden = self.scalar_mix(bert_hidden)
+            bert_hidden = self.scalar_mix(bert_outs['hidden_states'])
         elif self.mix_layers.lower() == 'top':
-            bert_hidden = bert_hidden[-1]
+            bert_hidden = bert_outs['last_hidden_state']
         elif self.mix_layers.lower() == 'average':
-            bert_hidden = sum(bert_hidden) / len(bert_hidden)
+            bert_hidden = sum(bert_outs['hidden_states']) / len(bert_outs['hidden_states'])
         
         if self.use_gamma:
             bert_hidden = self.gamma * bert_hidden
@@ -244,7 +245,13 @@ class BertLikeEmbedder(torch.nn.Module):
             # bert_hidden: (batch, tok_step, hid_dim)
             bert_hidden = self.group_aggregating(bert_hidden, ori_indexes)
         
-        return bert_hidden
+        if self.output_hidden_states:
+            all_bert_hidden = [hidden[:, 1:-1] for hidden in bert_outs['hidden_states']]
+            if self.from_tokenized:
+                all_bert_hidden = [self.group_aggregating(hidden, ori_indexes) for hidden in all_bert_hidden]
+            return (bert_hidden, all_bert_hidden)
+        else:
+            return bert_hidden
 
 
 

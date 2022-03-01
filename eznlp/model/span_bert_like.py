@@ -13,12 +13,18 @@ class SpanBertLikeConfig(Config):
         self.out_dim = self.bert_like.config.hidden_size
         self.num_layers = self.bert_like.config.num_hidden_layers
         
+        self.arch = kwargs.pop('arch', 'BERT')
+        self.freeze = kwargs.pop('freeze', True)
+        
         # num_layers
         self.max_span_size = kwargs.pop('max_span_size', None)
         self.share_weights = kwargs.pop('share_weights', False)
         self.init_agg_mode = kwargs.pop('init_agg_mode', 'mean')
         super().__init__(**kwargs)
         
+    @property
+    def name(self):
+        return self.arch
         
     def __getstate__(self):
         state = self.__dict__.copy()
