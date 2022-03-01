@@ -14,3 +14,10 @@ def test_span_bert_like(bert_like_with_tokenizer):
     all_last_query_states = span_bert_like(bert_outs['hidden_states'])
     assert len(all_last_query_states) == 4
     assert all(all_last_query_states[k].size(1) == 10-k+1 for k in range(2, 6))
+    
+    # Check the span representations are different from token representations
+    all_hidden = [bert_outs['last_hidden_state']] + list(all_last_query_states.values())
+    i = 0
+    span_hidden = torch.cat([hidden[i] for hidden in all_hidden], dim=0)
+    diff = (span_hidden.unsqueeze(0) - span_hidden.unsqueeze(1)).abs().sum(dim=-1)
+    assert (diff > 1).sum().item() == diff.size(0) * (diff.size(0) - 1)  # 40*39 = 1560
