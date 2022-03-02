@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 from typing import List, Union
+from collections import OrderedDict
+import torch
 
 from ...wrapper import Batch
 from ..encoder import EncoderConfig
@@ -64,6 +66,14 @@ class SpecificSpanExtractorConfig(ModelConfigBase):
 class SpecificSpanExtractor(ModelBase):
     def __init__(self, config: SpecificSpanExtractorConfig):
         super().__init__(config)
+        if config.intermediate2 is not None:
+            if config.span_bert_like.share_weights:
+                self.span_intermediate2 = config.intermediate2.instantiate()
+            else:
+                # `self.span_intermediate2[k-2]` for span size `k`
+                self.span_intermediate2 = torch.nn.ModuleList([config.intermediate2.instantiate() 
+                                                                   for _ in range(config.span_bert_like.max_span_size-1)])
+        
         
     def pretrained_parameters(self):
         params = []
@@ -74,4 +84,12 @@ class SpecificSpanExtractor(ModelBase):
     def forward2states(self, batch: Batch):
         bert_hidden, all_bert_hidden = self.bert_like(**batch.bert_like)
         all_last_query_states = self.span_bert_like(all_bert_hidden)
+        
+        if hasattr(self, 'intermediate2'):
+            bert_hidden = self.intermediate2(bert_hidden, batch.mask)
+            if self.span_bert_like.share_weights:
+                all_last_query_states = OrderedDict([(k, self.span_intermediate2(query_hidden, batch.mask[:, k-1:])) for k, query_hidden in all_last_query_states.items()])
+            else:
+                all_last_query_states = OrderedDict([(k, self.span_intermediate2[k-2](query_hidden, batch.mask[:, k-1:])) for k, query_hidden in all_last_query_states.items()])
+        
         return {'full_hidden': bert_hidden, 'all_query_hidden': all_last_query_states}

@@ -38,8 +38,6 @@ class SpanBertLikeConfig(Config):
 
 
 
-# TODO: Span intermediate (BiLSTM)?
-
 class SpanBertLikeEncoder(torch.nn.Module):
     def __init__(self, config: SpanBertLikeConfig):
         super().__init__()

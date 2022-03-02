@@ -3,6 +3,7 @@ import pytest
 import torch
 
 from eznlp.dataset import Dataset
+from eznlp.model import EncoderConfig
 from eznlp.model import BertLikeConfig, SpanBertLikeConfig, SpecificSpanClsDecoderConfig, SpecificSpanExtractorConfig
 from eznlp.model.decoder.boundary_selection import _spans_from_upper_triangular
 from eznlp.model.decoder.specific_span_classification import _spans_from_diagonals
@@ -57,20 +58,22 @@ class TestModel(object):
         assert isinstance(self.config.name, str) and len(self.config.name) > 0
         
         
-    @pytest.mark.parametrize("num_layers, share_weights, agg_mode, size_emb_dim", 
-                             [(12, False, 'max_pooling', 0), 
-                              (6,  False, 'max_pooling', 0), 
-                              (1,  False, 'max_pooling', 0), 
-                              (12, True,  'max_pooling', 0), 
-                              (12, False, 'mean_pooling', 0), 
-                              (12, False, 'multiplicative_attention', 0), 
-                              (12, False, 'max_pooling', 25)])
-    def test_model(self, num_layers, share_weights, agg_mode, size_emb_dim, conll2004_demo, bert_with_tokenizer, device):
+    @pytest.mark.parametrize("num_layers, share_weights, agg_mode, use_interm2, size_emb_dim", 
+                             [(12, False, 'max_pooling', False, 0), 
+                              (6,  False, 'max_pooling', False, 0), 
+                              (1,  False, 'max_pooling', False, 0), 
+                              (12, True,  'max_pooling', False, 0), 
+                              (12, False, 'mean_pooling', False, 0), 
+                              (12, False, 'multiplicative_attention', False, 0), 
+                              (12, False, 'max_pooling', True, 0), 
+                              (12, True,  'max_pooling', True, 0), 
+                              (12, False, 'max_pooling', False, 25)])
+    def test_model(self, num_layers, share_weights, agg_mode, use_interm2, size_emb_dim, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
         self.config = SpecificSpanExtractorConfig(decoder=SpecificSpanClsDecoderConfig(size_emb_dim=size_emb_dim), 
                                                   bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False, output_hidden_states=True), 
                                                   span_bert_like=SpanBertLikeConfig(bert_like=bert, freeze=False, num_layers=num_layers, share_weights=share_weights, init_agg_mode=agg_mode), 
-                                                  intermediate2=None)
+                                                  intermediate2=EncoderConfig(arch='LSTM') if use_interm2 else None)
         self._setup_case(conll2004_demo, device)
         if share_weights:
             assert len(self.model.span_bert_like.query_bert_like.layer) == num_layers
