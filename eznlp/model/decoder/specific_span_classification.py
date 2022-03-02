@@ -2,11 +2,13 @@
 from typing import Dict
 from collections import Counter
 import logging
+import math
+import numpy
 import torch
 
 from ...wrapper import Batch
 from ...utils.chunk import detect_overlapping_level, filter_clashed_by_priority
-from ...nn.modules import SequencePooling, SequenceAttention, CombinedDropout
+from ...nn.modules import CombinedDropout
 from ...nn.init import reinit_embedding_, reinit_layer_
 from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
 from .boundary_selection import Boundaries
@@ -66,8 +68,13 @@ class SpecificSpanClsDecoderConfig(SingleDecoderConfigBase, SpecificSpanClsDecod
         self.overlapping_level = max(detect_overlapping_level(entry['chunks']) for data in partitions for entry in data)
         logger.info(f"Overlapping level: {self.overlapping_level}")
         
-        # TODO: check it
-        self.max_span_size = 5
+        # Calculate the maximum span size in data
+        _MAX_SPAN_SIZE = 15
+        span_sizes = [end-start for data in partitions for entry in data for label, start, end in entry['chunks']]
+        span_size_q100 = max(span_sizes)
+        span_size_q99  = math.ceil(numpy.quantile(span_sizes, 0.99))
+        self.max_span_size = min(span_size_q99, _MAX_SPAN_SIZE)
+        
         logger.warning(f"The max span size is set to {self.max_span_size}")
         size_counter = Counter(end-start for data in partitions for entry in data for label, start, end in entry['chunks'])
         num_spans = sum(size_counter.values())
@@ -88,11 +95,6 @@ class SpecificSpanClsDecoder(DecoderBase, SpecificSpanClsDecoderMixin):
         self.none_label = config.none_label
         self.idx2label = config.idx2label
         self.overlapping_level = config.overlapping_level
-        
-        # if config.agg_mode.lower().endswith('_pooling'):
-        #     self.aggregating = SequencePooling(mode=config.agg_mode.replace('_pooling', ''))
-        # elif config.agg_mode.lower().endswith('_attention'):
-        #     self.aggregating = SequenceAttention(config.in_dim, scoring=config.agg_mode.replace('_attention', ''))
         
         if config.size_emb_dim > 0:
             self.size_embedding = torch.nn.Embedding(config.max_span_size, config.size_emb_dim)
