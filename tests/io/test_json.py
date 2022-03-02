@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 import pytest
+import math
+import numpy
 import jieba
 
 from eznlp.io import JsonIO, SQuADIO, KarpathyIO, TextClsIO, BratIO
@@ -33,6 +35,10 @@ class TestJsonIO(object):
         assert sum(len(ex['chunks']) for ex in test_data) == 3_031
         assert max(ck[2]-ck[1] for ex in test_data for ck in ex['chunks']) == 43
         
+        span_sizes = [end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']]
+        assert max(span_sizes) == 57
+        assert math.ceil(numpy.quantile(span_sizes, 0.99)) == 16
+        
         
     def test_ace2005(self):
         io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end')
@@ -50,6 +56,10 @@ class TestJsonIO(object):
         assert sum(len(ex['chunks']) for ex in test_data) == 3_027
         assert max(ck[2]-ck[1] for ex in test_data for ck in ex['chunks']) == 27
         
+        span_sizes = [end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']]
+        assert max(span_sizes) == 49
+        assert math.ceil(numpy.quantile(span_sizes, 0.99)) == 15
+        
         
     def test_genia(self):
         io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end')
@@ -60,6 +70,10 @@ class TestJsonIO(object):
         assert sum(len(ex['chunks']) for ex in train_data) == 50_133
         assert len(test_data) == 1_836
         assert sum(len(ex['chunks']) for ex in test_data) == 5_466
+        
+        span_sizes = [end-start for data in [train_data, test_data] for ex in data for _, start, end in ex['chunks']]
+        assert max(span_sizes) == 18
+        assert math.ceil(numpy.quantile(span_sizes, 0.99)) == 6
         
         
     def test_ace2004_rel(self):

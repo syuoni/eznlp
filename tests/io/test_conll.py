@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from collections import Counter
 import pytest
+import math
 import numpy
 
 from eznlp.io import ConllIO, PostIO
@@ -54,7 +55,11 @@ class TestConllIO(object):
         
         self._assert_flatten_consistency(test_data)
         
-
+        span_sizes = [end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']]
+        assert max(span_sizes) == 10
+        assert math.ceil(numpy.quantile(span_sizes, 0.99)) == 4
+        
+        
     def test_conll2003_at_doc_level(self):
         self.io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', document_sep_starts=["-DOCSTART-"], document_level=True)
         train_data = self.io.read("data/conll2003/eng.train")
@@ -73,7 +78,7 @@ class TestConllIO(object):
         
         self._assert_flatten_consistency(test_data)
         
-
+        
     @pytest.mark.slow
     def test_ontonotesv5(self):
         self.io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end", "pt/"], document_sep_starts=["#begin"], encoding='utf-8')
@@ -91,7 +96,11 @@ class TestConllIO(object):
         assert sum(len(ex['chunks']) for ex in test_data) == 11_257
         assert sum(len(ex['tokens']) for ex in test_data) == 152_728
         
-
+        span_sizes = [end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']]
+        assert max(span_sizes) == 28
+        assert math.ceil(numpy.quantile(span_sizes, 0.99)) == 6
+        
+        
     @pytest.mark.slow
     def test_ontonotesv5_at_doc_level(self):
         self.io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end", "pt/"], document_sep_starts=["#begin"], document_level=True, encoding='utf-8')
@@ -109,7 +118,7 @@ class TestConllIO(object):
         assert sum(len(ex['chunks']) for ex in test_data) == 11_257
         assert sum(len(ex['tokens']) for ex in test_data) == 152_728
         
-
+        
     @pytest.mark.slow
     def test_ontonotesv5_chinese(self):
         self.io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end"], document_sep_starts=["#begin"], encoding='utf-8')
@@ -129,7 +138,7 @@ class TestConllIO(object):
         
         self._assert_flatten_consistency(test_data)
         
-
+        
     @pytest.mark.slow
     def test_ontonotesv4_chinese(self):
         self.io = ConllIO(text_col_id=2, tag_col_id=3, scheme='OntoNotes', sentence_sep_starts=["#end"], document_sep_starts=["#begin"], encoding='utf-8')
@@ -148,7 +157,7 @@ class TestConllIO(object):
         assert sum(len(ex['tokens']) for ex in test_data) == 128_277
         
         self._assert_flatten_consistency(test_data)
-
+        
         
     @pytest.mark.slow
     def test_sighan2006(self):
@@ -162,6 +171,10 @@ class TestConllIO(object):
         assert len(test_data) == 4_365
         assert sum(len(ex['chunks']) for ex in test_data) == 6_181
         assert sum(len(ex['tokens']) for ex in test_data) == 172_601
+        
+        span_sizes = [end-start for data in [train_data, test_data] for ex in data for _, start, end in ex['chunks']]
+        assert max(span_sizes) == 35
+        assert math.ceil(numpy.quantile(span_sizes, 0.99)) == 12
         
         
     def test_resume_ner(self):
@@ -180,6 +193,10 @@ class TestConllIO(object):
         assert sum(len(ex['chunks']) for ex in test_data) == 1_630
         assert sum(len(ex['tokens']) for ex in test_data) == 15_100
         
+        span_sizes = [end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']]
+        assert max(span_sizes) == 58
+        assert math.ceil(numpy.quantile(span_sizes, 0.99)) == 17
+        
         
     def test_weibo_ner(self):
         self.io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BIO2', encoding='utf-8')
@@ -197,6 +214,10 @@ class TestConllIO(object):
         assert sum(len(ex['chunks']) for ex in test_data) == 320
         assert sum(len(ex['tokens']) for ex in test_data) == 14_844
         
+        span_sizes = [end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']]
+        assert max(span_sizes) == 14
+        assert math.ceil(numpy.quantile(span_sizes, 0.99)) == 8
+        
         
     def test_weibo_ner_2nd(self):
         self.io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BIO2', encoding='utf-8', pre_text_normalizer=lambda x: x[0])
@@ -213,6 +234,10 @@ class TestConllIO(object):
         assert len(test_data) == 270
         assert sum(len(ex['chunks']) for ex in test_data) == 418
         assert sum(len(ex['tokens']) for ex in test_data) == 14_842
+        
+        span_sizes = [end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']]
+        assert max(span_sizes) == 11
+        assert math.ceil(numpy.quantile(span_sizes, 0.99)) == 7
         
         
     def test_clerd(self):
