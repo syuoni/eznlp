@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
+import pytest
 import torch
 
 from eznlp.model import SpanBertLikeConfig
+from eznlp.training import count_params
 
 
 def test_span_bert_like(bert_like_with_tokenizer):
@@ -21,3 +23,16 @@ def test_span_bert_like(bert_like_with_tokenizer):
     span_hidden = torch.cat([hidden[i] for hidden in all_hidden], dim=0)
     diff = (span_hidden.unsqueeze(0) - span_hidden.unsqueeze(1)).abs().sum(dim=-1)
     assert (diff > 1).sum().item() == diff.size(0) * (diff.size(0) - 1)  # 40*39 = 1560
+
+
+
+@pytest.mark.parametrize("freeze", [False, True])
+def test_trainble_config(freeze, bert_like_with_tokenizer):
+    bert_like, tokenizer = bert_like_with_tokenizer
+    config = SpanBertLikeConfig(bert_like=bert_like, max_span_size=5, freeze=freeze)
+    span_bert_like = config.instantiate()
+    
+    if freeze:
+        assert count_params(span_bert_like) == 0
+    else:
+        assert count_params(span_bert_like) == count_params(bert_like.encoder)*4

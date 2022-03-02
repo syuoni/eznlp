@@ -58,14 +58,21 @@ class TestModel(object):
         
         
     # @pytest.mark.parametrize("agg_mode", ['max_pooling', 'multiplicative_attention'])
-    @pytest.mark.parametrize("size_emb_dim", [25, 0])
-    def test_model(self, size_emb_dim, conll2004_demo, bert_with_tokenizer, device):
+    @pytest.mark.parametrize("num_layers, share_weights, size_emb_dim", 
+                             [(12, False, 0), (6,  False, 0), (1, False,  0), 
+                              (12, True,  0), (12, False, 25)])
+    def test_model(self, num_layers, share_weights, size_emb_dim, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
         self.config = SpecificSpanExtractorConfig(decoder=SpecificSpanClsDecoderConfig(size_emb_dim=size_emb_dim), 
                                                   bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False, output_hidden_states=True), 
-                                                  span_bert_like=SpanBertLikeConfig(bert_like=bert), 
+                                                  span_bert_like=SpanBertLikeConfig(bert_like=bert, num_layers=num_layers, share_weights=share_weights), 
                                                   intermediate2=None)
         self._setup_case(conll2004_demo, device)
+        if share_weights:
+            assert len(self.model.span_bert_like.query_bert_like.layer) == num_layers
+        else:
+            assert len(self.model.span_bert_like.query_bert_like[0].layer) == num_layers
+        
         self._assert_batch_consistency()
         self._assert_trainable()
         

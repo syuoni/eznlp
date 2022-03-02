@@ -102,9 +102,12 @@ class QueryBertLikeEncoder(torch.nn.Module):
     ----------
     transformers/models/bert/modeling_bert.py
     """
-    def __init__(self, origin: transformers.models.bert.modeling_bert.BertEncoder):
+    def __init__(self, origin: transformers.models.bert.modeling_bert.BertEncoder, num_layers: int=None):
         super().__init__()
-        self.layer = torch.nn.ModuleList([QueryBertLikeLayer(layer) for layer in origin.layer])
+        if num_layers is None:
+            num_layers = len(origin.layer)
+        self.layer = torch.nn.ModuleList([QueryBertLikeLayer(layer) for layer in origin.layer[-num_layers:]])
+        
         
     def forward(self, 
                 query_states, 
