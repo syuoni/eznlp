@@ -67,6 +67,7 @@ class SpecificSpanExtractor(ModelBase):
     def __init__(self, config: SpecificSpanExtractorConfig):
         super().__init__(config)
         if config.intermediate2 is not None:
+            config.intermediate2.allow_empty = True
             if config.span_bert_like.share_weights:
                 self.span_intermediate2 = config.intermediate2.instantiate()
             else:
@@ -87,9 +88,16 @@ class SpecificSpanExtractor(ModelBase):
         
         if hasattr(self, 'intermediate2'):
             bert_hidden = self.intermediate2(bert_hidden, batch.mask)
-            if self.span_bert_like.share_weights:
-                all_last_query_states = OrderedDict([(k, self.span_intermediate2(query_hidden, batch.mask[:, k-1:])) for k, query_hidden in all_last_query_states.items()])
-            else:
-                all_last_query_states = OrderedDict([(k, self.span_intermediate2[k-2](query_hidden, batch.mask[:, k-1:])) for k, query_hidden in all_last_query_states.items()])
+            
+            new_all_last_query_states = OrderedDict()
+            for k, query_hidden in all_last_query_states.items():
+                # Allow empty sequences here; expect not to raise inconsistencies in final outputs
+                curr_mask = batch.mask[:, k-1:].clone()
+                curr_mask[:, 0] = False
+                if self.span_bert_like.share_weights:
+                    new_all_last_query_states[k] = self.span_intermediate2(query_hidden, curr_mask)
+                else:
+                    new_all_last_query_states[k] = self.span_intermediate2[k-2](query_hidden, curr_mask)
+            all_last_query_states = new_all_last_query_states
         
         return {'full_hidden': bert_hidden, 'all_query_hidden': all_last_query_states}

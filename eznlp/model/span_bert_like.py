@@ -13,11 +13,14 @@ class SpanBertLikeConfig(Config):
     def __init__(self, **kwargs):
         self.bert_like: transformers.PreTrainedModel = kwargs.pop('bert_like')
         self.out_dim = self.bert_like.config.hidden_size
-        self.num_layers = kwargs.pop('num_layers', self.bert_like.config.num_hidden_layers)
-        assert 0 < self.num_layers <= self.bert_like.config.num_hidden_layers
         
         self.arch = kwargs.pop('arch', 'BERT')
         self.freeze = kwargs.pop('freeze', True)
+        
+        self.num_layers = kwargs.pop('num_layers', None)
+        if self.num_layers is None:
+            self.num_layers = self.bert_like.config.num_hidden_layers
+        assert 0 < self.num_layers <= self.bert_like.config.num_hidden_layers
         
         self.max_span_size = kwargs.pop('max_span_size', None)
         self.share_weights = kwargs.pop('share_weights', False)
