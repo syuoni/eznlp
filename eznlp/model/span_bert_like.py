@@ -4,6 +4,7 @@ from collections import OrderedDict
 import torch
 import transformers
 
+from ..nn.modules import SequencePooling, SequenceAttention
 from ..nn.modules import QueryBertLikeEncoder
 from ..config import Config
 
@@ -20,7 +21,7 @@ class SpanBertLikeConfig(Config):
         
         self.max_span_size = kwargs.pop('max_span_size', None)
         self.share_weights = kwargs.pop('share_weights', False)
-        self.init_agg_mode = kwargs.pop('init_agg_mode', 'mean')
+        self.init_agg_mode = kwargs.pop('init_agg_mode', 'max_pooling')
         super().__init__(**kwargs)
         
     @property
@@ -42,6 +43,11 @@ class SpanBertLikeConfig(Config):
 class SpanBertLikeEncoder(torch.nn.Module):
     def __init__(self, config: SpanBertLikeConfig):
         super().__init__()
+        if config.init_agg_mode.lower().endswith('_pooling'):
+            self.init_aggregating = SequencePooling(mode=config.init_agg_mode.replace('_pooling', ''))
+        elif config.init_agg_mode.lower().endswith('_attention'):
+            self.init_aggregating = SequenceAttention(config.out_dim, scoring=config.init_agg_mode.replace('_attention', ''))
+        
         if config.share_weights:
             # Share the module across all span sizes
             self.query_bert_like = QueryBertLikeEncoder(config.bert_like.encoder, num_layers=config.num_layers)
@@ -73,11 +79,12 @@ class SpanBertLikeEncoder(torch.nn.Module):
         
         all_last_query_states = OrderedDict()
         for k in range(2, min(self.max_span_size, num_steps)+1):
-            # reshaped_states: List of (B*(L-K+1), K, H)
+            # reshaped_states: List of (B, L, H) -> (B, L-K+1, H, K) -> (B, L-K+1, K, H) -> (B*(L-K+1), K, H)
             reshaped_states = [hidden_states.unfold(dimension=1, size=k, step=1).permute(0, 1, 3, 2).flatten(end_dim=1) 
                                    for hidden_states in all_hidden_states]
             # query_states: (B*(L-K+1), 1, H)
-            query_states = reshaped_states[0].mean(dim=1, keepdim=True)
+            # query_states = reshaped_states[0].mean(dim=1, keepdim=True)
+            query_states = self.init_aggregating(reshaped_states[0]).unsqueeze(1)
             
             if self.share_weights:
                 query_outs = self.query_bert_like(query_states, reshaped_states)

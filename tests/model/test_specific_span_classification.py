@@ -57,15 +57,19 @@ class TestModel(object):
         assert isinstance(self.config.name, str) and len(self.config.name) > 0
         
         
-    # @pytest.mark.parametrize("agg_mode", ['max_pooling', 'multiplicative_attention'])
-    @pytest.mark.parametrize("num_layers, share_weights, size_emb_dim", 
-                             [(12, False, 0), (6,  False, 0), (1, False,  0), 
-                              (12, True,  0), (12, False, 25)])
-    def test_model(self, num_layers, share_weights, size_emb_dim, conll2004_demo, bert_with_tokenizer, device):
+    @pytest.mark.parametrize("num_layers, share_weights, agg_mode, size_emb_dim", 
+                             [(12, False, 'max_pooling', 0), 
+                              (6,  False, 'max_pooling', 0), 
+                              (1,  False, 'max_pooling', 0), 
+                              (12, True,  'max_pooling', 0), 
+                              (12, False, 'mean_pooling', 0), 
+                              (12, False, 'multiplicative_attention', 0), 
+                              (12, False, 'max_pooling', 25)])
+    def test_model(self, num_layers, share_weights, agg_mode, size_emb_dim, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
         self.config = SpecificSpanExtractorConfig(decoder=SpecificSpanClsDecoderConfig(size_emb_dim=size_emb_dim), 
                                                   bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False, output_hidden_states=True), 
-                                                  span_bert_like=SpanBertLikeConfig(bert_like=bert, num_layers=num_layers, share_weights=share_weights), 
+                                                  span_bert_like=SpanBertLikeConfig(bert_like=bert, freeze=False, num_layers=num_layers, share_weights=share_weights, init_agg_mode=agg_mode), 
                                                   intermediate2=None)
         self._setup_case(conll2004_demo, device)
         if share_weights:
