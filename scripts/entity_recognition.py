@@ -14,9 +14,9 @@ from eznlp.token import LexiconTokenizer
 from eznlp.dataset import Dataset
 from eznlp.config import ConfigDict
 from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig, CharConfig, SoftLexiconConfig
-from eznlp.model import ELMoConfig, BertLikeConfig, FlairConfig
-from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderConfig, BoundarySelectionDecoderConfig
-from eznlp.model import ExtractorConfig
+from eznlp.model import ELMoConfig, BertLikeConfig, SpanBertLikeConfig, FlairConfig
+from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderConfig, BoundarySelectionDecoderConfig, SpecificSpanClsDecoderConfig
+from eznlp.model import ExtractorConfig, SpecificSpanExtractorConfig
 from eznlp.model.bert_like import segment_uniformly_for_bert_like
 from eznlp.training import Trainer, count_params, evaluate_entity_recognition
 
@@ -41,7 +41,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
     
     group_decoder = parser.add_argument_group('decoder configurations')
     group_decoder.add_argument('--ck_decoder', type=str, default='sequence_tagging', 
-                               help="chunk decoding method", choices=['sequence_tagging', 'span_classification', 'boundary_selection'])
+                               help="chunk decoding method", choices=['sequence_tagging', 'span_classification', 'boundary_selection', 'specific_span'])
     # Loss
     group_decoder.add_argument('--fl_gamma', type=float, default=0.0, 
                                help="Focal Loss gamma")
@@ -81,6 +81,12 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                help="Boundary smoothing window size")
     group_decoder.add_argument('--sb_adj_factor', type=float, default=1.0, 
                                help="Boundary smoothing probability adjust factor")
+    
+    # Specific span classification: Span-specific encoder (SSE)
+    group_decoder.add_argument('--sse_share_weights', default=False, action='store_true', 
+                               help="whether to share weights across span-bert encoders")
+    group_decoder.add_argument('--sse_num_layers', type=int, default=-1, 
+                               help="number of span-bert encoder layers (negative values are set to `None`)")
     return parse_to_args(parser)
 
 
@@ -143,8 +149,17 @@ def collect_IE_assembly_config(args: argparse.Namespace):
         bert_like, tokenizer = load_pretrained(args.bert_arch, args, cased=True)
         bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert_like, arch=args.bert_arch, 
                                           freeze=False, use_truecase='cased' in os.path.basename(bert_like.name_or_path).split('-'))
+        if args.ck_decoder == 'specific_span':
+            bert_like_config.output_hidden_states = True
+            span_bert_like_config = SpanBertLikeConfig(bert_like=bert_like, arch=args.bert_arch, freeze=False, 
+                                                       num_layers=None if args.sse_num_layers < 0 else args.sse_num_layers, 
+                                                       share_weights=args.sse_share_weights, 
+                                                       init_agg_mode=args.agg_mode)
+        else:
+            span_bert_like_config = None
     else:
         bert_like_config = None
+        span_bert_like_config = None
     
     return {'ohots': ohots_config, 
             'mhots': mhots_config, 
@@ -154,6 +169,7 @@ def collect_IE_assembly_config(args: argparse.Namespace):
             'flair_fw': flair_fw_config, 
             'flair_bw': flair_bw_config, 
             'bert_like': bert_like_config, 
+            'span_bert_like': span_bert_like_config, 
             'intermediate2': interm2_config}
 
 
@@ -186,7 +202,21 @@ def build_ER_config(args: argparse.Namespace):
                                                         sb_size=args.sb_size,
                                                         sb_adj_factor=args.sb_adj_factor, 
                                                         hid_drop_rates=drop_rates)
-    return ExtractorConfig(**collect_IE_assembly_config(args), decoder=decoder_config)
+    elif args.ck_decoder == 'specific_span':
+        decoder_config = SpecificSpanClsDecoderConfig(fl_gamma=args.fl_gamma,
+                                                      sl_epsilon=args.sl_epsilon, 
+                                                      neg_sampling_rate=args.neg_sampling_rate, 
+                                                      hard_neg_sampling_rate=args.hard_neg_sampling_rate, 
+                                                      hard_neg_sampling_size=args.hard_neg_sampling_size, 
+                                                      sb_epsilon=args.sb_epsilon, 
+                                                      sb_size=args.sb_size,
+                                                      sb_adj_factor=args.sb_adj_factor, 
+                                                      in_drop_rates=drop_rates)
+    
+    if args.ck_decoder == 'specific_span':
+        return SpecificSpanExtractorConfig(**collect_IE_assembly_config(args), decoder=decoder_config)
+    else:
+        return ExtractorConfig(**collect_IE_assembly_config(args), decoder=decoder_config)
 
 
 def process_IE_data(train_data, dev_data, test_data, args, config):
