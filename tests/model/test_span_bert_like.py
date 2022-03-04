@@ -26,13 +26,16 @@ def test_span_bert_like(bert_like_with_tokenizer):
 
 
 
+@pytest.mark.parametrize("share_weights", [False, True])
 @pytest.mark.parametrize("freeze", [False, True])
-def test_trainble_config(freeze, bert_like_with_tokenizer):
+def test_trainble_config(share_weights, freeze, bert_like_with_tokenizer):
     bert_like, tokenizer = bert_like_with_tokenizer
-    config = SpanBertLikeConfig(bert_like=bert_like, max_span_size=5, freeze=freeze)
+    config = SpanBertLikeConfig(bert_like=bert_like, max_span_size=5, share_weights=share_weights, freeze=freeze)
     span_bert_like = config.instantiate()
     
     if freeze:
         assert count_params(span_bert_like) == 0
+    elif share_weights:
+        assert count_params(span_bert_like) == count_params(bert_like.encoder)
     else:
         assert count_params(span_bert_like) == count_params(bert_like.encoder)*4
