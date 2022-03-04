@@ -58,20 +58,21 @@ class TestModel(object):
         assert isinstance(self.config.name, str) and len(self.config.name) > 0
         
         
-    @pytest.mark.parametrize("num_layers, share_weights, agg_mode, use_interm2, size_emb_dim", 
-                             [(12, True,  'max_pooling', False, 0), 
-                              (6,  True,  'max_pooling', False, 0), 
-                              (3,  True,  'max_pooling', False, 0), 
-                              (1,  True,  'max_pooling', False, 0), 
-                              (3,  False, 'max_pooling', False, 0), 
-                              (3,  True,  'mean_pooling', False, 0), 
-                              (3,  True,  'multiplicative_attention', False, 0), 
-                              (3,  True,  'max_pooling', True, 0), 
-                              (3,  False, 'max_pooling', True, 0), 
-                              (3,  True,  'max_pooling', False, 25)])
-    def test_model(self, num_layers, share_weights, agg_mode, use_interm2, size_emb_dim, conll2004_demo, bert_with_tokenizer, device):
+    @pytest.mark.parametrize("num_layers, share_weights, agg_mode, use_interm2, size_emb_dim, sb_epsilon", 
+                             [(12, True,  'max_pooling',  False, 0, 0), 
+                              (6,  True,  'max_pooling',  False, 0, 0), 
+                              (3,  True,  'max_pooling',  False, 0, 0), 
+                              (1,  True,  'max_pooling',  False, 0, 0), 
+                              (3,  False, 'max_pooling',  False, 0, 0), 
+                              (3,  True,  'mean_pooling', False, 0, 0), 
+                              (3,  True,  'multiplicative_attention', False, 0, 0), 
+                              (3,  True,  'max_pooling',  True,  0, 0), 
+                              (3,  False, 'max_pooling',  True,  0, 0), 
+                              (3,  True,  'max_pooling',  False, 25, 0), 
+                              (3,  True,  'max_pooling',  False, 0, 0.1)])
+    def test_model(self, num_layers, share_weights, agg_mode, use_interm2, size_emb_dim, sb_epsilon, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
-        self.config = SpecificSpanExtractorConfig(decoder=SpecificSpanClsDecoderConfig(size_emb_dim=size_emb_dim, max_span_size=3), 
+        self.config = SpecificSpanExtractorConfig(decoder=SpecificSpanClsDecoderConfig(size_emb_dim=size_emb_dim, max_span_size=3, sb_epsilon=sb_epsilon), 
                                                   bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False, output_hidden_states=True), 
                                                   span_bert_like=SpanBertLikeConfig(bert_like=bert, freeze=False, num_layers=num_layers, share_weights=share_weights, init_agg_mode=agg_mode), 
                                                   intermediate2=EncoderConfig(arch='LSTM') if use_interm2 else None)

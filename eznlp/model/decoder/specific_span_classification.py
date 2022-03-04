@@ -8,7 +8,7 @@ import torch
 
 from ...wrapper import Batch
 from ...utils.chunk import detect_overlapping_level, filter_clashed_by_priority
-from ...nn.modules import CombinedDropout
+from ...nn.modules import CombinedDropout, SoftLabelCrossEntropyLoss
 from ...nn.init import reinit_embedding_, reinit_layer_
 from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
 from .boundary_selection import Boundaries
@@ -65,6 +65,22 @@ class SpecificSpanClsDecoderConfig(SingleDecoderConfigBase, SpecificSpanClsDecod
     def __repr__(self):
         repr_attr_dict = {key: getattr(self, key) for key in ['in_dim', 'in_drop_rates', 'criterion']}
         return self._repr_non_config_attrs(repr_attr_dict)
+        
+    @property
+    def criterion(self):
+        if self.sb_epsilon > 0:
+            return f"SB({self.sb_epsilon:.2f}, {self.sb_size})"
+        else:
+            return super().criterion
+        
+    def instantiate_criterion(self, **kwargs):
+        if self.criterion.lower().startswith(('sb', 'sl')):
+            # For boundary/label smoothing, the `Boundaries` object has been accordingly changed; 
+            # hence, do not use `SmoothLabelCrossEntropyLoss`
+            return SoftLabelCrossEntropyLoss(**kwargs)
+        else:
+            return super().instantiate_criterion(**kwargs)
+        
         
     def build_vocab(self, *partitions):
         counter = Counter(label for data in partitions for entry in data for label, start, end in entry['chunks'])
@@ -148,8 +164,11 @@ class SpecificSpanClsDecoder(DecoderBase, SpecificSpanClsDecoderMixin):
         for boundaries_obj, curr_len in zip(batch.boundaries_objs, batch.seq_lens.cpu().tolist()):
             curr_max_span_size = min(self.max_span_size, curr_len)
             
-            # (curr_len-k+1, ) -> (\sum_k curr_len-k+1, )
-            label_ids = torch.cat([boundaries_obj.boundary2label_id.diagonal(offset=k-1) for k in range(1, curr_max_span_size+1)], dim=0)
+            # label_ids: (curr_len-k+1, ) -> (\sum_k curr_len-k+1, )
+            label_ids = torch.cat([boundaries_obj.boundary2label_id.diagonal(offset=k-1) for k in range(1, curr_max_span_size+1)], dim=-1)
+            if label_ids.dim() == 2:
+                # label_ids: (\sum_k curr_len-k+1, logit_dim)
+                label_ids = label_ids.permute(1, 0)
             batch_label_ids.append(label_ids)
         
         losses = [self.criterion(logits, label_ids) for logits, label_ids in zip(batch_logits, batch_label_ids)]
