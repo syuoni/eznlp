@@ -156,6 +156,9 @@ class BoundarySelectionDecoderConfig(SingleDecoderConfigBase, BoundarySelectionD
         self.affine = kwargs.pop('affine', EncoderConfig(arch='FFN', hid_dim=150, num_layers=1, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2))
         
         self.max_len = kwargs.pop('max_len', None)
+        # Note: `max_span_size` is only used for creating `size_embedding`. 
+        # The spans with sizes longer than `max_span_size` share a same size embedding vector; 
+        # they are also used for training, instead of being masked. 
         self.max_span_size = kwargs.pop('max_span_size', 50)
         self.size_emb_dim = kwargs.pop('size_emb_dim', 25)
         self.hid_drop_rates = kwargs.pop('hid_drop_rates', (0.2, 0.0, 0.0))

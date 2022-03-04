@@ -35,8 +35,13 @@ class SpecificSpanClsDecoderConfig(SingleDecoderConfigBase, SpecificSpanClsDecod
         self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
         
         # self.max_len = kwargs.pop('max_len', None)
+        
+        # Note: The spans with sizes longer than `max_span_size` will be masked/ignored in both training and inference. 
+        # Hence, these spans will never be recalled in testing. 
+        self.max_span_size_ceiling = kwargs.pop('max_span_size_ceiling', 20)
+        self.max_span_size_cov_rate = kwargs.pop('max_span_size_cov_rate', 0.995)
         self.max_span_size = kwargs.pop('max_span_size', None)
-        self.size_emb_dim = kwargs.pop('size_emb_dim', 0)
+        self.size_emb_dim = kwargs.pop('size_emb_dim', 25)
         
         self.neg_sampling_rate = kwargs.pop('neg_sampling_rate', 1.0)
         self.hard_neg_sampling_rate = kwargs.pop('hard_neg_sampling_rate', 1.0)
@@ -68,14 +73,17 @@ class SpecificSpanClsDecoderConfig(SingleDecoderConfigBase, SpecificSpanClsDecod
         self.overlapping_level = max(detect_overlapping_level(entry['chunks']) for data in partitions for entry in data)
         logger.info(f"Overlapping level: {self.overlapping_level}")
         
-        # Calculate the maximum span size in data
-        _MAX_SPAN_SIZE = 15
-        span_sizes = [end-start for data in partitions for entry in data for label, start, end in entry['chunks']]
-        span_size_q100 = max(span_sizes)
-        span_size_q99  = math.ceil(numpy.quantile(span_sizes, 0.99))
-        self.max_span_size = min(span_size_q99, _MAX_SPAN_SIZE)
+        # Allow directly setting `max_span_size`
+        if self.max_span_size is None:
+            # Calculate `max_span_size` according to data
+            span_sizes = [end-start for data in partitions for entry in data for label, start, end in entry['chunks']]
+            if self.max_span_size_cov_rate >= 1:
+                span_size_cov = max(span_sizes)
+            else:
+                span_size_cov = math.ceil(numpy.quantile(span_sizes, self.max_span_size_cov_rate))
+            self.max_span_size = min(span_size_cov, self.max_span_size_ceiling)
+        logger.warning(f"The `max_span_size` is set to {self.max_span_size}")
         
-        logger.warning(f"The max span size is set to {self.max_span_size}")
         size_counter = Counter(end-start for data in partitions for entry in data for label, start, end in entry['chunks'])
         num_spans = sum(size_counter.values())
         num_oov_spans = sum(num for size, num in size_counter.items() if size > self.max_span_size)
