@@ -148,3 +148,5 @@ dmypy.json
 !/publications/
 /publications/*
 !publications/framework/scheme.pdf
+
+/test_script.py
