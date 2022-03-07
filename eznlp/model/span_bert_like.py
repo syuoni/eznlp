@@ -23,13 +23,13 @@ class SpanBertLikeConfig(Config):
         assert 0 < self.num_layers <= self.bert_like.config.num_hidden_layers
         
         self.max_span_size = kwargs.pop('max_span_size', None)
-        self.share_weights = kwargs.pop('share_weights', False)
+        self.share_weights = kwargs.pop('share_weights', True)
         self.init_agg_mode = kwargs.pop('init_agg_mode', 'max_pooling')
         super().__init__(**kwargs)
         
     @property
     def name(self):
-        return self.arch
+        return f"{self.arch}({self.num_layers})"
         
     def __getstate__(self):
         state = self.__dict__.copy()
