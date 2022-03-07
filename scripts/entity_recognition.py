@@ -87,6 +87,8 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                help="whether to share weights across span-bert encoders")
     group_decoder.add_argument('--sse_num_layers', type=int, default=-1, 
                                help="number of span-bert encoder layers (negative values are set to `None`)")
+    group_decoder.add_argument('--sse_max_span_size_cov_rate', type=float, default=0.995, 
+                               help="coverage rate of maximum span size")
     return parse_to_args(parser)
 
 
@@ -211,6 +213,8 @@ def build_ER_config(args: argparse.Namespace):
                                                       sb_epsilon=args.sb_epsilon, 
                                                       sb_size=args.sb_size,
                                                       sb_adj_factor=args.sb_adj_factor, 
+                                                      max_span_size_cov_rate=args.sse_max_span_size_cov_rate, 
+                                                      size_emb_dim=args.ck_size_emb_dim, 
                                                       in_drop_rates=drop_rates)
     
     if args.ck_decoder == 'specific_span':
