@@ -86,6 +86,7 @@ $ python scripts/attribute_extraction.py --dataset <dataset> [options]
 ## Future Plans
 - [ ] Unify the data interchange format as a dict, i.e., `entry`
 - [ ] Reorganize `JsonIO`
+- [ ] File names: classification -> cls
 - [ ] Memory optimization for large dataset for training PLM
 - [ ] More relation extraction models
 - [ ] Multihot classification
