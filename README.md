@@ -1,76 +1,86 @@
-# Boundary Smoothing for Named Entity Recognition
+# Easy Natural Language Processing
 
-This page describes the materials and code for "Boundary Smoothing for Named Entity Recognition". 
+`eznlp` is a `PyTorch`-based package for neural natural language processing, currently supporting the following tasks:
+
+* Text Classification ([Experimental Results](docs/text-classification.pdf))
+* Named Entity Recognition ([Experimental Results](docs/entity-recognition.pdf))
+    * Sequence Tagging
+    * Span Classification
+    * Boundary Selection
+* Relation Extraction ([Experimental Results](docs/relation-extraction.pdf))
+* Attribute Extraction
+* Machine Translation
+* Image Captioning
+
+This repository also maintains the code of our papers: 
+* Check this [link](docs/boundary-smoothing.md) for "Boundary Smoothing for Named Entity Recognition" accepted to ACL 2022 main conference. 
 
 
-## Setup
-### Installation from source
+## Installation
+### With `pip`
+```bash
+$ pip install eznlp
+```
+
+### From source
 ```bash
 $ python setup.py sdist
 $ pip install dist/eznlp-<version>.tar.gz
 ```
-The dependencies have been specified in `setup.py`. 
-
-
-### Download and process datasets
-* English datasets
-    * CoNLL 2003
-    * OntoNotes 5: Download from https://catalog.ldc.upenn.edu/LDC2013T19; Process following Pradhan et al. (2013).
-    * ACE 2004: Download from https://catalog.ldc.upenn.edu/LDC2005T09; Process following Lu and Roth (2015).
-    * ACE 2005: Download from https://catalog.ldc.upenn.edu/LDC2006T06; Process following Lu and Roth (2015).
-
-* Chinese datasets
-    * OntoNotes 4: Download from https://catalog.ldc.upenn.edu/LDC2011T03; Process following Che et al. (2013).
-    * MSRA: Download from https://github.com/v-mipeng/LexiconAugmentedNER.
-    * Weibo NER: Download from https://github.com/hltcoe/golden-horse.
-    * Resume NER: Download from https://github.com/jiesutd/LatticeLSTM.
-
-
-### Download pretrained language models
-Download the pretrained language models by `transformers` and save to `assets/transformers`.
-
-```python
-import transformers
-
-for model_name in ["roberta-base", 
-                   "roberta-large", 
-                   "hfl/chinese-bert-wwm-ext", 
-                   "hfl/chinese-macbert-base", 
-                   "hfl/chinese-macbert-large"]:
-    tokenizer = transformers.AutoTokenizer.from_pretrained(model_name)
-    tokenizer.save_pretrained(f"assets/transformers/{model_name}")
-    model = transformers.AutoModelForPreTraining.from_pretrained(model_name)
-    model.save_pretrained(f"assets/transformers/{model_name}")
-```
 
 
 ## Running the Code
-For English datasets:
-
+### Text classification
 ```bash
-$ python scripts/entity_recognition.py @scripts/options/with_bert.opt \
-    --dataset {conll2003 | conll2012 | ace2004 | ace2005} \
-    --ck_decoder boundary_selection \
-    --sb_epsilon {0.0 | 0.1 | 0.2 | 0.3} \
-    --sb_size {1 | 2} \
-    --bert_arch RoBERTa_base --use_interm2 \
-    [options]
+$ python scripts/text_classification.py --dataset <dataset> [options]
 ```
 
-For Chinese datasets:
-
+### Entity recognition
 ```bash
-$ python scripts/entity_recognition.py @scripts/options/with_bert.opt \
-    --dataset {ontonotesv4_zh | SIGHAN2006 | WeiboNER | ResumeNER} \
-    --ck_decoder boundary_selection \
-    --sb_epsilon {0.0 | 0.1 | 0.2 | 0.3} \
-    --sb_size {1 | 2} \
-    --bert_arch BERT_base --use_interm2 \
-    [options]
+$ python scripts/entity_recognition.py --dataset <dataset> [options]
 ```
 
-See more details for options: 
-
+### Relation extraction
 ```bash
-$ python scripts/entity_recognition.py --help
+$ python scripts/relation_extraction.py --dataset <dataset> [options]
 ```
+
+### Attribute extraction
+```bash
+$ python scripts/attribute_extraction.py --dataset <dataset> [options]
+```
+
+
+## Citation
+If you find our code useful, please cite the following papers: 
+
+```
+@inproceedings{zhu2022boundary,
+  title={Boundary Smoothing for Named Entity Recognition},
+  author={Zhu, Enwei and Li, Jinpeng},
+  booktitle={Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics},
+  year={2022},
+  publisher={Association for Computational Linguistics},
+}
+```
+
+```
+@article{zhu2021framework,
+  title={A Unified Framework of Medical Information Annotation and Extraction for {Chinese} Clinical Text},
+  author={Zhu, Enwei and Sheng, Qilin and Yang, Huanwan and Li, Jinpeng},
+  journal={Working Paper},
+  year={2021}
+}
+```
+
+
+## Future Plans
+- [ ] Unify the data interchange format as a dict, i.e., `entry`
+- [ ] Reorganize `JsonIO`
+- [ ] Memory optimization for large dataset for training PLM
+- [ ] More relation extraction models
+- [ ] Multihot classification
+- [ ] Unify the aggregation interface of pooling and attention
+- [ ] Radical-level features
+- [ ] Data augmentation
+- [ ] Loss increases in later training phases -> LR finder?
