@@ -65,7 +65,7 @@ $ python scripts/entity_recognition.py @scripts/options/with_bert.opt \
     --ck_decoder boundary_selection \
     --sb_epsilon {0.0 | 0.1 | 0.2 | 0.3} \
     --sb_size {1 | 2} \
-    --bert_arch BERT_base --use_interm2 \
+    --bert_arch BERT_base_wwm --use_interm2 \
     [options]
 ```
 
