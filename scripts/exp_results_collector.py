@@ -10,7 +10,9 @@ import pandas
 
 
 dict_re = re.compile("\{[^\{\}]+\}")
-metircs_re = {'acc': re.compile("(?<=Accuracy: )\d+\.\d+(?=%)"), 
+metrics_re = {'acc': re.compile("(?<=Accuracy: )\d+\.\d+(?=%)"), 
+              'micro_prec': re.compile("(?<=Micro Precision: )\d+\.\d+(?=%)"), 
+              'micro_rec': re.compile("(?<=Micro Recall: )\d+\.\d+(?=%)"), 
               'micro_f1': re.compile("(?<=Micro F1-score: )\d+\.\d+(?=%)"), 
               'bleu4': re.compile("(?<=BLEU-4: )\d+\.\d+(?=%)")}
 
@@ -19,6 +21,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--dataset', type=str, default='conll2003', 
                         help="dataset name")
+    parser.add_argument('--no_test_split', dest='has_test_split', default=True, action='store_false', 
+                        help="whether exists test split")
     parser.add_argument('--from_date', type=str, default='None', 
                         help="from date (yyyymmdd)")
     parser.add_argument('--to_date', type=str, default='None', 
@@ -55,13 +59,19 @@ if __name__ == '__main__':
                 num_metrics = 0
                 for m_name, m_re in metrics_re.items():
                     metric_list = m_re.findall(log_text)
-                    curr_num_metrics, num_res = divmod(len(metric_list), 2)
-                    assert num_res == 0
-                    num_metrics += curr_num_metrics
                     
-                    for k in range(curr_num_metrics):
-                        exp_res[f'dev_{m_name}_{k}'] = float(metric_list[k])
-                        exp_res[f'test_{m_name}_{k}'] = float(metric_list[curr_num_metrics+k])
+                    if args.has_test_split:
+                        curr_num_metrics, num_res = divmod(len(metric_list), 2)
+                        assert num_res == 0
+                        for k in range(curr_num_metrics):
+                            exp_res[f'dev_{m_name}_{k}'] = float(metric_list[k])
+                            exp_res[f'test_{m_name}_{k}'] = float(metric_list[curr_num_metrics+k])
+                    else:
+                        curr_num_metrics = len(metric_list)
+                        for k in range(curr_num_metrics):
+                            exp_res[f'dev_{m_name}_{k}'] = float(metric_list[k])
+                    
+                    num_metrics += curr_num_metrics
                 
                 assert num_metrics > 0
                 
@@ -71,7 +81,7 @@ if __name__ == '__main__':
                 exp_results.append(exp_res)
         
         df = pandas.DataFrame(exp_results)
-        filter_cols = ['log_terminal', 'profile', 'pdb', 'pipeline', 'dataset', 'use_amp', 'seed', 'fl_gamma', 'grad_clip', 'use_locked_drop', 
+        filter_cols = ['log_terminal', 'profile', 'pdb', 'pipeline', 'save_preds', 'dataset', 'use_amp', 'seed', 'fl_gamma', 'grad_clip', 'use_locked_drop', 
                        'scheme', 'use_crf', 'num_neg_chunks', 'max_span_size', 'size_emb_dim', 'agg_mode']
         df = df.iloc[:, ~df.columns.isin(filter_cols)]
         df.to_excel(f"cache/{args.dataset}-collected-{timestamp}.xlsx", index=False)

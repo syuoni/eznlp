@@ -10,7 +10,22 @@ import jieba
 import numpy
 
 
-zh_punctuation = "！？｡。＂＃＄％＆＇（）＊＋，－——／：；＜＝＞＠［＼］＾＿｀｛｜｝～｟｠｢｣､、〃《》「」『』【】〔〕〖〗〘〙〚〛〜〝〞〟〰〾〿–—‘’‛“”„‟…‧﹏"
+# "".join([chr(i) for i in range(8211, 8232)])
+# "".join([chr(i) for i in range(12289, 12352)])
+# "".join([chr(i) for i in range(65091, 65511)])
+zh_punctuation = ("–—―‖‗‘’‚‛“”„‟†‡•‣․‥…‧" + 
+                  "、。〃〄々〆〇〈〉《》「」『』【】〒〓〔〕〖〗〘〙〚〛〜〝〞〟〠〡〢〣〤〥〦〧〨〩〪〭〮〯〫〬〰〱〲〳〴〵〶〷〸〹〺〻〼〽〾〿" + 
+                  "﹃﹄﹅﹆﹇﹈﹉﹊﹋﹌﹍﹎﹏﹐﹑﹒﹔﹕﹖﹗﹘﹙﹚﹛﹜﹝﹞﹟﹠﹡﹢﹣﹤﹥﹦﹨﹩﹪﹫" + 
+                  "！＂＃＄％＆＇（）＊＋，－．／：；＜＝＞？＠［＼］＾＿｀｛｜｝～｟｠｡｢｣､･" + 
+                  "￥￦")
+
+# Full-width characters
+fw_digits = "０１２３４５６７８９"
+fw_uppercase = "ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ"
+fw_lowercase = "ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚ"
+
+assert not any(c.isascii() for c in zh_punctuation + fw_digits + fw_uppercase + fw_lowercase)
+
 
 ascii_re = re.compile('[\x00-\xff]')
 lower_re = re.compile('[a-z]')
@@ -18,7 +33,17 @@ upper_re = re.compile('[A-Z]')
 digit_re = re.compile('\d')
 punct_re = re.compile('[' + ''.join("\\" + p for p in string.punctuation) + ']')
 non_ascii_re = re.compile('[^\x00-\xff]')
+
+# CJK Unified Ideographs
+# https://zh.wikipedia.org/wiki/%E4%B8%AD%E6%97%A5%E9%9F%93%E7%B5%B1%E4%B8%80%E8%A1%A8%E6%84%8F%E6%96%87%E5%AD%97
+unihan93_re = re.compile('[\u4e00-\u9fa5〇﨎﨏﨑﨓﨔﨟﨡﨣﨤﨧﨨﨩]')
+
+zh_char_re = re.compile('[\u4e00-\u9fa5]')
 zh_punct_re = re.compile('[' + zh_punctuation + ']')
+fw_lower_re = re.compile('[' + fw_lowercase + ']')
+fw_upper_re = re.compile('[' + fw_uppercase + ']')
+fw_digit_re = re.compile('[' + fw_digits + ']')
+
 
 en_title_word_re = re.compile('[A-Z]{1}[a-z]{1,}')
 en_upper_word_re = re.compile('[A-Z]{2,}')
@@ -281,7 +306,10 @@ class TokenSequence(object):
         # it is good for implementing a fallback for missing attributes. While, `__getattribute__`
         # is invoked before looking at the actual attributes on the object. 
         # See: https://stackoverflow.com/questions/3278077/difference-between-getattr-vs-getattribute
-        if hasattr(self.token_list[0], name):
+        if len(self.token_list) == 0: 
+            # Unable to check attribute existence, return an empty list anyway
+            return []
+        elif hasattr(self.token_list[0], name):
             return [getattr(tok, name) for tok in self.token_list]
         else:
             raise AttributeError(f"{self.__class__.__name__} has no attribute {name}")
@@ -316,14 +344,18 @@ class TokenSequence(object):
                                  none_token=self.none_token)
         else:
             raise TypeError(f"Invalid subscript type of {i}")
-            
+        
     def __add__(self, other):
+        assert isinstance(other, TokenSequence)
+        assert other.token_sep == self.token_sep
+        assert other.pad_token == self.pad_token
+        assert other.none_token == self.none_token
         return TokenSequence(self.token_list + other.token_list, 
                              token_sep=self.token_sep, 
                              pad_token=self.pad_token, 
                              none_token=self.none_token)
-    
-    
+        
+        
     def build_pseudo_boundaries(self, sep_width: int=None):
         if sep_width is None:
             sep_width = len(self.token_sep)

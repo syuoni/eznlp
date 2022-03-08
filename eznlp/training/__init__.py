@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from .trainer import Trainer
+from .plm_trainer import MaskedLMTrainer
 from .evaluation import (evaluate_text_classification, 
                          evaluate_entity_recognition, 
                          evaluate_attribute_extraction, 

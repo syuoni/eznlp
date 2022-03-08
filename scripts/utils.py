@@ -3,6 +3,7 @@ import os
 import argparse
 import logging
 import re
+import json
 import spacy
 import jieba
 import random
@@ -14,7 +15,7 @@ import allennlp.modules
 import transformers
 import flair
 
-from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO, KarpathyIO, BratIO, Src2TrgIO
+from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO, TextClsIO, KarpathyIO, BratIO, Src2TrgIO
 from eznlp.io import PostIO
 from eznlp.vectors import Vectors, GloVe
 from eznlp.training import Trainer, LRLambda, collect_params, check_param_groups
@@ -117,14 +118,23 @@ dataset2language = {'conll2003': 'English',
                     'conll2012': 'English', 
                     'ace2004': 'English', 
                     'ace2005': 'English', 
+                    'genia': 'English', 
                     'conll2004': 'English', 
                     'SciERC': 'English', 
+                    'ace2005_rel': 'English',
                     'ResumeNER': 'Chinese', 
                     'WeiboNER': 'Chinese', 
                     'SIGHAN2006': 'Chinese', 
                     'conll2012_zh': 'Chinese', 
                     'ontonotesv4_zh': 'Chinese',
                     'yidu_s4k': 'Chinese', 
+                    'cmeee': 'Chinese', 
+                    'cmeie': 'Chinese', 
+                    'chip_ctc': 'Chinese', 
+                    'chip_sts': 'Chinese', 
+                    'kuake_qic': 'Chinese', 
+                    'kuake_qtr': 'Chinese', 
+                    'kuake_qqr': 'Chinese', 
                     'CLERD': 'Chinese', 
                     'yelp2013': 'English', 
                     'imdb': 'English', 
@@ -136,6 +146,9 @@ dataset2language = {'conll2003': 'English',
                     'flickr8k': 'English', 
                     'flickr30k': 'English', 
                     'mscoco': 'English'}
+dataset2language.update({f'ADE_cv{k}': 'English' for k in range(10)})
+dataset2language.update({f'ace2004_rel_cv{k}': 'English' for k in range(5)})
+dataset2language.update({f'HwaMei_{s}': 'Chinese' for s in range(500, 1201, 100)})
 
 def load_data(args: argparse.Namespace):
     if args.dataset == 'conll2003':
@@ -193,23 +206,58 @@ def load_data(args: argparse.Namespace):
             logger.warning(f"Loading data with corruption rate of {args.corrupt_rate:.1f} \n"
                            f"Corruption Retrieval F1-score: {ave_scores['micro']['f1']*100:2.3f}%")
         
+    elif args.dataset == 'genia':
+        io = JsonIO(text_key='tokens', 
+                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', 
+                    case_mode='None', number_mode='Zeros')
+        train_data = io.read("data/genia/term.train.json")
+        dev_data   = []
+        test_data  = io.read("data/genia/term.test.json")
+        
     elif args.dataset == 'conll2004':
-        json_io = JsonIO(text_key='tokens', 
-                         chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', 
-                         relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
-                         case_mode='None', number_mode='Zeros')
-        train_data = json_io.read("data/conll2004/conll04_train.json")
-        dev_data   = json_io.read("data/conll2004/conll04_dev.json")
-        test_data  = json_io.read("data/conll2004/conll04_test.json")
+        io = JsonIO(text_key='tokens', 
+                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', 
+                    relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
+                    case_mode='None', number_mode='Zeros')
+        train_data = io.read("data/conll2004/conll04_train.json")
+        dev_data   = io.read("data/conll2004/conll04_dev.json")
+        test_data  = io.read("data/conll2004/conll04_test.json")
         
     elif args.dataset == 'SciERC':
-        json_io = JsonIO(text_key='tokens', 
-                         chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', 
-                         relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
-                         case_mode='None', number_mode='Zeros')
-        train_data = json_io.read("data/SciERC/scierc_train.json")
-        dev_data   = json_io.read("data/SciERC/scierc_dev.json")
-        test_data  = json_io.read("data/SciERC/scierc_test.json")
+        io = JsonIO(text_key='tokens', 
+                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', 
+                    relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
+                    case_mode='None', number_mode='Zeros')
+        train_data = io.read("data/SciERC/scierc_train.json")
+        dev_data   = io.read("data/SciERC/scierc_dev.json")
+        test_data  = io.read("data/SciERC/scierc_test.json")
+        
+    elif args.dataset.startswith('ADE_cv'):
+        io = JsonIO(text_key='tokens', 
+                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', 
+                    relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
+                    case_mode='None', number_mode='Zeros')
+        k = int(args.dataset.replace('ADE_cv', ''))
+        train_data = io.read(f"data/ADE/ade_split_{k}_train.json")
+        dev_data   = []
+        test_data  = io.read(f"data/ADE/ade_split_{k}_test.json")
+        args.train_with_dev = True
+        
+    elif args.dataset.startswith('ace2004_rel_cv'):
+        io = JsonIO(relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
+                    case_mode='None', number_mode='Zeros')
+        k = int(args.dataset.replace('ace2004_rel_cv', ''))
+        train_data = io.read(f"data/ace-luan2019naacl/ace04/cv{k}.train.json")
+        dev_data   = []
+        test_data  = io.read(f"data/ace-luan2019naacl/ace04/cv{k}.test.json")
+        args.train_with_dev = True
+        
+    elif args.dataset == 'ace2005_rel':
+        io = JsonIO(relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
+                    case_mode='None', number_mode='Zeros')
+        train_data = io.read("data/ace-luan2019naacl/ace05/train.json")
+        dev_data   = io.read("data/ace-luan2019naacl/ace05/dev.json")
+        test_data  = io.read("data/ace-luan2019naacl/ace05/test.json")
         
     elif args.dataset == 'ResumeNER':
         conll_io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BMES', encoding='utf-8', token_sep="", pad_token="")
@@ -259,8 +307,28 @@ def load_data(args: argparse.Namespace):
                     text_key='originalText', chunk_key='entities', chunk_type_key='label_type', chunk_start_key='start_pos', chunk_end_key='end_pos', 
                     is_whole_piece=False, encoding='utf-8-sig', token_sep="", pad_token="")
         train_data = io.read("data/yidu_s4k/subtask1_training_part1.txt") + io.read("data/yidu_s4k/subtask1_training_part2.txt")
+        # train_data, dev_data = sklearn.model_selection.train_test_split(train_data, test_size=0.2, random_state=args.seed)
+        dev_data   = []
         test_data  = io.read("data/yidu_s4k/subtask1_test_set_with_answer.json")
-        train_data, dev_data = sklearn.model_selection.train_test_split(train_data, test_size=0.2, random_state=args.seed)
+        
+        
+    elif args.dataset == 'cmeee':
+        io = JsonIO(is_tokenized=False, tokenize_callback='char', text_key='text', 
+                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start_idx', chunk_end_key='end_idx', 
+                    encoding='utf-8', token_sep="", pad_token="")
+        train_data = io.read("data/cblue/CMeEE/CMeEE_train_vz.json")
+        dev_data   = io.read("data/cblue/CMeEE/CMeEE_dev_vz.json")
+        test_data  = io.read("data/cblue/CMeEE/CMeEE_test_vz.json")
+        
+    elif args.dataset == 'cmeie':
+        io = JsonIO(is_tokenized=False, tokenize_callback='char', text_key='text', 
+                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', 
+                    relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
+                    encoding='utf-8', token_sep="", pad_token="")
+        train_data = io.read("data/cblue/CMeIE/CMeIE_train_vz.json")
+        dev_data   = io.read("data/cblue/CMeIE/CMeIE_dev_vz.json")
+        test_data  = io.read("data/cblue/CMeIE/CMeIE_test_vz.json")
+        
         
     elif args.dataset == 'CLERD':
         io = BratIO(tokenize_callback='char', has_ins_space=False, parse_attrs=False, parse_relations=True, 
@@ -277,6 +345,27 @@ def load_data(args: argparse.Namespace):
         train_data = post_io.map(train_data, **kwargs)
         dev_data   = post_io.map(dev_data, **kwargs)
         test_data  = post_io.map(test_data, **kwargs)
+        
+        
+    elif args.dataset.startswith('HwaMei'):
+        io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', chunk_text_key=None, 
+                    attribute_key='attributes', attribute_type_key='type', attribute_chunk_key='entity', 
+                    relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
+                    is_whole_piece=False, retain_meta=True, encoding='utf-8', token_sep="", pad_token="")
+        train_data = io.read("data/HwaMei/v20211230/train.json")
+        dev_data   = io.read("data/HwaMei/v20211230/dev.json")
+        test_data  = io.read("data/HwaMei/v20211230/test.json")
+        
+        size = int(args.dataset.split('_')[-1])
+        if size > 500:
+            with open("data/HwaMei/v20211230/splits.json", 'r', encoding='utf-8') as f:
+                splits = json.load(f)
+            ext_ids = (splits['reserve'] + splits['iaa'])[:size-500]
+            ext_data = io.read("data/HwaMei/v20211230/reserve.json") + io.read("data/HwaMei/v20211230/iaa.json")
+            ext_data = [entry for entry in ext_data if entry['visit_id'] in ext_ids]
+            train_data += ext_data
+        assert len(set([entry['visit_id'] for entry in train_data])) == size - 200
+        
         
     elif args.dataset == 'yelp2013':
         tabular_io = TabularIO(text_col_id=3, label_col_id=2, sep="\t\t", mapping={"<sssss>": "\n"}, encoding='utf-8', verbose=args.log_terminal, 
@@ -312,6 +401,42 @@ def load_data(args: argparse.Namespace):
         train_data = tabular_io.read("data/THUCNews-10/cnews.train.txt")
         dev_data   = tabular_io.read("data/THUCNews-10/cnews.val.txt")
         test_data  = tabular_io.read("data/THUCNews-10/cnews.test.txt")
+        
+    elif args.dataset == 'chip_ctc':
+        io = TextClsIO(is_tokenized=False, tokenize_callback=jieba.tokenize, text_key='text', mapping={" ": ""}, encoding='utf-8', verbose=args.log_terminal, 
+                       case_mode='Lower', number_mode='None')
+        train_data = io.read("data/cblue/CHIP-CTC/CHIP-CTC_train.json")
+        dev_data   = io.read("data/cblue/CHIP-CTC/CHIP-CTC_dev.json")
+        test_data  = io.read("data/cblue/CHIP-CTC/CHIP-CTC_test.json")
+        
+    elif args.dataset == 'chip_sts':
+        io = TextClsIO(is_tokenized=False, tokenize_callback=jieba.tokenize, text_key='text1', paired_text_key='text2', mapping={" ": ""}, encoding='utf-8', verbose=args.log_terminal, 
+                       case_mode='Lower', number_mode='None')
+        train_data = io.read("data/cblue/CHIP-STS/CHIP-STS_train.json")
+        dev_data   = io.read("data/cblue/CHIP-STS/CHIP-STS_dev.json")
+        test_data  = io.read("data/cblue/CHIP-STS/CHIP-STS_test.json")
+        
+    elif args.dataset == 'kuake_qic':
+        io = TextClsIO(is_tokenized=False, tokenize_callback=jieba.tokenize, text_key='query', mapping={" ": ""}, encoding='utf-8', verbose=args.log_terminal, 
+                       case_mode='Lower', number_mode='None')
+        train_data = io.read("data/cblue/KUAKE-QIC/KUAKE-QIC_train.json")
+        dev_data   = io.read("data/cblue/KUAKE-QIC/KUAKE-QIC_dev.json")
+        test_data  = io.read("data/cblue/KUAKE-QIC/KUAKE-QIC_test.json")
+        
+    elif args.dataset == 'kuake_qtr':
+        io = TextClsIO(is_tokenized=False, tokenize_callback=jieba.tokenize, text_key='query', paired_text_key='title', mapping={" ": ""}, encoding='utf-8', verbose=args.log_terminal, 
+                       case_mode='Lower', number_mode='None')
+        train_data = io.read("data/cblue/KUAKE-QTR/KUAKE-QTR_train.json")
+        dev_data   = io.read("data/cblue/KUAKE-QTR/KUAKE-QTR_dev.json")
+        test_data  = io.read("data/cblue/KUAKE-QTR/KUAKE-QTR_test.json")
+        
+    elif args.dataset == 'kuake_qqr':
+        io = TextClsIO(is_tokenized=False, tokenize_callback=jieba.tokenize, text_key='query1', paired_text_key='query2', mapping={" ": ""}, encoding='utf-8', verbose=args.log_terminal, 
+                       case_mode='Lower', number_mode='None')
+        train_data = io.read("data/cblue/KUAKE-QQR/KUAKE-QQR_train.json")
+        dev_data   = io.read("data/cblue/KUAKE-QQR/KUAKE-QQR_dev.json")
+        test_data  = io.read("data/cblue/KUAKE-QQR/KUAKE-QQR_test.json")
+        
         
     elif args.dataset == 'multi30k':
         io = Src2TrgIO(tokenize_callback=spacy_nlp_de, trg_tokenize_callback=spacy_nlp_en, encoding='utf-8', verbose=args.log_terminal, 
@@ -389,18 +514,26 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=False))
             
-    elif args.language.lower() == 'chinese':
-        if pretrained_str.lower().startswith('bert'):
-            PATH = "assets/transformers/hfl/chinese-bert-wwm-ext"
+        elif pretrained_str.lower().startswith('scibert'):
+            PATH = "assets/transformers/allenai/scibert_scivocab_cased" if cased else "assets/transformers/allenai/scibert_scivocab_uncased"
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512))
+            
+    elif args.language.lower() == 'chinese':
+        if pretrained_str.lower().startswith('bert'):
+            if 'wwm' in pretrained_str.lower():
+                PATH = "assets/transformers/hfl/chinese-bert-wwm-ext"
+            else:
+                PATH = "assets/transformers/bert-base-chinese"
+            return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
+                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=True))
             
         elif pretrained_str.lower().startswith('roberta'):
             # RoBERTa-like BERT
             # https://github.com/ymcui/Chinese-BERT-wwm#faq
             PATH = "assets/transformers/hfl/chinese-roberta-wwm-ext"
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
-                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512))
+                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=True))
             
         elif pretrained_str.lower().startswith('macbert'):
             if 'base' in pretrained_str.lower():
@@ -408,17 +541,18 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
             elif 'large' in pretrained_str.lower():
                 PATH = "assets/transformers/hfl/chinese-macbert-large"
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
-                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512))
+                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=True))
             
         elif pretrained_str.lower().startswith('ernie'):
             PATH = "assets/transformers/nghuyong/ernie-1.0"
             return (transformers.AutoModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
-                    transformers.AutoTokenizer.from_pretrained(PATH, model_max_length=512))
+                    transformers.AutoTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=True))
             
-        elif pretrained_str.lower().startswith('hwamei'):
-            PATH = "assets/transformers/hwamei/bert-1.98G"
+        elif pretrained_str.lower().startswith('syuoni_'):
+            pretrained_str = pretrained_str.replace('syuoni_', '').replace('_', '-')
+            PATH = f"assets/transformers/syuoni/{pretrained_str}"
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
-                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512))
+                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=True))
 
 
 

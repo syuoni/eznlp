@@ -157,7 +157,7 @@ if __name__ == '__main__':
                                     bert_arch=['BERT_base', 'RoBERTa_base', 
                                                'MacBERT_base', 'MacBERT_large', 'ERNIE'])
         
-    elif args.task == 'relation_extraction':
+    elif args.task in ('attribute_extraction', 'relation_extraction'):
         if not args.use_bert:
             sampler = OptionSampler(num_epochs=100, 
                                     # optimizer=['SGD'], lr=[0.1], 
@@ -165,7 +165,8 @@ if __name__ == '__main__':
                                     optimizer=['AdamW'], lr=[1e-3],
                                     batch_size=64, 
                                     num_layers=[1, 2], 
-                                    num_neg_relations=[100, 200], 
+                                    # num_neg_relations=[100, 200], 
+                                    # max_pair_distance=[100, 200], 
                                     ck_size_emb_dim=[10, 25], 
                                     ck_label_emb_dim=[10, 25])
         else:
@@ -173,6 +174,8 @@ if __name__ == '__main__':
                                     lr=[1e-3, 2e-3], 
                                     finetune_lr=[1e-5, 2e-5], 
                                     batch_size=48, 
+                                    # num_neg_relations=[100, 200], 
+                                    # max_pair_distance=[100, 200], 
                                     bert_drop_rate=0.2, 
                                     use_interm2=[False, True], 
                                     bert_arch=['BERT_base', 'RoBERTa_base'])
@@ -193,13 +196,15 @@ if __name__ == '__main__':
                                     ck_label_emb_dim=[10, 25])
         else:
             sampler = OptionSampler(num_epochs=50, 
-                                    lr=[1e-3, 2e-3], 
-                                    finetune_lr=[1e-5, 2e-5], 
+                                    # lr=[1e-3, 2e-3], 
+                                    lr=numpy.logspace(-3.0, -2.5, num=100, base=10).tolist(), # 1e-3 ~ 3e-3
+                                    # finetune_lr=[5e-5, 1e-4], 
+                                    finetune_lr=numpy.logspace(-4.5, -4.0, num=100, base=10).tolist(), # 3e-5 ~ 1e-4
                                     batch_size=48, 
                                     ck_decoder='span_classification',
                                     bert_drop_rate=0.2, 
                                     use_interm2=[False, True], 
-                                    bert_arch=['BERT_base', 'RoBERTa_base'])
+                                    bert_arch=['BERT_base', 'RoBERTa_base', 'SciBERT'])
         
     elif args.task == 'text2text':
         COMMAND = " ".join([COMMAND, "@scripts/options/tf2text.opt"])

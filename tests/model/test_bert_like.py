@@ -36,6 +36,23 @@ def test_trainble_config(mix_layers, use_gamma, freeze, bert_like_with_tokenizer
 
 
 
+@pytest.mark.parametrize("paired_inputs", [True, False])
+def test_paired_inputs_config(paired_inputs, bert_like_with_tokenizer):
+    bert_like, tokenizer = bert_like_with_tokenizer
+    bert_like_config = BertLikeConfig(bert_like=bert_like, tokenizer=tokenizer, paired_inputs=paired_inputs)
+    
+    tokens = TokenSequence.from_tokenized_text([c for c in random.choices(string.ascii_letters, k=100)])
+    entry = {'tokens': tokens + TokenSequence.from_tokenized_text([tokenizer.sep_token]) + tokens}
+    example = bert_like_config.exemplify(entry['tokens'])
+    
+    if paired_inputs:
+        assert 'sub_tok_type_ids' in example
+        assert example['sub_tok_type_ids'].sum().item() == 101
+    else:
+        assert 'sub_tok_type_ids' not in example
+
+
+
 def test_serialization(bert_with_tokenizer):
     bert, tokenizer = bert_with_tokenizer
     config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert)

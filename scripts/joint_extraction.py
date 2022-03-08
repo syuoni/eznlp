@@ -30,6 +30,8 @@ def parse_arguments(parser: argparse.ArgumentParser):
     group_data = parser.add_argument_group('dataset')
     group_data.add_argument('--dataset', type=str, default='conll2004', 
                             help="dataset name")
+    group_data.add_argument('--save_preds', default=False, action='store_true', 
+                            help="whether to save predictions on the test split (typically in case without ground truth)")
     
     group_decoder = parser.add_argument_group('decoder configurations')
     group_decoder.add_argument('--ck_decoder', type=str, default='sequence_tagging', 
@@ -207,11 +209,11 @@ if __name__ == '__main__':
     trainer = Trainer(model, device=device)
     
     logger.info("Evaluating on dev-set")
-    evaluate_joint_extraction(trainer, dev_set, has_attr=(args.attr_decoder!='None'), has_rel=(args.rel_decoder!='None'), eval_chunk_type_for_relation=True, batch_size=args.batch_size)
-    # evaluate_joint_extraction(trainer, dev_set, has_attr=(args.attr_decoder!='None'), has_rel=(args.rel_decoder!='None'), eval_chunk_type_for_relation=False, batch_size=args.batch_size)
+    evaluate_joint_extraction(trainer, dev_set, has_attr=(args.attr_decoder!='None'), has_rel=(args.rel_decoder!='None'), batch_size=args.batch_size)
     logger.info("Evaluating on test-set")
-    evaluate_joint_extraction(trainer, test_set, has_attr=(args.attr_decoder!='None'), has_rel=(args.rel_decoder!='None'), eval_chunk_type_for_relation=True, batch_size=args.batch_size)
-    # evaluate_joint_extraction(trainer, test_set, has_attr=(args.attr_decoder!='None'), has_rel=(args.rel_decoder!='None'), eval_chunk_type_for_relation=False, batch_size=args.batch_size)
+    evaluate_joint_extraction(trainer, test_set, has_attr=(args.attr_decoder!='None'), has_rel=(args.rel_decoder!='None'), batch_size=args.batch_size, save_preds=args.save_preds)
+    if args.save_preds:
+        torch.save(test_data, f"{save_path}/test-data-with-preds.pth")
     
     logger.info(" ".join(sys.argv))
     logger.info(pprint.pformat(args.__dict__))

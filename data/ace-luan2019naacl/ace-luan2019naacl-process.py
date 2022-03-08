@@ -35,6 +35,8 @@ for partition in ['train', 'dev', 'test']:
                                     'head': spans.index((rel[0]-curr_start, rel[1]-curr_start+1)), 
                                     'tail': spans.index((rel[2]-curr_start, rel[3]-curr_start+1))} for rel in ex['relations'][k]]
             new_data.append(new_ex)
+            curr_start += len(new_ex['tokens'])
+    
     
     with open(trg_fn, 'w') as f:
-        json.dump(new_data, f)
+        json.dump(new_data, f, ensure_ascii=False)
