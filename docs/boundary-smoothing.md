@@ -49,11 +49,14 @@ For English datasets:
 
 ```bash
 $ python scripts/entity_recognition.py @scripts/options/with_bert.opt \
+    --num_epochs 50 \
+    --batch_size 48 \
     --dataset {conll2003 | conll2012 | ace2004 | ace2005} \
     --ck_decoder boundary_selection \
     --sb_epsilon {0.0 | 0.1 | 0.2 | 0.3} \
     --sb_size {1 | 2} \
-    --bert_arch RoBERTa_base --use_interm2 \
+    --bert_arch {RoBERTa_base | RoBERTa_large | BERT_base | BERT_large} \
+    --use_interm2 \
     [options]
 ```
 
@@ -61,13 +64,17 @@ For Chinese datasets:
 
 ```bash
 $ python scripts/entity_recognition.py @scripts/options/with_bert.opt \
+    --num_epochs 50 \
+    --batch_size 48 \
     --dataset {ontonotesv4_zh | SIGHAN2006 | WeiboNER | ResumeNER} \
     --ck_decoder boundary_selection \
     --sb_epsilon {0.0 | 0.1 | 0.2 | 0.3} \
     --sb_size {1 | 2} \
-    --bert_arch BERT_base_wwm --use_interm2 \
+    --bert_arch {BERT_base_wwm | MacBERT_base | MacBERT_large} \
+    --use_interm2 \
     [options]
 ```
+
 
 See more details for options: 
 
