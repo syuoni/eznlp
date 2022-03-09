@@ -32,7 +32,7 @@ def _spans_from_diagonals(seq_len: int, max_span_size: int=None):
 
 class SpecificSpanClsDecoderConfig(SingleDecoderConfigBase, SpecificSpanClsDecoderMixin):
     def __init__(self, **kwargs):
-        self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
+        self.in_drop_rates = kwargs.pop('in_drop_rates', (0.2, 0.0, 0.0))
         
         # self.max_len = kwargs.pop('max_len', None)
         
