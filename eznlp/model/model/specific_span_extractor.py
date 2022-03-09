@@ -12,7 +12,7 @@ from .base import ModelConfigBase, ModelBase
 class SpecificSpanExtractorConfig(ModelConfigBase):
     
     _pretrained_names = ['bert_like', 'span_bert_like']
-    _all_names = _pretrained_names + ['intermediate2'] + ['decoder']
+    _all_names = _pretrained_names + ['intermediate2', 'intermediate3'] + ['decoder']
     
     def __init__(self, decoder: Union[SpecificSpanClsDecoderConfig, str]='specific_span', **kwargs):
         self.bert_like = kwargs.pop('bert_like', None)
