@@ -18,6 +18,7 @@ class TestJsonIO(object):
     [2] Eberts and Ulges. 2019. Span-based joint entity and relation extraction with Transformer pre-training. ECAI 2020.
     [3] Luan et al. 2019. A general framework for information extraction using dynamic span graphs. NAACL 2019. 
     [4] Zhong and Chen. 2020. A frustratingly easy approach for joint entity and relation extraction. NAACL 2020. 
+    [5] Li et al. 2022. Unified Named Entity Recognition asWord-Word Relation Classification. AAAI 2022. 
     """
     def test_ace2004(self):
         io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end')
@@ -76,7 +77,24 @@ class TestJsonIO(object):
         assert math.ceil(numpy.quantile(span_sizes, 0.99)) == 6
         
         
+    def test_genia_yu2020acl(self):
+        # TODO: document-level?
+        io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end')
+        train_data = io.read("data/genia-yu2020acl/train_dev.json")
+        test_data  = io.read("data/genia-yu2020acl/test.json")
+        
+        assert len(train_data) == 16_692
+        assert sum(len(ex['chunks']) for ex in train_data) == 50_509
+        assert len(test_data) == 1_854
+        assert sum(len(ex['chunks']) for ex in test_data) == 5_506
+        
+        span_sizes = [end-start for data in [train_data, test_data] for ex in data for _, start, end in ex['chunks']]
+        assert max(span_sizes) == 18
+        assert math.ceil(numpy.quantile(span_sizes, 0.99)) == 6
+        
+        
     def test_ace2004_rel(self):
+        # TODO: document-level?
         io = JsonIO(relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail')
         train_data = io.read("data/ace-luan2019naacl/ace04/cv0.train.json")
         test_data  = io.read("data/ace-luan2019naacl/ace04/cv0.test.json")
@@ -91,6 +109,7 @@ class TestJsonIO(object):
         
         
     def test_ace2005_rel(self):
+        # TODO: document-level?
         io = JsonIO(relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail')
         train_data = io.read("data/ace-luan2019naacl/ace05/train.json")
         dev_data   = io.read("data/ace-luan2019naacl/ace05/dev.json")
