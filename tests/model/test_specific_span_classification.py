@@ -67,6 +67,7 @@ class TestModel(object):
                               (3,  False, 'max_pooling',  False, True,  0, 0), 
                               (3,  True,  'mean_pooling', False, True,  0, 0), 
                               (3,  True,  'multiplicative_attention', False, True, 0, 0), 
+                              (3,  True,  'conv',         False, True,  0, 0), 
                               (3,  True,  'max_pooling',  True,  True,  0, 0), 
                               (3,  False, 'max_pooling',  True,  True,  0, 0), 
                               (3,  True,  'max_pooling',  False, False, 0, 0), 

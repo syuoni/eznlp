@@ -6,13 +6,14 @@ import transformers
 
 from ..nn.modules import SequencePooling, SequenceAttention
 from ..nn.modules import QueryBertLikeEncoder
+from ..nn.init import reinit_layer_
 from ..config import Config
 
 
 class SpanBertLikeConfig(Config):
     def __init__(self, **kwargs):
         self.bert_like: transformers.PreTrainedModel = kwargs.pop('bert_like')
-        self.out_dim = self.bert_like.config.hidden_size
+        self.hid_dim = self.bert_like.config.hidden_size
         
         self.arch = kwargs.pop('arch', 'BERT')
         self.freeze = kwargs.pop('freeze', True)
@@ -31,6 +32,10 @@ class SpanBertLikeConfig(Config):
     def name(self):
         return f"{self.arch}({self.num_layers})"
         
+    @property
+    def out_dim(self):
+        return self.hid_dim
+        
     def __getstate__(self):
         state = self.__dict__.copy()
         state['bert_like'] = None
@@ -47,7 +52,14 @@ class SpanBertLikeEncoder(torch.nn.Module):
         if config.init_agg_mode.lower().endswith('_pooling'):
             self.init_aggregating = SequencePooling(mode=config.init_agg_mode.replace('_pooling', ''))
         elif config.init_agg_mode.lower().endswith('_attention'):
-            self.init_aggregating = SequenceAttention(config.out_dim, scoring=config.init_agg_mode.replace('_attention', ''))
+            self.init_aggregating = SequenceAttention(config.hid_dim, scoring=config.init_agg_mode.replace('_attention', ''))
+        elif config.init_agg_mode.lower().startswith('conv'):
+            # `self.init_aggregating[k-2]` for span size `k`
+            self.init_aggregating = torch.nn.ModuleList([torch.nn.Conv1d(config.hid_dim, config.hid_dim, kernel_size=k)
+                                                             for k in range(2, config.max_span_size+1)])
+            for k in range(2, config.max_span_size+1):
+                # Preserve the standard deviation of each embedding/representation vector
+                reinit_layer_(self.init_aggregating[k-2], nonlinearity='linear')
         
         if config.share_weights:
             # Share the module across all span sizes
@@ -56,7 +68,7 @@ class SpanBertLikeEncoder(torch.nn.Module):
             # `ModuleDict` only accepts string keys. See https://github.com/pytorch/pytorch/issues/11714 
             # `self.query_bert_like[k-2]` for span size `k`
             self.query_bert_like = torch.nn.ModuleList([QueryBertLikeEncoder(config.bert_like.encoder, num_layers=config.num_layers) 
-                                                            for _ in range(config.max_span_size-1)])
+                                                            for k in range(2, config.max_span_size+1)])
         
         self.freeze = config.freeze
         self.num_layers = config.num_layers
@@ -83,9 +95,15 @@ class SpanBertLikeEncoder(torch.nn.Module):
             # reshaped_states: List of (B, L, H) -> (B, L-K+1, H, K) -> (B, L-K+1, K, H) -> (B*(L-K+1), K, H)
             reshaped_states = [hidden_states.unfold(dimension=1, size=k, step=1).permute(0, 1, 3, 2).flatten(end_dim=1) 
                                    for hidden_states in all_hidden_states]
-            # query_states: (B*(L-K+1), 1, H)
-            # query_states = reshaped_states[0].mean(dim=1, keepdim=True)
-            query_states = self.init_aggregating(reshaped_states[0]).unsqueeze(1)
+            
+            if isinstance(self.init_aggregating, (SequencePooling, SequenceAttention)):
+                # query_states: (B*(L-K+1), 1, H)
+                # query_states = reshaped_states[0].mean(dim=1, keepdim=True)
+                query_states = self.init_aggregating(reshaped_states[0]).unsqueeze(1)
+            else:
+                query_states = self.init_aggregating[k-2](all_hidden_states[0].permute(0, 2, 1)).permute(0, 2, 1)
+                # query_states: (B, L-K+1, H) -> (B*(L-K+1), 1, H)
+                query_states = query_states.flatten(end_dim=1).unsqueeze(1)
             
             if self.share_weights:
                 query_outs = self.query_bert_like(query_states, reshaped_states)

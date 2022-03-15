@@ -21,7 +21,7 @@ class BertLikeConfig(Config):
     def __init__(self, **kwargs):
         self.tokenizer: transformers.PreTrainedTokenizer = kwargs.pop('tokenizer')
         self.bert_like: transformers.PreTrainedModel = kwargs.pop('bert_like')
-        self.out_dim = self.bert_like.config.hidden_size
+        self.hid_dim = self.bert_like.config.hidden_size
         self.num_layers = self.bert_like.config.num_hidden_layers
         
         self.arch = kwargs.pop('arch', 'BERT')
@@ -42,6 +42,10 @@ class BertLikeConfig(Config):
     @property
     def name(self):
         return self.arch
+        
+    @property
+    def out_dim(self):
+        return self.hid_dim
         
     def __getstate__(self):
         state = self.__dict__.copy()
