@@ -69,19 +69,27 @@ class SpecificSpanExtractor(ModelBase):
     def __init__(self, config: SpecificSpanExtractorConfig):
         super().__init__(config)
         if config.intermediate2 is not None:
-            config.intermediate2.allow_empty = True
-            if config.span_bert_like.share_weights:
+            # Share weights exactly following `span_bert_like`
+            if config.span_bert_like.share_weights_ext:
+                pass
+            elif config.span_bert_like.share_weights_int:
                 self.span_intermediate2 = config.intermediate2.instantiate()
             else:
                 # `self.span_intermediate2[k-2]` for span size `k`
                 self.span_intermediate2 = torch.nn.ModuleList([config.intermediate2.instantiate() 
-                                                                   for _ in range(config.span_bert_like.max_span_size-1)])
+                                                                   for k in range(2, config.span_bert_like.max_span_size+1)])
         
         
     def pretrained_parameters(self):
         params = []
         params.extend(self.bert_like.bert_like.parameters())
-        params.extend(self.span_bert_like.query_bert_like.parameters())
+        
+        # `torch.nn.Module` use a set to keep up to one copy of each parameter/tensor, 
+        # which is possibly shared and registered by different names
+        # Hence, here we should manually avoid duplicate parameters/tensors
+        if not self.span_bert_like.share_weights_ext:
+            params.extend(self.span_bert_like.query_bert_like.parameters())
+        
         return params
         
         
@@ -97,7 +105,9 @@ class SpecificSpanExtractor(ModelBase):
                 # Allow empty sequences here; expect not to raise inconsistencies in final outputs
                 curr_mask = batch.mask[:, k-1:].clone()
                 curr_mask[:, 0] = False
-                if self.span_bert_like.share_weights:
+                if self.span_bert_like.share_weights_ext:
+                    new_all_last_query_states[k] = self.intermediate2(query_hidden, curr_mask)
+                elif self.span_bert_like.share_weights_int:
                     new_all_last_query_states[k] = self.span_intermediate2(query_hidden, curr_mask)
                 else:
                     new_all_last_query_states[k] = self.span_intermediate2[k-2](query_hidden, curr_mask)

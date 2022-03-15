@@ -24,7 +24,9 @@ class SpanBertLikeConfig(Config):
         assert 0 < self.num_layers <= self.bert_like.config.num_hidden_layers
         
         self.max_span_size = kwargs.pop('max_span_size', None)
-        self.share_weights = kwargs.pop('share_weights', True)
+        self.share_weights_ext = kwargs.pop('share_weights_ext', True)  # Share weights externally, i.e., with `bert_like`
+        self.share_weights_int = kwargs.pop('share_weights_int', True)  # Share weights internally, i.e., between `query_bert_like` of different span sizes
+        assert (not self.share_weights_ext) or self.share_weights_int
         self.init_agg_mode = kwargs.pop('init_agg_mode', 'max_pooling')
         super().__init__(**kwargs)
         
@@ -61,19 +63,20 @@ class SpanBertLikeEncoder(torch.nn.Module):
                 # Preserve the standard deviation of each embedding/representation vector
                 reinit_layer_(self.init_aggregating[k-2], nonlinearity='linear')
         
-        if config.share_weights:
+        if config.share_weights_int:
             # Share the module across all span sizes
-            self.query_bert_like = QueryBertLikeEncoder(config.bert_like.encoder, num_layers=config.num_layers)
+            self.query_bert_like = QueryBertLikeEncoder(config.bert_like.encoder, num_layers=config.num_layers, share_weights=config.share_weights_ext)
         else:
             # `ModuleDict` only accepts string keys. See https://github.com/pytorch/pytorch/issues/11714 
             # `self.query_bert_like[k-2]` for span size `k`
-            self.query_bert_like = torch.nn.ModuleList([QueryBertLikeEncoder(config.bert_like.encoder, num_layers=config.num_layers) 
+            self.query_bert_like = torch.nn.ModuleList([QueryBertLikeEncoder(config.bert_like.encoder, num_layers=config.num_layers, share_weights=False) 
                                                             for k in range(2, config.max_span_size+1)])
         
         self.freeze = config.freeze
         self.num_layers = config.num_layers
         self.max_span_size = config.max_span_size
-        self.share_weights = config.share_weights
+        self.share_weights_ext = config.share_weights_ext
+        self.share_weights_int = config.share_weights_int
         
     @property
     def freeze(self):
@@ -105,7 +108,7 @@ class SpanBertLikeEncoder(torch.nn.Module):
                 # query_states: (B, L-K+1, H) -> (B*(L-K+1), 1, H)
                 query_states = query_states.flatten(end_dim=1).unsqueeze(1)
             
-            if self.share_weights:
+            if self.share_weights_int:
                 query_outs = self.query_bert_like(query_states, reshaped_states)
             else:
                 query_outs = self.query_bert_like[k-2](query_states, reshaped_states)  # `k` starts from 2

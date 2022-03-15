@@ -6,17 +6,23 @@ import transformers
 
 
 class QueryBertLikeSelfAttention(torch.nn.Module):
-    def __init__(self, origin: transformers.models.bert.modeling_bert.BertSelfAttention):
+    def __init__(self, origin: transformers.models.bert.modeling_bert.BertSelfAttention, share_weights: bool=False):
         super().__init__()
         self.num_attention_heads = origin.num_attention_heads
         self.attention_head_size = origin.attention_head_size
         self.all_head_size = origin.all_head_size
         
-        # https://discuss.pytorch.org/t/are-there-any-recommended-methods-to-clone-a-model/483
-        self.query = copy.deepcopy(origin.query)
-        self.key = copy.deepcopy(origin.key)
-        self.value = copy.deepcopy(origin.value)
-        self.dropout = copy.deepcopy(origin.dropout)
+        if share_weights:
+            self.query = origin.query
+            self.key = origin.key
+            self.value = origin.value
+            self.dropout = origin.dropout
+        else:
+            # https://discuss.pytorch.org/t/are-there-any-recommended-methods-to-clone-a-model/483
+            self.query = copy.deepcopy(origin.query)
+            self.key = copy.deepcopy(origin.key)
+            self.value = copy.deepcopy(origin.value)
+            self.dropout = copy.deepcopy(origin.dropout)
         
     def transpose_for_scores(self, x):
         new_x_shape = x.size()[:-1] + (self.num_attention_heads, self.attention_head_size)
@@ -59,10 +65,13 @@ class QueryBertLikeSelfAttention(torch.nn.Module):
 
 
 class QueryBertLikeAttention(torch.nn.Module):
-    def __init__(self, origin: transformers.models.bert.modeling_bert.BertAttention):
+    def __init__(self, origin: transformers.models.bert.modeling_bert.BertAttention, share_weights: bool=False):
         super().__init__()
-        self.self = QueryBertLikeSelfAttention(origin.self)
-        self.output = copy.deepcopy(origin.output)
+        self.self = QueryBertLikeSelfAttention(origin.self, share_weights=share_weights)
+        if share_weights:
+            self.output = origin.output
+        else:
+            self.output = copy.deepcopy(origin.output)
         
     def forward(self, query_states, hidden_states, **kwargs):
         self_outputs = self.self(query_states, hidden_states, **kwargs)
@@ -73,11 +82,15 @@ class QueryBertLikeAttention(torch.nn.Module):
 
 
 class QueryBertLikeLayer(torch.nn.Module):
-    def __init__(self, origin: transformers.models.bert.modeling_bert.BertLayer):
+    def __init__(self, origin: transformers.models.bert.modeling_bert.BertLayer, share_weights: bool=False):
         super().__init__()
-        self.attention = QueryBertLikeAttention(origin.attention)
-        self.intermediate = copy.deepcopy(origin.intermediate)
-        self.output = copy.deepcopy(origin.output)
+        self.attention = QueryBertLikeAttention(origin.attention, share_weights=share_weights)
+        if share_weights:
+            self.intermediate = origin.intermediate
+            self.output = origin.output
+        else:
+            self.intermediate = copy.deepcopy(origin.intermediate)
+            self.output = copy.deepcopy(origin.output)
         
     def forward(self, query_states, hidden_states, **kwargs):
         self_attention_outputs = self.attention(query_states, hidden_states, **kwargs)
@@ -102,11 +115,11 @@ class QueryBertLikeEncoder(torch.nn.Module):
     ----------
     transformers/models/bert/modeling_bert.py
     """
-    def __init__(self, origin: transformers.models.bert.modeling_bert.BertEncoder, num_layers: int=None):
+    def __init__(self, origin: transformers.models.bert.modeling_bert.BertEncoder, num_layers: int=None, share_weights: bool=False):
         super().__init__()
         if num_layers is None:
             num_layers = len(origin.layer)
-        self.layer = torch.nn.ModuleList([QueryBertLikeLayer(layer) for layer in origin.layer[-num_layers:]])
+        self.layer = torch.nn.ModuleList([QueryBertLikeLayer(layer, share_weights=share_weights) for layer in origin.layer[-num_layers:]])
         
         
     def forward(self, 
