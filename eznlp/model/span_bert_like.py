@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from typing import List
 from collections import OrderedDict
+import math
 import torch
 import transformers
 
@@ -28,6 +29,8 @@ class SpanBertLikeConfig(Config):
         self.share_weights_int = kwargs.pop('share_weights_int', True)  # Share weights internally, i.e., between `query_bert_like` of different span sizes
         assert (not self.share_weights_ext) or self.share_weights_int
         self.init_agg_mode = kwargs.pop('init_agg_mode', 'max_pooling')
+        self.num_init_conv_groups = kwargs.pop('num_init_conv_groups', 1)
+        self.inc_conv_groups_every = kwargs.pop('inc_conv_groups_every', 100)  # 100 for no increasing
         super().__init__(**kwargs)
         
     @property
@@ -56,12 +59,18 @@ class SpanBertLikeEncoder(torch.nn.Module):
         elif config.init_agg_mode.lower().endswith('_attention'):
             self.init_aggregating = SequenceAttention(config.hid_dim, scoring=config.init_agg_mode.replace('_attention', ''))
         elif config.init_agg_mode.lower().startswith('conv'):
-            # `self.init_aggregating[k-2]` for span size `k`
-            self.init_aggregating = torch.nn.ModuleList([torch.nn.Conv1d(config.hid_dim, config.hid_dim, kernel_size=k)
-                                                             for k in range(2, config.max_span_size+1)])
+            convs = []
             for k in range(2, config.max_span_size+1):
+                # More groups for larger kernel size, to reduce parameters
+                num_groups = min(config.num_init_conv_groups * 2**((k-1)//config.inc_conv_groups_every), config.hid_dim)
+                conv = torch.nn.Conv1d(config.hid_dim, config.hid_dim, kernel_size=k, groups=num_groups)
                 # Preserve the standard deviation of each embedding/representation vector
-                reinit_layer_(self.init_aggregating[k-2], nonlinearity='linear')
+                reinit_layer_(conv, nonlinearity='linear')
+                conv.weight.data.mul_(math.sqrt((num_groups+1) / 2))  # Additional adjust for convolution groups
+                convs.append(conv)
+            
+            # `self.init_aggregating[k-2]` for span size `k`
+            self.init_aggregating = torch.nn.ModuleList(convs)
         
         if config.share_weights_int:
             # Share the module across all span sizes
