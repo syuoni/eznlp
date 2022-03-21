@@ -11,22 +11,10 @@ from ...utils.chunk import detect_overlapping_level, filter_clashed_by_priority
 from ...nn.modules import CombinedDropout, SoftLabelCrossEntropyLoss
 from ...nn.init import reinit_embedding_, reinit_layer_
 from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
-from .boundary_selection import Boundaries
+from .boundaries import Boundaries, _spans_from_diagonals
 from .boundary_selection import BoundarySelectionDecoderMixin as SpecificSpanClsDecoderMixin
 
 logger = logging.getLogger(__name__)
-
-
-
-def _spans_from_diagonals(seq_len: int, max_span_size: int=None):
-    """Spans from diagonals of the upper triangular area. 
-    """
-    if max_span_size is None:
-        max_span_size = seq_len
-    
-    for k in range(1, max_span_size+1):
-        for start in range(seq_len-k+1):
-            yield (start, start+k)
 
 
 

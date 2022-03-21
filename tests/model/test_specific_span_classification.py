@@ -5,8 +5,6 @@ import torch
 from eznlp.dataset import Dataset
 from eznlp.model import EncoderConfig
 from eznlp.model import BertLikeConfig, SpanBertLikeConfig, SpecificSpanClsDecoderConfig, SpecificSpanExtractorConfig
-from eznlp.model.decoder.boundary_selection import _spans_from_upper_triangular
-from eznlp.model.decoder.specific_span_classification import _spans_from_diagonals
 from eznlp.training import Trainer, count_params
 
 
@@ -122,16 +120,3 @@ class TestModel(object):
         trainer = Trainer(self.model, device=device)
         set_chunks_pred = trainer.predict(dataset_wo_gold)
         assert len(set_chunks_pred) == len(data_wo_gold)
-
-
-
-@pytest.mark.parametrize("seq_len, max_span_size", [(5, 1),   (5, 5), 
-                                                    (10, 1),  (10, 5), (10, 10), 
-                                                    (100, 1), (100, 10), (100, 100)])
-def test_spans_from_diagonals(seq_len, max_span_size):
-    assert len(list(_spans_from_diagonals(seq_len, max_span_size))) == (seq_len*2-max_span_size+1)*max_span_size // 2
-
-
-@pytest.mark.parametrize("seq_len", [5, 10, 100])
-def test_spans_from_functions(seq_len):
-    assert set(_spans_from_diagonals(seq_len)) == set(_spans_from_upper_triangular(seq_len))
