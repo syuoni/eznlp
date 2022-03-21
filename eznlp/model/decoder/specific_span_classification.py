@@ -148,18 +148,18 @@ class SpecificSpanClsDecoder(DecoderBase, SpecificSpanClsDecoderMixin):
     def forward(self, batch: Batch, full_hidden: torch.Tensor, all_query_hidden: Dict[int, torch.Tensor]):
         batch_logits = self.get_logits(batch, full_hidden, all_query_hidden)
         
-        batch_label_ids = []
-        for boundaries_obj, curr_len in zip(batch.boundaries_objs, batch.seq_lens.cpu().tolist()):
+        losses = []
+        for logits, boundaries_obj, curr_len in zip(batch_logits, batch.boundaries_objs, batch.seq_lens.cpu().tolist()):
             curr_max_span_size = min(self.max_span_size, curr_len)
             
-            # label_ids: (curr_len-k+1, ) -> (\sum_k curr_len-k+1, )
-            label_ids = torch.cat([boundaries_obj.boundary2label_id.diagonal(offset=k-1) for k in range(1, curr_max_span_size+1)], dim=-1)
-            if label_ids.dim() == 2:
-                # label_ids: (\sum_k curr_len-k+1, logit_dim)
-                label_ids = label_ids.permute(1, 0)
-            batch_label_ids.append(label_ids)
-        
-        losses = [self.criterion(logits, label_ids) for logits, label_ids in zip(batch_logits, batch_label_ids)]
+            # label_ids: (\sum_k curr_len-k+1, ) or (\sum_k curr_len-k+1, logit_dim)
+            label_ids = boundaries_obj.diagonal_label_ids(curr_max_span_size)
+            if hasattr(boundaries_obj, 'non_mask'):
+                non_mask = boundaries_obj.diagonal_non_mask(curr_max_span_size)
+                logits, label_ids = logits[non_mask], label_ids[non_mask]
+            
+            loss = self.criterion(logits, label_ids)
+            losses.append(loss)
         return torch.stack(losses)
         
         

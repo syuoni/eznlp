@@ -1,4 +1,5 @@
 from typing import Tuple
+import random
 import torch
 
 from ...wrapper import TargetWrapper
@@ -84,6 +85,11 @@ class Boundaries(TargetWrapper):
                     neg_sampled = neg_sampled | hard_neg_non_mask
             
             self.non_mask = pos_non_mask | (neg_sampled & non_mask)
+            if not self.non_mask.any().item():
+                # In case of all masked (may appears when no positive samples, very short sequence, and low negative sampling rate), 
+                # randomly re-select one span of size 1 for un-masking. 
+                start = random.randrange(num_tokens)
+                self.non_mask[start, start] = True
         
         if self.chunks is not None:
             if config.sb_epsilon <= 0 and config.sl_epsilon <= 0:
@@ -117,3 +123,23 @@ class Boundaries(TargetWrapper):
                     pos_indic = (torch.arange(config.voc_dim) != config.none_idx)
                     self.boundary2label_id[:, :, pos_indic] = (self.boundary2label_id[:, :, pos_indic] * (1-config.sl_epsilon) + 
                                                                self.boundary2label_id[:, :, pos_indic].sum(dim=-1, keepdim=True)*config.sl_epsilon / (config.voc_dim-1))
+        
+        
+    def diagonal_label_ids(self, max_span_size: int=None):
+        if max_span_size is None:
+            max_span_size = self.boundary2label_id.size(0)
+        
+        # label_ids: (\sum_k seq_len-k+1, )
+        label_ids = torch.cat([self.boundary2label_id.diagonal(offset=k-1) for k in range(1, max_span_size+1)], dim=-1)
+        if label_ids.dim() == 2:
+            # label_ids: (\sum_k seq_len-k+1, logit_dim)
+            label_ids = label_ids.permute(1, 0)
+        return label_ids
+        
+        
+    def diagonal_non_mask(self, max_span_size: int=None):
+        if max_span_size is None:
+            max_span_size = self.boundary2label_id.size(0)
+        
+        # non_mask: (\sum_k seq_len-k+1, )
+        return torch.cat([self.non_mask.diagonal(offset=k-1) for k in range(1, max_span_size+1)], dim=-1)
