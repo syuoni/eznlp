@@ -42,6 +42,7 @@ def _spans_from_diagonals(seq_len: int, max_span_size: int=None):
 class Boundaries(TargetWrapper):
     """A wrapper of boundaries with underlying chunks. 
     
+    Eberts and Ulges (2019) use a fixed number of negative samples as 100. 
     Li et al. (2021) recommend negative sampling rate as 0.3 to 0.4. 
     
     Parameters
@@ -52,7 +53,8 @@ class Boundaries(TargetWrapper):
     
     References
     ----------
-    [1] Li et al. Empirical Analysis of Unlabeled Entity Problem in Named Entity Recognition. ICLR 2021. 
+    [1] Eberts and Ulges. 2019. Span-based joint entity and relation extraction with Transformer pre-training. ECAI 2020.
+    [2] Li et al. 2021. Empirical Analysis of Unlabeled Entity Problem in Named Entity Recognition. ICLR 2021. 
     """
     def __init__(self, data_entry: dict, config: SingleDecoderConfigBase, training: bool=True):
         super().__init__(training)
@@ -66,7 +68,7 @@ class Boundaries(TargetWrapper):
             non_mask_rate.masked_fill_(span_size_ids < 0, 0)
             non_mask_rate.clamp_(max=1)
             
-            # Sampling rate to 1 for positive samples
+            # Sampling rate is 1 for positive samples
             for label, start, end in self.chunks:
                 non_mask_rate[start, end-1] = 1
             
