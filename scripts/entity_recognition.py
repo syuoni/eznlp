@@ -71,10 +71,13 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                help="affine encoder architecture")
     group_decoder.add_argument('--neg_sampling_rate', type=float, default=1.0, 
                                help="Negative sampling rate")
-    group_decoder.add_argument('--hard_neg_sampling_rate', type=float, default=1.0, 
-                               help="Hard negative sampling rate")
-    group_decoder.add_argument('--hard_neg_sampling_size', type=int, default=5, 
-                               help="Hard negative sampling window size")
+    group_decoder.add_argument('--neg_sampling_power_decay', type=float, default=0.0, 
+                               help="Negative sampling rate power decay parameter")
+    group_decoder.add_argument('--neg_sampling_surr_rate', type=float, default=0.0, 
+                               help="Extra negative sampling rate surrounding positive samples")
+    group_decoder.add_argument('--neg_sampling_surr_size', type=int, default=5, 
+                               help="Extra negative sampling rate surrounding size")
+    
     group_decoder.add_argument('--sb_epsilon', type=float, default=0.0, 
                                help="Boundary smoothing loss epsilon")
     group_decoder.add_argument('--sb_size', type=int, default=1, 
@@ -83,8 +86,12 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                help="Boundary smoothing probability adjust factor")
     
     # Specific span classification: Span-specific encoder (SSE)
-    group_decoder.add_argument('--sse_share_weights', default=False, action='store_true', 
+    group_decoder.add_argument('--sse_no_share_weights_ext', dest='sse_share_weights_ext', default=True, action='store_false', 
+                               help="whether to share weights between span-bert and bert encoders")
+    group_decoder.add_argument('--sse_no_share_weights_int', dest='sse_share_weights_int', default=True, action='store_false', 
                                help="whether to share weights across span-bert encoders")
+    group_decoder.add_argument('--sse_init_agg_mode', type=str, default='max_pooling', 
+                               help="initial aggregating mode for span-bert enocder")
     group_decoder.add_argument('--sse_num_layers', type=int, default=-1, 
                                help="number of span-bert encoder layers (negative values are set to `None`)")
     group_decoder.add_argument('--sse_max_span_size_cov_rate', type=float, default=0.995, 
@@ -155,8 +162,9 @@ def collect_IE_assembly_config(args: argparse.Namespace):
             bert_like_config.output_hidden_states = True
             span_bert_like_config = SpanBertLikeConfig(bert_like=bert_like, arch=args.bert_arch, freeze=False, 
                                                        num_layers=None if args.sse_num_layers < 0 else args.sse_num_layers, 
-                                                       share_weights=args.sse_share_weights, 
-                                                       init_agg_mode=args.agg_mode)
+                                                       share_weights_ext=args.sse_share_weights_ext, 
+                                                       share_weights_int=args.sse_share_weights_int, 
+                                                       init_agg_mode=args.sse_init_agg_mode)
         else:
             span_bert_like_config = None
     else:
@@ -198,24 +206,28 @@ def build_ER_config(args: argparse.Namespace):
                                                         fl_gamma=args.fl_gamma,
                                                         sl_epsilon=args.sl_epsilon, 
                                                         neg_sampling_rate=args.neg_sampling_rate, 
-                                                        hard_neg_sampling_rate=args.hard_neg_sampling_rate, 
-                                                        hard_neg_sampling_size=args.hard_neg_sampling_size, 
+                                                        neg_sampling_power_decay=args.neg_sampling_power_decay, 
+                                                        neg_sampling_surr_rate=args.neg_sampling_surr_rate, 
+                                                        neg_sampling_surr_size=args.neg_sampling_surr_size, 
                                                         sb_epsilon=args.sb_epsilon, 
                                                         sb_size=args.sb_size,
                                                         sb_adj_factor=args.sb_adj_factor, 
-                                                        hid_drop_rates=drop_rates)
+                                                        #hid_drop_rates=drop_rates,
+                                                        )
     elif args.ck_decoder == 'specific_span':
         decoder_config = SpecificSpanClsDecoderConfig(fl_gamma=args.fl_gamma,
                                                       sl_epsilon=args.sl_epsilon, 
                                                       neg_sampling_rate=args.neg_sampling_rate, 
-                                                      hard_neg_sampling_rate=args.hard_neg_sampling_rate, 
-                                                      hard_neg_sampling_size=args.hard_neg_sampling_size, 
+                                                      neg_sampling_power_decay=args.neg_sampling_power_decay, 
+                                                      neg_sampling_surr_rate=args.neg_sampling_surr_rate, 
+                                                      neg_sampling_surr_size=args.neg_sampling_surr_size, 
                                                       sb_epsilon=args.sb_epsilon, 
                                                       sb_size=args.sb_size,
                                                       sb_adj_factor=args.sb_adj_factor, 
                                                       max_span_size_cov_rate=args.sse_max_span_size_cov_rate, 
                                                       size_emb_dim=args.ck_size_emb_dim, 
-                                                      in_drop_rates=drop_rates)
+                                                      # in_drop_rates=drop_rates, 
+                                                      )
     
     if args.ck_decoder == 'specific_span':
         return SpecificSpanExtractorConfig(**collect_IE_assembly_config(args), decoder=decoder_config)
