@@ -32,9 +32,9 @@ class SpecificSpanClsDecoderConfig(SingleDecoderConfigBase, SpecificSpanClsDecod
         self.size_emb_dim = kwargs.pop('size_emb_dim', 25)
         
         self.neg_sampling_rate = kwargs.pop('neg_sampling_rate', 1.0)
-        self.hard_neg_sampling_rate = kwargs.pop('hard_neg_sampling_rate', 1.0)
-        self.hard_neg_sampling_rate = max(self.hard_neg_sampling_rate, self.neg_sampling_rate)
-        self.hard_neg_sampling_size = kwargs.pop('hard_neg_sampling_size', 5)
+        self.neg_sampling_power_decay = kwargs.pop('neg_sampling_power_decay', 0.0)  # decay = 0.5, 1.0
+        self.neg_sampling_surr_rate = kwargs.pop('neg_sampling_surr_rate', 0.0)
+        self.neg_sampling_surr_size = kwargs.pop('neg_sampling_surr_size', 5)
         
         self.none_label = kwargs.pop('none_label', '<none>')
         self.idx2label = kwargs.pop('idx2label', None)

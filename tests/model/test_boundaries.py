@@ -78,26 +78,27 @@ def test_boundaries_obj_for_boundary_smoothing(sb_epsilon, sb_size):
 
 
 
-@pytest.mark.parametrize("neg_sampling_rate, hard_neg_sampling_rate", [(1.0, 1.0), (0.0, 1.0), (0.0, 0.0), 
-                                                                       (0.3, 0.6), (0.1, 0.9), (0.2, 0.8)])
+@pytest.mark.parametrize("neg_sampling_rate", [1.0, 0.5, 0.0])
+@pytest.mark.parametrize("neg_sampling_surr_rate", [0.0, 0.5, 1.0])
 @pytest.mark.parametrize("training", [True, False])
-def test_boundaries_obj_for_neg_sampling(neg_sampling_rate, hard_neg_sampling_rate, training):
+def test_boundaries_obj_for_neg_sampling(neg_sampling_rate, neg_sampling_surr_rate, training):
     entry = {'tokens': list("abcdefhijk"), 
              'chunks': [('EntA', 0, 1), ('EntA', 0, 4), ('EntB', 0, 5), ('EntA', 3, 5), ('EntA', 4, 5)]}
     config = BoundarySelectionDecoderConfig(neg_sampling_rate=neg_sampling_rate, 
-                                            hard_neg_sampling_rate=hard_neg_sampling_rate, 
-                                            hard_neg_sampling_size=3)
+                                            neg_sampling_surr_rate=neg_sampling_surr_rate, 
+                                            neg_sampling_surr_size=3)
     config.build_vocab([entry])
     boundaries_obj = config.exemplify(entry, training=training)['boundaries_obj']
     
-    if (not training) or (neg_sampling_rate >= 1):
+    if (not training) or (neg_sampling_rate == 1):
         assert not hasattr(boundaries_obj, 'non_mask')
-    elif neg_sampling_rate <=0 and hard_neg_sampling_rate <= 0:
+    elif neg_sampling_rate ==0 and neg_sampling_surr_rate == 0:
         assert boundaries_obj.non_mask.sum().item() == 5
-    elif neg_sampling_rate <=0 and hard_neg_sampling_rate >= 1:
+    elif neg_sampling_rate ==0 and neg_sampling_surr_rate == 1:
         assert boundaries_obj.non_mask.sum().item() == 30
     else:
-        assert abs(boundaries_obj.non_mask.sum().item() - (25*neg_sampling_rate + 25*hard_neg_sampling_rate + 5)) < 5
+        assert abs(boundaries_obj.non_mask.sum().item() - (5 + 50*neg_sampling_rate + 25*(1-neg_sampling_rate)*neg_sampling_surr_rate)) < 10
+
 
 
 @pytest.mark.parametrize("seq_len", [1, 5, 10, 100])

@@ -60,34 +60,31 @@ class Boundaries(TargetWrapper):
         self.chunks = data_entry.get('chunks', None)
         num_tokens = len(data_entry['tokens'])
         
-        if training and config.neg_sampling_rate < 1:
-            non_mask = (torch.arange(num_tokens) - torch.arange(num_tokens).unsqueeze(-1) >= 0)
-            pos_non_mask = torch.zeros_like(non_mask)
+        if training and (config.neg_sampling_rate < 1 or config.neg_sampling_power_decay > 0):
+            span_size_ids = torch.arange(num_tokens) - torch.arange(num_tokens).unsqueeze(-1)
+            non_mask_rate = config.neg_sampling_rate * (span_size_ids+1)**(-config.neg_sampling_power_decay)
+            non_mask_rate.masked_fill_(span_size_ids < 0, 0)
+            non_mask_rate.clamp_(max=1)
+            
+            # Sampling rate to 1 for positive samples
             for label, start, end in self.chunks:
-                pos_non_mask[start, end-1] = True
+                non_mask_rate[start, end-1] = 1
             
-            neg_sampled = torch.empty_like(non_mask).bernoulli(p=config.neg_sampling_rate)
-            
-            if config.hard_neg_sampling_rate > config.neg_sampling_rate:
-                hard_neg_non_mask = torch.zeros_like(non_mask)
+            # Extra sampling rate surrounding positive samples
+            if config.neg_sampling_surr_rate > 0 and config.neg_sampling_surr_size > 0:
+                surr_non_mask = torch.zeros_like(non_mask_rate, dtype=torch.bool)
                 for label, start, end in self.chunks:
-                    for dist in range(1, config.hard_neg_sampling_size+1):
-                        for sur_start, sur_end in _spans_from_surrounding((start, end), dist, num_tokens):
-                            hard_neg_non_mask[sur_start, sur_end-1] = True
-                
-                if config.hard_neg_sampling_rate < 1:
-                    # Solve: 1 - (1 - p_{neg})(1 - p_{comp}) = p_{hard}
-                    # Get: p_{comp} = (p_{hard} - p_{neg}) / (1 - p_{neg})
-                    comp_sampling_rate = (config.hard_neg_sampling_rate - config.neg_sampling_rate) / (1 - config.neg_sampling_rate)
-                    comp_sampled = torch.empty_like(non_mask).bernoulli(p=comp_sampling_rate)
-                    neg_sampled = neg_sampled | (comp_sampled & hard_neg_non_mask)
-                else:
-                    neg_sampled = neg_sampled | hard_neg_non_mask
+                    for dist in range(1, config.neg_sampling_surr_size+1):
+                        for surr_start, surr_end in _spans_from_surrounding((start, end), dist, num_tokens):
+                            surr_non_mask[surr_start, surr_end-1] = True
+                non_mask_rate[surr_non_mask] += (1 - non_mask_rate[surr_non_mask]) * config.neg_sampling_surr_rate
             
-            self.non_mask = pos_non_mask | (neg_sampled & non_mask)
+            # Bernoulli sampling according probability in `non_mask_rate`
+            self.non_mask = non_mask_rate.bernoulli().bool() 
+            
+            # In case of all masked (may appears when no positive samples, very short sequence, and low negative sampling rate), 
+            # randomly re-select one span of size 1 for un-masking. 
             if not self.non_mask.any().item():
-                # In case of all masked (may appears when no positive samples, very short sequence, and low negative sampling rate), 
-                # randomly re-select one span of size 1 for un-masking. 
                 start = random.randrange(num_tokens)
                 self.non_mask[start, start] = True
         
