@@ -12,13 +12,13 @@ from ...nn.modules import CombinedDropout, SoftLabelCrossEntropyLoss
 from ...nn.init import reinit_embedding_, reinit_layer_
 from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
 from .boundaries import Boundaries, _spans_from_diagonals
-from .boundary_selection import BoundarySelectionDecoderMixin as SpecificSpanClsDecoderMixin
+from .boundary_selection import BoundariesDecoderMixin
 
 logger = logging.getLogger(__name__)
 
 
 
-class SpecificSpanClsDecoderConfig(SingleDecoderConfigBase, SpecificSpanClsDecoderMixin):
+class SpecificSpanClsDecoderConfig(SingleDecoderConfigBase, BoundariesDecoderMixin):
     def __init__(self, **kwargs):
         self.in_drop_rates = kwargs.pop('in_drop_rates', (0.2, 0.0, 0.0))
         
@@ -100,7 +100,7 @@ class SpecificSpanClsDecoderConfig(SingleDecoderConfigBase, SpecificSpanClsDecod
 
 
 
-class SpecificSpanClsDecoder(DecoderBase, SpecificSpanClsDecoderMixin):
+class SpecificSpanClsDecoder(DecoderBase, BoundariesDecoderMixin):
     def __init__(self, config: SpecificSpanClsDecoderConfig):
         super().__init__()
         self.max_span_size = config.max_span_size
