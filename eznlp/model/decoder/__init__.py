@@ -10,5 +10,6 @@ from .span_rel_classification import SpanRelClassificationDecoderConfig
 from .boundary_selection import BoundarySelectionDecoderConfig
 from .joint_extraction import JointExtractionDecoderConfig
 from .specific_span_classification import SpecificSpanClsDecoderConfig
+from .specific_span_rel_classification import SpecificSpanRelClsDecoderConfig
 
 from .generator import GeneratorConfig

@@ -1,0 +1,256 @@
+# -*- coding: utf-8 -*-
+from typing import List, Dict
+from collections import Counter
+import itertools
+import logging
+import math
+import numpy
+import torch
+
+from ...wrapper import Batch
+from ...utils.chunk import detect_overlapping_level, filter_clashed_by_priority
+from ...nn.modules import CombinedDropout, SoftLabelCrossEntropyLoss
+from ...nn.init import reinit_embedding_, reinit_layer_
+from ...metrics import precision_recall_f1_report
+from ..encoder import EncoderConfig
+from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
+from .boundaries import DiagBoundariesPair, _span_pairs_from_diagonals
+
+logger = logging.getLogger(__name__)
+
+
+
+class DiagBoundariesPairDecoderMixin(DecoderMixinBase):
+    """Standard `Mixin` for relation extraction. 
+    """
+    @property
+    def idx2label(self):
+        return self._idx2label
+        
+    @idx2label.setter
+    def idx2label(self, idx2label: List[str]):
+        self._idx2label = idx2label
+        self.label2idx = {l: i for i, l in enumerate(idx2label)} if idx2label is not None else None
+        
+    @property
+    def voc_dim(self):
+        return len(self.label2idx)
+        
+    @property
+    def none_idx(self):
+        return self.label2idx[self.none_label]
+        
+    @property
+    def idx2ck_label(self):
+        return self._idx2ck_label
+        
+    @idx2ck_label.setter
+    def idx2ck_label(self, idx2ck_label: List[str]):
+        self._idx2ck_label = idx2ck_label
+        self.ck_label2idx = {l: i for i, l in enumerate(idx2ck_label)} if idx2ck_label is not None else None
+        
+    @property
+    def ck_voc_dim(self):
+        return len(self.ck_label2idx)
+        
+    @property
+    def ck_none_idx(self):
+        return self.ck_label2idx[self.ck_none_label]
+        
+    def exemplify(self, entry: dict, training: bool=True):
+        return {'dbp_obj': DiagBoundariesPair(entry, self, training=training)}
+        
+    def batchify(self, batch_examples: List[dict]):
+        return {'dbp_objs': [ex['dbp_obj'] for ex in batch_examples]}
+        
+    def retrieve(self, batch: Batch):
+        return [dbp_obj.relations for dbp_obj in batch.dbp_objs]
+        
+    def evaluate(self, y_gold: List[List[tuple]], y_pred: List[List[tuple]]):
+        scores, ave_scores = precision_recall_f1_report(y_gold, y_pred)
+        return ave_scores['micro']['f1']
+
+
+
+class SpecificSpanRelClsDecoderConfig(SingleDecoderConfigBase, DiagBoundariesPairDecoderMixin):
+    def __init__(self, **kwargs):
+        self.use_biaffine = kwargs.pop('use_biaffine', True)
+        self.affine = kwargs.pop('affine', EncoderConfig(arch='FFN', hid_dim=150, num_layers=1, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2))
+        
+        # self.max_len = kwargs.pop('max_len', None)
+        
+        # Note: The spans with sizes longer than `max_span_size` will be masked/ignored in both training and inference. 
+        # Hence, these spans will never be recalled in testing. 
+        self.max_span_size_ceiling = kwargs.pop('max_span_size_ceiling', 20)
+        self.max_span_size_cov_rate = kwargs.pop('max_span_size_cov_rate', 0.995)
+        self.max_span_size = kwargs.pop('max_span_size', None)
+        self.size_emb_dim = kwargs.pop('size_emb_dim', 25)
+        self.hid_drop_rates = kwargs.pop('hid_drop_rates', (0.2, 0.0, 0.0))
+        
+        self.neg_sampling_rate = kwargs.pop('neg_sampling_rate', 1.0)
+        # self.neg_sampling_power_decay = kwargs.pop('neg_sampling_power_decay', 0.0)  # decay = 0.5, 1.0
+        # self.neg_sampling_surr_rate = kwargs.pop('neg_sampling_surr_rate', 0.0)
+        # self.neg_sampling_surr_size = kwargs.pop('neg_sampling_surr_size', 5)
+        
+        self.none_label = kwargs.pop('none_label', '<none>')
+        self.idx2label = kwargs.pop('idx2label', None)
+        self.ck_none_label = kwargs.pop('ck_none_label', '<none>')
+        self.idx2ck_label = kwargs.pop('idx2ck_label', None)
+        self.overlapping_level = kwargs.pop('overlapping_level', None)
+        super().__init__(**kwargs)
+        
+    @property
+    def name(self):
+        return self.criterion
+        
+    def __repr__(self):
+        repr_attr_dict = {key: getattr(self, key) for key in ['in_dim', 'hid_drop_rates', 'criterion']}
+        return self._repr_non_config_attrs(repr_attr_dict)
+        
+    def build_vocab(self, *partitions):
+        counter = Counter(label for data in partitions for entry in data for label, start, end in entry['chunks'])
+        self.idx2ck_label = [self.ck_none_label] + list(counter.keys())
+        
+        self.overlapping_level = max(detect_overlapping_level(entry['chunks']) for data in partitions for entry in data)
+        logger.info(f"Overlapping level: {self.overlapping_level}")
+        
+        # Allow directly setting `max_span_size`
+        if self.max_span_size is None:
+            # Calculate `max_span_size` according to data
+            span_sizes = [end-start for data in partitions for entry in data for label, start, end in entry['chunks']]
+            if self.max_span_size_cov_rate >= 1:
+                span_size_cov = max(span_sizes)
+            else:
+                span_size_cov = math.ceil(numpy.quantile(span_sizes, self.max_span_size_cov_rate))
+            self.max_span_size = min(span_size_cov, self.max_span_size_ceiling)
+        logger.warning(f"The `max_span_size` is set to {self.max_span_size}")
+        
+        size_counter = Counter(end-start for data in partitions for entry in data for label, start, end in entry['chunks'])
+        num_spans = sum(size_counter.values())
+        num_oov_spans = sum(num for size, num in size_counter.items() if size > self.max_span_size)
+        if num_oov_spans > 0:
+            logger.warning(f"OOV positive spans: {num_oov_spans} ({num_oov_spans/num_spans*100:.2f}%)")
+        
+        counter = Counter(label for data in partitions for entry in data for label, head, tail in entry['relations'])
+        self.idx2label = [self.none_label] + list(counter.keys())
+        
+        
+    def instantiate(self):
+        return SpecificSpanRelClsDecoder(self)
+
+
+
+class SpecificSpanRelClsDecoder(DecoderBase, DiagBoundariesPairDecoderMixin):
+    def __init__(self, config: SpecificSpanRelClsDecoderConfig):
+        super().__init__()
+        self.max_span_size = config.max_span_size
+        self.none_label = config.none_label
+        self.idx2label = config.idx2label
+        self.ck_none_label = config.ck_none_label
+        self.idx2ck_label = config.idx2ck_label
+        self.overlapping_level = config.overlapping_level
+        
+        if config.use_biaffine:
+            self.affine_head = config.affine.instantiate()
+            self.affine_tail = config.affine.instantiate()
+        else:
+            self.affine = config.affine.instantiate()
+        
+        # TODO: Representations of context between head/tail entities
+        # TODO: Chunk type embedding, only for positive (entity) spans? 
+        if config.size_emb_dim > 0:
+            self.size_embedding = torch.nn.Embedding(config.max_span_size, config.size_emb_dim)
+            reinit_embedding_(self.size_embedding)
+        
+        self.dropout = CombinedDropout(*config.hid_drop_rates)
+        
+        self.U = torch.nn.Parameter(torch.empty(config.voc_dim, config.affine.out_dim, config.affine.out_dim))
+        self.W = torch.nn.Parameter(torch.empty(config.voc_dim, config.affine.out_dim*2 + config.size_emb_dim*2))
+        self.b = torch.nn.Parameter(torch.empty(config.voc_dim))
+        torch.nn.init.orthogonal_(self.U.data)
+        torch.nn.init.orthogonal_(self.W.data)
+        torch.nn.init.zeros_(self.b.data)
+        
+        self.criterion = config.instantiate_criterion(reduction='sum')
+        
+        
+    def compute_scores(self, batch: Batch, full_hidden: torch.Tensor, all_query_hidden: Dict[int, torch.Tensor]):
+        # full_hidden: (batch, step, hid_dim)
+        # query_hidden: (batch, step-k+1, hid_dim)
+        all_hidden = [full_hidden] + list(all_query_hidden.values())
+        
+        batch_scores = []
+        for i, curr_len in enumerate(batch.seq_lens.cpu().tolist()):
+            curr_max_span_size = min(self.max_span_size, curr_len)
+            
+            # (curr_len-k+1, hid_dim) -> (num_spans = \sum_k curr_len-k+1, hid_dim)
+            span_hidden = torch.cat([all_hidden[k-1][i, :curr_len-k+1] for k in range(1, curr_max_span_size+1)], dim=0)
+            
+            if hasattr(self, 'affine_head'):
+                # No mask input needed here
+                affined_head = self.affine_head(span_hidden)
+                affined_tail = self.affine_tail(span_hidden)
+            else:
+                affined_head = self.affine(span_hidden)
+                affined_tail = self.affine(span_hidden)
+            
+            # scores1: (head_spans, affine_dim) * (voc_dim, affine_dim, affine_dim) * (affine_dim, tail_spans) -> (voc_dim, head_spans, tail_spans)
+            scores1 = self.dropout(affined_head).matmul(self.U).matmul(self.dropout(affined_tail))
+            
+            if hasattr(self, 'size_embedding'):
+                span_size_ids = [k-1 for k in range(1, curr_max_span_size+1) for _ in range(curr_len-k+1)]
+                span_size_ids = torch.tensor(span_size_ids, dtype=torch.long, device=full_hidden.device)
+                # size_embedded: (num_spans, emb_dim)
+                size_embedded = self.size_embedding(span_size_ids)
+                affined_head = torch.cat([affined_head, size_embedded], dim=-1)
+                affined_tail = torch.cat([affined_tail, size_embedded], dim=-1)
+            
+            # affined_cat: (head_spans, tail_spans, affine_dim*2)
+            affined_cat = torch.cat([self.dropout(affined_head).unsqueeze(1).expand(-1, affined_tail.size(0), -1), 
+                                     self.dropout(affined_tail).unsqueeze(0).expand(affined_head.size(0), -1, -1)], dim=-1)
+            
+            # scores2: (voc_dim, affine_dim*2) * (head_spans, tail_spans, affine_dim*2, 1) -> (head_spans, tail_spans, voc_dim, 1) 
+            scores2 = self.W.matmul(affined_cat.unsqueeze(-1))
+            # scores: (head_spans, tail_spans, voc_dim)
+            scores = scores1.permute(1, 2, 0) + scores2.squeeze(-1) + self.b
+            batch_scores.append(scores)
+        
+        return batch_scores
+        
+        
+    def forward(self, batch: Batch, full_hidden: torch.Tensor, all_query_hidden: Dict[int, torch.Tensor]):
+        batch_scores = self.compute_scores(batch, full_hidden, all_query_hidden)
+        
+        losses = []
+        for scores, dbp_obj in zip(batch_scores, batch.dbp_objs):
+            # label_ids: (num_spans, num_spans, voc_dim)
+            label_ids = dbp_obj.dbp2label_ids
+            if hasattr(dbp_obj, 'non_mask'):
+                non_mask = dbp_obj.non_mask
+                scores, label_ids = scores[non_mask], label_ids[non_mask]
+            else:
+                scores, label_ids = scores.flatten(start_dim=1), label_ids.flatten(start_dim=1)
+            
+            loss = self.criterion(scores, label_ids)
+            losses.append(loss)
+        return torch.stack(losses)
+        
+        
+    def decode(self, batch: Batch, full_hidden: torch.Tensor, all_query_hidden: Dict[int, torch.Tensor]):
+        batch_scores = self.compute_scores(batch, full_hidden, all_query_hidden)
+        
+        batch_relations = []
+        for scores, dbp_obj, curr_len in zip(batch_scores, batch.dbp_objs, batch.seq_lens.cpu().tolist()):
+            curr_max_span_size = min(self.max_span_size, curr_len)
+            
+            confidences, label_ids = scores.softmax(dim=-1).max(dim=-1)
+            labels = [self.idx2label[i] for i in label_ids.flatten().cpu().tolist()]
+            
+            relations = []
+            for label, ((h_start, h_end), (t_start, t_end)) in zip(labels, _span_pairs_from_diagonals(curr_len, curr_max_span_size)):
+                head = (dbp_obj.span2ck_label.get((h_start, h_end), self.ck_none_label), h_start, h_end)
+                tail = (dbp_obj.span2ck_label.get((t_start, t_end), self.ck_none_label), t_start, t_end)
+                if label != self.none_label and head[0] != self.ck_none_label and tail[0] != self.ck_none_label:
+                    relations.append((label, head, tail))
+            batch_relations.append(relations)
+        return batch_relations

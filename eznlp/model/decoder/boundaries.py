@@ -1,5 +1,7 @@
-from typing import Tuple
+from typing import Tuple, List
+import itertools
 import random
+import math
 import torch
 
 from ...wrapper import TargetWrapper
@@ -38,6 +40,23 @@ def _spans_from_diagonals(seq_len: int, max_span_size: int=None):
             yield (start, start+k)
 
 
+def _ij2diagonal(i: int, j: int, seq_len: int):
+    assert i <= j
+    return (seq_len*2 - (j-i-1)) * (j-i) // 2 + i
+
+
+def _diagonal2ij(k: int, seq_len: int):
+    assert k < (seq_len+1)*seq_len // 2
+    j_minus_i = int((2*seq_len+1 - math.sqrt((2*seq_len+1)**2 - 8*k)) / 2)
+    i = k - ((seq_len*2 - (j_minus_i-1)) * j_minus_i // 2)
+    return (i, i+j_minus_i)
+
+
+def _span_pairs_from_diagonals(seq_len: int, max_span_size: int=None):
+    yield from itertools.product(_spans_from_diagonals(seq_len, max_span_size=max_span_size), 
+                                 _spans_from_diagonals(seq_len, max_span_size=max_span_size))
+
+
 
 class Boundaries(TargetWrapper):
     """A wrapper of boundaries with underlying chunks. 
@@ -47,7 +66,7 @@ class Boundaries(TargetWrapper):
     
     Parameters
     ----------
-    data_entry: dict
+    entry: dict
         {'tokens': TokenSequence, 
          'chunks': List[tuple]}
     
@@ -56,11 +75,11 @@ class Boundaries(TargetWrapper):
     [1] Eberts and Ulges. 2019. Span-based joint entity and relation extraction with Transformer pre-training. ECAI 2020.
     [2] Li et al. 2021. Empirical Analysis of Unlabeled Entity Problem in Named Entity Recognition. ICLR 2021. 
     """
-    def __init__(self, data_entry: dict, config: SingleDecoderConfigBase, training: bool=True):
+    def __init__(self, entry: dict, config: SingleDecoderConfigBase, training: bool=True):
         super().__init__(training)
         
-        self.chunks = data_entry.get('chunks', None)
-        num_tokens = len(data_entry['tokens'])
+        self.chunks = entry.get('chunks', None)
+        num_tokens = len(entry['tokens'])
         
         if training and (config.neg_sampling_rate < 1 or config.neg_sampling_power_decay > 0):
             span_size_ids = torch.arange(num_tokens) - torch.arange(num_tokens).unsqueeze(-1)
@@ -142,3 +161,65 @@ class Boundaries(TargetWrapper):
         
         # non_mask: (\sum_k seq_len-k+1, )
         return torch.cat([self.non_mask.diagonal(offset=k-1) for k in range(1, max_span_size+1)], dim=-1)
+
+
+
+class DiagBoundariesPair(TargetWrapper):
+    """A wrapper of boundaries-pair (in diagonal) with underlying relations. 
+    
+    For pipeline modeling, `chunks_pred` is pre-computed, and thus initially non-empty in `entry`;
+    For joint modeling, `chunks_pred` is computed on-the-fly, and thus initially empty in `entry`.
+    
+    Parameters
+    ----------
+    entry: dict
+        {'tokens': TokenSequence, 
+         'chunks': List[tuple], 
+         'relations': List[tuple]}
+    """
+    def __init__(self, entry: dict, config: SingleDecoderConfigBase, training: bool=True):
+        super().__init__(training)
+        
+        self.chunks_gold = entry['chunks'] if training else []
+        self.chunks_pred = entry.get('chunks_pred', None)
+        
+        self.relations = entry.get('relations', None)
+        num_tokens = len(entry['tokens'])
+        num_spans = (num_tokens*2 - (config.max_span_size-1)) * config.max_span_size // 2
+        
+        if training and config.neg_sampling_rate < 1:
+            non_mask_rate = config.neg_sampling_rate * torch.ones(num_spans, num_spans, dtype=torch.float)
+            for label, (_, h_start, h_end), (_, t_start, t_end) in self.relations:
+                hk = _ij2diagonal(h_start, h_end-1, num_tokens)
+                tk = _ij2diagonal(t_start, t_end-1, num_tokens)
+                non_mask_rate[hk, tk] = 1
+            
+            # Bernoulli sampling according probability in `non_mask_rate`
+            self.non_mask = non_mask_rate.bernoulli().bool() 
+        
+        if self.relations is not None:
+            self.dbp2label_id = torch.full((num_spans, num_spans), config.none_idx, dtype=torch.long)
+            for label, (_, h_start, h_end), (_, t_start, t_end) in self.relations:
+                hk = _ij2diagonal(h_start, h_end-1, num_tokens)
+                tk = _ij2diagonal(t_start, t_end-1, num_tokens)
+                self.dbp2label_id[hk, tk] = config.label2idx[label]
+        
+        
+    @property
+    def chunks_pred(self):
+        return self._chunks_pred
+        
+    @chunks_pred.setter
+    def chunks_pred(self, chunks: List[tuple]):
+        assert getattr(self, '_chunks_pred', None) is None  # `chunks_pred` is unchangable once set
+        self._chunks_pred = chunks
+        
+        if self.chunks_pred is not None:
+            # Do not use ```self.chunks = list(set(self.chunks_gold + self.chunks_pred))```,
+            # which may return non-deterministic order. 
+            self.chunks = self.chunks_gold + [ck for ck in self.chunks_pred if ck not in self.chunks_gold]
+            
+            # In case of one span with multiple labels, the latter chunks will override the former ones; 
+            # hence, the labels from `chunks_pred` are of priority. 
+            # This only affects the training phase, because `chunks_gold` is always empty for evaluation phase. 
+            self.span2ck_label = {(start, end): label for label, start, end in self.chunks}

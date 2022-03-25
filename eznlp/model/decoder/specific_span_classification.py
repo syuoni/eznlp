@@ -142,6 +142,7 @@ class SpecificSpanClsDecoder(DecoderBase, BoundariesDecoderMixin):
             
             # (curr_len-k+1, hid_dim) -> (num_spans = \sum_k curr_len-k+1, hid_dim) -> (num_spans, affine_dim)
             span_hidden = torch.cat([all_hidden[k-1][i, :curr_len-k+1] for k in range(1, curr_max_span_size+1)], dim=0)
+            # No mask input needed here
             affined = self.affine(span_hidden)
             
             if hasattr(self, 'size_embedding'):

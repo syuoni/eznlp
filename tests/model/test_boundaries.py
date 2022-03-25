@@ -1,9 +1,10 @@
+# -*- coding: utf-8 -*-
 import pytest
 import torch
 
-from eznlp.dataset import Dataset
-from eznlp.model import BoundarySelectionDecoderConfig, ExtractorConfig
-from eznlp.model.decoder.boundaries import _spans_from_upper_triangular, _spans_from_diagonals
+from eznlp.model import BoundarySelectionDecoderConfig, SpecificSpanRelClsDecoderConfig
+from eznlp.model.decoder.boundaries import _spans_from_upper_triangular, _spans_from_diagonals, _span_pairs_from_diagonals
+from eznlp.model.decoder.boundaries import _ij2diagonal, _diagonal2ij
 
 
 @pytest.mark.parametrize("sb_epsilon", [0.0, 0.1])
@@ -12,33 +13,33 @@ def test_boundaries_obj(sb_epsilon, sl_epsilon, EAR_data_demo):
     entry = EAR_data_demo[0]
     tokens, chunks = entry['tokens'], entry['chunks']
     
-    config = ExtractorConfig(decoder=BoundarySelectionDecoderConfig(sb_epsilon=sb_epsilon, sl_epsilon=sl_epsilon))
-    dataset = Dataset(EAR_data_demo, config)
-    dataset.build_vocabs_and_dims()
-    boundaries_obj = dataset[0]['boundaries_obj']
+    config = BoundarySelectionDecoderConfig(sb_epsilon=sb_epsilon, sl_epsilon=sl_epsilon)
+    config.build_vocab(EAR_data_demo)
+    boundaries_obj = config.exemplify(entry)['boundaries_obj']
     
     num_tokens, num_chunks = len(tokens), len(chunks)
     assert boundaries_obj.chunks == chunks
     if sb_epsilon == 0 and sl_epsilon == 0:
-        assert all(boundaries_obj.boundary2label_id[start, end-1] == config.decoder.label2idx[label] for label, start, end in chunks)
-        labels_retr = [config.decoder.idx2label[i] for i in boundaries_obj.boundary2label_id[torch.arange(num_tokens) >= torch.arange(num_tokens).unsqueeze(-1)].tolist()]
+        assert all(boundaries_obj.boundary2label_id[start, end-1] == config.label2idx[label] for label, start, end in chunks)
+        labels_retr = [config.idx2label[i] for i in boundaries_obj.boundary2label_id[torch.arange(num_tokens) >= torch.arange(num_tokens).unsqueeze(-1)].tolist()]
     else:
-        assert all(boundaries_obj.boundary2label_id[start, end-1].argmax() == config.decoder.label2idx[label] for label, start, end in chunks)
-        labels_retr = [config.decoder.idx2label[i] for i in boundaries_obj.boundary2label_id[torch.arange(num_tokens) >= torch.arange(num_tokens).unsqueeze(-1)].argmax(dim=-1).tolist()]
+        assert all(boundaries_obj.boundary2label_id[start, end-1].argmax() == config.label2idx[label] for label, start, end in chunks)
+        labels_retr = [config.idx2label[i] for i in boundaries_obj.boundary2label_id[torch.arange(num_tokens) >= torch.arange(num_tokens).unsqueeze(-1)].argmax(dim=-1).tolist()]
         
         assert (boundaries_obj.boundary2label_id.sum(dim=-1) - 1).abs().max().item() < 1e-6
         if sb_epsilon == 0:
-            assert (boundaries_obj.boundary2label_id[:, :, config.decoder.none_idx] < 1).sum().item() == num_chunks
+            assert (boundaries_obj.boundary2label_id[:, :, config.none_idx] < 1).sum().item() == num_chunks
         else:
-            assert (boundaries_obj.boundary2label_id[:, :, config.decoder.none_idx] < 1).sum().item() > num_chunks
+            assert (boundaries_obj.boundary2label_id[:, :, config.none_idx] < 1).sum().item() > num_chunks
     
-    chunks_retr = [(label, start, end) for label, (start, end) in zip(labels_retr, _spans_from_upper_triangular(num_tokens)) if label != config.decoder.none_label]
+    chunks_retr = [(label, start, end) for label, (start, end) in zip(labels_retr, _spans_from_upper_triangular(num_tokens)) if label != config.none_label]
     assert set(chunks_retr) == set(chunks)
     
-    extractor = config.instantiate()
+    config.in_dim = 200
+    decoder = config.instantiate()
     # \sum_{k=0}^N k(N-k), where N is `num_tokens`
-    assert extractor.decoder._span_size_ids.sum().item() == (num_tokens**3 - num_tokens) // 6
-    assert extractor.decoder._span_non_mask.sum().item() == (num_tokens**2 + num_tokens) // 2
+    assert decoder._span_size_ids.sum().item() == (num_tokens**3 - num_tokens) // 6
+    assert decoder._span_non_mask.sum().item() == (num_tokens**2 + num_tokens) // 2
 
 
 
@@ -101,6 +102,40 @@ def test_boundaries_obj_for_neg_sampling(neg_sampling_rate, neg_sampling_surr_ra
 
 
 
+@pytest.mark.parametrize("training", [True, False])
+def test_diag_boundaries_pair_obj(training, EAR_data_demo):
+    entry = EAR_data_demo[0]
+    entry['chunks_pred'] = []
+    tokens, chunks, relations = entry['tokens'], entry['chunks'], entry['relations']
+    
+    config = SpecificSpanRelClsDecoderConfig(max_span_size=3)
+    config.build_vocab(EAR_data_demo)
+    dbp_obj = config.exemplify(entry, training=training)['dbp_obj']
+    
+    num_tokens = len(tokens)
+    num_spans = (num_tokens-1) * 3  # max_span_size=3
+    assert dbp_obj.chunks == (chunks if training else [])
+    assert dbp_obj.relations == relations
+    assert dbp_obj.dbp2label_id.size() == (num_spans, num_spans)
+    
+    assert dbp_obj.dbp2label_id.sum() == sum(config.label2idx[label] for label, *_ in relations)
+    assert all(dbp_obj.dbp2label_id[_ij2diagonal(h_start, h_end-1, num_tokens), _ij2diagonal(t_start, t_end-1, num_tokens)] == config.label2idx[label] 
+                   for label, (_, h_start, h_end), (_, t_start, t_end) in relations)
+    
+    labels_retr = [config.idx2label[i] for i in dbp_obj.dbp2label_id.flatten().tolist()]
+    relations_retr = []
+    for label, ((h_start, h_end), (t_start, t_end)) in zip(labels_retr, _span_pairs_from_diagonals(num_tokens, 3)):
+        head = (dbp_obj.span2ck_label.get((h_start, h_end), config.ck_none_label), h_start, h_end)
+        tail = (dbp_obj.span2ck_label.get((t_start, t_end), config.ck_none_label), t_start, t_end)
+        if label != config.none_label and head[0] != config.ck_none_label and tail[0] != config.ck_none_label:
+            relations_retr.append((label, head, tail))
+    if training:
+        assert set(relations_retr) == set(relations)
+    else:
+        assert len(relations_retr) == 0  # `dbp_obj.chunks` is empty 
+
+
+
 @pytest.mark.parametrize("seq_len", [1, 5, 10, 100])
 def test_spans_from_upper_triangular(seq_len):
     assert len(list(_spans_from_upper_triangular(seq_len))) == (seq_len+1)*seq_len // 2
@@ -116,3 +151,10 @@ def test_spans_from_diagonals(seq_len, max_span_size):
 @pytest.mark.parametrize("seq_len", [5, 10, 100])
 def test_spans_from_functions(seq_len):
     assert set(_spans_from_diagonals(seq_len)) == set(_spans_from_upper_triangular(seq_len))
+
+
+@pytest.mark.parametrize("seq_len", [5, 10, 100])
+def test_ij2diagonal(seq_len):
+    num_spans = (seq_len+1)*seq_len // 2
+    assert [_ij2diagonal(start, end-1, seq_len) for start, end in _spans_from_diagonals(seq_len)] == list(range(num_spans))
+    assert [_diagonal2ij(k, seq_len) for k in range(num_spans)] == [(start, end-1) for start, end in _spans_from_diagonals(seq_len)]
