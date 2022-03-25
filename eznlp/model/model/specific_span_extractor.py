@@ -12,13 +12,12 @@ from .base import ModelConfigBase, ModelBase
 class SpecificSpanExtractorConfig(ModelConfigBase):
     
     _pretrained_names = ['bert_like', 'span_bert_like']
-    _all_names = _pretrained_names + ['intermediate2', 'intermediate3'] + ['decoder']
+    _all_names = _pretrained_names + ['intermediate2'] + ['decoder']
     
     def __init__(self, decoder: Union[SpecificSpanClsDecoderConfig, str]='specific_span', **kwargs):
         self.bert_like = kwargs.pop('bert_like', None)
         self.span_bert_like = kwargs.pop('span_bert_like', None)
         self.intermediate2 = kwargs.pop('intermediate2', EncoderConfig(arch='LSTM', hid_dim=400))
-        self.intermediate3 = kwargs.pop('intermediate3', EncoderConfig(arch='FFN',  hid_dim=300, num_layers=1, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2))
         
         if isinstance(decoder, SpecificSpanClsDecoderConfig):
             self.decoder = decoder
@@ -33,12 +32,11 @@ class SpecificSpanExtractorConfig(ModelConfigBase):
         return super().valid and (self.bert_like is not None) and self.bert_like.output_hidden_states and (self.span_bert_like is not None)
         
     def build_vocabs_and_dims(self, *partitions):
-        curr_dim = self.bert_like.out_dim
         if self.intermediate2 is not None:
-            self.intermediate2.in_dim, curr_dim = curr_dim, self.intermediate2.out_dim
-        if self.intermediate3 is not None:
-            self.intermediate3.in_dim, curr_dim = curr_dim, self.intermediate3.out_dim
-        self.decoder.in_dim = curr_dim
+            self.intermediate2.in_dim = self.bert_like.out_dim
+            self.decoder.in_dim = self.intermediate2.out_dim
+        else:
+            self.decoder.in_dim = self.bert_like.out_dim
         
         self.decoder.build_vocab(*partitions)
         self.span_bert_like.max_span_size = self.decoder.max_span_size
@@ -111,15 +109,6 @@ class SpecificSpanExtractor(ModelBase):
                     new_all_last_query_states[k] = self.span_intermediate2(query_hidden, curr_mask)
                 else:
                     new_all_last_query_states[k] = self.span_intermediate2[k-2](query_hidden, curr_mask)
-            all_last_query_states = new_all_last_query_states
-        
-        if hasattr(self, 'intermediate3'):
-            # `intermediate3` is always shared across span sizes
-            bert_hidden = self.intermediate3(bert_hidden, batch.mask)
-            
-            new_all_last_query_states = OrderedDict()
-            for k, query_hidden in all_last_query_states.items():
-                new_all_last_query_states[k] = self.intermediate3(query_hidden, batch.mask[:, k-1:])
             all_last_query_states = new_all_last_query_states
         
         return {'full_hidden': bert_hidden, 'all_query_hidden': all_last_query_states}

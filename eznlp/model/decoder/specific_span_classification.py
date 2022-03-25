@@ -10,6 +10,7 @@ from ...wrapper import Batch
 from ...utils.chunk import detect_overlapping_level, filter_clashed_by_priority
 from ...nn.modules import CombinedDropout, SoftLabelCrossEntropyLoss
 from ...nn.init import reinit_embedding_, reinit_layer_
+from ..encoder import EncoderConfig
 from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
 from .boundaries import Boundaries, _spans_from_diagonals
 from .boundary_selection import BoundariesDecoderMixin
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 class SpecificSpanClsDecoderConfig(SingleDecoderConfigBase, BoundariesDecoderMixin):
     def __init__(self, **kwargs):
-        self.in_drop_rates = kwargs.pop('in_drop_rates', (0.2, 0.0, 0.0))
+        self.affine = kwargs.pop('affine', EncoderConfig(arch='FFN', hid_dim=300, num_layers=1, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2))
         
         # self.max_len = kwargs.pop('max_len', None)
         
@@ -30,6 +31,7 @@ class SpecificSpanClsDecoderConfig(SingleDecoderConfigBase, BoundariesDecoderMix
         self.max_span_size_cov_rate = kwargs.pop('max_span_size_cov_rate', 0.995)
         self.max_span_size = kwargs.pop('max_span_size', None)
         self.size_emb_dim = kwargs.pop('size_emb_dim', 25)
+        self.hid_drop_rates = kwargs.pop('hid_drop_rates', (0.2, 0.0, 0.0))
         
         self.neg_sampling_rate = kwargs.pop('neg_sampling_rate', 1.0)
         self.neg_sampling_power_decay = kwargs.pop('neg_sampling_power_decay', 0.0)  # decay = 0.5, 1.0
@@ -48,11 +50,19 @@ class SpecificSpanClsDecoderConfig(SingleDecoderConfigBase, BoundariesDecoderMix
         
     @property
     def name(self):
-        return self.criterion
+        return self._name_sep.join([self.affine.arch, self.criterion])
         
     def __repr__(self):
-        repr_attr_dict = {key: getattr(self, key) for key in ['in_dim', 'in_drop_rates', 'criterion']}
+        repr_attr_dict = {key: getattr(self, key) for key in ['in_dim', 'hid_drop_rates', 'criterion']}
         return self._repr_non_config_attrs(repr_attr_dict)
+        
+    @property
+    def in_dim(self):
+        return self.affine.in_dim
+        
+    @in_dim.setter
+    def in_dim(self, dim: int):
+        self.affine.in_dim = dim
         
     @property
     def criterion(self):
@@ -108,12 +118,14 @@ class SpecificSpanClsDecoder(DecoderBase, BoundariesDecoderMixin):
         self.idx2label = config.idx2label
         self.overlapping_level = config.overlapping_level
         
+        self.affine = config.affine.instantiate()
+        
         if config.size_emb_dim > 0:
             self.size_embedding = torch.nn.Embedding(config.max_span_size, config.size_emb_dim)
             reinit_embedding_(self.size_embedding)
         
-        self.dropout = CombinedDropout(*config.in_drop_rates)
-        self.hid2logit = torch.nn.Linear(config.in_dim+config.size_emb_dim, config.voc_dim)
+        self.dropout = CombinedDropout(*config.hid_drop_rates)
+        self.hid2logit = torch.nn.Linear(config.affine.out_dim+config.size_emb_dim, config.voc_dim)
         reinit_layer_(self.hid2logit, 'sigmoid')
         
         self.criterion = config.instantiate_criterion(reduction='sum')
@@ -128,18 +140,19 @@ class SpecificSpanClsDecoder(DecoderBase, BoundariesDecoderMixin):
         for i, curr_len in enumerate(batch.seq_lens.cpu().tolist()):
             curr_max_span_size = min(self.max_span_size, curr_len)
             
-            # (curr_len-k+1, hid_dim) -> (\sum_k curr_len-k+1, hid_dim)
+            # (curr_len-k+1, hid_dim) -> (num_spans = \sum_k curr_len-k+1, hid_dim) -> (num_spans, affine_dim)
             span_hidden = torch.cat([all_hidden[k-1][i, :curr_len-k+1] for k in range(1, curr_max_span_size+1)], dim=0)
+            affined = self.affine(span_hidden)
             
             if hasattr(self, 'size_embedding'):
                 span_size_ids = [k-1 for k in range(1, curr_max_span_size+1) for _ in range(curr_len-k+1)]
                 span_size_ids = torch.tensor(span_size_ids, dtype=torch.long, device=full_hidden.device)
-                # size_embedded: (\sum_k curr_len-k+1, emb_dim)
+                # size_embedded: (num_spans = \sum_k curr_len-k+1, emb_dim)
                 size_embedded = self.size_embedding(span_size_ids)
-                span_hidden = torch.cat([span_hidden, size_embedded], dim=-1)
+                affined = torch.cat([affined, size_embedded], dim=-1)
             
-            # (\sum_k curr_len-k+1, logit_dim)
-            logits = self.hid2logit(self.dropout(span_hidden))
+            # (num_spans, logit_dim)
+            logits = self.hid2logit(self.dropout(affined))
             batch_logits.append(logits)
         
         return batch_logits
@@ -152,7 +165,7 @@ class SpecificSpanClsDecoder(DecoderBase, BoundariesDecoderMixin):
         for logits, boundaries_obj, curr_len in zip(batch_logits, batch.boundaries_objs, batch.seq_lens.cpu().tolist()):
             curr_max_span_size = min(self.max_span_size, curr_len)
             
-            # label_ids: (\sum_k curr_len-k+1, ) or (\sum_k curr_len-k+1, logit_dim)
+            # label_ids: (num_spans = \sum_k curr_len-k+1, ) or (num_spans = \sum_k curr_len-k+1, logit_dim)
             label_ids = boundaries_obj.diagonal_label_ids(curr_max_span_size)
             if hasattr(boundaries_obj, 'non_mask'):
                 non_mask = boundaries_obj.diagonal_non_mask(curr_max_span_size)
