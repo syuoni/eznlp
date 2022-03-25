@@ -99,16 +99,16 @@ class Encoder(torch.nn.Module):
             reinit_layer_(self.in_proj_layer, 'linear')
         self.shortcut = config.shortcut
         
-    def embedded2hidden(self, embedded: torch.FloatTensor, mask: torch.BoolTensor):
+    def embedded2hidden(self, embedded: torch.FloatTensor, mask: torch.BoolTensor=None):
         raise NotImplementedError("Not Implemented `embedded2hidden`")
         
-    def forward(self, embedded: torch.FloatTensor, mask: torch.BoolTensor):
+    def forward(self, embedded: torch.FloatTensor, mask: torch.BoolTensor=None):
         # embedded: (batch, step, emb_dim)
         # hidden: (batch, step, hid_dim)
         if hasattr(self, 'in_proj_layer'):
-            hidden = self.embedded2hidden(self.in_proj_layer(self.dropout(embedded)), mask)
+            hidden = self.embedded2hidden(self.in_proj_layer(self.dropout(embedded)), mask=mask)
         else:
-            hidden = self.embedded2hidden(self.dropout(embedded), mask)
+            hidden = self.embedded2hidden(self.dropout(embedded), mask=mask)
         
         if self.shortcut:
             return torch.cat([hidden, embedded], dim=-1)
@@ -121,7 +121,7 @@ class IdentityEncoder(Encoder):
     def __init__(self, config: EncoderConfig):
         super().__init__(config)
         
-    def embedded2hidden(self, embedded: torch.FloatTensor, mask: torch.BoolTensor):
+    def embedded2hidden(self, embedded: torch.FloatTensor, mask: torch.BoolTensor=None):
         return embedded
 
 
@@ -136,7 +136,7 @@ class FFNEncoder(Encoder):
                               drop_rate=(0.0 if k==0 else config.hid_drop_rate)) for k in range(config.num_layers)]
         )
         
-    def embedded2hidden(self, embedded: torch.FloatTensor, mask: torch.BoolTensor):
+    def embedded2hidden(self, embedded: torch.FloatTensor, mask: torch.BoolTensor=None):
         hidden = embedded
         for ff_block in self.ff_blocks:
             hidden = ff_block(hidden)
@@ -169,11 +169,7 @@ class RNNEncoder(Encoder):
                 self.c_0 = torch.nn.Parameter(torch.zeros(config.num_layers*2, 1, config.hid_dim//2))
         
         
-    def embedded2hidden(self, embedded: torch.FloatTensor, mask: torch.BoolTensor, return_last_hidden: bool=False):
-        packed_embedded = torch.nn.utils.rnn.pack_padded_sequence(embedded, 
-                                                                  lengths=mask2seq_lens(mask).cpu(), 
-                                                                  batch_first=True, 
-                                                                  enforce_sorted=False)
+    def embedded2hidden(self, embedded: torch.FloatTensor, mask: torch.BoolTensor=None, return_last_hidden: bool=False):
         if hasattr(self, 'h_0'):
             h_0 = self.h_0.expand(-1, embedded.size(0), -1)
             if hasattr(self, 'c_0'):
@@ -182,13 +178,20 @@ class RNNEncoder(Encoder):
         else:
             h_0 = None
         
-        if isinstance(self.rnn, torch.nn.LSTM):
-            packed_rnn_outs, (h_T, _) = self.rnn(packed_embedded, h_0)
-        else:
-            packed_rnn_outs, h_T = self.rnn(packed_embedded, h_0)
+        if mask is not None:
+            embedded = torch.nn.utils.rnn.pack_padded_sequence(embedded, 
+                                                               lengths=mask2seq_lens(mask).cpu(), 
+                                                               batch_first=True, 
+                                                               enforce_sorted=False)
         
         # rnn_outs: (batch, step, hid_dim)
-        rnn_outs, _ = torch.nn.utils.rnn.pad_packed_sequence(packed_rnn_outs, batch_first=True, padding_value=0)
+        if isinstance(self.rnn, torch.nn.LSTM):
+            rnn_outs, (h_T, _) = self.rnn(embedded, h_0)
+        else:
+            rnn_outs, h_T = self.rnn(embedded, h_0)
+        
+        if mask is not None:
+            rnn_outs, _ = torch.nn.utils.rnn.pad_packed_sequence(rnn_outs, batch_first=True, padding_value=0)
         
         if return_last_hidden:
             # h_T: (layers*directions, batch, hid_dim/2)
@@ -197,13 +200,13 @@ class RNNEncoder(Encoder):
             return rnn_outs
         
         
-    def forward(self, embedded: torch.FloatTensor, mask: torch.BoolTensor, return_last_hidden: bool=False):
+    def forward(self, embedded: torch.FloatTensor, mask: torch.BoolTensor=None, return_last_hidden: bool=False):
         # embedded: (batch, step, emb_dim)
         # hidden: (batch, step, hid_dim)
         if hasattr(self, 'in_proj_layer'):
-            hidden = self.embedded2hidden(self.in_proj_layer(self.dropout(embedded)), mask, return_last_hidden=return_last_hidden)
+            hidden = self.embedded2hidden(self.in_proj_layer(self.dropout(embedded)), mask=mask, return_last_hidden=return_last_hidden)
         else:
-            hidden = self.embedded2hidden(self.dropout(embedded), mask, return_last_hidden=return_last_hidden)
+            hidden = self.embedded2hidden(self.dropout(embedded), mask=mask, return_last_hidden=return_last_hidden)
         
         if self.shortcut:
             if return_last_hidden:
@@ -227,11 +230,11 @@ class ConvEncoder(Encoder):
                        nonlinearity='relu') for k in range(config.num_layers)]
         )
         
-    def embedded2hidden(self, embedded: torch.FloatTensor, mask: torch.BoolTensor):
+    def embedded2hidden(self, embedded: torch.FloatTensor, mask: torch.BoolTensor=None):
         # embedded: (batch, step, emb_dim) -> (batch, emb_dim, step)
         hidden = embedded.permute(0, 2, 1)
         for conv_block in self.conv_blocks:
-            hidden = conv_block(hidden, mask)
+            hidden = conv_block(hidden, mask=mask)
         
         # hidden: (batch, hid_dim, step) -> (batch, step, hid_dim)
         return hidden.permute(0, 2, 1)
@@ -261,13 +264,13 @@ class GehringConvEncoder(Encoder):
         self.scale = config.scale
         
         
-    def embedded2hidden(self, embedded: torch.FloatTensor, mask: torch.BoolTensor):
+    def embedded2hidden(self, embedded: torch.FloatTensor, mask: torch.BoolTensor=None):
         init_hidden = self.glu(self.emb2init_hid(embedded))
         
         # hidden: (batch, step, hid_dim/channels) -> (batch, hid_dim/channels, step)
         hidden = init_hidden.permute(0, 2, 1)
         for conv_block in self.conv_blocks:
-            conved = conv_block(hidden, mask)
+            conved = conv_block(hidden, mask=mask)
             hidden = (hidden + conved) * self.scale
         
         # hidden: (batch, hid_dim/channels, step) -> (batch, step, hid_dim/channels) 
@@ -301,7 +304,7 @@ class TransformerEncoder(Encoder):
                                      nonlinearity='relu') for k in range(config.num_layers)]
         )
         
-    def embedded2hidden(self, embedded: torch.FloatTensor, mask: torch.BoolTensor):
+    def embedded2hidden(self, embedded: torch.FloatTensor, mask: torch.BoolTensor=None):
         if hasattr(self, 'emb2init_hid'):
             hidden = self.relu(self.emb2init_hid(embedded))
         else:
