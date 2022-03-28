@@ -119,6 +119,7 @@ dataset2language = {'conll2003': 'English',
                     'ace2004': 'English', 
                     'ace2005': 'English', 
                     'genia': 'English', 
+                    'genia_yu2020acl': 'English',
                     'conll2004': 'English', 
                     'SciERC': 'English', 
                     'ace2005_rel': 'English',
@@ -213,6 +214,14 @@ def load_data(args: argparse.Namespace):
         train_data = io.read("data/genia/term.train.json")
         dev_data   = []
         test_data  = io.read("data/genia/term.test.json")
+        
+    elif args.dataset == 'genia_yu2020acl':
+        io = JsonIO(text_key='tokens', 
+                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', 
+                    case_mode='None', number_mode='Zeros')
+        train_data = io.read("data/genia-yu2020acl/train_dev.json")
+        dev_data   = []
+        test_data  = io.read("data/genia-yu2020acl/test.json")
         
     elif args.dataset == 'conll2004':
         io = JsonIO(text_key='tokens', 

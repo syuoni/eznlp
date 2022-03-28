@@ -69,6 +69,10 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                help="whether to use biaffine")
     group_decoder.add_argument('--affine_arch', type=str, default='FFN', 
                                help="affine encoder architecture")
+    group_decoder.add_argument('--affine_dim', type=int, default=150, 
+                               help="affine encoder hidden dim")
+    group_decoder.add_argument('--affine_num_layers', type=int, default=1, 
+                               help="number of affine encoder layers")
     group_decoder.add_argument('--neg_sampling_rate', type=float, default=1.0, 
                                help="Negative sampling rate")
     group_decoder.add_argument('--neg_sampling_power_decay', type=float, default=0.0, 
@@ -202,7 +206,7 @@ def build_ER_config(args: argparse.Namespace):
                                                          in_drop_rates=drop_rates)
     elif args.ck_decoder == 'boundary_selection':
         decoder_config = BoundarySelectionDecoderConfig(use_biaffine=args.use_biaffine, 
-                                                        affine=EncoderConfig(arch=args.affine_arch, hid_dim=150, num_layers=1, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2), 
+                                                        affine=EncoderConfig(arch=args.affine_arch, hid_dim=args.affine_dim, num_layers=args.affine_num_layers, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2), 
                                                         fl_gamma=args.fl_gamma,
                                                         sl_epsilon=args.sl_epsilon, 
                                                         neg_sampling_rate=args.neg_sampling_rate, 
@@ -215,7 +219,8 @@ def build_ER_config(args: argparse.Namespace):
                                                         #hid_drop_rates=drop_rates,
                                                         )
     elif args.ck_decoder == 'specific_span':
-        decoder_config = SpecificSpanClsDecoderConfig(fl_gamma=args.fl_gamma,
+        decoder_config = SpecificSpanClsDecoderConfig(affine=EncoderConfig(arch=args.affine_arch, hid_dim=args.affine_dim, num_layers=args.affine_num_layers, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2), 
+                                                      fl_gamma=args.fl_gamma,
                                                       sl_epsilon=args.sl_epsilon, 
                                                       neg_sampling_rate=args.neg_sampling_rate, 
                                                       neg_sampling_power_decay=args.neg_sampling_power_decay, 
