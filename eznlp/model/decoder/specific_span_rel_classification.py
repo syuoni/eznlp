@@ -107,6 +107,14 @@ class SpecificSpanRelClsDecoderConfig(SingleDecoderConfigBase, DiagBoundariesPai
         repr_attr_dict = {key: getattr(self, key) for key in ['in_dim', 'hid_drop_rates', 'criterion']}
         return self._repr_non_config_attrs(repr_attr_dict)
         
+    @property
+    def in_dim(self):
+        return self.affine.in_dim
+        
+    @in_dim.setter
+    def in_dim(self, dim: int):
+        self.affine.in_dim = dim
+        
     def build_vocab(self, *partitions):
         counter = Counter(label for data in partitions for entry in data for label, start, end in entry['chunks'])
         self.idx2ck_label = [self.ck_none_label] + list(counter.keys())
@@ -195,7 +203,7 @@ class SpecificSpanRelClsDecoder(DecoderBase, DiagBoundariesPairDecoderMixin):
                 affined_tail = self.affine(span_hidden)
             
             # scores1: (head_spans, affine_dim) * (voc_dim, affine_dim, affine_dim) * (affine_dim, tail_spans) -> (voc_dim, head_spans, tail_spans)
-            scores1 = self.dropout(affined_head).matmul(self.U).matmul(self.dropout(affined_tail))
+            scores1 = self.dropout(affined_head).matmul(self.U).matmul(self.dropout(affined_tail.permute(1, 0)))
             
             if hasattr(self, 'size_embedding'):
                 span_size_ids = [k-1 for k in range(1, curr_max_span_size+1) for _ in range(curr_len-k+1)]
@@ -223,13 +231,13 @@ class SpecificSpanRelClsDecoder(DecoderBase, DiagBoundariesPairDecoderMixin):
         
         losses = []
         for scores, dbp_obj in zip(batch_scores, batch.dbp_objs):
-            # label_ids: (num_spans, num_spans, voc_dim)
-            label_ids = dbp_obj.dbp2label_ids
+            # label_ids: (num_spans, num_spans) or (num_spans, num_spans, voc_dim)
+            label_ids = dbp_obj.dbp2label_id
             if hasattr(dbp_obj, 'non_mask'):
                 non_mask = dbp_obj.non_mask
                 scores, label_ids = scores[non_mask], label_ids[non_mask]
             else:
-                scores, label_ids = scores.flatten(start_dim=1), label_ids.flatten(start_dim=1)
+                scores, label_ids = scores.flatten(end_dim=1), label_ids.flatten(end_dim=1)
             
             loss = self.criterion(scores, label_ids)
             losses.append(loss)

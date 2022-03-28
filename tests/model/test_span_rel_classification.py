@@ -94,7 +94,7 @@ def test_chunk_pairs_obj(EAR_data_demo, num_neg_relations, training, building):
         config = ExtractorConfig(decoder=SpanRelClassificationDecoderConfig(num_neg_relations=num_neg_relations))
         rel_decoder_config = config.decoder
     else:
-        config = ExtractorConfig(decoder=JointExtractionDecoderConfig(attr_decoder=None, rel_decoder=SpanRelClassificationDecoderConfig(num_neg_relations=num_neg_relations)))
+        config = ExtractorConfig(decoder=JointExtractionDecoderConfig(rel_decoder=SpanRelClassificationDecoderConfig(num_neg_relations=num_neg_relations)))
         rel_decoder_config = config.decoder.rel_decoder
     
     dataset = Dataset(EAR_data_demo, config, training=training)

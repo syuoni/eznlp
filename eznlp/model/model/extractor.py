@@ -65,7 +65,7 @@ class ExtractorConfig(ModelConfigBase):
             elif decoder.lower().startswith('boundary'):
                 self.decoder = BoundarySelectionDecoderConfig()
             elif decoder.lower().startswith('joint_extraction'):
-                self.decoder = JointExtractionDecoderConfig()
+                self.decoder = JointExtractionDecoderConfig(ck_decoder='span_classification', rel_decoder='span_rel')
             else:
                 raise ValueError(f"Invalid `decoder`: {decoder}")
         

@@ -5,7 +5,10 @@ import torch
 
 from ...wrapper import Batch
 from ..encoder import EncoderConfig
-from ..decoder import SpecificSpanClsDecoderConfig
+from ..decoder import (SingleDecoderConfigBase, 
+                       SpecificSpanClsDecoderConfig, 
+                       SpecificSpanRelClsDecoderConfig, 
+                       JointExtractionDecoderConfig)
 from .base import ModelConfigBase, ModelBase
 
 
@@ -14,15 +17,22 @@ class SpecificSpanExtractorConfig(ModelConfigBase):
     _pretrained_names = ['bert_like', 'span_bert_like']
     _all_names = _pretrained_names + ['intermediate2'] + ['decoder']
     
-    def __init__(self, decoder: Union[SpecificSpanClsDecoderConfig, str]='specific_span', **kwargs):
+    def __init__(self, decoder: Union[SpecificSpanClsDecoderConfig, str]='specific_span_cls', **kwargs):
         self.bert_like = kwargs.pop('bert_like', None)
         self.span_bert_like = kwargs.pop('span_bert_like', None)
         self.intermediate2 = kwargs.pop('intermediate2', EncoderConfig(arch='LSTM', hid_dim=400))
         
-        if isinstance(decoder, SpecificSpanClsDecoderConfig):
+        if isinstance(decoder, (SingleDecoderConfigBase, JointExtractionDecoderConfig)):
             self.decoder = decoder
-        else:
-            self.decoder = SpecificSpanClsDecoderConfig()
+        elif isinstance(decoder, str):
+            if decoder.lower().startswith('specific_span_cls'):
+                self.decoder = SpecificSpanClsDecoderConfig()
+            elif decoder.lower().startswith('specific_span_rel'):
+                self.decoder = SpecificSpanRelClsDecoderConfig()
+            elif decoder.lower().startswith('joint_extraction'):
+                self.decoder = JointExtractionDecoderConfig(ck_decoder='specific_span_cls', rel_decoder='specific_span_rel_cls')
+            else:
+                raise ValueError(f"Invalid `decoder`: {decoder}")
         
         super().__init__(**kwargs)
         
