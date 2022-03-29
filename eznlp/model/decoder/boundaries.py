@@ -40,6 +40,15 @@ def _spans_from_diagonals(seq_len: int, max_span_size: int=None):
             yield (start, start+k)
 
 
+def _span_sizes_from_diagonals(seq_len: int, max_span_size: int=None):
+    if max_span_size is None:
+        max_span_size = seq_len
+    
+    for k in range(1, max_span_size+1):
+        for start in range(seq_len-k+1):
+            yield k
+
+
 def _ij2diagonal(i: int, j: int, seq_len: int):
     assert i <= j
     return (seq_len*2 - (j-i-1)) * (j-i) // 2 + i
@@ -165,7 +174,10 @@ class Boundaries(TargetWrapper):
 
 
 class DiagBoundariesPair(TargetWrapper):
-    """A wrapper of boundaries-pair (in diagonal) with underlying relations. 
+    """A wrapper of boundaries-pair (in the diagonal format) with underlying relations. 
+    This object enumerate all pairs between all possible spans (not exceeding `max_span_size`), 
+    regardless of the spans being positive samples (entities) or not. Hence, it is not recommended 
+    to use auxiliary chunk-type embeddings. 
     
     For pipeline modeling, `chunks_pred` is pre-computed, and thus initially non-empty in `entry`;
     For joint modeling, `chunks_pred` is computed on-the-fly, and thus initially empty in `entry`.

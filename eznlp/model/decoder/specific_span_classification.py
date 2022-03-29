@@ -11,8 +11,8 @@ from ...utils.chunk import detect_overlapping_level, filter_clashed_by_priority
 from ...nn.modules import CombinedDropout, SoftLabelCrossEntropyLoss
 from ...nn.init import reinit_embedding_, reinit_layer_
 from ..encoder import EncoderConfig
-from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
-from .boundaries import Boundaries, _spans_from_diagonals
+from .base import SingleDecoderConfigBase, DecoderBase
+from .boundaries import Boundaries, _spans_from_diagonals, _span_sizes_from_diagonals
 from .boundary_selection import BoundariesDecoderMixin
 
 logger = logging.getLogger(__name__)
@@ -22,8 +22,6 @@ logger = logging.getLogger(__name__)
 class SpecificSpanClsDecoderConfig(SingleDecoderConfigBase, BoundariesDecoderMixin):
     def __init__(self, **kwargs):
         self.affine = kwargs.pop('affine', EncoderConfig(arch='FFN', hid_dim=300, num_layers=1, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2))
-        
-        # self.max_len = kwargs.pop('max_len', None)
         
         # Note: The spans with sizes longer than `max_span_size` will be masked/ignored in both training and inference. 
         # Hence, these spans will never be recalled in testing. 
@@ -146,7 +144,7 @@ class SpecificSpanClsDecoder(DecoderBase, BoundariesDecoderMixin):
             affined = self.affine(span_hidden)
             
             if hasattr(self, 'size_embedding'):
-                span_size_ids = [k-1 for k in range(1, curr_max_span_size+1) for _ in range(curr_len-k+1)]
+                span_size_ids = [k-1 for k in _span_sizes_from_diagonals(curr_len, curr_max_span_size)]
                 span_size_ids = torch.tensor(span_size_ids, dtype=torch.long, device=full_hidden.device)
                 # size_embedded: (num_spans = \sum_k curr_len-k+1, emb_dim)
                 size_embedded = self.size_embedding(span_size_ids)

@@ -1,113 +1,49 @@
 # -*- coding: utf-8 -*-
-from typing import List
 from collections import Counter
-import random
 import logging
+import math
+import numpy
 import torch
 
-from ...wrapper import TargetWrapper, Batch
+from ...wrapper import Batch
 from ...utils.chunk import detect_overlapping_level, filter_clashed_by_priority
-from ...nn.modules import SequencePooling, SequenceAttention, CombinedDropout
+from ...nn.modules import SequencePooling, SequenceAttention, CombinedDropout, SoftLabelCrossEntropyLoss
 from ...nn.functional import seq_lens2mask
 from ...nn.init import reinit_embedding_, reinit_layer_
-from ...metrics import precision_recall_f1_report
-from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
+from .base import SingleDecoderConfigBase, DecoderBase
+from .boundaries import Boundaries, _spans_from_diagonals, _span_sizes_from_diagonals
+from .boundary_selection import BoundariesDecoderMixin
 
 logger = logging.getLogger(__name__)
 
 
-class SpanClassificationDecoderMixin(DecoderMixinBase):
-    @property
-    def idx2label(self):
-        return self._idx2label
-        
-    @idx2label.setter
-    def idx2label(self, idx2label: List[str]):
-        self._idx2label = idx2label
-        self.label2idx = {l: i for i, l in enumerate(idx2label)} if idx2label is not None else None
-        
-    @property
-    def voc_dim(self):
-        return len(self.label2idx)
-        
-    @property
-    def none_idx(self):
-        return self.label2idx[self.none_label]
-        
-    def exemplify(self, data_entry: dict, training: bool=True):
-        return {'spans_obj': Spans(data_entry, self, training=training)}
-        
-    def batchify(self, batch_examples: List[dict]):
-        return {'spans_objs': [ex['spans_obj'] for ex in batch_examples]}
-        
-    def retrieve(self, batch: Batch):
-        return [spans_obj.chunks for spans_obj in batch.spans_objs]
-        
-    def evaluate(self, y_gold: List[List[tuple]], y_pred: List[List[tuple]]):
-        """Micro-F1 for entity recognition. 
-        
-        References
-        ----------
-        https://www.clips.uantwerpen.be/conll2000/chunking/output.html
-        """
-        scores, ave_scores = precision_recall_f1_report(y_gold, y_pred)
-        return ave_scores['micro']['f1']
 
-
-
-class Spans(TargetWrapper):
-    """A wrapper of spans with underlying chunks. 
-    
-    Parameters
-    ----------
-    data_entry: dict
-        {'tokens': TokenSequence, 
-         'chunks': List[tuple]}
-    """
-    def __init__(self, data_entry: dict, config: SpanClassificationDecoderMixin, training: bool=True):
-        super().__init__(training)
-        
-        self.chunks = data_entry.get('chunks', None)
-        if training:
-            pos_spans = [(start, end) for label, start, end in self.chunks]
-        else:
-            pos_spans = []
-        
-        neg_spans = [(start, end) 
-                         for start in range(len(data_entry['tokens'])) 
-                         for end in range(start+1, min(start+1+config.max_span_size, len(data_entry['tokens']) + 1))
-                         if (start, end) not in pos_spans]
-        
-        if training and len(neg_spans) > config.num_neg_chunks:
-            neg_spans = random.sample(neg_spans, config.num_neg_chunks)
-        
-        self.spans = pos_spans + neg_spans
-        # Note: size_id = size - 1
-        self.span_size_ids = torch.tensor([end-start-1 for start, end in self.spans], dtype=torch.long)
-        self.span_size_ids.masked_fill_(self.span_size_ids>=config.max_span_size, config.max_span_size-1)
-        
-        # TODO: boundary/label smoothing
-        # Do not smooth to `<none>` label
-        if self.chunks is not None:
-            span2label = {(start, end): label for label, start, end in self.chunks}
-            labels = [span2label.get(span, config.none_label) for span in self.spans]
-            self.label_ids = torch.tensor([config.label2idx[label] for label in labels], dtype=torch.long)
-
-
-
-class SpanClassificationDecoderConfig(SingleDecoderConfigBase, SpanClassificationDecoderMixin):
+class SpanClassificationDecoderConfig(SingleDecoderConfigBase, BoundariesDecoderMixin):
     def __init__(self, **kwargs):
         self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
         
-        self.num_neg_chunks = kwargs.pop('num_neg_chunks', 100)
-        self.max_span_size = kwargs.pop('max_span_size', 10)
+        # Note: The spans with sizes longer than `max_span_size` will be masked/ignored in both training and inference. 
+        # Hence, these spans will never be recalled in testing. 
+        self.max_span_size_ceiling = kwargs.pop('max_span_size_ceiling', 50)
+        self.max_span_size_cov_rate = kwargs.pop('max_span_size_cov_rate', 1.0)
+        self.max_span_size = kwargs.pop('max_span_size', None)
         self.size_emb_dim = kwargs.pop('size_emb_dim', 25)
+        
+        self.neg_sampling_rate = kwargs.pop('neg_sampling_rate', 1.0)
+        self.neg_sampling_power_decay = kwargs.pop('neg_sampling_power_decay', 0.0)  # decay = 0.5, 1.0
+        self.neg_sampling_surr_rate = kwargs.pop('neg_sampling_surr_rate', 0.0)
+        self.neg_sampling_surr_size = kwargs.pop('neg_sampling_surr_size', 5)
         
         self.agg_mode = kwargs.pop('agg_mode', 'max_pooling')
         
         self.none_label = kwargs.pop('none_label', '<none>')
         self.idx2label = kwargs.pop('idx2label', None)
         self.overlapping_level = kwargs.pop('overlapping_level', None)
+        
+        # Boundary smoothing epsilon
+        self.sb_epsilon = kwargs.pop('sb_epsilon', 0.0)
+        self.sb_size = kwargs.pop('sb_size', 1)
+        self.sb_adj_factor = kwargs.pop('sb_adj_factor', 1.0)
         super().__init__(**kwargs)
         
         
@@ -119,12 +55,39 @@ class SpanClassificationDecoderConfig(SingleDecoderConfigBase, SpanClassificatio
         repr_attr_dict = {key: getattr(self, key) for key in ['in_dim', 'in_drop_rates', 'agg_mode', 'criterion']}
         return self._repr_non_config_attrs(repr_attr_dict)
         
+    @property
+    def criterion(self):
+        if self.sb_epsilon > 0:
+            return f"SB({self.sb_epsilon:.2f}, {self.sb_size})"
+        else:
+            return super().criterion
+        
+    def instantiate_criterion(self, **kwargs):
+        if self.criterion.lower().startswith(('sb', 'sl')):
+            # For boundary/label smoothing, the `Boundaries` object has been accordingly changed; 
+            # hence, do not use `SmoothLabelCrossEntropyLoss`
+            return SoftLabelCrossEntropyLoss(**kwargs)
+        else:
+            return super().instantiate_criterion(**kwargs)
+        
+        
     def build_vocab(self, *partitions):
         counter = Counter(label for data in partitions for entry in data for label, start, end in entry['chunks'])
         self.idx2label = [self.none_label] + list(counter.keys())
         
         self.overlapping_level = max(detect_overlapping_level(entry['chunks']) for data in partitions for entry in data)
         logger.info(f"Overlapping level: {self.overlapping_level}")
+        
+        # Allow directly setting `max_span_size`
+        if self.max_span_size is None:
+            # Calculate `max_span_size` according to data
+            span_sizes = [end-start for data in partitions for entry in data for label, start, end in entry['chunks']]
+            if self.max_span_size_cov_rate >= 1:
+                span_size_cov = max(span_sizes)
+            else:
+                span_size_cov = math.ceil(numpy.quantile(span_sizes, self.max_span_size_cov_rate))
+            self.max_span_size = min(span_size_cov, self.max_span_size_ceiling)
+        logger.warning(f"The `max_span_size` is set to {self.max_span_size}")
         
         size_counter = Counter(end-start for data in partitions for entry in data for label, start, end in entry['chunks'])
         num_spans = sum(size_counter.values())
@@ -138,9 +101,10 @@ class SpanClassificationDecoderConfig(SingleDecoderConfigBase, SpanClassificatio
 
 
 
-class SpanClassificationDecoder(DecoderBase, SpanClassificationDecoderMixin):
+class SpanClassificationDecoder(DecoderBase, BoundariesDecoderMixin):
     def __init__(self, config: SpanClassificationDecoderConfig):
         super().__init__()
+        self.max_span_size = config.max_span_size
         self.none_label = config.none_label
         self.idx2label = config.idx2label
         self.overlapping_level = config.overlapping_level
@@ -164,28 +128,44 @@ class SpanClassificationDecoder(DecoderBase, SpanClassificationDecoderMixin):
     def get_logits(self, batch: Batch, full_hidden: torch.Tensor):
         # full_hidden: (batch, step, hid_dim)
         batch_logits = []
-        for k in range(full_hidden.size(0)):
+        for i, curr_len in enumerate(batch.seq_lens.cpu().tolist()):
+            curr_max_span_size = min(self.max_span_size, curr_len)
+            
             # span_hidden: (num_spans, span_size, hid_dim) -> (num_spans, hid_dim)
-            span_hidden = [full_hidden[k, start:end] for start, end in batch.spans_objs[k].spans]
+            span_hidden = [full_hidden[i, start:end] for start, end in _spans_from_diagonals(curr_len, curr_max_span_size)]
             span_mask = seq_lens2mask(torch.tensor([h.size(0) for h in span_hidden], dtype=torch.long, device=full_hidden.device))
             span_hidden = torch.nn.utils.rnn.pad_sequence(span_hidden, batch_first=True, padding_value=0.0)
             span_hidden = self.aggregating(self.dropout(span_hidden), mask=span_mask)
             
             if hasattr(self, 'size_embedding'):
-                # size_embedded: (num_spans, emb_dim)
-                size_embedded = self.size_embedding(batch.spans_objs[k].span_size_ids)
-                span_hidden = torch.cat([span_hidden, self.dropout(size_embedded)], dim=-1)
+                span_size_ids = [k-1 for k in _span_sizes_from_diagonals(curr_len, curr_max_span_size)]
+                span_size_ids = torch.tensor(span_size_ids, dtype=torch.long, device=full_hidden.device)
                 
+                # size_embedded: (num_spans, emb_dim)
+                size_embedded = self.size_embedding(span_size_ids)
+                span_hidden = torch.cat([span_hidden, self.dropout(size_embedded)], dim=-1)
+            
             logits = self.hid2logit(span_hidden)
             batch_logits.append(logits)
-            
+        
         return batch_logits
         
         
     def forward(self, batch: Batch, full_hidden: torch.Tensor):
         batch_logits = self.get_logits(batch, full_hidden)
         
-        losses = [self.criterion(batch_logits[k], batch.spans_objs[k].label_ids) for k in range(full_hidden.size(0))]
+        losses = []
+        for logits, boundaries_obj, curr_len in zip(batch_logits, batch.boundaries_objs, batch.seq_lens.cpu().tolist()):
+            curr_max_span_size = min(self.max_span_size, curr_len)
+            
+            # label_ids: (num_spans = \sum_k curr_len-k+1, ) or (num_spans = \sum_k curr_len-k+1, logit_dim)
+            label_ids = boundaries_obj.diagonal_label_ids(curr_max_span_size)
+            if hasattr(boundaries_obj, 'non_mask'):
+                non_mask = boundaries_obj.diagonal_non_mask(curr_max_span_size)
+                logits, label_ids = logits[non_mask], label_ids[non_mask]
+            
+            loss = self.criterion(logits, label_ids)
+            losses.append(loss)
         return torch.stack(losses)
         
         
@@ -193,10 +173,12 @@ class SpanClassificationDecoder(DecoderBase, SpanClassificationDecoderMixin):
         batch_logits = self.get_logits(batch, full_hidden)
         
         batch_chunks = []
-        for k in range(full_hidden.size(0)):
-            confidences, label_ids = batch_logits[k].softmax(dim=-1).max(dim=-1)
+        for logits, curr_len in zip(batch_logits, batch.seq_lens.cpu().tolist()):
+            curr_max_span_size = min(self.max_span_size, curr_len)
+            
+            confidences, label_ids = logits.softmax(dim=-1).max(dim=-1)
             labels = [self.idx2label[i] for i in label_ids.cpu().tolist()]
-            chunks = [(label, start, end) for label, (start, end) in zip(labels, batch.spans_objs[k].spans) if label != self.none_label]
+            chunks = [(label, start, end) for label, (start, end) in zip(labels, _spans_from_diagonals(curr_len, curr_max_span_size)) if label != self.none_label]
             confidences = [conf for label, conf in zip(labels, confidences.cpu().tolist()) if label != self.none_label]
             assert len(confidences) == len(chunks)
             

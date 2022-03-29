@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class BoundariesDecoderMixin(DecoderMixinBase):
-    """Standard `Mixin` for entity recognition. 
+    """The standard `Mixin` for span-based entity recognition. 
     """
     @property
     def idx2label(self):
