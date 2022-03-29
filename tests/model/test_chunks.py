@@ -2,7 +2,7 @@
 import pytest
 import itertools
 
-from eznlp.model import SpanRelClassificationDecoderConfig
+from eznlp.model import SpanRelClassificationDecoderConfig, SpanAttrClassificationDecoderConfig
 
 
 @pytest.mark.parametrize("training", [True, False])
@@ -13,13 +13,12 @@ def test_chunk_pairs_obj(training, pipeline, EAR_data_demo):
             entry['chunks_pred'] = []
     
     entry = EAR_data_demo[0]
-    tokens, chunks, relations = entry['tokens'], entry['chunks'], entry['relations']
+    chunks, relations = entry['chunks'], entry['relations']
     
     config = SpanRelClassificationDecoderConfig(max_span_size=3)
     config.build_vocab(EAR_data_demo)
     cp_obj = config.exemplify(entry, training=training)['cp_obj']
     
-    num_tokens = len(tokens)
     num_chunks = len(chunks)
     assert cp_obj.relations == relations
     
@@ -52,3 +51,55 @@ def test_chunk_pairs_obj(training, pipeline, EAR_data_demo):
         else:
             assert set(cp_obj.chunks) == set(chunks_pred)
             assert cp_obj.cp2label_id.size() == (3, 3)
+
+
+
+@pytest.mark.parametrize("training", [True, False])
+@pytest.mark.parametrize("pipeline", [True, False])
+def test_chunk_singles_obj(training, pipeline, EAR_data_demo):
+    if pipeline:
+        for entry in EAR_data_demo:
+            entry['chunks_pred'] = []
+    
+    entry = EAR_data_demo[0]
+    chunks, attributes = entry['chunks'], entry['attributes']
+    
+    config = SpanAttrClassificationDecoderConfig(max_span_size=3)
+    config.build_vocab(EAR_data_demo)
+    cs_obj = config.exemplify(entry, training=training)['cs_obj']
+    
+    num_chunks = len(chunks)
+    assert cs_obj.attributes == attributes
+    
+    if pipeline and training:
+        assert cs_obj.chunks == chunks
+        assert cs_obj.cs2label_id.size() == (num_chunks, config.voc_dim)
+        assert cs_obj.cs2label_id[:, 1:].sum() == len(attributes)
+        assert (cs_obj.cs2label_id.sum(dim=0) >= 1).all().item()
+        assert all(cs_obj.cs2label_id[cs_obj.chunks.index(chunk), config.label2idx[label]] == 1 for label, chunk in attributes)
+        
+        attributes_retr = []
+        for chunk, ck_confidences in zip(cs_obj.chunks, cs_obj.cs2label_id):
+            labels_retr = [config.idx2label[i] for i, c in enumerate(ck_confidences.tolist()) if c >= config.confidence_threshold]
+            if config.none_label not in labels_retr:
+                attributes_retr.extend([(label, chunk) for label in labels_retr])
+        assert set(attributes_retr) == set(attributes)
+        
+    elif pipeline and not training:
+        assert len(cs_obj.chunks) == 0
+        assert cs_obj.cs2label_id.size() == (0, config.voc_dim)
+        
+    else:
+        assert not hasattr(cs_obj, 'chunks')
+        assert not hasattr(cs_obj, 'cs2label_id')
+        
+        chunks_pred = [('EntA', 0, 1), ('EntB', 1, 2), ('EntA', 2, 3)]
+        cs_obj.chunks_pred = chunks_pred
+        cs_obj.build(config)
+        
+        if training:
+            assert set(cs_obj.chunks) == set(chunks + chunks_pred)
+            assert cs_obj.cs2label_id.size() == (num_chunks+3, config.voc_dim)
+        else:
+            assert set(cs_obj.chunks) == set(chunks_pred)
+            assert cs_obj.cs2label_id.size() == (3, config.voc_dim)

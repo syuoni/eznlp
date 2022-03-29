@@ -128,6 +128,7 @@ class SpanRelClassificationDecoderConfig(SingleDecoderConfigBase, ChunkPairsDeco
         counter = Counter(label for data in partitions for entry in data for label, head, tail in entry['relations'])
         self.idx2label = [self.none_label] + list(counter.keys())
         
+        # TODO: allow_ht2rel_type
         counter = Counter((head[0], tail[0]) for data in partitions for entry in data for label, head, tail in entry['relations'])
         self.allow_h2t_types = set(list(counter.keys()))
         self.allow_self_relation = any(head==tail for data in partitions for entry in data for label, head, tail in entry['relations'])
