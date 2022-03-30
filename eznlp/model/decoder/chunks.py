@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from typing import List, Union
+import random
 import torch
 
 from ...wrapper import TargetWrapper
@@ -23,6 +24,7 @@ class ChunkPairs(TargetWrapper):
     def __init__(self, entry: dict, config: SingleDecoderConfigBase, training: bool=True):
         super().__init__(training)
         
+        self.num_tokens = len(entry['tokens'])
         self.chunks_gold = entry['chunks'] if training else []
         self.chunks_pred = entry.get('chunks_pred', None)
         self.relations = entry.get('relations', None)
@@ -35,13 +37,20 @@ class ChunkPairs(TargetWrapper):
         
     @chunks_pred.setter
     def chunks_pred(self, chunks: List[tuple]):
-        assert getattr(self, '_chunks_pred', None) is None  # `chunks_pred` is unchangable once set
+        # `chunks_pred` is unchangable once set
+        # In the evaluation phase, the outside chunk-decoder should produce deterministic predicted chunks
+        assert getattr(self, '_chunks_pred', None) is None
         self._chunks_pred = chunks
         
         if self.chunks_pred is not None:
             # Do not use ```self.chunks = list(set(self.chunks_gold + self.chunks_pred))```,
             # which may return non-deterministic order. 
-            self.chunks = self.chunks_gold + [ck for ck in self.chunks_pred if ck not in self.chunks_gold]
+            # In the early training stage, the chunk-decoder may produce too many predicted chunks, so do sampling here. 
+            chunks_extra = [ck for ck in self.chunks_pred if ck not in self.chunks_gold]
+            num_neg_chunks = max(len(self.chunks_gold), int(self.num_tokens*0.2)-len(self.chunks_gold), 10)
+            if len(chunks_extra) > num_neg_chunks:
+                chunks_extra = random.sample(chunks_extra, num_neg_chunks)
+            self.chunks = self.chunks_gold + chunks_extra
             
             # In merged chunks, there may exist two chunks with a same span but different chunk-types. 
             # In this case, auxiliary chunk-type embeddings may be useful. 
@@ -95,6 +104,7 @@ class ChunkSingles(TargetWrapper):
     def __init__(self, entry: dict, config: SingleDecoderConfigBase, training: bool=True):
         super().__init__(training)
         
+        self.num_tokens = len(entry['tokens'])
         self.chunks_gold = entry['chunks'] if training else []
         self.chunks_pred = entry.get('chunks_pred', None)
         self.attributes = entry.get('attributes', None)
@@ -107,13 +117,20 @@ class ChunkSingles(TargetWrapper):
         
     @chunks_pred.setter
     def chunks_pred(self, chunks: List[tuple]):
-        assert getattr(self, '_chunks_pred', None) is None  # `chunks_pred` is unchangable once set
+        # `chunks_pred` is unchangable once set
+        # In the evaluation phase, the outside chunk-decoder should produce deterministic predicted chunks
+        assert getattr(self, '_chunks_pred', None) is None
         self._chunks_pred = chunks
         
         if self.chunks_pred is not None:
             # Do not use ```self.chunks = list(set(self.chunks_gold + self.chunks_pred))```,
             # which may return non-deterministic order. 
-            self.chunks = self.chunks_gold + [ck for ck in self.chunks_pred if ck not in self.chunks_gold]
+            # In the early training stage, the chunk-decoder may produce too many predicted chunks, so do sampling here. 
+            chunks_extra = [ck for ck in self.chunks_pred if ck not in self.chunks_gold]
+            num_neg_chunks = max(len(self.chunks_gold), int(self.num_tokens*0.2)-len(self.chunks_gold), 10)
+            if len(chunks_extra) > num_neg_chunks:
+                chunks_extra = random.sample(chunks_extra, num_neg_chunks)
+            self.chunks = self.chunks_gold + chunks_extra
             
             # In merged chunks, there may exist two chunks with a same span but different chunk-types. 
             # In this case, auxiliary chunk-type embeddings may be useful. 

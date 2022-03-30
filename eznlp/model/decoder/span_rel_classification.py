@@ -173,13 +173,14 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
         self.criterion = config.instantiate_criterion(reduction='sum')
         
         
-    def _assign_chunks_pred(self, batch: Batch, batch_chunks_pred: List[List[tuple]]):
+    def assign_chunks_pred(self, batch: Batch, batch_chunks_pred: List[List[tuple]]):
         """This method should be called on-the-fly for joint modeling. 
         """
         for cp_obj, chunks_pred in zip(batch.cp_objs, batch_chunks_pred):
-            cp_obj.chunks_pred = chunks_pred
-            cp_obj.build(self)
-            cp_obj.to(self.hid2logit.weight.device)
+            if cp_obj.chunks_pred is None:
+                cp_obj.chunks_pred = chunks_pred
+                cp_obj.build(self)
+                cp_obj.to(self.hid2logit.weight.device)
         
         
     def get_logits(self, batch: Batch, full_hidden: torch.Tensor):
@@ -236,14 +237,16 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
         
         losses = []
         for logits, cp_obj in zip(batch_logits, batch.cp_objs):
-            label_ids = cp_obj.cp2label_id
-            if hasattr(cp_obj, 'non_mask'):
-                non_mask = cp_obj.non_mask
-                logits, label_ids = logits[non_mask], label_ids[non_mask]
+            if len(cp_obj.chunks) == 0:
+                loss = torch.tensor(0.0, device=full_hidden.device)
             else:
-                logits, label_ids = logits.flatten(end_dim=1), label_ids.flatten(end_dim=1)
-            
-            loss = self.criterion(logits, label_ids) if len(cp_obj.chunks) > 0 else torch.tensor(0.0, device=full_hidden.device)
+                label_ids = cp_obj.cp2label_id
+                if hasattr(cp_obj, 'non_mask'):
+                    non_mask = cp_obj.non_mask
+                    logits, label_ids = logits[non_mask], label_ids[non_mask]
+                else:
+                    logits, label_ids = logits.flatten(end_dim=1), label_ids.flatten(end_dim=1)
+                loss = self.criterion(logits, label_ids)
             losses.append(loss)
         return torch.stack(losses)
         
@@ -253,11 +256,13 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
         
         batch_relations = []
         for logits, cp_obj in zip(batch_logits, batch.cp_objs):
-            confidences, label_ids = logits.softmax(dim=-1).max(dim=-1)
-            labels = [self.idx2label[i] for i in label_ids.flatten().cpu().tolist()]
-            
-            relations = [(label, head, tail) for label, (head, tail) in zip(labels, itertools.product(cp_obj.chunks, cp_obj.chunks)) if label != self.none_label]
-            relations = [(label, head, tail) for label, head, tail in relations if (head[0], tail[0]) in self.allow_h2t_types]
-            relations = [(label, head, tail) for label, head, tail in relations if (head == tail) and (not self.allow_self_relation)]
+            if len(cp_obj.chunks) == 0:
+                relations = []
+            else:
+                confidences, label_ids = logits.softmax(dim=-1).max(dim=-1)
+                labels = [self.idx2label[i] for i in label_ids.flatten().cpu().tolist()]
+                relations = [(label, head, tail) for label, (head, tail) in zip(labels, itertools.product(cp_obj.chunks, cp_obj.chunks)) if label != self.none_label]
+                relations = [(label, head, tail) for label, head, tail in relations if (head[0], tail[0]) in self.allow_h2t_types]
+                relations = [(label, head, tail) for label, head, tail in relations if (head == tail) and (not self.allow_self_relation)]
             batch_relations.append(relations)
         return batch_relations

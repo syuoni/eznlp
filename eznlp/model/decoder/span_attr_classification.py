@@ -172,13 +172,14 @@ class SpanAttrClassificationDecoder(DecoderBase, ChunkSinglesDecoderMixin):
         self.confidence_threshold = config.confidence_threshold
         
         
-    def _assign_chunks_pred(self, batch: Batch, batch_chunks_pred: List[List[tuple]]):
+    def assign_chunks_pred(self, batch: Batch, batch_chunks_pred: List[List[tuple]]):
         """This method should be called on-the-fly for joint modeling. 
         """
         for cs_obj, chunks_pred in zip(batch.cs_objs, batch_chunks_pred):
-            cs_obj.chunks_pred = chunks_pred
-            cs_obj.build(self)
-            cs_obj.to(self.hid2logit.weight.device)
+            if cs_obj.chunks_pred is None:
+                cs_obj.chunks_pred = chunks_pred
+                cs_obj.build(self)
+                cs_obj.to(self.hid2logit.weight.device)
         
         
     def get_logits(self, batch: Batch, full_hidden: torch.Tensor):
@@ -218,12 +219,14 @@ class SpanAttrClassificationDecoder(DecoderBase, ChunkSinglesDecoderMixin):
         
         losses = []
         for logits, cs_obj in zip(batch_logits, batch.cs_objs):
-            label_ids = cs_obj.cs2label_id
-            if hasattr(cs_obj, 'non_mask'):
-                non_mask = cs_obj.non_mask
-                logits, label_ids = logits[non_mask], label_ids[non_mask]
-            
-            loss = self.criterion(logits, label_ids) if len(cs_obj.chunks) > 0 else torch.tensor(0.0, device=full_hidden.device)
+            if len(cs_obj.chunks) == 0:
+                loss = torch.tensor(0.0, device=full_hidden.device)
+            else:
+                label_ids = cs_obj.cs2label_id
+                if hasattr(cs_obj, 'non_mask'):
+                    non_mask = cs_obj.non_mask
+                    logits, label_ids = logits[non_mask], label_ids[non_mask]
+                loss = self.criterion(logits, label_ids)
             losses.append(loss)
         return torch.stack(losses)
         
@@ -233,12 +236,14 @@ class SpanAttrClassificationDecoder(DecoderBase, ChunkSinglesDecoderMixin):
         
         batch_attributes = []
         for logits, cs_obj in zip(batch_logits, batch.cs_objs):
-            confidences = logits.sigmoid()
-            
-            attributes = []
-            for chunk, ck_confidences in zip(cs_obj.chunks, confidences):
-                labels = [self.idx2label[i] for i, c in enumerate(ck_confidences.cpu().tolist()) if c >= self.confidence_threshold]
-                if self.none_label not in labels:
-                    attributes.extend([(label, chunk) for label in labels])
+            if len(cs_obj.chunks) == 0:
+                attributes = []
+            else:
+                confidences = logits.sigmoid()
+                attributes = []
+                for chunk, ck_confidences in zip(cs_obj.chunks, confidences):
+                    labels = [self.idx2label[i] for i, c in enumerate(ck_confidences.cpu().tolist()) if c >= self.confidence_threshold]
+                    if self.none_label not in labels:
+                        attributes.extend([(label, chunk) for label in labels])
             batch_attributes.append(attributes)
         return batch_attributes
