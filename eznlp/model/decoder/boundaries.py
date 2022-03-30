@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from typing import Tuple, List
 import itertools
 import random
@@ -173,9 +174,9 @@ class Boundaries(TargetWrapper):
 
 
 
-class DiagBoundariesPair(TargetWrapper):
-    """A wrapper of boundaries-pair (in the diagonal format) with underlying relations. 
-    This object enumerate all pairs between all possible spans (not exceeding `max_span_size`), 
+class DiagBoundariesPairs(TargetWrapper):
+    """A wrapper of boundaries-pairs (in the diagonal format) with underlying relations. 
+    This object enumerates all pairs between all possible spans (not exceeding `max_span_size`), 
     regardless of the spans being positive samples (entities) or not. Hence, it is not recommended 
     to use auxiliary chunk-type embeddings. 
     
@@ -194,8 +195,8 @@ class DiagBoundariesPair(TargetWrapper):
         
         self.chunks_gold = entry['chunks'] if training else []
         self.chunks_pred = entry.get('chunks_pred', None)
-        
         self.relations = entry.get('relations', None)
+        
         num_tokens = len(entry['tokens'])
         num_spans = (num_tokens*2 - (config.max_span_size-1)) * config.max_span_size // 2
         
@@ -225,7 +226,9 @@ class DiagBoundariesPair(TargetWrapper):
         
     @chunks_pred.setter
     def chunks_pred(self, chunks: List[tuple]):
-        assert getattr(self, '_chunks_pred', None) is None  # `chunks_pred` is unchangable once set
+        # `chunks_pred` is unchangable once set
+        # In the evaluation phase, the outside chunk-decoder should produce deterministic predicted chunks
+        assert getattr(self, '_chunks_pred', None) is None
         self._chunks_pred = chunks
         
         if self.chunks_pred is not None:

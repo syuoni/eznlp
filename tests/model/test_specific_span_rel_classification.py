@@ -5,7 +5,7 @@ import torch
 from eznlp.dataset import Dataset
 from eznlp.model import EncoderConfig
 from eznlp.model import BertLikeConfig, SpanBertLikeConfig, SpecificSpanRelClsDecoderConfig, SpecificSpanExtractorConfig
-from eznlp.training import Trainer, count_params
+from eznlp.training import Trainer
 
 
 class TestModel(object):
@@ -30,7 +30,7 @@ class TestModel(object):
             assert delta_query.abs().max().item() < 1e-4
         
         delta_losses = losses012[1:] - losses123[:-1]
-        assert delta_losses.abs().max().item() < 2e-4
+        assert delta_losses.abs().max().item() < 5e-3
         
         pred012 = self.model.decode(batch012, **states012)
         pred123 = self.model.decode(batch123, **states123)
@@ -48,6 +48,8 @@ class TestModel(object):
         
         
     def _setup_case(self, data, device):
+        for entry in data:
+            entry['chunks_pred'] = entry['chunks']
         self.device = device
         
         self.dataset = Dataset(data, self.config)
@@ -68,8 +70,6 @@ class TestModel(object):
                               (3,  'max_pooling',  0.5, 0),  # Use negative sampling
                               (3,  'max_pooling',  1.0, 25)])  # Use size embedding
     def test_model(self, num_layers, agg_mode, neg_sampling_rate, size_emb_dim, conll2004_demo, bert_with_tokenizer, device):
-        for entry in conll2004_demo:
-            entry['chunks_pred'] = entry['chunks']
         bert, tokenizer = bert_with_tokenizer
         self.config = SpecificSpanExtractorConfig(decoder=SpecificSpanRelClsDecoderConfig(neg_sampling_rate=neg_sampling_rate, size_emb_dim=size_emb_dim, max_span_size=3), 
                                                   bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False, output_hidden_states=True), 
@@ -89,7 +89,6 @@ class TestModel(object):
         self._setup_case(conll2004_demo, device)
         
         data_wo_gold = [{'tokens': entry['tokens'], 
-                         'chunks': entry['chunks'], 
                          'chunks_pred': entry['chunks']} for entry in conll2004_demo]
         dataset_wo_gold = Dataset(data_wo_gold, self.config, training=False)
         

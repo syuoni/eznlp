@@ -1,27 +1,25 @@
 # -*- coding: utf-8 -*-
 from typing import List, Dict
 from collections import Counter
-import itertools
 import logging
 import math
 import numpy
 import torch
 
 from ...wrapper import Batch
-from ...utils.chunk import detect_overlapping_level, filter_clashed_by_priority
-from ...nn.modules import CombinedDropout, SoftLabelCrossEntropyLoss
+from ...nn.modules import CombinedDropout
 from ...nn.init import reinit_embedding_, reinit_layer_
 from ...metrics import precision_recall_f1_report
 from ..encoder import EncoderConfig
 from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
-from .boundaries import DiagBoundariesPair, _span_pairs_from_diagonals
+from .boundaries import DiagBoundariesPairs, _span_pairs_from_diagonals
 
 logger = logging.getLogger(__name__)
 
 
 
-class DiagBoundariesPairDecoderMixin(DecoderMixinBase):
-    """Standard `Mixin` for relation extraction. 
+class DiagBoundariesPairsDecoderMixin(DecoderMixinBase):
+    """A `Mixin` for relation extraction. 
     """
     @property
     def idx2label(self):
@@ -58,7 +56,7 @@ class DiagBoundariesPairDecoderMixin(DecoderMixinBase):
         return self.ck_label2idx[self.ck_none_label]
         
     def exemplify(self, entry: dict, training: bool=True):
-        return {'dbp_obj': DiagBoundariesPair(entry, self, training=training)}
+        return {'dbp_obj': DiagBoundariesPairs(entry, self, training=training)}
         
     def batchify(self, batch_examples: List[dict]):
         return {'dbp_objs': [ex['dbp_obj'] for ex in batch_examples]}
@@ -72,12 +70,10 @@ class DiagBoundariesPairDecoderMixin(DecoderMixinBase):
 
 
 
-class SpecificSpanRelClsDecoderConfig(SingleDecoderConfigBase, DiagBoundariesPairDecoderMixin):
+class SpecificSpanRelClsDecoderConfig(SingleDecoderConfigBase, DiagBoundariesPairsDecoderMixin):
     def __init__(self, **kwargs):
         self.use_biaffine = kwargs.pop('use_biaffine', True)
         self.affine = kwargs.pop('affine', EncoderConfig(arch='FFN', hid_dim=150, num_layers=1, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2))
-        
-        # self.max_len = kwargs.pop('max_len', None)
         
         # Note: The spans with sizes longer than `max_span_size` will be masked/ignored in both training and inference. 
         # Hence, these spans will never be recalled in testing. 
@@ -96,7 +92,6 @@ class SpecificSpanRelClsDecoderConfig(SingleDecoderConfigBase, DiagBoundariesPai
         self.idx2label = kwargs.pop('idx2label', None)
         self.ck_none_label = kwargs.pop('ck_none_label', '<none>')
         self.idx2ck_label = kwargs.pop('idx2ck_label', None)
-        self.overlapping_level = kwargs.pop('overlapping_level', None)
         super().__init__(**kwargs)
         
     @property
@@ -118,9 +113,6 @@ class SpecificSpanRelClsDecoderConfig(SingleDecoderConfigBase, DiagBoundariesPai
     def build_vocab(self, *partitions):
         counter = Counter(label for data in partitions for entry in data for label, start, end in entry['chunks'])
         self.idx2ck_label = [self.ck_none_label] + list(counter.keys())
-        
-        self.overlapping_level = max(detect_overlapping_level(entry['chunks']) for data in partitions for entry in data)
-        logger.info(f"Overlapping level: {self.overlapping_level}")
         
         # Allow directly setting `max_span_size`
         if self.max_span_size is None:
@@ -148,7 +140,7 @@ class SpecificSpanRelClsDecoderConfig(SingleDecoderConfigBase, DiagBoundariesPai
 
 
 
-class SpecificSpanRelClsDecoder(DecoderBase, DiagBoundariesPairDecoderMixin):
+class SpecificSpanRelClsDecoder(DecoderBase, DiagBoundariesPairsDecoderMixin):
     def __init__(self, config: SpecificSpanRelClsDecoderConfig):
         super().__init__()
         self.max_span_size = config.max_span_size
@@ -156,7 +148,6 @@ class SpecificSpanRelClsDecoder(DecoderBase, DiagBoundariesPairDecoderMixin):
         self.idx2label = config.idx2label
         self.ck_none_label = config.ck_none_label
         self.idx2ck_label = config.idx2ck_label
-        self.overlapping_level = config.overlapping_level
         
         if config.use_biaffine:
             self.affine_head = config.affine.instantiate()
@@ -180,6 +171,14 @@ class SpecificSpanRelClsDecoder(DecoderBase, DiagBoundariesPairDecoderMixin):
         torch.nn.init.zeros_(self.b.data)
         
         self.criterion = config.instantiate_criterion(reduction='sum')
+        
+        
+    def assign_chunks_pred(self, batch: Batch, batch_chunks_pred: List[List[tuple]]):
+        """This method should be called on-the-fly for joint modeling. 
+        """
+        for dbp_obj, chunks_pred in zip(batch.dbp_objs, batch_chunks_pred):
+            if dbp_obj.chunks_pred is None:
+                dbp_obj.chunks_pred = chunks_pred
         
         
     def compute_scores(self, batch: Batch, full_hidden: torch.Tensor, all_query_hidden: Dict[int, torch.Tensor]):
