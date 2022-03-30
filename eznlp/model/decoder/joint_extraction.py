@@ -10,6 +10,8 @@ from .span_classification import SpanClassificationDecoderConfig
 from .span_attr_classification import SpanAttrClassificationDecoderConfig
 from .span_rel_classification import SpanRelClassificationDecoderConfig
 from .boundary_selection import BoundarySelectionDecoderConfig
+from .specific_span_classification import SpecificSpanClsDecoderConfig
+from .specific_span_rel_classification import SpecificSpanRelClsDecoderConfig
 
 
 class JointExtractionDecoderMixin(DecoderMixinBase):
@@ -37,9 +39,9 @@ class JointExtractionDecoderMixin(DecoderMixinBase):
     def exemplify(self, data_entry: dict, training: bool=True):
         example = self.ck_decoder.exemplify(data_entry, training=training)
         if self.has_attr_decoder:
-            example.update(self.attr_decoder.exemplify(data_entry, training=training, building=False))
+            example.update(self.attr_decoder.exemplify(data_entry, training=training))
         if self.has_rel_decoder:
-            example.update(self.rel_decoder.exemplify(data_entry, training=training, building=False))
+            example.update(self.rel_decoder.exemplify(data_entry, training=training))
         return example
         
     def batchify(self, batch_examples: List[dict]):
@@ -63,7 +65,7 @@ class JointExtractionDecoderMixin(DecoderMixinBase):
 class JointExtractionDecoderConfig(Config, JointExtractionDecoderMixin):
     def __init__(self, 
                  ck_decoder: Union[SingleDecoderConfigBase, str]='span_classification', 
-                 attr_decoder: Union[SingleDecoderConfigBase, str]='span_attr_classification', 
+                 attr_decoder: Union[SingleDecoderConfigBase, str]=None, 
                  rel_decoder: Union[SingleDecoderConfigBase, str]='span_rel_classification',
                  **kwargs):
         if isinstance(ck_decoder, SingleDecoderConfigBase):
@@ -74,6 +76,8 @@ class JointExtractionDecoderConfig(Config, JointExtractionDecoderMixin):
             self.ck_decoder = SpanClassificationDecoderConfig()
         elif ck_decoder.lower().startswith('boundary'):
             self.ck_decoder = BoundarySelectionDecoderConfig()
+        elif ck_decoder.lower().startswith('specific_span_cls'):
+            self.ck_decoder = SpecificSpanClsDecoderConfig()
         
         if isinstance(attr_decoder, SingleDecoderConfigBase) or attr_decoder is None:
             self.attr_decoder = attr_decoder
@@ -84,6 +88,8 @@ class JointExtractionDecoderConfig(Config, JointExtractionDecoderMixin):
             self.rel_decoder = rel_decoder
         elif rel_decoder.lower().startswith('span_rel'):
             self.rel_decoder = SpanRelClassificationDecoderConfig()
+        elif rel_decoder.lower().startswith('specific_span_rel'):
+            self.rel_decoder = SpecificSpanRelClsDecoderConfig()
         
         # It seems that pytorch does not recommend to share weights outside two modules. 
         # See https://discuss.pytorch.org/t/how-to-create-model-with-sharing-weight/398/2
@@ -111,6 +117,10 @@ class JointExtractionDecoderConfig(Config, JointExtractionDecoderMixin):
         for decoder in self.decoders:
             decoder.in_dim = dim
         
+    @property
+    def max_span_size(self):
+        return self.ck_decoder.max_span_size
+        
     def build_vocab(self, *partitions):
         for decoder in self.decoders:
             decoder.build_vocab(*partitions)
@@ -130,31 +140,31 @@ class JointExtractionDecoder(DecoderBase, JointExtractionDecoderMixin):
             self.rel_decoder = config.rel_decoder.instantiate()
         
         
-    def forward(self, batch: Batch, full_hidden: torch.Tensor):
-        losses = self.ck_decoder(batch, full_hidden)
-        batch_chunks_pred = self.ck_decoder.decode(batch, full_hidden)
+    def forward(self, batch: Batch, **states):
+        losses = self.ck_decoder(batch, **states)
+        batch_chunks_pred = self.ck_decoder.decode(batch, **states)
         
         if self.has_attr_decoder:
-            self.attr_decoder.inject_chunks_and_build(batch, batch_chunks_pred, full_hidden.device)
-            losses += self.attr_decoder(batch, full_hidden)
+            self.attr_decoder.assign_chunks_pred(batch, batch_chunks_pred)
+            losses += self.attr_decoder(batch, **states)
         
         if self.has_rel_decoder:
-            self.rel_decoder.inject_chunks_and_build(batch, batch_chunks_pred, full_hidden.device)
-            losses += self.rel_decoder(batch, full_hidden)
+            self.rel_decoder.assign_chunks_pred(batch, batch_chunks_pred)
+            losses += self.rel_decoder(batch, **states)
         
         return losses
         
         
-    def decode(self, batch: Batch, full_hidden: torch.Tensor):
-        batch_chunks_pred = self.ck_decoder.decode(batch, full_hidden)
+    def decode(self, batch: Batch, **states):
+        batch_chunks_pred = self.ck_decoder.decode(batch, **states)
         y_pred = (batch_chunks_pred, )
         
         if self.has_attr_decoder:
-            self.attr_decoder.inject_chunks_and_build(batch, batch_chunks_pred, full_hidden.device)
-            y_pred = (*y_pred, self.attr_decoder.decode(batch, full_hidden))
+            self.attr_decoder.assign_chunks_pred(batch, batch_chunks_pred)
+            y_pred = (*y_pred, self.attr_decoder.decode(batch, **states))
         
         if self.has_rel_decoder:
-            self.rel_decoder.inject_chunks_and_build(batch, batch_chunks_pred, full_hidden.device)
-            y_pred = (*y_pred, self.rel_decoder.decode(batch, full_hidden))
+            self.rel_decoder.assign_chunks_pred(batch, batch_chunks_pred)
+            y_pred = (*y_pred, self.rel_decoder.decode(batch, **states))
         
         return y_pred
