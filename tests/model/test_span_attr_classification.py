@@ -52,9 +52,9 @@ class TestModel(object):
         
         
     @pytest.mark.parametrize("agg_mode", ['max_pooling', 'multiplicative_attention'])
-    @pytest.mark.parametrize("ck_label_emb_dim", [25, 0])
-    def test_model(self, agg_mode, ck_label_emb_dim, HwaMei_demo, device):
-        self.config = ExtractorConfig(decoder=SpanAttrClassificationDecoderConfig(agg_mode=agg_mode, ck_label_emb_dim=ck_label_emb_dim))
+    @pytest.mark.parametrize("label_emb_dim", [25, 0])
+    def test_model(self, agg_mode, label_emb_dim, HwaMei_demo, device):
+        self.config = ExtractorConfig(decoder=SpanAttrClassificationDecoderConfig(agg_mode=agg_mode, label_emb_dim=label_emb_dim))
         self._setup_case(HwaMei_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
