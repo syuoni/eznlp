@@ -91,6 +91,10 @@ class JointExtractionDecoderConfig(Config, JointExtractionDecoderMixin):
         elif rel_decoder.lower().startswith('specific_span_rel'):
             self.rel_decoder = SpecificSpanRelClsDecoderConfig()
         
+        self.ck_loss_weight = kwargs.pop('ck_loss_weight', 1.0)
+        self.attr_loss_weight = kwargs.pop('attr_loss_weight', 1.0)
+        self.rel_loss_weight = kwargs.pop('rel_loss_weight', 1.0)
+        
         # It seems that pytorch does not recommend to share weights outside two modules. 
         # See https://discuss.pytorch.org/t/how-to-create-model-with-sharing-weight/398/2
         # TODO: Refer to transformers/modeling_utils/PreTrainedModel/_tie_or_clone_weights
@@ -134,23 +138,26 @@ class JointExtractionDecoder(DecoderBase, JointExtractionDecoderMixin):
     def __init__(self, config: JointExtractionDecoderConfig):
         super().__init__()
         self.ck_decoder = config.ck_decoder.instantiate()
+        self.ck_loss_weight = config.ck_loss_weight
         if config.has_attr_decoder:
             self.attr_decoder = config.attr_decoder.instantiate()
+            self.attr_loss_weight = config.attr_loss_weight
         if config.has_rel_decoder:
             self.rel_decoder = config.rel_decoder.instantiate()
+            self.rel_loss_weight = config.rel_loss_weight
         
         
     def forward(self, batch: Batch, **states):
         losses = self.ck_decoder(batch, **states)
-        batch_chunks_pred = self.ck_decoder.decode(batch, **states)
+        batch_chunks_pred = self.ck_decoder.decode(batch, **states) * self.ck_loss_weight
         
         if self.has_attr_decoder:
             self.attr_decoder.assign_chunks_pred(batch, batch_chunks_pred)
-            losses += self.attr_decoder(batch, **states)
+            losses += self.attr_decoder(batch, **states) * self.attr_loss_weight
         
         if self.has_rel_decoder:
             self.rel_decoder.assign_chunks_pred(batch, batch_chunks_pred)
-            losses += self.rel_decoder(batch, **states)
+            losses += self.rel_decoder(batch, **states) * self.rel_loss_weight
         
         return losses
         
