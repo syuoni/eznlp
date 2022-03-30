@@ -134,6 +134,11 @@ class SpecificSpanRelClsDecoderConfig(SingleDecoderConfigBase, DiagBoundariesPai
         counter = Counter(label for data in partitions for entry in data for label, head, tail in entry['relations'])
         self.idx2label = [self.none_label] + list(counter.keys())
         
+        # TODO: allow_ht2rel_type
+        counter = Counter((head[0], tail[0]) for data in partitions for entry in data for label, head, tail in entry['relations'])
+        self.allow_h2t_types = set(list(counter.keys()))
+        self.allow_self_relation = any(head==tail for data in partitions for entry in data for label, head, tail in entry['relations'])
+        
         
     def instantiate(self):
         return SpecificSpanRelClsDecoder(self)
@@ -259,5 +264,7 @@ class SpecificSpanRelClsDecoder(DecoderBase, DiagBoundariesPairsDecoderMixin):
                 tail = (dbp_obj.span2ck_label.get((t_start, t_end), self.ck_none_label), t_start, t_end)
                 if label != self.none_label and head[0] != self.ck_none_label and tail[0] != self.ck_none_label:
                     relations.append((label, head, tail))
+            relations = [(label, head, tail) for label, head, tail in relations if (head[0], tail[0]) in self.allow_h2t_types]
+            relations = [(label, head, tail) for label, head, tail in relations if (head != tail) or self.allow_self_relation]
             batch_relations.append(relations)
         return batch_relations
