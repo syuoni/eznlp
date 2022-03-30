@@ -57,11 +57,9 @@ def parse_arguments(parser: argparse.ArgumentParser):
     # Span-based
     group_decoder.add_argument('--agg_mode', type=str, default='max_pooling', 
                                help="aggregating mode")
-    group_decoder.add_argument('--num_neg_chunks', type=int, default=100, 
-                               help="number of sampling negative chunks")
     group_decoder.add_argument('--max_span_size', type=int, default=10, 
                                help="maximum span size")
-    group_decoder.add_argument('--ck_size_emb_dim', type=int, default=25, 
+    group_decoder.add_argument('--size_emb_dim', type=int, default=25, 
                                help="span size embedding dim")
     
     # Boundary selection
@@ -162,7 +160,7 @@ def collect_IE_assembly_config(args: argparse.Namespace):
         bert_like, tokenizer = load_pretrained(args.bert_arch, args, cased=True)
         bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert_like, arch=args.bert_arch, 
                                           freeze=False, use_truecase='cased' in os.path.basename(bert_like.name_or_path).split('-'))
-        if args.ck_decoder == 'specific_span':
+        if getattr(args, 'ck_decoder', None) == 'specific_span':
             bert_like_config.output_hidden_states = True
             span_bert_like_config = SpanBertLikeConfig(bert_like=bert_like, arch=args.bert_arch, freeze=False, 
                                                        num_layers=None if args.sse_num_layers < 0 else args.sse_num_layers, 
@@ -200,9 +198,12 @@ def build_ER_config(args: argparse.Namespace):
         decoder_config = SpanClassificationDecoderConfig(agg_mode=args.agg_mode, 
                                                          fl_gamma=args.fl_gamma,
                                                          sl_epsilon=args.sl_epsilon, 
-                                                         num_neg_chunks=args.num_neg_chunks, 
+                                                         neg_sampling_rate=args.neg_sampling_rate, 
+                                                         neg_sampling_power_decay=args.neg_sampling_power_decay, 
+                                                         neg_sampling_surr_rate=args.neg_sampling_surr_rate, 
+                                                         neg_sampling_surr_size=args.neg_sampling_surr_size, 
                                                          max_span_size=args.max_span_size, 
-                                                         size_emb_dim=args.ck_size_emb_dim, 
+                                                         size_emb_dim=args.size_emb_dim, 
                                                          in_drop_rates=drop_rates)
     elif args.ck_decoder == 'boundary_selection':
         decoder_config = BoundarySelectionDecoderConfig(use_biaffine=args.use_biaffine, 
@@ -216,6 +217,7 @@ def build_ER_config(args: argparse.Namespace):
                                                         sb_epsilon=args.sb_epsilon, 
                                                         sb_size=args.sb_size,
                                                         sb_adj_factor=args.sb_adj_factor, 
+                                                        size_emb_dim=args.size_emb_dim, 
                                                         #hid_drop_rates=drop_rates,
                                                         )
     elif args.ck_decoder == 'specific_span':
@@ -230,7 +232,7 @@ def build_ER_config(args: argparse.Namespace):
                                                       sb_size=args.sb_size,
                                                       sb_adj_factor=args.sb_adj_factor, 
                                                       max_span_size_cov_rate=args.sse_max_span_size_cov_rate, 
-                                                      size_emb_dim=args.ck_size_emb_dim, 
+                                                      size_emb_dim=args.size_emb_dim, 
                                                       # in_drop_rates=drop_rates, 
                                                       )
     
@@ -357,17 +359,10 @@ if __name__ == '__main__':
             train_set = Dataset(train_data, train_set.config, training=True)
             dev_set   = Dataset(dev_data,   train_set.config, training=False)
         
-        train_set_chunks_pred = trainer.predict(train_set, batch_size=args.batch_size)
-        for ex, chunks_pred in zip(train_data, train_set_chunks_pred):
-            ex['chunks'] = ex['chunks'] + [ck for ck in chunks_pred if ck not in ex['chunks']]
-        
-        dev_set_chunks_pred = trainer.predict(dev_set, batch_size=args.batch_size)
-        for ex, chunks_pred in zip(dev_data, dev_set_chunks_pred):
-            ex['chunks'] = chunks_pred
-        
-        test_set_chunks_pred = trainer.predict(test_set, batch_size=args.batch_size)
-        for ex, chunks_pred in zip(test_data, test_set_chunks_pred):
-            ex['chunks'] = chunks_pred
+        for dataset, data in zip([train_set, dev_set, test_set], [train_data, dev_data, test_data]):
+            set_chunks_pred = trainer.predict(dataset, batch_size=args.batch_size)
+            for ex, chunks_pred in zip(data, dataset):
+                ex['chunks_pred'] = chunks_pred
         
         torch.save((train_data, dev_data, test_data), f"{save_path}/data-for-pipeline.pth")
     

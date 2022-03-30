@@ -44,15 +44,12 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                help="aggregating mode")
     group_decoder.add_argument('--max_span_size', type=int, default=10, 
                                help="maximum span size")
-    group_decoder.add_argument('--ck_size_emb_dim', type=int, default=25, 
+    group_decoder.add_argument('--size_emb_dim', type=int, default=25, 
                                help="span size embedding dim")
-    group_decoder.add_argument('--ck_label_emb_dim', type=int, default=25, 
+    group_decoder.add_argument('--label_emb_dim', type=int, default=25, 
                                help="chunk label embedding dim")
-    group_decoder.add_argument('--num_neg_relations', type=int, default=100, 
-                               help="number of sampling negative relations")
-    group_decoder.add_argument('--max_pair_distance', type=int, default=100, 
-                               help="maximum pair distance")
-    
+    group_decoder.add_argument('--neg_sampling_rate', type=float, default=1.0, 
+                               help="Negative sampling rate")
     return parse_to_args(parser)
 
 
@@ -63,11 +60,10 @@ def build_RE_config(args: argparse.Namespace):
     decoder_config = SpanRelClassificationDecoderConfig(agg_mode=args.agg_mode, 
                                                         fl_gamma=args.fl_gamma,
                                                         sl_epsilon=args.sl_epsilon, 
-                                                        num_neg_relations=args.num_neg_relations, 
+                                                        neg_sampling_rate=args.neg_sampling_rate, 
                                                         max_span_size=args.max_span_size, 
-                                                        max_pair_distance=args.max_pair_distance, 
-                                                        ck_size_emb_dim=args.ck_size_emb_dim, 
-                                                        ck_label_emb_dim=args.ck_label_emb_dim, 
+                                                        size_emb_dim=args.size_emb_dim, 
+                                                        label_emb_dim=args.label_emb_dim, 
                                                         in_drop_rates=drop_rates)
     
     return ExtractorConfig(**collect_IE_assembly_config(args), decoder=decoder_config)
@@ -112,6 +108,10 @@ if __name__ == '__main__':
     else:
         logger.info(f"Loading original data {args.dataset}...")
         train_data, dev_data, test_data = load_data(args)
+        for data in [train_data, dev_data, test_data]:
+            for entry in data:
+                entry['chunks_pred'] = entry['chunks']
+    
     args.language = dataset2language[args.dataset]
     config = build_RE_config(args)
     train_data, dev_data, test_data = process_IE_data(train_data, dev_data, test_data, args, config)
