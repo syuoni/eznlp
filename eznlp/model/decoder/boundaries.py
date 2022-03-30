@@ -198,12 +198,13 @@ class DiagBoundariesPairs(TargetWrapper):
         self.relations = entry.get('relations', None)
         
         num_tokens = len(entry['tokens'])
-        num_spans = (num_tokens*2 - (config.max_span_size-1)) * config.max_span_size // 2
+        curr_max_span_size = min(config.max_span_size, num_tokens)
+        num_spans = (num_tokens*2 - (curr_max_span_size-1)) * curr_max_span_size // 2
         
         if training and config.neg_sampling_rate < 1:
             non_mask_rate = config.neg_sampling_rate * torch.ones(num_spans, num_spans, dtype=torch.float)
             for label, (_, h_start, h_end), (_, t_start, t_end) in self.relations:
-                if h_end - h_start <= config.max_span_size and t_end - t_start <= config.max_span_size:
+                if h_end - h_start <= curr_max_span_size and t_end - t_start <= curr_max_span_size:
                     hk = _ij2diagonal(h_start, h_end-1, num_tokens)
                     tk = _ij2diagonal(t_start, t_end-1, num_tokens)
                     non_mask_rate[hk, tk] = 1
@@ -214,7 +215,7 @@ class DiagBoundariesPairs(TargetWrapper):
         if self.relations is not None:
             self.dbp2label_id = torch.full((num_spans, num_spans), config.none_idx, dtype=torch.long)
             for label, (_, h_start, h_end), (_, t_start, t_end) in self.relations:
-                if h_end - h_start <= config.max_span_size and t_end - t_start <= config.max_span_size:
+                if h_end - h_start <= curr_max_span_size and t_end - t_start <= curr_max_span_size:
                     hk = _ij2diagonal(h_start, h_end-1, num_tokens)
                     tk = _ij2diagonal(t_start, t_end-1, num_tokens)
                     self.dbp2label_id[hk, tk] = config.label2idx[label]
