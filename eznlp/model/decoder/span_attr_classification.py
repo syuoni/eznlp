@@ -245,5 +245,6 @@ class SpanAttrClassificationDecoder(DecoderBase, ChunkSinglesDecoderMixin):
                     labels = [self.idx2label[i] for i, c in enumerate(ck_confidences.cpu().tolist()) if c >= self.confidence_threshold]
                     if self.none_label not in labels:
                         attributes.extend([(label, chunk) for label in labels])
+                attributes = [(label, chunk) for label, chunk in attributes if chunk[0] in self.allow_ck_types]
             batch_attributes.append(attributes)
         return batch_attributes

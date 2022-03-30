@@ -263,6 +263,6 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
                 labels = [self.idx2label[i] for i in label_ids.flatten().cpu().tolist()]
                 relations = [(label, head, tail) for label, (head, tail) in zip(labels, itertools.product(cp_obj.chunks, cp_obj.chunks)) if label != self.none_label]
                 relations = [(label, head, tail) for label, head, tail in relations if (head[0], tail[0]) in self.allow_h2t_types]
-                relations = [(label, head, tail) for label, head, tail in relations if (head == tail) and (not self.allow_self_relation)]
+                relations = [(label, head, tail) for label, head, tail in relations if (head != tail) or self.allow_self_relation]
             batch_relations.append(relations)
         return batch_relations
