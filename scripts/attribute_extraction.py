@@ -42,6 +42,8 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                help="span size embedding dim")
     group_decoder.add_argument('--label_emb_dim', type=int, default=25, 
                                help="chunk label embedding dim")
+    
+    # Boundary selection (*)
     group_decoder.add_argument('--neg_sampling_rate', type=float, default=1.0, 
                                help="Negative sampling rate")
     return parse_to_args(parser)

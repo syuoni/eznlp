@@ -160,7 +160,7 @@ def collect_IE_assembly_config(args: argparse.Namespace):
         bert_like, tokenizer = load_pretrained(args.bert_arch, args, cased=True)
         bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert_like, arch=args.bert_arch, 
                                           freeze=False, use_truecase='cased' in os.path.basename(bert_like.name_or_path).split('-'))
-        if getattr(args, 'ck_decoder', None) == 'specific_span':
+        if getattr(args, 'ck_decoder', None) == 'specific_span' or getattr(args, 'rel_decoder', None) == 'specific_span_rel':
             bert_like_config.output_hidden_states = True
             span_bert_like_config = SpanBertLikeConfig(bert_like=bert_like, arch=args.bert_arch, freeze=False, 
                                                        num_layers=None if args.sse_num_layers < 0 else args.sse_num_layers, 
@@ -218,7 +218,7 @@ def build_ER_config(args: argparse.Namespace):
                                                         sb_size=args.sb_size,
                                                         sb_adj_factor=args.sb_adj_factor, 
                                                         size_emb_dim=args.size_emb_dim, 
-                                                        #hid_drop_rates=drop_rates,
+                                                        # hid_drop_rates=drop_rates,
                                                         )
     elif args.ck_decoder == 'specific_span':
         decoder_config = SpecificSpanClsDecoderConfig(affine=EncoderConfig(arch=args.affine_arch, hid_dim=args.affine_dim, num_layers=args.affine_num_layers, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2), 
@@ -233,7 +233,7 @@ def build_ER_config(args: argparse.Namespace):
                                                       sb_adj_factor=args.sb_adj_factor, 
                                                       max_span_size_cov_rate=args.sse_max_span_size_cov_rate, 
                                                       size_emb_dim=args.size_emb_dim, 
-                                                      # in_drop_rates=drop_rates, 
+                                                      # hid_drop_rates=drop_rates, 
                                                       )
     
     if args.ck_decoder == 'specific_span':
