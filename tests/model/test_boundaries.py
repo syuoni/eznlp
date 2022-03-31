@@ -4,7 +4,7 @@ import torch
 
 from eznlp.model import BoundarySelectionDecoderConfig, SpecificSpanRelClsDecoderConfig
 from eznlp.model.decoder.boundaries import _spans_from_upper_triangular, _spans_from_diagonals, _span_pairs_from_diagonals
-from eznlp.model.decoder.boundaries import _ij2diagonal, _diagonal2ij
+from eznlp.model.decoder.boundaries import _span2diagonal, _diagonal2span
 
 
 @pytest.mark.parametrize("sb_epsilon", [0.0, 0.1])
@@ -119,7 +119,7 @@ def test_diag_boundaries_pair_obj(training, EAR_data_demo):
     assert dbp_obj.dbp2label_id.size() == (num_spans, num_spans)
     
     assert dbp_obj.dbp2label_id.sum() == sum(config.label2idx[label] for label, *_ in relations)
-    assert all(dbp_obj.dbp2label_id[_ij2diagonal(h_start, h_end-1, num_tokens), _ij2diagonal(t_start, t_end-1, num_tokens)] == config.label2idx[label] 
+    assert all(dbp_obj.dbp2label_id[_span2diagonal(h_start, h_end, num_tokens), _span2diagonal(t_start, t_end, num_tokens)] == config.label2idx[label] 
                    for label, (_, h_start, h_end), (_, t_start, t_end) in relations)
     
     labels_retr = [config.idx2label[i] for i in dbp_obj.dbp2label_id.flatten().tolist()]
@@ -154,7 +154,7 @@ def test_spans_from_functions(seq_len):
 
 
 @pytest.mark.parametrize("seq_len", [5, 10, 100])
-def test_ij2diagonal(seq_len):
+def test_span2diagonal(seq_len):
     num_spans = (seq_len+1)*seq_len // 2
-    assert [_ij2diagonal(start, end-1, seq_len) for start, end in _spans_from_diagonals(seq_len)] == list(range(num_spans))
-    assert [_diagonal2ij(k, seq_len) for k in range(num_spans)] == [(start, end-1) for start, end in _spans_from_diagonals(seq_len)]
+    assert [_span2diagonal(start, end, seq_len) for start, end in _spans_from_diagonals(seq_len)] == list(range(num_spans))
+    assert [_diagonal2span(k, seq_len) for k in range(num_spans)] == list(_spans_from_diagonals(seq_len))

@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-from typing import Tuple, List
+from typing import Union, Tuple, List
 import itertools
 import random
 import math
 import torch
 
 from ...wrapper import TargetWrapper
-from .base import SingleDecoderConfigBase
+from .base import SingleDecoderConfigBase, DecoderBase
 
 
 def _spans_from_surrounding(span: Tuple[int], distance: int, num_tokens: int):
@@ -60,6 +60,15 @@ def _diagonal2ij(k: int, seq_len: int):
     j_minus_i = int((2*seq_len+1 - math.sqrt((2*seq_len+1)**2 - 8*k)) / 2)
     i = k - ((seq_len*2 - (j_minus_i-1)) * j_minus_i // 2)
     return (i, i+j_minus_i)
+
+
+def _span2diagonal(start: int, end: int, seq_len: int):
+    return _ij2diagonal(start, end-1, seq_len)
+
+
+def _diagonal2span(k: int, seq_len: int):
+    i, j = _diagonal2ij(k, seq_len)
+    return (i, j+1)
 
 
 def _span_pairs_from_diagonals(seq_len: int, max_span_size: int=None):
@@ -205,8 +214,8 @@ class DiagBoundariesPairs(TargetWrapper):
             non_mask_rate = config.neg_sampling_rate * torch.ones(num_spans, num_spans, dtype=torch.float)
             for label, (_, h_start, h_end), (_, t_start, t_end) in self.relations:
                 if h_end - h_start <= curr_max_span_size and t_end - t_start <= curr_max_span_size:
-                    hk = _ij2diagonal(h_start, h_end-1, num_tokens)
-                    tk = _ij2diagonal(t_start, t_end-1, num_tokens)
+                    hk = _span2diagonal(h_start, h_end, num_tokens)
+                    tk = _span2diagonal(t_start, t_end, num_tokens)
                     non_mask_rate[hk, tk] = 1
             
             # Bernoulli sampling according probability in `non_mask_rate`
@@ -216,8 +225,8 @@ class DiagBoundariesPairs(TargetWrapper):
             self.dbp2label_id = torch.full((num_spans, num_spans), config.none_idx, dtype=torch.long)
             for label, (_, h_start, h_end), (_, t_start, t_end) in self.relations:
                 if h_end - h_start <= curr_max_span_size and t_end - t_start <= curr_max_span_size:
-                    hk = _ij2diagonal(h_start, h_end-1, num_tokens)
-                    tk = _ij2diagonal(t_start, t_end-1, num_tokens)
+                    hk = _span2diagonal(h_start, h_end, num_tokens)
+                    tk = _span2diagonal(t_start, t_end, num_tokens)
                     self.dbp2label_id[hk, tk] = config.label2idx[label]
         
         
