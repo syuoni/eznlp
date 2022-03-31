@@ -93,6 +93,8 @@ class SpanRelClassificationDecoderConfig(SingleDecoderConfigBase, ChunkPairsDeco
         self.idx2label = kwargs.pop('idx2label', None)
         self.ck_none_label = kwargs.pop('ck_none_label', '<none>')
         self.idx2ck_label = kwargs.pop('idx2ck_label', None)
+        self.filter_by_labels = kwargs.pop('filter_by_labels', True)
+        self.filter_self_relation = kwargs.pop('filter_self_relation', True)
         super().__init__(**kwargs)
         
         
@@ -128,10 +130,9 @@ class SpanRelClassificationDecoderConfig(SingleDecoderConfigBase, ChunkPairsDeco
         counter = Counter(label for data in partitions for entry in data for label, head, tail in entry['relations'])
         self.idx2label = [self.none_label] + list(counter.keys())
         
-        # TODO: allow_ht2rel_type
-        counter = Counter((head[0], tail[0]) for data in partitions for entry in data for label, head, tail in entry['relations'])
-        self.allow_h2t_types = set(list(counter.keys()))
-        self.allow_self_relation = any(head==tail for data in partitions for entry in data for label, head, tail in entry['relations'])
+        counter = Counter((label, head[0], tail[0]) for data in partitions for entry in data for label, head, tail in entry['relations'])
+        self.existing_rht_labels = set(list(counter.keys()))
+        self.existing_self_relation = any(head[1:]==tail[1:] for data in partitions for entry in data for label, head, tail in entry['relations'])
         
         
     def instantiate(self):
@@ -148,8 +149,10 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
         self.idx2label = config.idx2label
         self.ck_none_label = config.ck_none_label
         self.idx2ck_label = config.idx2ck_label
-        self.allow_h2t_types = config.allow_h2t_types
-        self.allow_self_relation = config.allow_self_relation
+        self.filter_by_labels = config.filter_by_labels
+        self.existing_rht_labels = config.existing_rht_labels
+        self.filter_self_relation = config.filter_self_relation
+        self.existing_self_relation = config.existing_self_relation
         
         if config.agg_mode.lower().endswith('_pooling'):
             self.aggregating = SequencePooling(mode=config.agg_mode.replace('_pooling', ''))
@@ -262,7 +265,8 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
                 confidences, label_ids = logits.softmax(dim=-1).max(dim=-1)
                 labels = [self.idx2label[i] for i in label_ids.flatten().cpu().tolist()]
                 relations = [(label, head, tail) for label, (head, tail) in zip(labels, itertools.product(cp_obj.chunks, cp_obj.chunks)) if label != self.none_label]
-                relations = [(label, head, tail) for label, head, tail in relations if (head[0], tail[0]) in self.allow_h2t_types]
-                relations = [(label, head, tail) for label, head, tail in relations if (head != tail) or self.allow_self_relation]
+                relations = [(label, head, tail) for label, head, tail in relations 
+                                 if  (not self.filter_by_labels or ((label, head[0], tail[0]) in self.existing_rht_labels)) 
+                                 and (not self.filter_self_relation or self.existing_self_relation or (head[1:] != tail[1:]))]
             batch_relations.append(relations)
         return batch_relations

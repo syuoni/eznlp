@@ -92,6 +92,7 @@ class SpanAttrClassificationDecoderConfig(SingleDecoderConfigBase, ChunkSinglesD
         self.idx2label = kwargs.pop('idx2label', None)
         self.ck_none_label = kwargs.pop('ck_none_label', '<none>')
         self.idx2ck_label = kwargs.pop('idx2ck_label', None)
+        self.filter_by_labels = kwargs.pop('filter_by_labels', True)
         
         self.multihot = True
         self.confidence_threshold = kwargs.pop('confidence_threshold', 0.5)
@@ -130,9 +131,8 @@ class SpanAttrClassificationDecoderConfig(SingleDecoderConfigBase, ChunkSinglesD
         counter = Counter(label for data in partitions for entry in data for label, chunk in entry['attributes'])
         self.idx2label = [self.none_label] + list(counter.keys())
         
-        # TODO: allow_ck2attr_type
-        counter = Counter(chunk[0] for data in partitions for entry in data for label, chunk in entry['attributes'])
-        self.allow_ck_types = set(counter.keys())
+        counter = Counter((label, chunk[0]) for data in partitions for entry in data for label, chunk in entry['attributes'])
+        self.existing_ac_labels = set(list(counter.keys()))
         
         
     def instantiate(self):
@@ -149,7 +149,8 @@ class SpanAttrClassificationDecoder(DecoderBase, ChunkSinglesDecoderMixin):
         self.idx2label = config.idx2label
         self.ck_none_label = config.ck_none_label
         self.idx2ck_label = config.idx2ck_label
-        self.allow_ck_types = config.allow_ck_types
+        self.filter_by_labels = config.filter_by_labels
+        self.existing_ac_labels = config.existing_ac_labels
         
         if config.agg_mode.lower().endswith('_pooling'):
             self.aggregating = SequencePooling(mode=config.agg_mode.replace('_pooling', ''))
@@ -245,6 +246,6 @@ class SpanAttrClassificationDecoder(DecoderBase, ChunkSinglesDecoderMixin):
                     labels = [self.idx2label[i] for i, c in enumerate(ck_confidences.cpu().tolist()) if c >= self.confidence_threshold]
                     if self.none_label not in labels:
                         attributes.extend([(label, chunk) for label in labels])
-                attributes = [(label, chunk) for label, chunk in attributes if chunk[0] in self.allow_ck_types]
+                attributes = [(label, chunk) for label, chunk in attributes if (not self.filter_by_labels or ((label, chunk[0]) in self.existing_ac_labels))]
             batch_attributes.append(attributes)
         return batch_attributes

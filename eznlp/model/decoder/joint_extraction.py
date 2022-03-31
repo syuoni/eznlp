@@ -148,8 +148,8 @@ class JointExtractionDecoder(DecoderBase, JointExtractionDecoderMixin):
         
         
     def forward(self, batch: Batch, **states):
-        losses = self.ck_decoder(batch, **states)
-        batch_chunks_pred = self.ck_decoder.decode(batch, **states) * self.ck_loss_weight
+        losses = self.ck_decoder(batch, **states) * self.ck_loss_weight
+        batch_chunks_pred = self.ck_decoder.decode(batch, **states)
         
         if self.has_attr_decoder:
             self.attr_decoder.assign_chunks_pred(batch, batch_chunks_pred)
