@@ -3,8 +3,6 @@ from typing import List
 from collections import Counter
 import itertools
 import logging
-import math
-import numpy
 import torch
 
 from ...wrapper import Batch
@@ -74,11 +72,7 @@ class SpanRelClassificationDecoderConfig(SingleDecoderConfigBase, ChunkPairsDeco
     def __init__(self, **kwargs):
         self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
         
-        # Note: The spans with sizes longer than `max_span_size` will be masked/ignored in both training and inference. 
-        # Hence, these spans will never be recalled in testing. 
-        self.max_span_size_ceiling = kwargs.pop('max_span_size_ceiling', 50)
-        self.max_span_size_cov_rate = kwargs.pop('max_span_size_cov_rate', 1.0)
-        self.max_span_size = kwargs.pop('max_span_size', None)
+        self.max_size_id = kwargs.pop('max_size_id', 49)
         self.size_emb_dim = kwargs.pop('size_emb_dim', 25)
         self.label_emb_dim = kwargs.pop('label_emb_dim', 25)
         
@@ -110,23 +104,6 @@ class SpanRelClassificationDecoderConfig(SingleDecoderConfigBase, ChunkPairsDeco
         counter = Counter(label for data in partitions for entry in data for label, start, end in entry['chunks'])
         self.idx2ck_label = [self.ck_none_label] + list(counter.keys())
         
-        # Allow directly setting `max_span_size`
-        if self.max_span_size is None:
-            # Calculate `max_span_size` according to data
-            span_sizes = [end-start for data in partitions for entry in data for label, start, end in entry['chunks']]
-            if self.max_span_size_cov_rate >= 1:
-                span_size_cov = max(span_sizes)
-            else:
-                span_size_cov = math.ceil(numpy.quantile(span_sizes, self.max_span_size_cov_rate))
-            self.max_span_size = min(span_size_cov, self.max_span_size_ceiling)
-        logger.warning(f"The `max_span_size` is set to {self.max_span_size}")
-        
-        size_counter = Counter(end-start for data in partitions for entry in data for label, start, end in entry['chunks'])
-        num_spans = sum(size_counter.values())
-        num_oov_spans = sum(num for size, num in size_counter.items() if size > self.max_span_size)
-        if num_oov_spans > 0:
-            logger.warning(f"OOV positive spans: {num_oov_spans} ({num_oov_spans/num_spans*100:.2f}%)")
-        
         counter = Counter(label for data in partitions for entry in data for label, head, tail in entry['relations'])
         self.idx2label = [self.none_label] + list(counter.keys())
         
@@ -143,7 +120,7 @@ class SpanRelClassificationDecoderConfig(SingleDecoderConfigBase, ChunkPairsDeco
 class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
     def __init__(self, config: SpanRelClassificationDecoderConfig):
         super().__init__()
-        self.max_span_size = config.max_span_size
+        self.max_size_id = config.max_size_id
         self.neg_sampling_rate = config.neg_sampling_rate
         self.none_label = config.none_label
         self.idx2label = config.idx2label
@@ -162,7 +139,7 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
         self.zero_context = torch.nn.Parameter(torch.zeros(config.in_dim))
         
         if config.size_emb_dim > 0:
-            self.size_embedding = torch.nn.Embedding(config.max_span_size, config.size_emb_dim)
+            self.size_embedding = torch.nn.Embedding(config.max_size_id+1, config.size_emb_dim)
             reinit_embedding_(self.size_embedding)
         
         if config.label_emb_dim > 0:

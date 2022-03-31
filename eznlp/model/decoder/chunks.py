@@ -61,7 +61,7 @@ class ChunkPairs(TargetWrapper):
         num_chunks = len(self.chunks)
         
         self.span_size_ids = torch.tensor([end-start-1 for label, start, end in self.chunks], dtype=torch.long)
-        self.span_size_ids.masked_fill_(self.span_size_ids>=config.max_span_size, config.max_span_size-1)
+        self.span_size_ids.masked_fill_(self.span_size_ids > config.max_size_id, config.max_size_id)
         self.ck_label_ids = torch.tensor([config.ck_label2idx[label] for label, start, end in self.chunks], dtype=torch.long)
         
         if self.training and config.neg_sampling_rate < 1:
@@ -141,7 +141,7 @@ class ChunkSingles(TargetWrapper):
         num_chunks = len(self.chunks)
         
         self.span_size_ids = torch.tensor([end-start-1 for label, start, end in self.chunks], dtype=torch.long)
-        self.span_size_ids.masked_fill_(self.span_size_ids>=config.max_span_size, config.max_span_size-1)
+        self.span_size_ids.masked_fill_(self.span_size_ids > config.max_size_id, config.max_size_id)
         self.ck_label_ids = torch.tensor([config.ck_label2idx[label] for label, start, end in self.chunks], dtype=torch.long)
         
         if self.training and config.neg_sampling_rate < 1:

@@ -63,10 +63,10 @@ class BoundarySelectionDecoderConfig(SingleDecoderConfigBase, BoundariesDecoderM
         self.affine = kwargs.pop('affine', EncoderConfig(arch='FFN', hid_dim=150, num_layers=1, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2))
         
         self.max_len = kwargs.pop('max_len', None)
-        # Note: `max_span_size` is only used for creating `size_embedding`. 
-        # The spans with sizes longer than `max_span_size` share a same size embedding vector; 
-        # they are also used for training, instead of being masked. 
-        self.max_span_size = kwargs.pop('max_span_size', 50)
+        # Note: `max_size_id` is only used for creating `size_embedding`. 
+        # The spans with sizes longer than `max_size_id+1` share a same size embedding vector; 
+        # such spans are used for training and inference. 
+        self.max_size_id = kwargs.pop('max_size_id', 49)
         self.size_emb_dim = kwargs.pop('size_emb_dim', 25)
         self.hid_drop_rates = kwargs.pop('hid_drop_rates', (0.2, 0.0, 0.0))
         
@@ -147,7 +147,7 @@ class BoundarySelectionDecoder(DecoderBase, BoundariesDecoderMixin):
             self.affine = config.affine.instantiate()
         
         if config.size_emb_dim > 0:
-            self.size_embedding = torch.nn.Embedding(config.max_span_size, config.size_emb_dim)
+            self.size_embedding = torch.nn.Embedding(config.max_size_id+1, config.size_emb_dim)
             reinit_embedding_(self.size_embedding)
         
         # Use buffer to accelerate computation
@@ -156,13 +156,14 @@ class BoundarySelectionDecoder(DecoderBase, BoundariesDecoderMixin):
         # Create `_span_non_mask` before changing values of `_span_size_ids`
         self.register_buffer('_span_non_mask', self._span_size_ids >= 0)
         self._span_size_ids.masked_fill_(self._span_size_ids < 0, 0)
-        self._span_size_ids.masked_fill_(self._span_size_ids >= config.max_span_size, config.max_span_size-1)
+        self._span_size_ids.masked_fill_(self._span_size_ids > config.max_size_id, config.max_size_id)
         
         self.dropout = CombinedDropout(*config.hid_drop_rates)
         
         self.U = torch.nn.Parameter(torch.empty(config.voc_dim, config.affine.out_dim, config.affine.out_dim))
         self.W = torch.nn.Parameter(torch.empty(config.voc_dim, config.affine.out_dim*2 + config.size_emb_dim))
         self.b = torch.nn.Parameter(torch.empty(config.voc_dim))
+        # TODO: Check the output std.dev.
         torch.nn.init.orthogonal_(self.U.data)
         torch.nn.init.orthogonal_(self.W.data)
         torch.nn.init.zeros_(self.b.data)
