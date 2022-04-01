@@ -58,6 +58,8 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                help="aggregating mode")
     group_decoder.add_argument('--max_span_size', type=int, default=10, 
                                help="maximum span size")
+    group_decoder.add_argument('--max_size_id', type=int, default=9, 
+                               help="maximum span size ID")
     group_decoder.add_argument('--size_emb_dim', type=int, default=25, 
                                help="span size embedding dim")
     group_decoder.add_argument('--label_emb_dim', type=int, default=25, 
@@ -126,7 +128,7 @@ def build_joint_config(args: argparse.Namespace):
     elif args.attr_decoder == 'span_attr_classification':
         attr_decoder_config = SpanAttrClassificationDecoderConfig(agg_mode=args.agg_mode, 
                                                                   neg_sampling_rate=args.neg_sampling_rate, 
-                                                                  max_span_size=args.max_span_size, 
+                                                                  max_size_id=args.max_size_id, 
                                                                   size_emb_dim=args.size_emb_dim, 
                                                                   label_emb_dim=args.label_emb_dim, 
                                                                   in_drop_rates=drop_rates)
@@ -138,7 +140,7 @@ def build_joint_config(args: argparse.Namespace):
                                                                 fl_gamma=args.fl_gamma,
                                                                 sl_epsilon=args.sl_epsilon, 
                                                                 neg_sampling_rate=args.neg_sampling_rate, 
-                                                                max_span_size=args.max_span_size, 
+                                                                max_size_id=args.max_size_id, 
                                                                 size_emb_dim=args.size_emb_dim, 
                                                                 label_emb_dim=args.label_emb_dim, 
                                                                 in_drop_rates=drop_rates)
