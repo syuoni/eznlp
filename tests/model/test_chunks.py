@@ -15,7 +15,7 @@ def test_chunk_pairs_obj(training, pipeline, EAR_data_demo):
     entry = EAR_data_demo[0]
     chunks, relations = entry['chunks'], entry['relations']
     
-    config = SpanRelClassificationDecoderConfig(max_span_size=3)
+    config = SpanRelClassificationDecoderConfig()
     config.build_vocab(EAR_data_demo)
     cp_obj = config.exemplify(entry, training=training)['cp_obj']
     
@@ -64,7 +64,7 @@ def test_chunk_singles_obj(training, pipeline, EAR_data_demo):
     entry = EAR_data_demo[0]
     chunks, attributes = entry['chunks'], entry['attributes']
     
-    config = SpanAttrClassificationDecoderConfig(max_span_size=3)
+    config = SpanAttrClassificationDecoderConfig()
     config.build_vocab(EAR_data_demo)
     cs_obj = config.exemplify(entry, training=training)['cs_obj']
     
