@@ -12,7 +12,7 @@ import torch
 from eznlp import auto_device
 from eznlp.dataset import Dataset
 from eznlp.model import EncoderConfig
-from eznlp.model import SpanRelClassificationDecoderConfig, SpecificSpanRelClsDecoderConfig
+from eznlp.model import SpanRelClassificationDecoderConfig, SpecificSpanRelClsDecoderConfig, SpecificSpanSparseRelClsDecoderConfig
 from eznlp.model import ExtractorConfig, SpecificSpanExtractorConfig
 from eznlp.training import Trainer, count_params, evaluate_relation_extraction
 
@@ -32,7 +32,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
     
     group_decoder = parser.add_argument_group('decoder configurations')
     group_decoder.add_argument('--rel_decoder', type=str, default='span_rel_classification', 
-                               help="relation decoding method", choices=['span_rel_classification', 'specific_span_rel'])
+                               help="relation decoding method", choices=['span_rel_classification', 'specific_span_rel', 'specific_span_sparse_rel'])
     
     # Loss
     group_decoder.add_argument('--fl_gamma', type=float, default=0.0, 
@@ -96,8 +96,18 @@ def build_RE_config(args: argparse.Namespace):
                                                          size_emb_dim=args.size_emb_dim, 
                                                          # hid_drop_rates=drop_rates, 
                                                          )
+    elif args.rel_decoder == 'specific_span_sparse_rel':
+        decoder_config = SpecificSpanSparseRelClsDecoderConfig(affine=EncoderConfig(arch=args.affine_arch, hid_dim=args.affine_dim, num_layers=args.affine_num_layers, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2), 
+                                                               fl_gamma=args.fl_gamma,
+                                                               sl_epsilon=args.sl_epsilon, 
+                                                               neg_sampling_rate=args.neg_sampling_rate, 
+                                                               max_span_size_cov_rate=args.sse_max_span_size_cov_rate, 
+                                                               size_emb_dim=args.size_emb_dim, 
+                                                               label_emb_dim=args.label_emb_dim, 
+                                                               # hid_drop_rates=drop_rates, 
+                                                               )
     
-    if args.rel_decoder == 'specific_span_rel':
+    if args.rel_decoder.startswith('specific_span'):
         return SpecificSpanExtractorConfig(**collect_IE_assembly_config(args), decoder=decoder_config)
     else:
         return ExtractorConfig(**collect_IE_assembly_config(args), decoder=decoder_config)

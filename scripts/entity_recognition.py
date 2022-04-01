@@ -160,7 +160,7 @@ def collect_IE_assembly_config(args: argparse.Namespace):
         bert_like, tokenizer = load_pretrained(args.bert_arch, args, cased=True)
         bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert_like, arch=args.bert_arch, 
                                           freeze=False, use_truecase='cased' in os.path.basename(bert_like.name_or_path).split('-'))
-        if getattr(args, 'ck_decoder', None) == 'specific_span' or getattr(args, 'rel_decoder', None) == 'specific_span_rel':
+        if getattr(args, 'ck_decoder', '').startswith('specific_span') or getattr(args, 'rel_decoder', '').startswith('specific_span'):
             bert_like_config.output_hidden_states = True
             span_bert_like_config = SpanBertLikeConfig(bert_like=bert_like, arch=args.bert_arch, freeze=False, 
                                                        num_layers=None if args.sse_num_layers < 0 else args.sse_num_layers, 
