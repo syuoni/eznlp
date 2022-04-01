@@ -8,6 +8,7 @@ from ..encoder import EncoderConfig
 from ..decoder import (SingleDecoderConfigBase, 
                        SpecificSpanClsDecoderConfig, 
                        SpecificSpanRelClsDecoderConfig, 
+                       SpecificSpanSparseRelClsDecoderConfig, 
                        JointExtractionDecoderConfig)
 from .base import ModelConfigBase, ModelBase
 
@@ -29,6 +30,8 @@ class SpecificSpanExtractorConfig(ModelConfigBase):
                 self.decoder = SpecificSpanClsDecoderConfig()
             elif decoder.lower().startswith('specific_span_rel'):
                 self.decoder = SpecificSpanRelClsDecoderConfig()
+            elif decoder.lower().startswith('specific_span_sparse_rel'):
+                self.decoder = SpecificSpanSparseRelClsDecoderConfig()
             elif decoder.lower().startswith('joint_extraction'):
                 self.decoder = JointExtractionDecoderConfig(ck_decoder='specific_span_cls', rel_decoder='specific_span_rel_cls')
             else:

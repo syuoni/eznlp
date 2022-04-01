@@ -221,8 +221,7 @@ class DiagBoundariesPairs(TargetWrapper):
         self._chunks_pred = chunks
         
         if self.chunks_pred is not None:
-            # Do not use ```self.chunks = list(set(self.chunks_gold + self.chunks_pred))```,
-            # which may return non-deterministic order. 
+            # Do not use ```chunks = list(set(chunks_gold + chunks_pred))```, which may return non-deterministic order. 
             self.chunks = self.chunks_gold + [ck for ck in self.chunks_pred if ck not in self.chunks_gold]
             
             # In case of one span with multiple labels, the latter chunks will override the former ones; 

@@ -3,8 +3,9 @@ import pytest
 import torch
 
 from eznlp.dataset import Dataset
-from eznlp.model import EncoderConfig
-from eznlp.model import BertLikeConfig, SpanBertLikeConfig, SpecificSpanRelClsDecoderConfig, SpecificSpanExtractorConfig
+from eznlp.model import EncoderConfig, BertLikeConfig, SpanBertLikeConfig
+from eznlp.model import SpecificSpanRelClsDecoderConfig, SpecificSpanSparseRelClsDecoderConfig
+from eznlp.model import SpecificSpanExtractorConfig
 from eznlp.training import Trainer
 
 
@@ -69,9 +70,14 @@ class TestModel(object):
                               (3,  'conv',         1.0, 0), 
                               (3,  'max_pooling',  0.5, 0),  # Use negative sampling
                               (3,  'max_pooling',  1.0, 25)])  # Use size embedding
-    def test_model(self, num_layers, agg_mode, neg_sampling_rate, size_emb_dim, conll2004_demo, bert_with_tokenizer, device):
+    @pytest.mark.parametrize("use_sparse", [False, True])
+    def test_model(self, num_layers, agg_mode, neg_sampling_rate, size_emb_dim, use_sparse, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
-        self.config = SpecificSpanExtractorConfig(decoder=SpecificSpanRelClsDecoderConfig(neg_sampling_rate=neg_sampling_rate, size_emb_dim=size_emb_dim, max_span_size=3), 
+        if use_sparse:
+            decoder_config = SpecificSpanSparseRelClsDecoderConfig(neg_sampling_rate=neg_sampling_rate, size_emb_dim=size_emb_dim, max_span_size=3)
+        else:
+            decoder_config = SpecificSpanRelClsDecoderConfig(neg_sampling_rate=neg_sampling_rate, size_emb_dim=size_emb_dim, max_span_size=3)
+        self.config = SpecificSpanExtractorConfig(decoder=decoder_config, 
                                                   bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False, output_hidden_states=True), 
                                                   span_bert_like=SpanBertLikeConfig(bert_like=bert, freeze=False, num_layers=num_layers, share_weights_ext=True, share_weights_int=True, init_agg_mode=agg_mode), 
                                                   intermediate2=EncoderConfig(arch='LSTM', hid_dim=400))
@@ -80,9 +86,10 @@ class TestModel(object):
         self._assert_trainable()
         
         
-    def test_prediction_without_gold(self, conll2004_demo, bert_with_tokenizer, device):
+    @pytest.mark.parametrize("use_sparse", [False, True])
+    def test_prediction_without_gold(self, use_sparse, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
-        self.config = SpecificSpanExtractorConfig(decoder='specific_span_rel', 
+        self.config = SpecificSpanExtractorConfig(decoder='specific_span_sparse_rel' if use_sparse else 'specific_span_rel', 
                                                   bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False, output_hidden_states=True), 
                                                   span_bert_like=SpanBertLikeConfig(bert_like=bert), 
                                                   intermediate2=None)
