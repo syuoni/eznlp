@@ -8,7 +8,7 @@ import torch
 from ...wrapper import Batch
 from ...nn.modules import SequencePooling, SequenceAttention, CombinedDropout
 from ...nn.functional import seq_lens2mask
-from ...nn.init import reinit_embedding_, reinit_layer_
+from ...nn.init import reinit_embedding_, reinit_layer_, reinit_vector_parameter_
 from ...metrics import precision_recall_f1_report
 from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
 from .chunks import ChunkPairs
@@ -136,7 +136,8 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
         elif config.agg_mode.lower().endswith('_attention'):
             self.aggregating = SequenceAttention(config.in_dim, scoring=config.agg_mode.replace('_attention', ''))
         # Trainable context vector for overlapping chunks
-        self.zero_context = torch.nn.Parameter(torch.zeros(config.in_dim))
+        self.zero_context = torch.nn.Parameter(torch.empty(config.in_dim))
+        reinit_vector_parameter_(self.zero_context)
         
         if config.size_emb_dim > 0:
             self.size_embedding = torch.nn.Embedding(config.max_size_id+1, config.size_emb_dim)

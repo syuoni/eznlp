@@ -9,7 +9,7 @@ import torch
 
 from ...wrapper import Batch
 from ...nn.modules import CombinedDropout
-from ...nn.init import reinit_embedding_, reinit_layer_
+from ...nn.init import reinit_embedding_, reinit_layer_, reinit_vector_parameter_
 from ..encoder import EncoderConfig
 from .base import SingleDecoderConfigBase, DecoderBase
 from .chunks import ChunkPairs
@@ -22,6 +22,7 @@ class SpecificSpanSparseRelClsDecoderConfig(SingleDecoderConfigBase, ChunkPairsD
     def __init__(self, **kwargs):
         self.use_biaffine = kwargs.pop('use_biaffine', True)
         self.affine = kwargs.pop('affine', EncoderConfig(arch='FFN', hid_dim=150, num_layers=1, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2))
+        self.use_context = kwargs.pop('use_context', True)
         
         # Note: The spans with sizes longer than `max_span_size` will be masked/ignored in both training and inference. 
         # Hence, these spans will never be recalled in testing. 
@@ -60,6 +61,12 @@ class SpecificSpanSparseRelClsDecoderConfig(SingleDecoderConfigBase, ChunkPairsD
     @in_dim.setter
     def in_dim(self, dim: int):
         self.affine.in_dim = dim
+        
+    @property
+    def affined_cat_dim(self):
+        full_dim = (self.affine.out_dim + self.size_emb_dim + self.label_emb_dim) * 2
+        full_dim += (self.affine.out_dim if self.use_context else 0)
+        return full_dim
         
     def build_vocab(self, *partitions):
         counter = Counter(label for data in partitions for entry in data for label, start, end in entry['chunks'])
@@ -115,7 +122,12 @@ class SpecificSpanSparseRelClsDecoder(DecoderBase, ChunkPairsDecoderMixin):
         else:
             self.affine = config.affine.instantiate()
         
-        # TODO: Representations of context between head/tail entities
+        if config.use_context:
+            self.affine_ctx = config.affine.instantiate()
+            # Trainable context vector for overlapping chunks
+            self.zero_context = torch.nn.Parameter(torch.empty(config.in_dim))
+            reinit_vector_parameter_(self.zero_context)
+        
         if config.size_emb_dim > 0:
             self.size_embedding = torch.nn.Embedding(config.max_span_size, config.size_emb_dim)
             reinit_embedding_(self.size_embedding)
@@ -127,7 +139,7 @@ class SpecificSpanSparseRelClsDecoder(DecoderBase, ChunkPairsDecoderMixin):
         self.dropout = CombinedDropout(*config.hid_drop_rates)
         
         self.U = torch.nn.Parameter(torch.empty(config.voc_dim, config.affine.out_dim, config.affine.out_dim))
-        self.W = torch.nn.Parameter(torch.empty(config.voc_dim, config.affine.out_dim*2+config.size_emb_dim*2+config.label_emb_dim*2))
+        self.W = torch.nn.Parameter(torch.empty(config.voc_dim, config.affined_cat_dim))
         self.b = torch.nn.Parameter(torch.empty(config.voc_dim))
         torch.nn.init.orthogonal_(self.U.data)
         torch.nn.init.orthogonal_(self.W.data)
@@ -185,7 +197,22 @@ class SpecificSpanSparseRelClsDecoder(DecoderBase, ChunkPairsDecoderMixin):
                 
                 # affined_cat: (head_chunks, tail_chunks, affine_dim*2)
                 affined_cat = torch.cat([self.dropout(affined_head).unsqueeze(1).expand(-1, affined_tail.size(0), -1), 
-                                        self.dropout(affined_tail).unsqueeze(0).expand(affined_head.size(0), -1, -1)], dim=-1)
+                                         self.dropout(affined_tail).unsqueeze(0).expand(affined_head.size(0), -1, -1)], dim=-1)
+                
+                if hasattr(self, 'affine_ctx'):
+                    # contexts: (num_chunks^2, hid_dim)
+                    contexts = []
+                    for (h_label, h_start, h_end), (t_label, t_start, t_end) in itertools.product(cp_obj.chunks, cp_obj.chunks):
+                        if h_end < t_start:
+                            contexts.append(_collect_context_from_specific_span_hidden(i, h_end, t_start, all_hidden))
+                        elif t_end < h_start:
+                            contexts.append(_collect_context_from_specific_span_hidden(i, t_end, h_start, all_hidden))
+                        else:
+                            contexts.append(self.zero_context)
+                    contexts = torch.stack(contexts)
+                    # affined_ctx: (num_chunks^2, affine_dim) -> (num_chunks, num_chunks, affine_dim)
+                    affined_ctx = self.affine_ctx(contexts).view(num_chunks, num_chunks, -1)
+                    affined_cat = torch.cat([affined_cat, self.dropout(affined_ctx)], dim=-1)
                 
                 # scores2: (voc_dim, affine_dim*2) * (head_chunks, tail_chunks, affine_dim*2, 1) -> (head_chunks, tail_chunks, voc_dim, 1) 
                 scores2 = self.W.matmul(affined_cat.unsqueeze(-1))
@@ -231,3 +258,13 @@ class SpecificSpanSparseRelClsDecoder(DecoderBase, ChunkPairsDecoderMixin):
                                 and (not self.filter_self_relation or self.existing_self_relation or (head[1:] != tail[1:]))]
             batch_relations.append(relations)
         return batch_relations
+
+
+
+# TODO: Aggregation?
+def _collect_context_from_specific_span_hidden(i: int, start: int, end: int, all_hidden: List[torch.Tensor]):
+    max_span_size = len(all_hidden)
+    if end - start <= max_span_size:
+        return all_hidden[end-start-1][i, start]
+    else:
+        return (all_hidden[max_span_size-1][i, start] + all_hidden[max_span_size-1][i, end-max_span_size]) / 2
