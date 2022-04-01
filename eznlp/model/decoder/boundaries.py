@@ -202,33 +202,12 @@ class DiagBoundariesPairs(TargetWrapper):
     def __init__(self, entry: dict, config: SingleDecoderConfigBase, training: bool=True):
         super().__init__(training)
         
+        self.num_tokens = len(entry['tokens'])
         self.chunks_gold = entry['chunks'] if training else []
         self.chunks_pred = entry.get('chunks_pred', None)
         self.relations = entry.get('relations', None)
-        
-        num_tokens = len(entry['tokens'])
-        curr_max_span_size = min(config.max_span_size, num_tokens)
-        num_spans = (num_tokens*2 - (curr_max_span_size-1)) * curr_max_span_size // 2
-        
-        if training and config.neg_sampling_rate < 1:
-            non_mask_rate = config.neg_sampling_rate * torch.ones(num_spans, num_spans, dtype=torch.float)
-            for label, (_, h_start, h_end), (_, t_start, t_end) in self.relations:
-                if h_end - h_start <= curr_max_span_size and t_end - t_start <= curr_max_span_size:
-                    hk = _span2diagonal(h_start, h_end, num_tokens)
-                    tk = _span2diagonal(t_start, t_end, num_tokens)
-                    non_mask_rate[hk, tk] = 1
-            
-            # Bernoulli sampling according probability in `non_mask_rate`
-            self.non_mask = non_mask_rate.bernoulli().bool() 
-        
-        if self.relations is not None:
-            self.dbp2label_id = torch.full((num_spans, num_spans), config.none_idx, dtype=torch.long)
-            for label, (_, h_start, h_end), (_, t_start, t_end) in self.relations:
-                if h_end - h_start <= curr_max_span_size and t_end - t_start <= curr_max_span_size:
-                    hk = _span2diagonal(h_start, h_end, num_tokens)
-                    tk = _span2diagonal(t_start, t_end, num_tokens)
-                    self.dbp2label_id[hk, tk] = config.label2idx[label]
-        
+        if self.chunks_pred is not None:
+            self.build(config)
         
     @property
     def chunks_pred(self):
@@ -250,3 +229,27 @@ class DiagBoundariesPairs(TargetWrapper):
             # hence, the labels from `chunks_pred` are of priority. 
             # This only affects the training phase, because `chunks_gold` is always empty for evaluation phase. 
             self.span2ck_label = {(start, end): label for label, start, end in self.chunks}
+        
+        
+    def build(self, config: Union[SingleDecoderConfigBase, DecoderBase]):
+        curr_max_span_size = min(config.max_span_size, self.num_tokens)
+        num_spans = (self.num_tokens*2 - (curr_max_span_size-1)) * curr_max_span_size // 2
+        
+        if self.training and config.neg_sampling_rate < 1:
+            non_mask_rate = config.neg_sampling_rate * torch.ones(num_spans, num_spans, dtype=torch.float)
+            for label, (_, h_start, h_end), (_, t_start, t_end) in self.relations:
+                if h_end - h_start <= curr_max_span_size and t_end - t_start <= curr_max_span_size:
+                    hk = _span2diagonal(h_start, h_end, self.num_tokens)
+                    tk = _span2diagonal(t_start, t_end, self.num_tokens)
+                    non_mask_rate[hk, tk] = 1
+            
+            # Bernoulli sampling according probability in `non_mask_rate`
+            self.non_mask = non_mask_rate.bernoulli().bool() 
+        
+        if self.relations is not None:
+            self.dbp2label_id = torch.full((num_spans, num_spans), config.none_idx, dtype=torch.long)
+            for label, (_, h_start, h_end), (_, t_start, t_end) in self.relations:
+                if h_end - h_start <= curr_max_span_size and t_end - t_start <= curr_max_span_size:
+                    hk = _span2diagonal(h_start, h_end, self.num_tokens)
+                    tk = _span2diagonal(t_start, t_end, self.num_tokens)
+                    self.dbp2label_id[hk, tk] = config.label2idx[label]

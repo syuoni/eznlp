@@ -150,6 +150,7 @@ class SpecificSpanRelClsDecoder(DecoderBase, DiagBoundariesPairsDecoderMixin):
     def __init__(self, config: SpecificSpanRelClsDecoderConfig):
         super().__init__()
         self.max_span_size = config.max_span_size
+        self.neg_sampling_rate = config.neg_sampling_rate
         self.none_label = config.none_label
         self.idx2label = config.idx2label
         self.ck_none_label = config.ck_none_label
@@ -189,6 +190,8 @@ class SpecificSpanRelClsDecoder(DecoderBase, DiagBoundariesPairsDecoderMixin):
         for dbp_obj, chunks_pred in zip(batch.dbp_objs, batch_chunks_pred):
             if dbp_obj.chunks_pred is None:
                 dbp_obj.chunks_pred = chunks_pred
+                dbp_obj.build(self)
+                dbp_obj.to(self.W.device)
         
         
     def compute_scores(self, batch: Batch, full_hidden: torch.Tensor, all_query_hidden: Dict[int, torch.Tensor]):
