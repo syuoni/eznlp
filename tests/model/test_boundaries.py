@@ -37,8 +37,8 @@ def test_boundaries_obj(sb_epsilon, sl_epsilon, EAR_data_demo):
     
     config.in_dim = 200
     decoder = config.instantiate()
-    # \sum_{k=0}^N k(N-k), where N is `num_tokens`
-    assert decoder._span_size_ids.sum().item() == (num_tokens**3 - num_tokens) // 6
+    # \sum_{k=0}^{N-1} k(N-k), where N is `num_tokens`
+    assert decoder._span_size_ids.sum().item() == sum(min(k, config.max_size_id)*(num_tokens-k) for k in range(num_tokens))
     assert decoder._span_non_mask.sum().item() == (num_tokens**2 + num_tokens) // 2
 
 
