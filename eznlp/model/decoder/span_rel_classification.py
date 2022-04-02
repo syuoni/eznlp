@@ -3,6 +3,8 @@ from typing import List
 from collections import Counter
 import itertools
 import logging
+import math
+import numpy
 import torch
 
 from ...wrapper import Batch
@@ -11,6 +13,7 @@ from ...nn.functional import seq_lens2mask
 from ...nn.init import reinit_embedding_, reinit_layer_, reinit_vector_parameter_
 from ...metrics import precision_recall_f1_report
 from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
+from .boundaries import MAX_SIZE_ID_COV_RATE
 from .chunks import ChunkPairs
 
 logger = logging.getLogger(__name__)
@@ -72,7 +75,6 @@ class SpanRelClassificationDecoderConfig(SingleDecoderConfigBase, ChunkPairsDeco
     def __init__(self, **kwargs):
         self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
         
-        self.max_size_id = kwargs.pop('max_size_id', 49)
         self.size_emb_dim = kwargs.pop('size_emb_dim', 25)
         self.label_emb_dim = kwargs.pop('label_emb_dim', 25)
         
@@ -103,6 +105,9 @@ class SpanRelClassificationDecoderConfig(SingleDecoderConfigBase, ChunkPairsDeco
     def build_vocab(self, *partitions):
         counter = Counter(label for data in partitions for entry in data for label, start, end in entry['chunks'])
         self.idx2ck_label = [self.ck_none_label] + list(counter.keys())
+        
+        span_sizes = [end-start for data in partitions for entry in data for label, start, end in entry['chunks']]
+        self.max_size_id = math.ceil(numpy.quantile(span_sizes, MAX_SIZE_ID_COV_RATE)) - 1
         
         counter = Counter(label for data in partitions for entry in data for label, head, tail in entry['relations'])
         self.idx2label = [self.none_label] + list(counter.keys())

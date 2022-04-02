@@ -2,6 +2,8 @@
 from typing import List
 from collections import Counter
 import logging
+import math
+import numpy
 import torch
 
 from ...wrapper import Batch
@@ -11,7 +13,7 @@ from ...nn.init import reinit_embedding_, reinit_layer_
 from ...metrics import precision_recall_f1_report
 from ..encoder import EncoderConfig
 from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
-from .boundaries import Boundaries, _spans_from_upper_triangular
+from .boundaries import Boundaries, MAX_SIZE_ID_COV_RATE, _spans_from_upper_triangular
 
 logger = logging.getLogger(__name__)
 
@@ -63,10 +65,6 @@ class BoundarySelectionDecoderConfig(SingleDecoderConfigBase, BoundariesDecoderM
         self.affine = kwargs.pop('affine', EncoderConfig(arch='FFN', hid_dim=150, num_layers=1, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2))
         
         self.max_len = kwargs.pop('max_len', None)
-        # Note: `max_size_id` is only used for creating `size_embedding`. 
-        # The spans with sizes longer than `max_size_id+1` share a same size embedding vector; 
-        # such spans are used for training and inference. 
-        self.max_size_id = kwargs.pop('max_size_id', 49)
         self.size_emb_dim = kwargs.pop('size_emb_dim', 25)
         self.hid_drop_rates = kwargs.pop('hid_drop_rates', (0.2, 0.0, 0.0))
         
@@ -124,6 +122,10 @@ class BoundarySelectionDecoderConfig(SingleDecoderConfigBase, BoundariesDecoderM
         
         self.overlapping_level = max(detect_overlapping_level(entry['chunks']) for data in partitions for entry in data)
         logger.info(f"Overlapping level: {self.overlapping_level}")
+        
+        span_sizes = [end-start for data in partitions for entry in data for label, start, end in entry['chunks']]
+        self.max_size_id = math.ceil(numpy.quantile(span_sizes, MAX_SIZE_ID_COV_RATE)) - 1
+        
         self.max_len = max(len(data_entry['tokens']) for data in partitions for data_entry in data)
         
         

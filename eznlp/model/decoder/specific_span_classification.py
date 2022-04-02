@@ -12,7 +12,7 @@ from ...nn.modules import CombinedDropout, SoftLabelCrossEntropyLoss
 from ...nn.init import reinit_embedding_, reinit_layer_
 from ..encoder import EncoderConfig
 from .base import SingleDecoderConfigBase, DecoderBase
-from .boundaries import Boundaries, _spans_from_diagonals, _span_sizes_from_diagonals
+from .boundaries import Boundaries, MAX_SIZE_ID_COV_RATE, _spans_from_diagonals, _span_sizes_from_diagonals
 from .boundary_selection import BoundariesDecoderMixin
 
 logger = logging.getLogger(__name__)
@@ -23,8 +23,6 @@ class SpecificSpanClsDecoderConfig(SingleDecoderConfigBase, BoundariesDecoderMix
     def __init__(self, **kwargs):
         self.affine = kwargs.pop('affine', EncoderConfig(arch='FFN', hid_dim=300, num_layers=1, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2))
         
-        # Note: The spans with sizes longer than `max_span_size` will be masked/ignored in both training and inference. 
-        # Hence, these spans will never be recalled in testing. 
         self.max_span_size_ceiling = kwargs.pop('max_span_size_ceiling', 20)
         self.max_span_size_cov_rate = kwargs.pop('max_span_size_cov_rate', 0.995)
         self.max_span_size = kwargs.pop('max_span_size', None)
@@ -85,15 +83,16 @@ class SpecificSpanClsDecoderConfig(SingleDecoderConfigBase, BoundariesDecoderMix
         self.overlapping_level = max(detect_overlapping_level(entry['chunks']) for data in partitions for entry in data)
         logger.info(f"Overlapping level: {self.overlapping_level}")
         
+        # Calculate `max_span_size` according to data
+        span_sizes = [end-start for data in partitions for entry in data for label, start, end in entry['chunks']]
         # Allow directly setting `max_span_size`
         if self.max_span_size is None:
-            # Calculate `max_span_size` according to data
-            span_sizes = [end-start for data in partitions for entry in data for label, start, end in entry['chunks']]
             if self.max_span_size_cov_rate >= 1:
                 span_size_cov = max(span_sizes)
             else:
                 span_size_cov = math.ceil(numpy.quantile(span_sizes, self.max_span_size_cov_rate))
             self.max_span_size = min(span_size_cov, self.max_span_size_ceiling)
+        self.max_size_id = min(math.ceil(numpy.quantile(span_sizes, MAX_SIZE_ID_COV_RATE)), self.max_span_size) - 1
         logger.warning(f"The `max_span_size` is set to {self.max_span_size}")
         
         size_counter = Counter(end-start for data in partitions for entry in data for label, start, end in entry['chunks'])

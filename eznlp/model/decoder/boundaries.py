@@ -9,6 +9,9 @@ from ...wrapper import TargetWrapper
 from .base import SingleDecoderConfigBase, DecoderBase
 
 
+MAX_SIZE_ID_COV_RATE = 0.975
+
+
 def _spans_from_surrounding(span: Tuple[int], distance: int, num_tokens: int):
     """Spans from the surrounding area of the given `span`.
     """
