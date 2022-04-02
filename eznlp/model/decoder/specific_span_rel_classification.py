@@ -78,6 +78,7 @@ class SpecificSpanRelClsDecoderConfig(SingleDecoderConfigBase, DiagBoundariesPai
         self.max_span_size_ceiling = kwargs.pop('max_span_size_ceiling', 20)
         self.max_span_size_cov_rate = kwargs.pop('max_span_size_cov_rate', 0.995)
         self.max_span_size = kwargs.pop('max_span_size', None)
+        self.max_len = kwargs.pop('max_len', None)
         self.size_emb_dim = kwargs.pop('size_emb_dim', 25)
         self.hid_drop_rates = kwargs.pop('hid_drop_rates', (0.2, 0.0, 0.0))
         
@@ -132,6 +133,8 @@ class SpecificSpanRelClsDecoderConfig(SingleDecoderConfigBase, DiagBoundariesPai
         if num_oov_spans > 0:
             logger.warning(f"OOV positive spans: {num_oov_spans} ({num_oov_spans/num_spans*100:.2f}%)")
         
+        self.max_len = max(len(data_entry['tokens']) for data in partitions for data_entry in data)
+        
         counter = Counter(label for data in partitions for entry in data for label, head, tail in entry['relations'])
         self.idx2label = [self.none_label] + list(counter.keys())
         
@@ -168,8 +171,12 @@ class SpecificSpanRelClsDecoder(DecoderBase, DiagBoundariesPairsDecoderMixin):
         # TODO: Representations of context between head/tail entities
         # TODO: Chunk type embedding, only for positive (entity) spans? 
         if config.size_emb_dim > 0:
-            self.size_embedding = torch.nn.Embedding(config.max_span_size, config.size_emb_dim)
+            self.size_embedding = torch.nn.Embedding(config.max_size_id+1, config.size_emb_dim)
             reinit_embedding_(self.size_embedding)
+        
+        self.register_buffer('_span_size_ids', torch.arange(config.max_len) - torch.arange(config.max_len).unsqueeze(-1))
+        self._span_size_ids.masked_fill_(self._span_size_ids < 0, 0)
+        self._span_size_ids.masked_fill_(self._span_size_ids > config.max_size_id, config.max_size_id)
         
         self.dropout = CombinedDropout(*config.hid_drop_rates)
         
@@ -191,6 +198,11 @@ class SpecificSpanRelClsDecoder(DecoderBase, DiagBoundariesPairsDecoderMixin):
                 dbp_obj.chunks_pred = chunks_pred
                 dbp_obj.build(self)
                 dbp_obj.to(self.W.device)
+        
+        
+    def _get_diagonal_span_size_ids(self, seq_len: int, max_span_size: int):
+        span_size_ids = self._span_size_ids[:seq_len, :seq_len]
+        return torch.cat([span_size_ids.diagonal(offset=k-1) for k in range(1, max_span_size+1)], dim=-1)
         
         
     def compute_scores(self, batch: Batch, full_hidden: torch.Tensor, all_query_hidden: Dict[int, torch.Tensor]):
@@ -217,10 +229,8 @@ class SpecificSpanRelClsDecoder(DecoderBase, DiagBoundariesPairsDecoderMixin):
             scores1 = self.dropout(affined_head).matmul(self.U).matmul(self.dropout(affined_tail.permute(1, 0)))
             
             if hasattr(self, 'size_embedding'):
-                span_size_ids = [k-1 for k in range(1, curr_max_span_size+1) for _ in range(curr_len-k+1)]
-                span_size_ids = torch.tensor(span_size_ids, dtype=torch.long, device=full_hidden.device)
                 # size_embedded: (num_spans, emb_dim)
-                size_embedded = self.size_embedding(span_size_ids)
+                size_embedded = self.size_embedding(self._get_diagonal_span_size_ids(curr_len, curr_max_span_size))
                 affined_head = torch.cat([affined_head, size_embedded], dim=-1)
                 affined_tail = torch.cat([affined_tail, size_embedded], dim=-1)
             

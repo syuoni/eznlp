@@ -30,6 +30,7 @@ class SpanClassificationDecoderConfig(SingleDecoderConfigBase, BoundariesDecoder
         self.max_span_size_ceiling = kwargs.pop('max_span_size_ceiling', 20)
         self.max_span_size_cov_rate = kwargs.pop('max_span_size_cov_rate', 0.995)
         self.max_span_size = kwargs.pop('max_span_size', None)
+        self.max_len = kwargs.pop('max_len', None)
         self.size_emb_dim = kwargs.pop('size_emb_dim', 25)
         
         self.neg_sampling_rate = kwargs.pop('neg_sampling_rate', 1.0)
@@ -99,6 +100,8 @@ class SpanClassificationDecoderConfig(SingleDecoderConfigBase, BoundariesDecoder
         if num_oov_spans > 0:
             logger.warning(f"OOV positive spans: {num_oov_spans} ({num_oov_spans/num_spans*100:.2f}%)")
         
+        self.max_len = max(len(data_entry['tokens']) for data in partitions for data_entry in data)
+        
         
     def instantiate(self):
         return SpanClassificationDecoder(self)
@@ -119,14 +122,23 @@ class SpanClassificationDecoder(DecoderBase, BoundariesDecoderMixin):
             self.aggregating = SequenceAttention(config.in_dim, scoring=config.agg_mode.replace('_attention', ''))
         
         if config.size_emb_dim > 0:
-            self.size_embedding = torch.nn.Embedding(config.max_span_size, config.size_emb_dim)
+            self.size_embedding = torch.nn.Embedding(config.max_size_id+1, config.size_emb_dim)
             reinit_embedding_(self.size_embedding)
+        
+        self.register_buffer('_span_size_ids', torch.arange(config.max_len) - torch.arange(config.max_len).unsqueeze(-1))
+        self._span_size_ids.masked_fill_(self._span_size_ids < 0, 0)
+        self._span_size_ids.masked_fill_(self._span_size_ids > config.max_size_id, config.max_size_id)
         
         self.dropout = CombinedDropout(*config.in_drop_rates)
         self.hid2logit = torch.nn.Linear(config.in_dim+config.size_emb_dim, config.voc_dim)
         reinit_layer_(self.hid2logit, 'sigmoid')
         
         self.criterion = config.instantiate_criterion(reduction='sum')
+        
+        
+    def _get_diagonal_span_size_ids(self, seq_len: int, max_span_size: int):
+        span_size_ids = self._span_size_ids[:seq_len, :seq_len]
+        return torch.cat([span_size_ids.diagonal(offset=k-1) for k in range(1, max_span_size+1)], dim=-1)
         
         
     def get_logits(self, batch: Batch, full_hidden: torch.Tensor):
@@ -142,11 +154,8 @@ class SpanClassificationDecoder(DecoderBase, BoundariesDecoderMixin):
             span_hidden = self.aggregating(self.dropout(span_hidden), mask=span_mask)
             
             if hasattr(self, 'size_embedding'):
-                span_size_ids = [k-1 for k in _span_sizes_from_diagonals(curr_len, curr_max_span_size)]
-                span_size_ids = torch.tensor(span_size_ids, dtype=torch.long, device=full_hidden.device)
-                
                 # size_embedded: (num_spans, emb_dim)
-                size_embedded = self.size_embedding(span_size_ids)
+                size_embedded = self.size_embedding(self._get_diagonal_span_size_ids(curr_len, curr_max_span_size))
                 span_hidden = torch.cat([span_hidden, self.dropout(size_embedded)], dim=-1)
             
             logits = self.hid2logit(span_hidden)

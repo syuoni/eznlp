@@ -106,6 +106,7 @@ class SpecificSpanSparseRelClsDecoder(DecoderBase, ChunkPairsDecoderMixin):
     def __init__(self, config: SpecificSpanSparseRelClsDecoderConfig):
         super().__init__()
         self.max_span_size = config.max_span_size
+        self.max_size_id = config.max_size_id
         self.neg_sampling_rate = config.neg_sampling_rate
         self.none_label = config.none_label
         self.idx2label = config.idx2label
@@ -129,7 +130,7 @@ class SpecificSpanSparseRelClsDecoder(DecoderBase, ChunkPairsDecoderMixin):
             reinit_vector_parameter_(self.zero_context)
         
         if config.size_emb_dim > 0:
-            self.size_embedding = torch.nn.Embedding(config.max_span_size, config.size_emb_dim)
+            self.size_embedding = torch.nn.Embedding(config.max_size_id+1, config.size_emb_dim)
             reinit_embedding_(self.size_embedding)
         
         if config.label_emb_dim > 0:

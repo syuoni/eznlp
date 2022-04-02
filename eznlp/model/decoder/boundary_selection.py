@@ -152,8 +152,6 @@ class BoundarySelectionDecoder(DecoderBase, BoundariesDecoderMixin):
             self.size_embedding = torch.nn.Embedding(config.max_size_id+1, config.size_emb_dim)
             reinit_embedding_(self.size_embedding)
         
-        # Use buffer to accelerate computation
-        # Note: size_id = size - 1
         self.register_buffer('_span_size_ids', torch.arange(config.max_len) - torch.arange(config.max_len).unsqueeze(-1))
         # Create `_span_non_mask` before changing values of `_span_size_ids`
         self.register_buffer('_span_non_mask', self._span_size_ids >= 0)
