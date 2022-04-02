@@ -29,6 +29,7 @@ class SpanBertLikeConfig(Config):
         self.share_weights_int = kwargs.pop('share_weights_int', True)  # Share weights internally, i.e., between `query_bert_like` of different span sizes
         assert (not self.share_weights_ext) or self.share_weights_int
         self.init_agg_mode = kwargs.pop('init_agg_mode', 'max_pooling')
+        self.init_drop_rate = kwargs.pop('hid_drop_rate', 0.2)
         super().__init__(**kwargs)
         
     @property
@@ -67,6 +68,8 @@ class SpanBertLikeEncoder(torch.nn.Module):
             
             # `self.init_aggregating[k-2]` for span size `k`
             self.init_aggregating = torch.nn.ModuleList(convs)
+        
+        self.dropout = torch.nn.Dropout(config.init_drop_rate)
         
         if config.share_weights_int:
             # Share the module across all span sizes
@@ -107,9 +110,9 @@ class SpanBertLikeEncoder(torch.nn.Module):
             if isinstance(self.init_aggregating, (SequencePooling, SequenceAttention)):
                 # query_states: (B*(L-K+1), 1, H)
                 # query_states = reshaped_states[0].mean(dim=1, keepdim=True)
-                query_states = self.init_aggregating(reshaped_states[0]).unsqueeze(1)
+                query_states = self.init_aggregating(self.dropout(reshaped_states[0])).unsqueeze(1)
             else:
-                query_states = self.init_aggregating[k-2](all_hidden_states[0].permute(0, 2, 1)).permute(0, 2, 1)
+                query_states = self.init_aggregating[k-2](self.dropout(all_hidden_states[0].permute(0, 2, 1))).permute(0, 2, 1)
                 # query_states: (B, L-K+1, H) -> (B*(L-K+1), 1, H)
                 query_states = query_states.flatten(end_dim=1).unsqueeze(1)
             
