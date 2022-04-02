@@ -105,11 +105,12 @@ class SpecificSpanRelClsDecoderConfig(SingleDecoderConfigBase, DiagBoundariesPai
         
     @property
     def in_dim(self):
-        return self.affine.in_dim
+        return self.affine.in_dim - self.size_emb_dim
         
     @in_dim.setter
     def in_dim(self, dim: int):
-        self.affine.in_dim = dim
+        if dim is not None:
+            self.affine.in_dim = dim + self.size_emb_dim
         
     def build_vocab(self, *partitions):
         counter = Counter(label for data in partitions for entry in data for label, start, end in entry['chunks'])
@@ -181,7 +182,7 @@ class SpecificSpanRelClsDecoder(DecoderBase, DiagBoundariesPairsDecoderMixin):
         self.dropout = CombinedDropout(*config.hid_drop_rates)
         
         self.U = torch.nn.Parameter(torch.empty(config.voc_dim, config.affine.out_dim, config.affine.out_dim))
-        self.W = torch.nn.Parameter(torch.empty(config.voc_dim, config.affine.out_dim*2 + config.size_emb_dim*2))
+        self.W = torch.nn.Parameter(torch.empty(config.voc_dim, config.affine.out_dim*2))
         self.b = torch.nn.Parameter(torch.empty(config.voc_dim))
         torch.nn.init.orthogonal_(self.U.data)
         torch.nn.init.orthogonal_(self.W.data)
@@ -217,6 +218,11 @@ class SpecificSpanRelClsDecoder(DecoderBase, DiagBoundariesPairsDecoderMixin):
             # (curr_len-k+1, hid_dim) -> (num_spans = \sum_k curr_len-k+1, hid_dim)
             span_hidden = torch.cat([all_hidden[k-1][i, :curr_len-k+1] for k in range(1, curr_max_span_size+1)], dim=0)
             
+            if hasattr(self, 'size_embedding'):
+                # size_embedded: (num_spans, emb_dim)
+                size_embedded = self.size_embedding(self._get_diagonal_span_size_ids(curr_len, curr_max_span_size))
+                span_hidden = torch.cat([span_hidden, size_embedded], dim=-1)
+            
             if hasattr(self, 'affine_head'):
                 # No mask input needed here
                 affined_head = self.affine_head(span_hidden)
@@ -227,12 +233,6 @@ class SpecificSpanRelClsDecoder(DecoderBase, DiagBoundariesPairsDecoderMixin):
             
             # scores1: (head_spans, affine_dim) * (voc_dim, affine_dim, affine_dim) * (affine_dim, tail_spans) -> (voc_dim, head_spans, tail_spans)
             scores1 = self.dropout(affined_head).matmul(self.U).matmul(self.dropout(affined_tail.permute(1, 0)))
-            
-            if hasattr(self, 'size_embedding'):
-                # size_embedded: (num_spans, emb_dim)
-                size_embedded = self.size_embedding(self._get_diagonal_span_size_ids(curr_len, curr_max_span_size))
-                affined_head = torch.cat([affined_head, size_embedded], dim=-1)
-                affined_tail = torch.cat([affined_tail, size_embedded], dim=-1)
             
             # affined_cat: (head_spans, tail_spans, affine_dim*2)
             affined_cat = torch.cat([self.dropout(affined_head).unsqueeze(1).expand(-1, affined_tail.size(0), -1), 

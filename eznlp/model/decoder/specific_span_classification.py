@@ -55,11 +55,12 @@ class SpecificSpanClsDecoderConfig(SingleDecoderConfigBase, BoundariesDecoderMix
         
     @property
     def in_dim(self):
-        return self.affine.in_dim
+        return self.affine.in_dim - self.size_emb_dim
         
     @in_dim.setter
     def in_dim(self, dim: int):
-        self.affine.in_dim = dim
+        if dim is not None:
+            self.affine.in_dim = dim + self.size_emb_dim
         
     @property
     def criterion(self):
@@ -129,7 +130,7 @@ class SpecificSpanClsDecoder(DecoderBase, BoundariesDecoderMixin):
         self._span_size_ids.masked_fill_(self._span_size_ids > config.max_size_id, config.max_size_id)
         
         self.dropout = CombinedDropout(*config.hid_drop_rates)
-        self.hid2logit = torch.nn.Linear(config.affine.out_dim+config.size_emb_dim, config.voc_dim)
+        self.hid2logit = torch.nn.Linear(config.affine.out_dim, config.voc_dim)
         reinit_layer_(self.hid2logit, 'sigmoid')
         
         self.criterion = config.instantiate_criterion(reduction='sum')
@@ -149,15 +150,16 @@ class SpecificSpanClsDecoder(DecoderBase, BoundariesDecoderMixin):
         for i, curr_len in enumerate(batch.seq_lens.cpu().tolist()):
             curr_max_span_size = min(self.max_span_size, curr_len)
             
-            # (curr_len-k+1, hid_dim) -> (num_spans = \sum_k curr_len-k+1, hid_dim) -> (num_spans, affine_dim)
+            # (curr_len-k+1, hid_dim) -> (num_spans = \sum_k curr_len-k+1, hid_dim)
             span_hidden = torch.cat([all_hidden[k-1][i, :curr_len-k+1] for k in range(1, curr_max_span_size+1)], dim=0)
-            # No mask input needed here
-            affined = self.affine(span_hidden)
             
             if hasattr(self, 'size_embedding'):
                 # size_embedded: (num_spans = \sum_k curr_len-k+1, emb_dim)
                 size_embedded = self.size_embedding(self._get_diagonal_span_size_ids(curr_len, curr_max_span_size))
-                affined = torch.cat([affined, size_embedded], dim=-1)
+                span_hidden = torch.cat([span_hidden, size_embedded], dim=-1)
+            
+            # No mask input needed here
+            affined = self.affine(span_hidden)
             
             # (num_spans, logit_dim)
             logits = self.hid2logit(self.dropout(affined))

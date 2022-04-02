@@ -3,6 +3,7 @@ from typing import List, Dict
 from collections import Counter
 import itertools
 import logging
+import copy
 import math
 import numpy
 import torch
@@ -55,17 +56,18 @@ class SpecificSpanSparseRelClsDecoderConfig(SingleDecoderConfigBase, ChunkPairsD
         
     @property
     def in_dim(self):
-        return self.affine.in_dim
+        return self.affine.in_dim - self.size_emb_dim - self.label_emb_dim
         
     @in_dim.setter
     def in_dim(self, dim: int):
-        self.affine.in_dim = dim
+        if dim is not None:
+            self.affine.in_dim = dim + self.size_emb_dim + self.label_emb_dim
         
     @property
-    def affined_cat_dim(self):
-        full_dim = (self.affine.out_dim + self.size_emb_dim + self.label_emb_dim) * 2
-        full_dim += (self.affine.out_dim if self.use_context else 0)
-        return full_dim
+    def affine_ctx(self):
+        affine_ctx = copy.deepcopy(self.affine)
+        affine_ctx.in_dim = self.in_dim
+        return affine_ctx
         
     def build_vocab(self, *partitions):
         counter = Counter(label for data in partitions for entry in data for label, start, end in entry['chunks'])
@@ -124,7 +126,7 @@ class SpecificSpanSparseRelClsDecoder(DecoderBase, ChunkPairsDecoderMixin):
             self.affine = config.affine.instantiate()
         
         if config.use_context:
-            self.affine_ctx = config.affine.instantiate()
+            self.affine_ctx = config.affine_ctx.instantiate()
             # Trainable context vector for overlapping chunks
             self.zero_context = torch.nn.Parameter(torch.empty(config.in_dim))
             reinit_vector_parameter_(self.zero_context)
@@ -140,7 +142,7 @@ class SpecificSpanSparseRelClsDecoder(DecoderBase, ChunkPairsDecoderMixin):
         self.dropout = CombinedDropout(*config.hid_drop_rates)
         
         self.U = torch.nn.Parameter(torch.empty(config.voc_dim, config.affine.out_dim, config.affine.out_dim))
-        self.W = torch.nn.Parameter(torch.empty(config.voc_dim, config.affined_cat_dim))
+        self.W = torch.nn.Parameter(torch.empty(config.voc_dim, config.affine.out_dim*(3 if config.use_context else 2)))
         self.b = torch.nn.Parameter(torch.empty(config.voc_dim))
         torch.nn.init.orthogonal_(self.U.data)
         torch.nn.init.orthogonal_(self.W.data)
@@ -173,6 +175,16 @@ class SpecificSpanSparseRelClsDecoder(DecoderBase, ChunkPairsDecoderMixin):
                 # (num_chunks, hid_dim)
                 span_hidden = torch.stack([all_hidden[end-start-1][i, start] for label, start, end in cp_obj.chunks])
                 
+                if hasattr(self, 'size_embedding'):
+                    # size_embedded: (num_chunks, emb_dim)
+                    size_embedded = self.size_embedding(cp_obj.span_size_ids)
+                    span_hidden = torch.cat([span_hidden, size_embedded], dim=-1)
+                
+                if hasattr(self, 'label_embedding'):
+                    # label_embedded: (num_chunks, emb_dim)
+                    label_embedded = self.label_embedding(cp_obj.ck_label_ids)
+                    span_hidden = torch.cat([span_hidden, label_embedded], dim=-1)
+                
                 if hasattr(self, 'affine_head'):
                     # No mask input needed here
                     affined_head = self.affine_head(span_hidden)
@@ -183,18 +195,6 @@ class SpecificSpanSparseRelClsDecoder(DecoderBase, ChunkPairsDecoderMixin):
                 
                 # scores1: (head_chunks, affine_dim) * (voc_dim, affine_dim, affine_dim) * (affine_dim, tail_chunks) -> (voc_dim, head_chunks, tail_chunks)
                 scores1 = self.dropout(affined_head).matmul(self.U).matmul(self.dropout(affined_tail.permute(1, 0)))
-                
-                if hasattr(self, 'size_embedding'):
-                    # size_embedded: (num_chunks, emb_dim)
-                    size_embedded = self.size_embedding(cp_obj.span_size_ids)
-                    affined_head = torch.cat([affined_head, size_embedded], dim=-1)
-                    affined_tail = torch.cat([affined_tail, size_embedded], dim=-1)
-                
-                if hasattr(self, 'label_embedding'):
-                    # label_embedded: (num_chunks, emb_dim)
-                    label_embedded = self.label_embedding(cp_obj.ck_label_ids)
-                    affined_head = torch.cat([affined_head, label_embedded], dim=-1)
-                    affined_tail = torch.cat([affined_tail, label_embedded], dim=-1)
                 
                 # affined_cat: (head_chunks, tail_chunks, affine_dim*2)
                 affined_cat = torch.cat([self.dropout(affined_head).unsqueeze(1).expand(-1, affined_tail.size(0), -1), 
