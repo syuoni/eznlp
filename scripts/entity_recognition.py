@@ -17,7 +17,7 @@ from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig, CharConfig,
 from eznlp.model import ELMoConfig, BertLikeConfig, SpanBertLikeConfig, FlairConfig
 from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderConfig, BoundarySelectionDecoderConfig, SpecificSpanClsDecoderConfig
 from eznlp.model import ExtractorConfig, SpecificSpanExtractorConfig
-from eznlp.model.bert_like import segment_uniformly_for_bert_like
+from eznlp.model.bert_like import truecase_for_bert_like, segment_uniformly_for_bert_like, subtokenize_for_bert_like
 from eznlp.training import Trainer, count_params, evaluate_entity_recognition
 
 from utils import add_base_arguments, parse_to_args
@@ -94,10 +94,14 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                help="whether to share weights across span-bert encoders")
     group_decoder.add_argument('--sse_init_agg_mode', type=str, default='max_pooling', 
                                help="initial aggregating mode for span-bert enocder")
+    group_decoder.add_argument('--sse_init_drop_rate', type=float, default=0.2, 
+                               help="dropout rate before initial aggregating")
     group_decoder.add_argument('--sse_num_layers', type=int, default=-1, 
                                help="number of span-bert encoder layers (negative values are set to `None`)")
     group_decoder.add_argument('--sse_max_span_size_cov_rate', type=float, default=0.995, 
                                help="coverage rate of maximum span size")
+    group_decoder.add_argument('--sse_max_span_size', type=int, default=-1, 
+                               help="maximum span size (negative values are set to `None`)")
     return parse_to_args(parser)
 
 
@@ -158,15 +162,15 @@ def collect_IE_assembly_config(args: argparse.Namespace):
     if args.bert_arch.lower() != 'none':
         # Cased tokenizer for NER task
         bert_like, tokenizer = load_pretrained(args.bert_arch, args, cased=True)
-        bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert_like, arch=args.bert_arch, 
-                                          freeze=False, use_truecase='cased' in os.path.basename(bert_like.name_or_path).split('-'))
+        bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert_like, arch=args.bert_arch, freeze=False)
         if getattr(args, 'ck_decoder', '').startswith('specific_span') or getattr(args, 'rel_decoder', '').startswith('specific_span'):
             bert_like_config.output_hidden_states = True
             span_bert_like_config = SpanBertLikeConfig(bert_like=bert_like, arch=args.bert_arch, freeze=False, 
                                                        num_layers=None if args.sse_num_layers < 0 else args.sse_num_layers, 
                                                        share_weights_ext=args.sse_share_weights_ext, 
                                                        share_weights_int=args.sse_share_weights_int, 
-                                                       init_agg_mode=args.sse_init_agg_mode)
+                                                       init_agg_mode=args.sse_init_agg_mode, 
+                                                       init_drop_rate=args.sse_init_drop_rate)
         else:
             span_bert_like_config = None
     else:
@@ -232,6 +236,7 @@ def build_ER_config(args: argparse.Namespace):
                                                       sb_size=args.sb_size,
                                                       sb_adj_factor=args.sb_adj_factor, 
                                                       max_span_size_cov_rate=args.sse_max_span_size_cov_rate, 
+                                                      max_span_size=(args.sse_max_span_size if args.sse_max_span_size>0 else None), 
                                                       size_emb_dim=args.size_emb_dim, 
                                                       # hid_drop_rates=drop_rates, 
                                                       )
@@ -243,6 +248,11 @@ def build_ER_config(args: argparse.Namespace):
 
 
 def process_IE_data(train_data, dev_data, test_data, args, config):
+    if config.bert_like is not None and ('cased' in os.path.basename(config.bert_like.name_or_path).split('-')):
+        train_data = truecase_for_bert_like(train_data, verbose=args.log_terminal)
+        dev_data   = truecase_for_bert_like(dev_data,   verbose=args.log_terminal)
+        test_data  = truecase_for_bert_like(test_data,  verbose=args.log_terminal)
+    
     if (config.bert_like is not None and 
             ((args.dataset in ('SIGHAN2006', 'yidu_s4k', 'cmeee')) or 
              (args.dataset in ('conll2003', 'conll2012') and args.doc_level))):

@@ -17,7 +17,7 @@ from eznlp.model import OneHotConfig, EncoderConfig
 from eznlp.model import ELMoConfig, BertLikeConfig, FlairConfig
 from eznlp.model import TextClassificationDecoderConfig
 from eznlp.model import ClassifierConfig
-from eznlp.model.bert_like import truncate_for_bert_like
+from eznlp.model.bert_like import truecase_for_bert_like, truncate_for_bert_like
 from eznlp.training import Trainer, count_params, evaluate_text_classification
 
 from utils import add_base_arguments, parse_to_args
@@ -76,9 +76,7 @@ def collect_TC_assembly_config(args: argparse.Namespace):
     if args.bert_arch.lower() != 'none':
         # Uncased tokenizer for text classification
         bert_like, tokenizer = load_pretrained(args.bert_arch, args, cased=False)
-        bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert_like, arch=args.bert_arch, freeze=False, 
-                                          paired_inputs=args.paired_inputs, 
-                                          use_truecase='cased' in os.path.basename(bert_like.name_or_path).split('-'))
+        bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert_like, arch=args.bert_arch, freeze=False, paired_inputs=args.paired_inputs)
     else:
         bert_like_config = None
     
@@ -98,6 +96,11 @@ def build_TC_config(args: argparse.Namespace):
 
 
 def process_TC_data(train_data, dev_data, test_data, args, config):
+    if config.bert_like is not None and ('cased' in os.path.basename(config.bert_like.name_or_path).split('-')):
+        train_data = truecase_for_bert_like(train_data, verbose=args.log_terminal)
+        dev_data   = truecase_for_bert_like(dev_data,   verbose=args.log_terminal)
+        test_data  = truecase_for_bert_like(test_data,  verbose=args.log_terminal)
+    
     # Truncate too long sentences
     if config.bert_like is not None:
         train_data = truncate_for_bert_like(train_data, config.bert_like.tokenizer, verbose=args.log_terminal)

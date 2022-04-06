@@ -9,7 +9,11 @@ import torch
 
 from eznlp.token import TokenSequence
 from eznlp.model import BertLikeConfig
-from eznlp.model.bert_like import truncate_for_bert_like, segment_uniformly_for_bert_like, subtokenize_for_bert_like, _tokenized2nested
+from eznlp.model.bert_like import (truecase_for_bert_like, 
+                                   truncate_for_bert_like, 
+                                   segment_uniformly_for_bert_like, 
+                                   subtokenize_for_bert_like, 
+                                   _tokenized2nested)
 from eznlp.training import count_params
 from eznlp.io import TabularIO
 
@@ -60,6 +64,15 @@ def test_serialization(bert_with_tokenizer):
     config_path = "cache/bert_embedder.config"
     torch.save(config, config_path)
     assert os.path.getsize(config_path) < 1024 * 1024  # 1MB
+
+
+
+def test_truecase_for_bert_like():
+    tokenized_raw_text = ['FULL', 'FEES', '1.875', 'REOFFER', '99.32', 'SPREAD', '+20', 'BP']
+    tokens = TokenSequence.from_tokenized_text(tokenized_raw_text)
+    data = [{'tokens': tokens}]
+    new_data = truecase_for_bert_like(data, verbose=False)
+    assert new_data[0]['tokens'].raw_text == ['Full', 'fees', '1.875', 'Reoffer', '99.32', 'spread', '+20', 'BP']
 
 
 

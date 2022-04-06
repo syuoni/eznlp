@@ -30,8 +30,8 @@ class BertLikeConfig(Config):
         self.paired_inputs = kwargs.pop('paired_inputs', False)
         self.from_tokenized = kwargs.pop('from_tokenized', True)
         self.is_subtokenized = kwargs.pop('is_subtokenized', False)
+        assert self.from_tokenized or (not self.is_subtokenized)
         self.pre_truncation = kwargs.pop('pre_truncation', False)
-        self.use_truecase = kwargs.pop('use_truecase', False)
         self.agg_mode = kwargs.pop('agg_mode', 'mean')
         self.mix_layers = kwargs.pop('mix_layers', 'top')
         self.use_gamma = kwargs.pop('use_gamma', False)
@@ -66,8 +66,7 @@ class BertLikeConfig(Config):
         
         
     def _token_ids_from_string(self, raw_text: str):
-        """
-        Tokenize a non-tokenized sentence (string), and convert to sub-token indexes. 
+        """Tokenize a non-tokenized sentence (string), and convert to sub-token indexes. 
         
         Parameters
         ----------
@@ -97,8 +96,7 @@ class BertLikeConfig(Config):
         
         
     def _token_ids_from_tokenized(self, tokenized_raw_text: List[str]):
-        """
-        Further tokenize a pre-tokenized sentence, and convert to sub-token indexes. 
+        """Further tokenize a pre-tokenized sentence, and convert to sub-token indexes. 
         
         Parameters
         ----------
@@ -133,8 +131,6 @@ class BertLikeConfig(Config):
         
     def exemplify(self, tokens: TokenSequence):
         tokenized_raw_text = tokens.raw_text
-        if self.use_truecase:
-            tokenized_raw_text = _truecase(tokenized_raw_text)
         
         if self.from_tokenized:
             sub_tok_ids, sub_tok_type_ids, ori_indexes = self._token_ids_from_tokenized(tokenized_raw_text)
@@ -287,6 +283,23 @@ def _truecase(tokenized_raw_text: List[str]):
                 new_tokenized[idx] = nw
     
     return new_tokenized
+
+
+def truecase_for_bert_like(data: list, verbose=True):
+    num_truecased = 0
+    for entry in tqdm.tqdm(data, disable=not verbose, ncols=100, desc="Truecasing data"):
+        tokens = entry['tokens']
+        tokenized_raw_text = tokens.raw_text
+        new_tokenized_raw_text = _truecase(tokenized_raw_text)
+        if new_tokenized_raw_text != tokenized_raw_text:
+            # Directly modify the `raw_text` attribute for each token; `text` attribute remains unchanged
+            for tok, new_raw_text in zip(entry['tokens'].token_list, new_tokenized_raw_text):
+                tok.raw_text = new_raw_text
+            num_truecased += 1
+    
+    logger.info(f"Truecased sequences: {num_truecased} ({num_truecased/len(data)*100:.2f}%)")
+    return data
+
 
 
 def _tokenized2nested(tokenized_raw_text: List[str], tokenizer: transformers.PreTrainedTokenizer, max_num_from_word: int=5):
@@ -466,6 +479,7 @@ def _subtokenize_tokens(entry: dict, tokenizer: transformers.PreTrainedTokenizer
     sub2ori_idx.append(len(tokens))
     ori2sub_idx = [si for si, oi in enumerate(sub2ori_idx) if isinstance(oi, int)]
     
+    # Warning: Re-construct `tokens`; this may yield `text` attribute different from the original ones
     new_entry = {'tokens': TokenSequence.from_tokenized_text(sub_tokens, **tokens._tokens_kwargs), 
                  'sub2ori_idx': sub2ori_idx, 
                  'ori2sub_idx': ori2sub_idx}
