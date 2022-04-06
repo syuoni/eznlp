@@ -29,6 +29,7 @@ class BertLikeConfig(Config):
         
         self.paired_inputs = kwargs.pop('paired_inputs', False)
         self.from_tokenized = kwargs.pop('from_tokenized', True)
+        self.is_subtokenized = kwargs.pop('is_subtokenized', False)
         self.pre_truncation = kwargs.pop('pre_truncation', False)
         self.use_truecase = kwargs.pop('use_truecase', False)
         self.agg_mode = kwargs.pop('agg_mode', 'mean')
@@ -288,16 +289,16 @@ def _truecase(tokenized_raw_text: List[str]):
     return new_tokenized
 
 
-def _tokenized2nested(tokenized_raw_text: List[str], tokenizer: transformers.PreTrainedTokenizer, max_len: int=5):
+def _tokenized2nested(tokenized_raw_text: List[str], tokenizer: transformers.PreTrainedTokenizer, max_num_from_word: int=5):
     nested_sub_tokens = []
     for word in tokenized_raw_text:
         sub_tokens = tokenizer.tokenize(word)
         if len(sub_tokens) == 0:
             # The tokenizer returns an empty list if the input is a space-like string
             sub_tokens = [tokenizer.unk_token]
-        elif len(sub_tokens) > max_len:
+        elif len(sub_tokens) > max_num_from_word:
             # The tokenizer may return a very long list if the input is a url
-            sub_tokens = sub_tokens[:max_len]
+            sub_tokens = sub_tokens[:max_num_from_word]
         nested_sub_tokens.append(sub_tokens)
     
     return nested_sub_tokens
@@ -402,14 +403,15 @@ def segment_uniformly_for_bert_like(data: list, tokenizer: transformers.PreTrain
     new_data = []
     num_segmented = 0
     for raw_idx, entry in enumerate(tqdm.tqdm(data, disable=not verbose, ncols=100, desc="Segmenting data")):
-        tokens, chunks = entry['tokens'], entry['chunks']
+        tokens = entry['tokens']
         nested_sub_tokens = _tokenized2nested(tokens.raw_text, tokenizer)
         sub_tok_seq_lens = [len(tok) for tok in nested_sub_tokens]
         
         num_sub_tokens = sum(sub_tok_seq_lens)
         if num_sub_tokens > max_len:
+            # Avoid segmenting at positions inside a chunk
             is_segmentable = [True for _ in range(len(tokens))]
-            for _, start, end in chunks:
+            for _, start, end in entry.get('chunks', []):
                 for i in range(start+1, end):
                     is_segmentable[i] = False
             
@@ -429,9 +431,11 @@ def segment_uniformly_for_bert_like(data: list, tokenizer: transformers.PreTrain
                     span_end = len(tokens)
                 assert sum(sub_tok_seq_lens[span_start:span_end]) <= max_len
                 
-                new_entry = {k: v for k, v in entry.items() if k not in ('tokens', 'chunks')}
-                new_entry['tokens'] = tokens[span_start:span_end]
-                new_entry['chunks'] = [(label, start-span_start, end-span_start) for label, start, end in chunks if span_start <= start and end <= span_end]
+                new_entry = {'tokens': tokens[span_start:span_end]}
+                if 'chunks' in entry:
+                    new_entry['chunks'] = [(label, start-span_start, end-span_start) for label, start, end in entry['chunks'] if span_start <= start and end <= span_end]
+                
+                new_entry.update({k: v for k, v in entry.items() if k not in ('tokens', 'chunks', 'relations', 'attributes')})
                 new_entries.append(new_entry)
                 span_start = span_end
             
@@ -450,4 +454,41 @@ def segment_uniformly_for_bert_like(data: list, tokenizer: transformers.PreTrain
         new_data.extend(new_entries)
     
     logger.info(f"Segmented sequences: {num_segmented} ({num_segmented/len(data)*100:.2f}%)")
+    return new_data
+
+
+
+def _subtokenize_tokens(entry: dict, tokenizer: transformers.PreTrainedTokenizer, num_digits: int=3):
+    tokens = entry['tokens']
+    nested_sub_tokens = _tokenized2nested(tokens.raw_text, tokenizer)
+    sub_tokens = [sub_tok for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
+    sub2ori_idx = [i if j==0 else i+round(j/len(tok), ndigits=num_digits) for i, tok in enumerate(nested_sub_tokens) for j, sub_tok in enumerate(tok)]
+    sub2ori_idx.append(len(tokens))
+    ori2sub_idx = [si for si, oi in enumerate(sub2ori_idx) if isinstance(oi, int)]
+    
+    new_entry = {'tokens': TokenSequence.from_tokenized_text(sub_tokens, **tokens._tokens_kwargs), 
+                 'sub2ori_idx': sub2ori_idx, 
+                 'ori2sub_idx': ori2sub_idx}
+    
+    if 'chunks' in entry:
+        new_entry['chunks'] = [(label, ori2sub_idx[start], ori2sub_idx[end]) for label, start, end in entry['chunks']]
+    if 'relations' in entry:
+        new_entry['relations'] = [(label, (h_label, ori2sub_idx[h_start], ori2sub_idx[h_end]), (t_label, ori2sub_idx[t_start], ori2sub_idx[t_end])) 
+                                      for label, (h_label, h_start, h_end), (t_label, t_start, t_end) in entry['relations']]
+    if 'attributes' in entry:
+        new_entry['attributes'] = [(label, (ck_label, ori2sub_idx[ck_start], ori2sub_idx[ck_end])) 
+                                       for label, (ck_label, ck_start, ck_end) in entry['attributes']]
+    
+    new_entry.update({k: v for k, v in entry.items() if k not in ('tokens', 'chunks', 'relations', 'attributes')})
+    return new_entry
+
+
+def subtokenize_for_bert_like(data: list, tokenizer: transformers.PreTrainedTokenizer, num_digits: int=3, verbose=True):
+    """Sub-tokenize tokens in `data` with sub-word `tokenizer`. 
+    Modify the corresponding start/end indexes in `chunks`, `relations`, `attributes`.
+    """
+    new_data = []
+    for entry in tqdm.tqdm(data, disable=not verbose, ncols=100, desc="Subtokenizing data"):
+        new_entry = _subtokenize_tokens(entry, tokenizer, num_digits=num_digits)
+        new_data.append(new_entry)
     return new_data

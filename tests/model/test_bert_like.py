@@ -9,7 +9,7 @@ import torch
 
 from eznlp.token import TokenSequence
 from eznlp.model import BertLikeConfig
-from eznlp.model.bert_like import truncate_for_bert_like, segment_uniformly_for_bert_like, _tokenized2nested
+from eznlp.model.bert_like import truncate_for_bert_like, segment_uniformly_for_bert_like, subtokenize_for_bert_like, _tokenized2nested
 from eznlp.training import count_params
 from eznlp.io import TabularIO
 
@@ -104,3 +104,33 @@ def test_segment_uniformly_for_bert_like(bert_with_tokenizer, token_len, max_len
     span_starts = [0] + numpy.cumsum([len(entry['tokens']) for entry in new_data]).tolist()
     chunks_retr = [(label, span_start+start, span_start+end) for entry, span_start in zip(new_data, span_starts) for label, start, end in entry['chunks']]
     assert chunks_retr == chunks
+
+
+
+def test_subtokenize_for_bert_like(bert_with_tokenizer):
+    bert, tokenizer = bert_with_tokenizer
+    
+    tokens = TokenSequence.from_tokenized_text(["I", "like", 'it', 'sooooo', 'much!'])
+    chunks = [('EntA', start, end) for start in range(len(tokens)) for end in range(start+1, len(tokens)+1)]
+    data = [{'tokens': tokens, 'chunks': chunks}]
+    new_data = subtokenize_for_bert_like(data, tokenizer, verbose=False)
+    
+    assert new_data[0]['sub2ori_idx'] == [0, 1, 2, 3, 3.333, 3.667, 4, 4.5, 5]
+    assert new_data[0]['ori2sub_idx'] == [0, 1, 2, 3, 6, 8]
+    for entry, new_entry in zip(data, new_data):
+        for ck, new_ck in zip(entry['chunks'], new_entry['chunks']):
+            assert "".join(entry['tokens'].raw_text[ck[1]:ck[2]]).lower() == "".join(new_entry['tokens'].raw_text[new_ck[1]:new_ck[2]]).replace("##", "").lower()
+
+
+def test_subtokenize_for_bert_like_with_data(bert_like_with_tokenizer, conll2003_demo):
+    bert_like, tokenizer = bert_like_with_tokenizer
+    
+    conll2003_demo = conll2003_demo[1:]  # The fisrt sentence include "-DOCSTART-"
+    for entry in conll2003_demo:
+        entry['chunks'] = [('EntA', start, end) for start in range(len(entry['tokens'])) for end in range(start+1, len(entry['tokens'])+1)]
+    new_data = subtokenize_for_bert_like(conll2003_demo, tokenizer, verbose=False)
+    
+    for entry, new_entry in zip(conll2003_demo, new_data):
+        for ck, new_ck in zip(entry['chunks'], new_entry['chunks']):
+            assert ("".join(entry['tokens'].raw_text[ck[1]:ck[2]]).lower() == 
+                    "".join(new_entry['tokens'].raw_text[new_ck[1]:new_ck[2]]).replace("##", "").replace("Ġ", "").lower())

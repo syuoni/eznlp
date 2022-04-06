@@ -109,8 +109,8 @@ class Full2Half(object):
     @staticmethod
     def half2full(text):
         return text.translate(Full2Half._h2f)
-    
-    
+
+
 
 SHORT_LEN = 3
 def _adaptive_lower(text: str):
@@ -143,7 +143,7 @@ def _text_to_num_mark(text: str, return_nan_mark: bool=True):
     else:
         text4num = text
         is_percent = False
-        
+    
     try:
         possible_value = float(text4num)
     except:
@@ -156,22 +156,22 @@ def _text_to_num_mark(text: str, return_nan_mark: bool=True):
             digits = 0
         else:
             digits = min(MAX_DIGITS, int(numpy.log10(abs(possible_value))) + 1)
-            
+        
         if is_percent:
             num_type = 'percent'
         elif '.' in text4num:
             num_type = 'real'
         else:
             num_type = 'int'
-            
+        
         if possible_value < 0:
             num_sign = '-'
         else:
             num_sign = ''
-            
+        
         return f"<{num_sign}{num_type}{digits}>"
-    
-    
+
+
 _number_normalizers = {'none': lambda x: x, 
                        'marks': lambda x: _text_to_num_mark(x, return_nan_mark=False), 
                        'zeros': lambda x: digit_re.sub('0', x)}
@@ -205,7 +205,7 @@ class Token(object):
         self.raw_text = raw_text
         if callable(pre_text_normalizer):
             self.raw_text = pre_text_normalizer(self.raw_text)
-            
+        
         pipeline_normalizer = _pipeline(_case_normalizers[case_mode.lower()], 
                                         _number_normalizers[number_mode.lower()], 
                                         lambda x: Full2Half.full2half(x) if to_half else x, 
@@ -217,48 +217,48 @@ class Token(object):
         for k, v in kwargs.items():
             setattr(self, k, v)
         
-
+        
     def __eq__(self, other):
         return isinstance(other, Token) and self.raw_text == other.raw_text and self.text == other.text
         
     def __len__(self):
         return len(self.raw_text)
-    
+        
     def __repr__(self):
         return self.raw_text
-    
+        
     @property    
     def prefix_2(self):
         return self.raw_text[:2]
-    
+        
     @property
     def prefix_3(self):
         return self.raw_text[:3]
-    
+        
     @property
     def prefix_4(self):
         return self.raw_text[:4]
-    
+        
     @property
     def prefix_5(self):
         return self.raw_text[:5]
-    
+        
     @property
     def suffix_2(self):
         return self.raw_text[-2:]
-    
+        
     @property
     def suffix_3(self):
         return self.raw_text[-3:]
-    
+        
     @property
     def suffix_4(self):
         return self.raw_text[-4:]
-    
+        
     @property
     def suffix_5(self):
         return self.raw_text[-5:]
-    
+        
     @property
     def num_mark(self):
         return _text_to_num_mark(self.raw_text, return_nan_mark=True)
@@ -269,7 +269,7 @@ class Token(object):
         feature = lower_re.sub('a', feature)
         feature = digit_re.sub('0', feature)
         return feature
-    
+        
     @property
     def en_pattern_sum(self):
         feature = self.en_pattern
@@ -285,9 +285,9 @@ class Token(object):
     @property
     def zh_shape_features(self):
         return None
-    
-    
-    
+
+
+
 class TokenSequence(object):
     """A wrapper of token list, providing sequential attribute access to all tokens. 
     
@@ -317,18 +317,21 @@ class TokenSequence(object):
         
     def __eq__(self, other):
         return isinstance(other, TokenSequence) and self.__getstate__() == other.__getstate__()
-    
+        
     def __len__(self):
         return len(self.token_list)
-    
+        
     def __repr__(self):
         return repr(self.token_list)
-    
-    def __getstate__(self):
-        return {'token_list': self.token_list, 
-                'token_sep': self.token_sep, 
+        
+    @property
+    def _tokens_kwargs(self):
+        return {'token_sep': self.token_sep, 
                 'pad_token': self.pad_token, 
                 'none_token': self.none_token}
+        
+    def __getstate__(self):
+        return {'token_list': self.token_list, **self._tokens_kwargs}
         
     def __setstate__(self, state: dict):
         self.__dict__.update(state)
@@ -338,22 +341,14 @@ class TokenSequence(object):
         if isinstance(i, int):
             return self.token_list[i]
         elif isinstance(i, slice):
-            return TokenSequence(self.token_list[i], 
-                                 token_sep=self.token_sep, 
-                                 pad_token=self.pad_token, 
-                                 none_token=self.none_token)
+            return TokenSequence(self.token_list[i], **self._tokens_kwargs)
         else:
             raise TypeError(f"Invalid subscript type of {i}")
         
     def __add__(self, other):
         assert isinstance(other, TokenSequence)
-        assert other.token_sep == self.token_sep
-        assert other.pad_token == self.pad_token
-        assert other.none_token == self.none_token
-        return TokenSequence(self.token_list + other.token_list, 
-                             token_sep=self.token_sep, 
-                             pad_token=self.pad_token, 
-                             none_token=self.none_token)
+        assert other._tokens_kwargs == self._tokens_kwargs
+        return TokenSequence(self.token_list + other.token_list, **self._tokens_kwargs)
         
         
     def build_pseudo_boundaries(self, sep_width: int=None):
@@ -385,8 +380,8 @@ class TokenSequence(object):
                 self.softword[word_end-1][self._softword_tag2idx['E']] = True
                 for k in range(word_start+1, word_end-1):
                     self.softword[k][self._softword_tag2idx['M']] = True
-                    
-                    
+        
+        
     def build_softlexicons(self, tokenize_callback, **kwargs):
         self._assert_for_softwords(tokenize_callback)
         
@@ -400,25 +395,25 @@ class TokenSequence(object):
                 self.softlexicon[word_end-1][self._softword_tag2idx['E']].append(word_text)
                 for k in range(word_start+1, word_end-1):
                     self.softlexicon[k][self._softword_tag2idx['M']].append(word_text)
-                    
+        
         # Add a special token to empty word sets
         for word_sets in self.softlexicon:
             for word_set in word_sets:
                 if len(word_set) == 0:
                     word_set.append(self.none_token)
-                    
-                    
+        
+        
     @cached_property
     def bigram(self):
         unigram = self.text
         return [self.token_sep.join(gram) for gram in zip(unigram, unigram[1:]+[self.pad_token])]
-    
+        
     @cached_property
     def trigram(self):
         unigram = self.text
         return [self.token_sep.join(gram) for gram in zip(unigram, unigram[1:]+[self.pad_token], unigram[2:]+[self.pad_token, self.pad_token])]
         
-    
+        
     def spans_within_max_length(self, max_len: int):
         total_len = len(self.token_list)
         slice_start = 0
@@ -435,8 +430,8 @@ class TokenSequence(object):
                         raise ValueError(f"Cannot find proper slices in {self.token_list[slice_start:slice_start+max_len]}")
                 yield slice(slice_start, slice_end)
                 slice_start = slice_end
-                
-                
+        
+        
     def attach_additional_tags(self, additional_tags: dict=None, additional_tok2tags: list=None):
         """
         
@@ -451,15 +446,15 @@ class TokenSequence(object):
             for tag_name, tags in additional_tags.items():
                 for tok, tag in zip(self.token_list, tags):
                     setattr(tok, tag_name, tag)
-                    
+        
         if additional_tok2tags is not None:
             for tag_name, tok2tag in additional_tok2tags:
                 for tok in self.token_list:
                     setattr(tok, tag_name, tok2tag.get(tok.text, tok2tag['<unk>']))
-                    
+        
         return self
-    
-    
+        
+        
     @classmethod
     def from_tokenized_text(cls, tokenized_text: List[str], additional_tags=None, additional_tok2tags=None, 
                             token_sep=" ", pad_token="<pad>", none_token="<none>", **kwargs):
@@ -474,8 +469,8 @@ class TokenSequence(object):
         tokens = cls(token_list, token_sep=token_sep, pad_token=pad_token, none_token=none_token)
         tokens.attach_additional_tags(additional_tags=additional_tags, additional_tok2tags=additional_tok2tags)
         return tokens
-    
-    
+        
+        
     @classmethod
     def from_raw_text(cls, raw_text: str, tokenize_callback=None, additional_tok2tags=None, 
                       token_sep=" ", pad_token="<pad>", none_token="<none>", **kwargs):
