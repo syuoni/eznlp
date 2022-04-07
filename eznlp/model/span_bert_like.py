@@ -1,13 +1,11 @@
 # -*- coding: utf-8 -*-
 from typing import List
 from collections import OrderedDict
-import math
 import torch
 import transformers
 
 from ..nn.modules import SequencePooling, SequenceAttention
 from ..nn.modules import QueryBertLikeEncoder
-from ..nn.init import reinit_layer_
 from ..config import Config
 
 
@@ -29,7 +27,7 @@ class SpanBertLikeConfig(Config):
         self.share_weights_int = kwargs.pop('share_weights_int', True)  # Share weights internally, i.e., between `query_bert_like` of different span sizes
         assert (not self.share_weights_ext) or self.share_weights_int
         self.init_agg_mode = kwargs.pop('init_agg_mode', 'max_pooling')
-        self.init_drop_rate = kwargs.pop('hid_drop_rate', 0.2)
+        self.init_drop_rate = kwargs.pop('init_drop_rate', 0.2)
         super().__init__(**kwargs)
         
     @property
