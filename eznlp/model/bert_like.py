@@ -29,8 +29,8 @@ class BertLikeConfig(Config):
         
         self.paired_inputs = kwargs.pop('paired_inputs', False)
         self.from_tokenized = kwargs.pop('from_tokenized', True)
-        self.is_subtokenized = kwargs.pop('is_subtokenized', False)
-        assert self.from_tokenized or (not self.is_subtokenized)
+        self.from_subtokenized = kwargs.pop('from_subtokenized', False)
+        assert self.from_tokenized or (not self.from_subtokenized)
         self.pre_truncation = kwargs.pop('pre_truncation', False)
         self.group_agg_mode = kwargs.pop('group_agg_mode', 'mean')
         self.mix_layers = kwargs.pop('mix_layers', 'top')
@@ -109,7 +109,7 @@ class BertLikeConfig(Config):
         ori_indexes: torch.LongTensor
             A 1D tensor indicating each sub-token's original index in `tokenized_raw_text`.
         """
-        if self.is_subtokenized:
+        if self.from_subtokenized:
             sub_tokens = tokenized_raw_text
         else:
             nested_sub_tokens = _tokenized2nested(tokenized_raw_text, self.tokenizer)
@@ -121,7 +121,7 @@ class BertLikeConfig(Config):
         sub_tok_ids = [self.tokenizer.cls_token_id] + self.tokenizer.convert_tokens_to_ids(sub_tokens) + [self.tokenizer.sep_token_id]
         example = {'sub_tok_ids': torch.tensor(sub_tok_ids)}
         
-        if not self.is_subtokenized:
+        if not self.from_subtokenized:
             example.update({'ori_indexes': torch.tensor(ori_indexes)})
         
         if self.paired_inputs:
@@ -156,7 +156,7 @@ class BertLikeConfig(Config):
         batch = {'sub_tok_ids': batch_sub_tok_ids, 
                  'sub_mask': batch_sub_mask}
         
-        if self.from_tokenized and (not self.is_subtokenized):
+        if self.from_tokenized and (not self.from_subtokenized):
             batch_ori_indexes = [ex['ori_indexes'] for ex in batch_ex]
             batch_ori_indexes = torch.nn.utils.rnn.pad_sequence(batch_ori_indexes, batch_first=True, padding_value=-1)
             batch.update({'ori_indexes': batch_ori_indexes})
@@ -194,7 +194,7 @@ class BertLikeEmbedder(torch.nn.Module):
         self.use_gamma = config.use_gamma
         self.output_hidden_states = config.output_hidden_states
         
-        if config.from_tokenized and (not config.is_subtokenized):
+        if config.from_tokenized and (not config.from_subtokenized):
             self.group_aggregating = SequenceGroupAggregating(mode=config.group_agg_mode)
         if self.mix_layers.lower() == 'trainable':
             self.scalar_mix = ScalarMix(config.num_layers + 1)

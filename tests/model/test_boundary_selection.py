@@ -4,6 +4,7 @@ import torch
 
 from eznlp.dataset import Dataset
 from eznlp.model import EncoderConfig, BertLikeConfig, BoundarySelectionDecoderConfig, ExtractorConfig
+from eznlp.model.bert_like import subtokenize_for_bert_like
 from eznlp.training import Trainer
 
 
@@ -69,12 +70,14 @@ class TestModel(object):
         self._assert_trainable()
         
         
-    def test_model_with_bert_like(self, conll2004_demo, bert_with_tokenizer, device):
+    @pytest.mark.parametrize("from_subtokenized", [False, True])
+    def test_model_with_bert_like(self, from_subtokenized, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
-        self.config = ExtractorConfig('boundary_selection', 
-                                      ohots=None, 
-                                      bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert), 
+        self.config = ExtractorConfig('boundary_selection', ohots=None, 
+                                      bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, from_subtokenized=from_subtokenized), 
                                       intermediate2=None)
+        if from_subtokenized:
+            conll2004_demo = subtokenize_for_bert_like(conll2004_demo, tokenizer, verbose=False)
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
