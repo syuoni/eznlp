@@ -32,7 +32,7 @@ class BertLikeConfig(Config):
         self.is_subtokenized = kwargs.pop('is_subtokenized', False)
         assert self.from_tokenized or (not self.is_subtokenized)
         self.pre_truncation = kwargs.pop('pre_truncation', False)
-        self.agg_mode = kwargs.pop('agg_mode', 'mean')
+        self.group_agg_mode = kwargs.pop('group_agg_mode', 'mean')
         self.mix_layers = kwargs.pop('mix_layers', 'top')
         self.use_gamma = kwargs.pop('use_gamma', False)
         
@@ -79,20 +79,19 @@ class BertLikeConfig(Config):
             A 1D tensor of sub-token indexes.
         """
         sub_tokens = self.tokenizer.tokenize(raw_text)
+        
         # Sequence longer than maximum length should be pre-processed
         assert len(sub_tokens) <= self.tokenizer.model_max_length - 2
-        
         sub_tok_ids = [self.tokenizer.cls_token_id] + self.tokenizer.convert_tokens_to_ids(sub_tokens) + [self.tokenizer.sep_token_id]
+        example = {'sub_tok_ids': torch.tensor(sub_tok_ids)}
         
         if self.paired_inputs:
             # NOTE: `[SEP]` will be retained by tokenizer, instead of being tokenized
             sep_loc = sub_tokens.index(self.tokenizer.sep_token)
             sub_tok_type_ids = [self.sentence_A_id] * (sep_loc+1 +1) + [self.sentence_B_id] * (len(sub_tokens)-sep_loc-1 +1)  # `[CLS]` and `[SEP]` at the ends
-        else:
-            sub_tok_type_ids = None
+            example.update({'sub_tok_type_ids': torch.tensor(sub_tok_type_ids)})
         
-        # (step+2, ), (step+2, )
-        return sub_tok_ids, sub_tok_type_ids
+        return example
         
         
     def _token_ids_from_tokenized(self, tokenized_raw_text: List[str]):
@@ -110,40 +109,41 @@ class BertLikeConfig(Config):
         ori_indexes: torch.LongTensor
             A 1D tensor indicating each sub-token's original index in `tokenized_raw_text`.
         """
-        nested_sub_tokens = _tokenized2nested(tokenized_raw_text, self.tokenizer)
-        sub_tokens = [sub_tok for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
-        ori_indexes = [i for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
+        if self.is_subtokenized:
+            sub_tokens = tokenized_raw_text
+        else:
+            nested_sub_tokens = _tokenized2nested(tokenized_raw_text, self.tokenizer)
+            sub_tokens = [sub_tok for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
+            ori_indexes = [i for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
+        
         # Sequence longer than maximum length should be pre-processed
         assert len(sub_tokens) <= self.tokenizer.model_max_length - 2
-        
         sub_tok_ids = [self.tokenizer.cls_token_id] + self.tokenizer.convert_tokens_to_ids(sub_tokens) + [self.tokenizer.sep_token_id]
+        example = {'sub_tok_ids': torch.tensor(sub_tok_ids)}
+        
+        if not self.is_subtokenized:
+            example.update({'ori_indexes': torch.tensor(ori_indexes)})
         
         if self.paired_inputs:
             # NOTE: `[SEP]` will be retained by tokenizer, instead of being tokenized
             sep_loc = sub_tokens.index(self.tokenizer.sep_token)
             sub_tok_type_ids = [self.sentence_A_id] * (sep_loc+1 +1) + [self.sentence_B_id] * (len(sub_tokens)-sep_loc-1 +1)  # `[CLS]` and `[SEP]` at the ends
-        else:
-            sub_tok_type_ids = None
+            example.update({'sub_tok_type_ids': torch.tensor(sub_tok_type_ids)})
         
-        # (step+2, ), (step+2, ), (step, )
-        return sub_tok_ids, sub_tok_type_ids, ori_indexes
+        return example
         
         
     def exemplify(self, tokens: TokenSequence):
         tokenized_raw_text = tokens.raw_text
         
         if self.from_tokenized:
-            sub_tok_ids, sub_tok_type_ids, ori_indexes = self._token_ids_from_tokenized(tokenized_raw_text)
-            example = {'sub_tok_ids': torch.tensor(sub_tok_ids), 
-                       'ori_indexes': torch.tensor(ori_indexes)}
+            # sub_tok_ids: (step+2, )
+            # sub_tok_type_ids: (step+2, )
+            # ori_indexes: (step, )
+            return self._token_ids_from_tokenized(tokenized_raw_text)
         else:
             # AD-HOC: Use rejoined tokenized raw text here
-            sub_tok_ids, sub_tok_type_ids = self._token_ids_from_string(" ".join(tokenized_raw_text))
-            example = {'sub_tok_ids': torch.tensor(sub_tok_ids)}
-        
-        if self.paired_inputs:
-            example.update({'sub_tok_type_ids': torch.tensor(sub_tok_type_ids)})
-        return example
+            return self._token_ids_from_string(" ".join(tokenized_raw_text))
         
         
     def batchify(self, batch_ex: List[dict]):
@@ -153,16 +153,13 @@ class BertLikeConfig(Config):
         batch_sub_tok_ids = torch.nn.utils.rnn.pad_sequence(batch_sub_tok_ids, 
                                                             batch_first=True, 
                                                             padding_value=self.tokenizer.pad_token_id)
+        batch = {'sub_tok_ids': batch_sub_tok_ids, 
+                 'sub_mask': batch_sub_mask}
         
-        if self.from_tokenized:
+        if self.from_tokenized and (not self.is_subtokenized):
             batch_ori_indexes = [ex['ori_indexes'] for ex in batch_ex]
             batch_ori_indexes = torch.nn.utils.rnn.pad_sequence(batch_ori_indexes, batch_first=True, padding_value=-1)
-            batch = {'sub_tok_ids': batch_sub_tok_ids, 
-                     'sub_mask': batch_sub_mask, 
-                     'ori_indexes': batch_ori_indexes}
-        else:
-            batch = {'sub_tok_ids': batch_sub_tok_ids, 
-                     'sub_mask': batch_sub_mask}
+            batch.update({'ori_indexes': batch_ori_indexes})
         
         if self.paired_inputs:
             batch_sub_tok_type_ids = [ex['sub_tok_type_ids'] for ex in batch_ex]
@@ -170,6 +167,7 @@ class BertLikeConfig(Config):
                                                                      batch_first=True, 
                                                                      padding_value=self.sentence_A_id)
             batch.update({'sub_tok_type_ids': batch_sub_tok_type_ids})
+        
         return batch
         
         
@@ -191,14 +189,13 @@ class BertLikeEmbedder(torch.nn.Module):
         super().__init__()
         self.bert_like = config.bert_like
         
-        self.from_tokenized = config.from_tokenized
         self.freeze = config.freeze
         self.mix_layers = config.mix_layers
         self.use_gamma = config.use_gamma
         self.output_hidden_states = config.output_hidden_states
         
-        if self.from_tokenized:
-            self.group_aggregating = SequenceGroupAggregating(mode=config.agg_mode)
+        if config.from_tokenized and (not config.is_subtokenized):
+            self.group_aggregating = SequenceGroupAggregating(mode=config.group_agg_mode)
         if self.mix_layers.lower() == 'trainable':
             self.scalar_mix = ScalarMix(config.num_layers + 1)
         if self.use_gamma:
@@ -242,13 +239,13 @@ class BertLikeEmbedder(torch.nn.Module):
         bert_hidden = bert_hidden[:, 1:-1]
         sub_mask = sub_mask[:, 2:]
         
-        if self.from_tokenized:
+        if hasattr(self, 'group_aggregating'):
             # bert_hidden: (batch, tok_step, hid_dim)
             bert_hidden = self.group_aggregating(bert_hidden, ori_indexes)
         
         if self.output_hidden_states:
             all_bert_hidden = [hidden[:, 1:-1] for hidden in bert_outs['hidden_states']]
-            if self.from_tokenized:
+            if hasattr(self, 'group_aggregating'):
                 all_bert_hidden = [self.group_aggregating(hidden, ori_indexes) for hidden in all_bert_hidden]
             return (bert_hidden, all_bert_hidden)
         else:

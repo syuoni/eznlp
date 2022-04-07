@@ -101,6 +101,10 @@ class Boundaries(TargetWrapper):
         super().__init__(training)
         
         self.chunks = entry.get('chunks', None)
+        if 'sub2ori_idx' in entry:
+            self.sub2ori_idx = entry['sub2ori_idx']
+            self.ori2sub_idx = entry['ori2sub_idx']
+        
         num_tokens = len(entry['tokens'])
         
         if training and (config.neg_sampling_rate < 1 or config.neg_sampling_power_decay > 0):

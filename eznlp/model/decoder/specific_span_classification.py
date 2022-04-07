@@ -190,7 +190,7 @@ class SpecificSpanClsDecoder(DecoderBase, BoundariesDecoderMixin):
         batch_logits = self.get_logits(batch, full_hidden, all_query_hidden)
         
         batch_chunks = []
-        for logits, curr_len in zip(batch_logits, batch.seq_lens.cpu().tolist()):
+        for logits, boundaries_obj, curr_len in zip(batch_logits, batch.boundaries_objs, batch.seq_lens.cpu().tolist()):
             curr_max_span_size = min(self.max_span_size, curr_len)
             
             confidences, label_ids = logits.softmax(dim=-1).max(dim=-1)
@@ -198,6 +198,11 @@ class SpecificSpanClsDecoder(DecoderBase, BoundariesDecoderMixin):
             chunks = [(label, start, end) for label, (start, end) in zip(labels, _spans_from_diagonals(curr_len, curr_max_span_size)) if label != self.none_label]
             confidences = [conf for label, conf in zip(labels, confidences.cpu().tolist()) if label != self.none_label]
             assert len(confidences) == len(chunks)
+            
+            if hasattr(boundaries_obj, 'sub2ori_idx'):
+                is_valid = [isinstance(boundaries_obj.sub2ori_idx[start], int) and isinstance(boundaries_obj.sub2ori_idx[end], int) for label, start, end in chunks]
+                confidences = [conf for conf, is_v in zip(confidences, is_valid) if is_v]
+                chunks = [ck for ck, is_v in zip(chunks, is_valid) if is_v]
             
             # Sort chunks from high to low confidences
             chunks = [ck for _, ck in sorted(zip(confidences, chunks), reverse=True)]

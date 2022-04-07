@@ -223,7 +223,7 @@ class BoundarySelectionDecoder(DecoderBase, BoundariesDecoderMixin):
         batch_scores = self.compute_scores(batch, full_hidden)
         
         batch_chunks = []
-        for curr_scores, curr_len in zip(batch_scores, batch.seq_lens.cpu().tolist()):
+        for curr_scores, boundaries_obj, curr_len in zip(batch_scores, batch.boundaries_objs, batch.seq_lens.cpu().tolist()):
             curr_non_mask = self._get_span_non_mask(curr_len)
             
             confidences, label_ids = curr_scores[:curr_len, :curr_len][curr_non_mask].softmax(dim=-1).max(dim=-1)
@@ -231,6 +231,11 @@ class BoundarySelectionDecoder(DecoderBase, BoundariesDecoderMixin):
             chunks = [(label, start, end) for label, (start, end) in zip(labels, _spans_from_upper_triangular(curr_len)) if label != self.none_label]
             confidences = [conf for label, conf in zip(labels, confidences.cpu().tolist()) if label != self.none_label]
             assert len(confidences) == len(chunks)
+            
+            if hasattr(boundaries_obj, 'sub2ori_idx'):
+                is_valid = [isinstance(boundaries_obj.sub2ori_idx[start], int) and isinstance(boundaries_obj.sub2ori_idx[end], int) for label, start, end in chunks]
+                confidences = [conf for conf, is_v in zip(confidences, is_valid) if is_v]
+                chunks = [ck for ck, is_v in zip(chunks, is_valid) if is_v]
             
             # Sort chunks from high to low confidences
             chunks = [ck for _, ck in sorted(zip(confidences, chunks), reverse=True)]
