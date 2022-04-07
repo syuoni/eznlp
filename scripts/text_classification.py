@@ -30,6 +30,8 @@ def parse_arguments(parser: argparse.ArgumentParser):
     group_data = parser.add_argument_group('dataset')
     group_data.add_argument('--dataset', type=str, default='imdb', 
                             help="dataset name")
+    group_data.add_argument('--pre_truecase', default=False, action='store_true', 
+                            help="whether to pre-truecase data")
     group_data.add_argument('--save_preds', default=False, action='store_true', 
                             help="whether to save predictions on the test split (typically in case without ground truth)")
     
@@ -96,7 +98,9 @@ def build_TC_config(args: argparse.Namespace):
 
 
 def process_TC_data(train_data, dev_data, test_data, args, config):
-    if config.bert_like is not None and ('cased' in os.path.basename(config.bert_like.name_or_path).split('-')):
+    if args.pre_truecase:
+        assert config.bert_like is not None
+        assert not getattr(config.bert_like.tokenizer, 'do_lower_case', False)
         train_data = truecase_for_bert_like(train_data, verbose=args.log_terminal)
         dev_data   = truecase_for_bert_like(dev_data,   verbose=args.log_terminal)
         test_data  = truecase_for_bert_like(test_data,  verbose=args.log_terminal)
@@ -106,7 +110,7 @@ def process_TC_data(train_data, dev_data, test_data, args, config):
         train_data = truncate_for_bert_like(train_data, config.bert_like.tokenizer, verbose=args.log_terminal)
         dev_data   = truncate_for_bert_like(dev_data,   config.bert_like.tokenizer, verbose=args.log_terminal)
         test_data  = truncate_for_bert_like(test_data,  config.bert_like.tokenizer, verbose=args.log_terminal)
-        
+    
     elif args.dataset in ('ChnSentiCorp', 'THUCNews_10'):
         # Too long sentences even for RNN
         for data in [train_data, dev_data, test_data]:

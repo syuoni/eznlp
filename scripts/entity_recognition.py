@@ -32,6 +32,10 @@ def parse_arguments(parser: argparse.ArgumentParser):
                             help="dataset name")
     group_data.add_argument('--doc_level', default=False, action='store_true', 
                             help="whether to load data at document level")
+    group_data.add_argument('--pre_truecase', default=False, action='store_true', 
+                            help="whether to pre-truecase data")
+    group_data.add_argument('--pre_subtokenize', default=False, action='store_true', 
+                            help="whether to pre-subtokenize data")
     group_data.add_argument('--corrupt_rate', type=float, default=0.0, 
                             help="boundary corrupt rate")
     group_data.add_argument('--save_preds', default=False, action='store_true', 
@@ -162,7 +166,7 @@ def collect_IE_assembly_config(args: argparse.Namespace):
     if args.bert_arch.lower() != 'none':
         # Cased tokenizer for NER task
         bert_like, tokenizer = load_pretrained(args.bert_arch, args, cased=True)
-        bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert_like, arch=args.bert_arch, freeze=False)
+        bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert_like, arch=args.bert_arch, from_subtokenized=args.pre_subtokenize, freeze=False)
         if getattr(args, 'ck_decoder', '').startswith('specific_span') or getattr(args, 'rel_decoder', '').startswith('specific_span'):
             bert_like_config.output_hidden_states = True
             span_bert_like_config = SpanBertLikeConfig(bert_like=bert_like, arch=args.bert_arch, freeze=False, 
@@ -248,7 +252,9 @@ def build_ER_config(args: argparse.Namespace):
 
 
 def process_IE_data(train_data, dev_data, test_data, args, config):
-    if config.bert_like is not None and ('cased' in os.path.basename(config.bert_like.name_or_path).split('-')):
+    if args.pre_truecase:
+        assert config.bert_like is not None
+        assert not getattr(config.bert_like.tokenizer, 'do_lower_case', False)
         train_data = truecase_for_bert_like(train_data, verbose=args.log_terminal)
         dev_data   = truecase_for_bert_like(dev_data,   verbose=args.log_terminal)
         test_data  = truecase_for_bert_like(test_data,  verbose=args.log_terminal)
@@ -259,6 +265,12 @@ def process_IE_data(train_data, dev_data, test_data, args, config):
         train_data = segment_uniformly_for_bert_like(train_data, config.bert_like.tokenizer, update_raw_idx=True, verbose=args.log_terminal)
         dev_data   = segment_uniformly_for_bert_like(dev_data,   config.bert_like.tokenizer, update_raw_idx=True, verbose=args.log_terminal)
         test_data  = segment_uniformly_for_bert_like(test_data,  config.bert_like.tokenizer, update_raw_idx=True, verbose=args.log_terminal)
+    
+    if args.pre_subtokenize:
+        assert config.bert_like is not None
+        train_data = subtokenize_for_bert_like(train_data, config.bert_like.tokenizer, verbose=args.log_terminal)
+        dev_data   = subtokenize_for_bert_like(dev_data,   config.bert_like.tokenizer, verbose=args.log_terminal)
+        test_data  = subtokenize_for_bert_like(test_data,  config.bert_like.tokenizer, verbose=args.log_terminal)
     
     if args.use_softword or args.use_softlexicon:
         if config.nested_ohots is not None and 'softlexicon' in config.nested_ohots.keys():

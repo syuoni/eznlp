@@ -497,6 +497,8 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
                 PATH = "assets/transformers/bert-base-cased" if cased else "assets/transformers/bert-base-uncased"
             elif 'large' in pretrained_str.lower():
                 PATH = "assets/transformers/bert-large-cased" if cased else "assets/transformers/bert-large-uncased"
+            # cased: do_lower_case=False
+            # uncased: do_lower_case=True
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.BertTokenizer.from_pretrained(PATH))
             
@@ -505,6 +507,7 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
                 PATH = "assets/transformers/roberta-base"
             elif 'large' in pretrained_str.lower():
                 PATH = "assets/transformers/roberta-large"
+            # cased: do_lower_case=False
             return (transformers.RobertaModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.RobertaTokenizer.from_pretrained(PATH, add_prefix_space=True))
             
@@ -512,6 +515,7 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
             size = re.search("x*(base|large)", pretrained_str.lower())
             if size is not None:
                 PATH = f"assets/transformers/albert-{size.group()}-v2"
+            # uncased: do_lower_case=True
             return (transformers.AlbertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.AlbertTokenizer.from_pretrained(PATH))
             
@@ -526,7 +530,7 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
         elif pretrained_str.lower().startswith('scibert'):
             PATH = "assets/transformers/allenai/scibert_scivocab_cased" if cased else "assets/transformers/allenai/scibert_scivocab_uncased"
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
-                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512))
+                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=(not cased)))
             
     elif args.language.lower() == 'chinese':
         if pretrained_str.lower().startswith('bert'):
