@@ -11,7 +11,7 @@ from ...nn.modules import SequencePooling, SequenceAttention, CombinedDropout, S
 from ...nn.functional import seq_lens2mask
 from ...nn.init import reinit_embedding_, reinit_layer_
 from .base import SingleDecoderConfigBase, DecoderBase
-from .boundaries import Boundaries, MAX_SIZE_ID_COV_RATE, _spans_from_diagonals, _span_sizes_from_diagonals
+from .boundaries import Boundaries, MAX_SIZE_ID_COV_RATE, _spans_from_diagonals
 from .boundary_selection import BoundariesDecoderMixin
 
 logger = logging.getLogger(__name__)

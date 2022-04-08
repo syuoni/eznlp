@@ -44,8 +44,8 @@ class ModelConfigBase(Config):
 class ModelBase(torch.nn.Module):
     def __init__(self, config: ModelConfigBase):
         super().__init__()
-        for name, c in config.__dict__.items():
-            if c is not None:
+        for name in config._all_names:
+            if (c := getattr(config, name)) is not None:
                 setattr(self, name, c.instantiate())
         
     def pretrained_parameters(self):

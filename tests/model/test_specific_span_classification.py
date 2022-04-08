@@ -58,29 +58,32 @@ class TestModel(object):
         
         
     @pytest.mark.slow
-    @pytest.mark.parametrize("from_subtokenized, num_layers, share_weights_ext, share_weights_int, agg_mode, use_interm2, neg_sampling_rate, size_emb_dim, sb_epsilon", 
-                             [(False, 3,  True,  True,  'max_pooling',  False, 1.0, 0, 0),  # Baseline
-                              (True,  3,  True,  True,  'max_pooling',  False, 1.0, 0, 0),  # Pre-subtokenization
-                              (False, 12, True,  True,  'max_pooling',  False, 1.0, 0, 0),  # Number of layers
-                              (False, 6,  True,  True,  'max_pooling',  False, 1.0, 0, 0), 
-                              (False, 1,  True,  True,  'max_pooling',  False, 1.0, 0, 0), 
-                              (False, 3,  False, True,  'max_pooling',  False, 1.0, 0, 0),  # Share weights
-                              (False, 3,  False, False, 'max_pooling',  False, 1.0, 0, 0), 
-                              (False, 3,  True,  True,  'mean_pooling', False, 1.0, 0, 0),  # Initial aggregation
-                              (False, 3,  True,  True,  'multiplicative_attention', False, 1.0, 0, 0), 
-                              (False, 3,  True,  True,  'conv',         False, 1.0, 0, 0), 
-                              (False, 3,  True,  True,  'max_pooling',  True,  1.0, 0, 0),  # Use interm2 x Share weights
-                              (False, 3,  False, True,  'max_pooling',  True,  1.0, 0, 0),
-                              (False, 3,  False, False, 'max_pooling',  True,  1.0, 0, 0), 
-                              (False, 3,  True,  True,  'max_pooling',  False, 0.5, 0, 0),  # Use negative sampling
-                              (False, 3,  True,  True,  'max_pooling',  False, 1.0, 25, 0),  # Use size embedding
-                              (False, 3,  True,  True,  'max_pooling',  False, 1.0, 0, 0.1)])  # Use boundary smoothing 
-    def test_model(self, from_subtokenized, num_layers, share_weights_ext, share_weights_int, agg_mode, use_interm2, neg_sampling_rate, size_emb_dim, sb_epsilon, conll2004_demo, bert_with_tokenizer, device):
+    @pytest.mark.parametrize("from_subtokenized, num_layers, agg_mode, share_weights_ext, share_weights_int, use_interm2, share_interm2, neg_sampling_rate, size_emb_dim, sb_epsilon", 
+                             [(False, 3,  'max_pooling',  True,  True,  False, True,  1.0, 0, 0),  # Baseline
+                              (True,  3,  'max_pooling',  True,  True,  False, True,  1.0, 0, 0),  # Pre-subtokenization
+                              (False, 12, 'max_pooling',  True,  True,  False, True,  1.0, 0, 0),  # Number of layers
+                              (False, 6,  'max_pooling',  True,  True,  False, True,  1.0, 0, 0), 
+                              (False, 1,  'max_pooling',  True,  True,  False, True,  1.0, 0, 0), 
+                              (False, 3,  'mean_pooling', True,  True,  False, True,  1.0, 0, 0),  # Initial aggregation
+                              (False, 3,  'multiplicative_attention', True,  True,  False, True,  1.0, 0, 0), 
+                              (False, 3,  'conv',         True,  True,  False, True,  1.0, 0, 0), 
+                              (False, 3,  'max_pooling',  False, True,  False, True,  1.0, 0, 0),  # Share weights
+                              (False, 3,  'max_pooling',  False, False, False, True,  1.0, 0, 0), 
+                              (False, 3,  'max_pooling',  True,  True,  True,  True,  1.0, 0, 0),  # Use interm2 
+                              (False, 3,  'max_pooling',  False, True,  True,  True,  1.0, 0, 0),  # Use interm2 x Share weights x Share interm2
+                              (False, 3,  'max_pooling',  False, False, True,  True,  1.0, 0, 0), 
+                              (False, 3,  'max_pooling',  False, True,  True,  False, 1.0, 0, 0), 
+                              (False, 3,  'max_pooling',  False, False, True,  False, 1.0, 0, 0), 
+                              (False, 3,  'max_pooling',  True,  True,  False, True,  0.5, 0, 0),  # Use negative sampling
+                              (False, 3,  'max_pooling',  True,  True,  False, True,  1.0, 25, 0),  # Use size embedding
+                              (False, 3,  'max_pooling',  True,  True,  False, True,  1.0, 0, 0.1)])  # Use boundary smoothing 
+    def test_model(self, from_subtokenized, num_layers, agg_mode, share_weights_ext, share_weights_int, use_interm2, share_interm2, neg_sampling_rate, size_emb_dim, sb_epsilon, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
         self.config = SpecificSpanExtractorConfig(decoder=SpecificSpanClsDecoderConfig(neg_sampling_rate=neg_sampling_rate, size_emb_dim=size_emb_dim, max_span_size=3, sb_epsilon=sb_epsilon), 
                                                   bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, from_subtokenized=from_subtokenized, freeze=False, output_hidden_states=True), 
                                                   span_bert_like=SpanBertLikeConfig(bert_like=bert, freeze=False, num_layers=num_layers, share_weights_ext=share_weights_ext, share_weights_int=share_weights_int, init_agg_mode=agg_mode), 
-                                                  intermediate2=EncoderConfig(arch='LSTM', hid_dim=400) if use_interm2 else None)
+                                                  intermediate2=EncoderConfig(arch='LSTM', hid_dim=400) if use_interm2 else None, 
+                                                  share_interm2=share_interm2)
         if from_subtokenized:
             conll2004_demo = subtokenize_for_bert_like(conll2004_demo, tokenizer, verbose=False)
         self._setup_case(conll2004_demo, device)

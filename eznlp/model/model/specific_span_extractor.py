@@ -3,6 +3,7 @@ from typing import List, Union
 from collections import OrderedDict
 import torch
 
+from ...config import ConfigList
 from ...wrapper import Batch
 from ..encoder import EncoderConfig
 from ..decoder import (SingleDecoderConfigBase, 
@@ -16,12 +17,13 @@ from .base import ModelConfigBase, ModelBase
 class SpecificSpanExtractorConfig(ModelConfigBase):
     
     _pretrained_names = ['bert_like', 'span_bert_like']
-    _all_names = _pretrained_names + ['intermediate2'] + ['decoder']
+    _all_names = _pretrained_names + ['intermediate2', 'span_intermediate2'] + ['decoder']
     
     def __init__(self, decoder: Union[SpecificSpanClsDecoderConfig, str]='specific_span_cls', **kwargs):
-        self.bert_like = kwargs.pop('bert_like', None)
-        self.span_bert_like = kwargs.pop('span_bert_like', None)
+        self.bert_like = kwargs.pop('bert_like')
+        self.span_bert_like = kwargs.pop('span_bert_like')
         self.intermediate2 = kwargs.pop('intermediate2', EncoderConfig(arch='LSTM', hid_dim=400))
+        self.share_interm2 = kwargs.pop('share_interm2', True)
         
         if isinstance(decoder, (SingleDecoderConfigBase, JointExtractionDecoderConfig)):
             self.decoder = decoder
@@ -43,6 +45,16 @@ class SpecificSpanExtractorConfig(ModelConfigBase):
     @property
     def valid(self):
         return super().valid and (self.bert_like is not None) and self.bert_like.output_hidden_states and (self.span_bert_like is not None)
+        
+    @property
+    def span_intermediate2(self):
+        if self.share_interm2:
+            return None
+        elif self.span_bert_like.share_weights_int:
+            return self.intermediate2
+        else:
+            return ConfigList([self.intermediate2 for k in range(2, self.span_bert_like.max_span_size+1)])
+        
         
     def build_vocabs_and_dims(self, *partitions):
         if self.intermediate2 is not None:
@@ -79,16 +91,6 @@ class SpecificSpanExtractorConfig(ModelConfigBase):
 class SpecificSpanExtractor(ModelBase):
     def __init__(self, config: SpecificSpanExtractorConfig):
         super().__init__(config)
-        if config.intermediate2 is not None:
-            # Share weights exactly following `span_bert_like`
-            if config.span_bert_like.share_weights_ext:
-                pass
-            elif config.span_bert_like.share_weights_int:
-                self.span_intermediate2 = config.intermediate2.instantiate()
-            else:
-                # `self.span_intermediate2[k-2]` for span size `k`
-                self.span_intermediate2 = torch.nn.ModuleList([config.intermediate2.instantiate() 
-                                                                   for k in range(2, config.span_bert_like.max_span_size+1)])
         
         
     def pretrained_parameters(self):
@@ -116,9 +118,9 @@ class SpecificSpanExtractor(ModelBase):
                 # Allow empty sequences here; expect not to raise inconsistencies in final outputs
                 curr_mask = batch.mask[:, k-1:].clone()
                 curr_mask[:, 0] = False
-                if self.span_bert_like.share_weights_ext:
+                if not hasattr(self, 'span_intermediate2'):
                     new_all_last_query_states[k] = self.intermediate2(query_hidden, curr_mask)
-                elif self.span_bert_like.share_weights_int:
+                elif not isinstance(self.span_intermediate2, torch.nn.ModuleList):
                     new_all_last_query_states[k] = self.span_intermediate2(query_hidden, curr_mask)
                 else:
                     new_all_last_query_states[k] = self.span_intermediate2[k-2](query_hidden, curr_mask)
