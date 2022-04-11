@@ -495,11 +495,95 @@ def _subtokenize_tokens(entry: dict, tokenizer: transformers.PreTrainedTokenizer
 
 
 def subtokenize_for_bert_like(data: list, tokenizer: transformers.PreTrainedTokenizer, num_digits: int=3, verbose=True):
-    """Sub-tokenize tokens in `data` with sub-word `tokenizer`. 
+    """For word-level tokens, sub-tokenize the words with sub-word `tokenizer`. 
     Modify the corresponding start/end indexes in `chunks`, `relations`, `attributes`.
     """
     new_data = []
-    for entry in tqdm.tqdm(data, disable=not verbose, ncols=100, desc="Subtokenizing data"):
+    for entry in tqdm.tqdm(data, disable=not verbose, ncols=100, desc="Subtokenizing words in data"):
         new_entry = _subtokenize_tokens(entry, tokenizer, num_digits=num_digits)
+        new_data.append(new_entry)
+    return new_data
+
+
+
+def _tokenizer2sub_prefix(tokenizer: transformers.PreTrainedTokenizer):
+    if isinstance(tokenizer, transformers.BertTokenizer):
+        return "##"
+    elif isinstance(tokenizer, transformers.RobertaTokenizer):
+        return "Ġ"
+    elif isinstance(tokenizer, transformers.AlbertTokenizer):
+        return "▁"
+    else:
+        raise ValueError(f"Invalid tokenizer {tokenizer}")
+
+
+def _unk_ascii_characters(tokenizer: transformers.PreTrainedTokenizer):
+    return [chr(i) for i in range(128) if tokenizer.tokenize(chr(i)) in ([], [tokenizer.unk_token])]
+
+
+def _merge_enchars(entry: dict, tokenizer: transformers.PreTrainedTokenizer, sub_prefix: str, unk_ascii: list, num_digits: int=3):
+    tokens = entry['tokens']
+    sub_tokens = []
+    curr_enchars = []
+    for char in tokens.raw_text:
+        if char.isascii() and (char not in unk_ascii):
+            curr_enchars.append(char)
+        else:
+            if len(curr_enchars) > 0:
+                curr_sub_tokens = tokenizer.tokenize("".join(curr_enchars))
+                assert "".join(stok.replace(sub_prefix, "") for stok in curr_sub_tokens).lower() == "".join(curr_enchars).lower()
+                sub_tokens.extend(curr_sub_tokens)
+                curr_enchars = []
+            
+            char_subtokenized = tokenizer.tokenize(char)
+            assert len(char_subtokenized) <= 1
+            if len(char_subtokenized) == 0:
+                char_subtokenized = [tokenizer.unk_token]
+            # assert char_subtokenized[0] in (char, char.lower(), tokenizer.unk_token)
+            sub_tokens.extend(char_subtokenized) 
+    
+    if len(curr_enchars) > 0:
+        curr_sub_tokens = tokenizer.tokenize("".join(curr_enchars))
+        assert "".join(stok.replace(sub_prefix, "") for stok in curr_sub_tokens).lower() == "".join(curr_enchars).lower()
+        sub_tokens.extend(curr_sub_tokens)
+    
+    sub_tokens_wo_prefix = [stok.replace(sub_prefix, "") for stok in sub_tokens]
+    assert len("".join(sub_tokens_wo_prefix).replace(tokenizer.unk_token, "_")) == len(tokens)
+    ori2sub_idx = [i if j==0 else i+round(j/len(stok), ndigits=num_digits) for i, stok in enumerate(sub_tokens_wo_prefix) for j in range(len(stok) if stok != tokenizer.unk_token else 1)]
+    ori2sub_idx.append(len(sub_tokens))
+    sub2ori_idx = [oi for oi, si in enumerate(ori2sub_idx) if isinstance(si, int)]
+    
+    # Warning: Re-construct `tokens`; this may yield `text` attribute different from the original ones
+    new_entry = {'tokens': TokenSequence.from_tokenized_text(sub_tokens, **tokens._tokens_kwargs), 
+                 'sub2ori_idx': sub2ori_idx, 
+                 'ori2sub_idx': ori2sub_idx}
+    
+    if 'chunks' in entry:
+        new_entry['chunks'] = [(label, ori2sub_idx[start], ori2sub_idx[end]) for label, start, end in entry['chunks']]
+    if 'relations' in entry:
+        new_entry['relations'] = [(label, (h_label, ori2sub_idx[h_start], ori2sub_idx[h_end]), (t_label, ori2sub_idx[t_start], ori2sub_idx[t_end])) 
+                                      for label, (h_label, h_start, h_end), (t_label, t_start, t_end) in entry['relations']]
+    if 'attributes' in entry:
+        new_entry['attributes'] = [(label, (ck_label, ori2sub_idx[ck_start], ori2sub_idx[ck_end])) 
+                                       for label, (ck_label, ck_start, ck_end) in entry['attributes']]
+    
+    new_entry.update({k: v for k, v in entry.items() if k not in ('tokens', 'chunks', 'relations', 'attributes')})
+    return new_entry
+
+
+def merge_enchars_for_bert_like(data: list, tokenizer: transformers.PreTrainedTokenizer, num_digits: int=3, verbose=True):
+    """For character-level tokens, merge the consecutive English characters with sub-word `tokenizer`. 
+    Modify the corresponding start/end indexes in `chunks`, `relations`, `attributes`. 
+    
+    Warning: Any consecutive English characters will be first merged as a word and then subtokenized into sub-words, 
+    even if the characters originally contain multiple words. 
+    Note that the original word boundaries (i.e., spaces) are missing, and not retrievable. 
+    """
+    sub_prefix = _tokenizer2sub_prefix(tokenizer)
+    unk_ascii = _unk_ascii_characters(tokenizer)
+    
+    new_data = []
+    for entry in tqdm.tqdm(data, disable=not verbose, ncols=100, desc="Merging characters in data"):
+        new_entry = _merge_enchars(entry, tokenizer, sub_prefix, unk_ascii, num_digits=num_digits)
         new_data.append(new_entry)
     return new_data

@@ -6,6 +6,7 @@ import random
 import numpy
 import pandas
 import torch
+import transformers
 
 from eznlp.token import TokenSequence
 from eznlp.model import BertLikeConfig
@@ -13,7 +14,9 @@ from eznlp.model.bert_like import (truecase_for_bert_like,
                                    truncate_for_bert_like, 
                                    segment_uniformly_for_bert_like, 
                                    subtokenize_for_bert_like, 
-                                   _tokenized2nested)
+                                   merge_enchars_for_bert_like, 
+                                   _tokenized2nested, 
+                                   _tokenizer2sub_prefix)
 from eznlp.training import count_params
 from eznlp.io import TabularIO
 
@@ -122,6 +125,7 @@ def test_segment_uniformly_for_bert_like(bert_with_tokenizer, token_len, max_len
 
 def test_subtokenize_for_bert_like(bert_with_tokenizer):
     bert, tokenizer = bert_with_tokenizer
+    sub_prefix = _tokenizer2sub_prefix(tokenizer)
     
     tokens = TokenSequence.from_tokenized_text(["I", "like", 'it', 'sooooo', 'much!'])
     chunks = [('EntA', start, end) for start in range(len(tokens)) for end in range(start+1, len(tokens)+1)]
@@ -132,11 +136,12 @@ def test_subtokenize_for_bert_like(bert_with_tokenizer):
     assert new_data[0]['ori2sub_idx'] == [0, 1, 2, 3, 6, 8]
     for entry, new_entry in zip(data, new_data):
         for ck, new_ck in zip(entry['chunks'], new_entry['chunks']):
-            assert "".join(entry['tokens'].raw_text[ck[1]:ck[2]]).lower() == "".join(new_entry['tokens'].raw_text[new_ck[1]:new_ck[2]]).replace("##", "").lower()
+            assert "".join(entry['tokens'].raw_text[ck[1]:ck[2]]).lower() == "".join(new_entry['tokens'].raw_text[new_ck[1]:new_ck[2]]).replace(sub_prefix, "").lower()
 
 
 def test_subtokenize_for_bert_like_with_data(bert_like_with_tokenizer, conll2003_demo):
     bert_like, tokenizer = bert_like_with_tokenizer
+    sub_prefix = _tokenizer2sub_prefix(tokenizer)
     
     conll2003_demo = conll2003_demo[1:]  # The fisrt sentence include "-DOCSTART-"
     for entry in conll2003_demo:
@@ -146,4 +151,23 @@ def test_subtokenize_for_bert_like_with_data(bert_like_with_tokenizer, conll2003
     for entry, new_entry in zip(conll2003_demo, new_data):
         for ck, new_ck in zip(entry['chunks'], new_entry['chunks']):
             assert ("".join(entry['tokens'].raw_text[ck[1]:ck[2]]).lower() == 
-                    "".join(new_entry['tokens'].raw_text[new_ck[1]:new_ck[2]]).replace("##", "").replace("Ġ", "").lower())
+                    "".join(new_entry['tokens'].raw_text[new_ck[1]:new_ck[2]]).replace(sub_prefix, "").lower())
+
+
+
+def test_merge_enchars_for_bert_like():
+    tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-chinese", do_lower_case=True)
+    sub_prefix = _tokenizer2sub_prefix(tokenizer)
+    
+    tokens = TokenSequence.from_tokenized_text(["我", "l", "i", "k", "e", "i", "t", "非", "常", "！"])
+    chunks = [('EntA', start, end) for start in range(len(tokens)) for end in range(start+1, len(tokens)+1)]
+    data = [{'tokens': tokens, 'chunks': chunks}]
+    new_data = merge_enchars_for_bert_like(data, tokenizer, verbose=False)
+    
+    assert new_data[0]['ori2sub_idx'] == [0, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5, 6]
+    assert new_data[0]['sub2ori_idx'] == [0, 1, 5, 7, 8, 9, 10]
+    for entry, new_entry in zip(data, new_data):
+        for ck, new_ck in zip(entry['chunks'], new_entry['chunks']):
+            if isinstance(new_ck[1], float) or isinstance(new_ck[2], float):
+                continue
+            assert "".join(entry['tokens'].raw_text[ck[1]:ck[2]]).lower() == "".join(new_entry['tokens'].raw_text[new_ck[1]:new_ck[2]]).replace(sub_prefix, "").lower()
