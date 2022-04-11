@@ -502,6 +502,9 @@ def subtokenize_for_bert_like(data: list, tokenizer: transformers.PreTrainedToke
     for entry in tqdm.tqdm(data, disable=not verbose, ncols=100, desc="Subtokenizing words in data"):
         new_entry = _subtokenize_tokens(entry, tokenizer, num_digits=num_digits)
         new_data.append(new_entry)
+    
+    num_subtokenized = sum(len(entry['sub2ori_idx'])!=len(entry['ori2sub_idx']) for entry in new_data)
+    logger.info(f"Sub-tokenized sequences: {num_subtokenized} ({num_subtokenized/len(data)*100:.2f}%)")
     return new_data
 
 
@@ -586,4 +589,9 @@ def merge_enchars_for_bert_like(data: list, tokenizer: transformers.PreTrainedTo
     for entry in tqdm.tqdm(data, disable=not verbose, ncols=100, desc="Merging characters in data"):
         new_entry = _merge_enchars(entry, tokenizer, sub_prefix, unk_ascii, num_digits=num_digits)
         new_data.append(new_entry)
+    
+    num_merged = sum(len(entry['sub2ori_idx'])!=len(entry['ori2sub_idx']) for entry in new_data)
+    logger.info(f"Merged sequences: {num_merged} ({num_merged/len(data)*100:.2f}%)")
+    num_float_boundaries = sum(isinstance(start, float) or isinstance(end, float) for entry in new_data for label, start, end in entry['chunks'])
+    logger.info(f"Non-integer chunks: {num_float_boundaries}")
     return new_data
