@@ -17,7 +17,7 @@ from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig, CharConfig,
 from eznlp.model import ELMoConfig, BertLikeConfig, SpanBertLikeConfig, FlairConfig
 from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderConfig, BoundarySelectionDecoderConfig, SpecificSpanClsDecoderConfig
 from eznlp.model import ExtractorConfig, SpecificSpanExtractorConfig
-from eznlp.model.bert_like import truecase_for_bert_like, segment_uniformly_for_bert_like, subtokenize_for_bert_like
+from eznlp.model.bert_like import truecase_for_bert_like, segment_uniformly_for_bert_like, subtokenize_for_bert_like, merge_enchars_for_bert_like
 from eznlp.training import Trainer, count_params, evaluate_entity_recognition
 
 from utils import add_base_arguments, parse_to_args
@@ -35,7 +35,9 @@ def parse_arguments(parser: argparse.ArgumentParser):
     group_data.add_argument('--pre_truecase', default=False, action='store_true', 
                             help="whether to pre-truecase data")
     group_data.add_argument('--pre_subtokenize', default=False, action='store_true', 
-                            help="whether to pre-subtokenize data")
+                            help="whether to pre-subtokenize words in data")
+    group_data.add_argument('--pre_merge_enchars', default=False, action='store_true', 
+                            help="whether to pre-merge English characters in data")
     group_data.add_argument('--corrupt_rate', type=float, default=0.0, 
                             help="boundary corrupt rate")
     group_data.add_argument('--save_preds', default=False, action='store_true', 
@@ -96,6 +98,8 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                help="whether to share weights between span-bert and bert encoders")
     group_decoder.add_argument('--sse_no_share_weights_int', dest='sse_share_weights_int', default=True, action='store_false', 
                                help="whether to share weights across span-bert encoders")
+    group_decoder.add_argument('--sse_no_share_interm2', dest='sse_share_interm2', default=True, action='store_false', 
+                               help="whether to share interm2 between span-bert and bert encoders")
     group_decoder.add_argument('--sse_init_agg_mode', type=str, default='max_pooling', 
                                help="initial aggregating mode for span-bert enocder")
     group_decoder.add_argument('--sse_init_drop_rate', type=float, default=0.2, 
@@ -246,7 +250,7 @@ def build_ER_config(args: argparse.Namespace):
                                                       )
     
     if args.ck_decoder == 'specific_span':
-        return SpecificSpanExtractorConfig(**collect_IE_assembly_config(args), decoder=decoder_config)
+        return SpecificSpanExtractorConfig(**collect_IE_assembly_config(args), share_interm2=args.sse_share_interm2, decoder=decoder_config)
     else:
         return ExtractorConfig(**collect_IE_assembly_config(args), decoder=decoder_config)
 
@@ -272,6 +276,15 @@ def process_IE_data(train_data, dev_data, test_data, args, config):
         dev_data   = subtokenize_for_bert_like(dev_data,   config.bert_like.tokenizer, verbose=args.log_terminal)
         test_data  = subtokenize_for_bert_like(test_data,  config.bert_like.tokenizer, verbose=args.log_terminal)
     
+    if args.pre_merge_enchars:
+        assert config.bert_like is not None
+        train_data = merge_enchars_for_bert_like(train_data, config.bert_like.tokenizer, verbose=args.log_terminal)
+        dev_data   = merge_enchars_for_bert_like(dev_data,   config.bert_like.tokenizer, verbose=args.log_terminal)
+        test_data  = merge_enchars_for_bert_like(test_data,  config.bert_like.tokenizer, verbose=args.log_terminal)
+        if args.dataset in ('WeiboNER', ):
+            for entry in train_data:
+                entry['chunks'] = [(label, round(start), round(end)) for label, start, end in entry['chunks']]
+    
     if args.use_softword or args.use_softlexicon:
         if config.nested_ohots is not None and 'softlexicon' in config.nested_ohots.keys():
             vectors = config.nested_ohots['softlexicon'].vectors
@@ -279,9 +292,9 @@ def process_IE_data(train_data, dev_data, test_data, args, config):
             vectors = load_vectors(args.language, 50)
         tokenizer = LexiconTokenizer(vectors.itos)
         for data in [train_data, dev_data, test_data]:
-            for data_entry in data:
-                data_entry['tokens'].build_softwords(tokenizer.tokenize)
-                data_entry['tokens'].build_softlexicons(tokenizer.tokenize)
+            for entry in data:
+                entry['tokens'].build_softwords(tokenizer.tokenize)
+                entry['tokens'].build_softlexicons(tokenizer.tokenize)
     
     return train_data, dev_data, test_data
 
