@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 from collections import Counter
 import pytest
-import math
 import numpy
+import transformers
 
 from eznlp.io import ConllIO, PostIO
+from eznlp.model.bert_like import merge_enchars_for_bert_like
+
 
 
 class TestConllIO(object):
@@ -55,9 +57,7 @@ class TestConllIO(object):
         
         self._assert_flatten_consistency(test_data)
         
-        span_sizes = [end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']]
-        assert max(span_sizes) == 10
-        assert math.ceil(numpy.quantile(span_sizes, 0.99)) == 4
+        assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 10
         
         
     def test_conll2003_at_doc_level(self):
@@ -96,9 +96,7 @@ class TestConllIO(object):
         assert sum(len(ex['chunks']) for ex in test_data) == 11_257
         assert sum(len(ex['tokens']) for ex in test_data) == 152_728
         
-        span_sizes = [end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']]
-        assert max(span_sizes) == 28
-        assert math.ceil(numpy.quantile(span_sizes, 0.99)) == 6
+        assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 28
         
         
     @pytest.mark.slow
@@ -158,6 +156,18 @@ class TestConllIO(object):
         
         self._assert_flatten_consistency(test_data)
         
+        train_data = self.io.flatten_to_characters(train_data)
+        dev_data   = self.io.flatten_to_characters(dev_data)
+        test_data  = self.io.flatten_to_characters(test_data)
+        assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 38
+        
+        tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-chinese", do_lower_case=True)
+        train_data = merge_enchars_for_bert_like(train_data, tokenizer, verbose=False)
+        dev_data   = merge_enchars_for_bert_like(dev_data,   tokenizer, verbose=False)
+        test_data  = merge_enchars_for_bert_like(test_data,  tokenizer, verbose=False)
+        assert sum(any(isinstance(start, float) or isinstance(end, float) for _, start, end in ex['chunks']) for data in [train_data, dev_data, test_data] for ex in data) == 0
+        assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 38
+        
         
     @pytest.mark.slow
     def test_sighan2006(self):
@@ -172,9 +182,13 @@ class TestConllIO(object):
         assert sum(len(ex['chunks']) for ex in test_data) == 6_181
         assert sum(len(ex['tokens']) for ex in test_data) == 172_601
         
-        span_sizes = [end-start for data in [train_data, test_data] for ex in data for _, start, end in ex['chunks']]
-        assert max(span_sizes) == 35
-        assert math.ceil(numpy.quantile(span_sizes, 0.99)) == 12
+        assert max(end-start for data in [train_data, test_data] for ex in data for _, start, end in ex['chunks']) == 35
+        
+        tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-chinese", do_lower_case=True)
+        train_data = merge_enchars_for_bert_like(train_data, tokenizer, verbose=False)
+        test_data  = merge_enchars_for_bert_like(test_data,  tokenizer, verbose=False)
+        assert sum(any(isinstance(start, float) or isinstance(end, float) for _, start, end in ex['chunks']) for data in [train_data, test_data] for ex in data) == 0
+        assert max(end-start for data in [train_data, test_data] for ex in data for _, start, end in ex['chunks']) == 35
         
         
     def test_resume_ner(self):
@@ -193,9 +207,14 @@ class TestConllIO(object):
         assert sum(len(ex['chunks']) for ex in test_data) == 1_630
         assert sum(len(ex['tokens']) for ex in test_data) == 15_100
         
-        span_sizes = [end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']]
-        assert max(span_sizes) == 58
-        assert math.ceil(numpy.quantile(span_sizes, 0.99)) == 17
+        assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 58
+        
+        tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-chinese", do_lower_case=True)
+        train_data = merge_enchars_for_bert_like(train_data, tokenizer, verbose=False)
+        dev_data   = merge_enchars_for_bert_like(dev_data,   tokenizer, verbose=False)
+        test_data  = merge_enchars_for_bert_like(test_data,  tokenizer, verbose=False)
+        assert sum(any(isinstance(start, float) or isinstance(end, float) for _, start, end in ex['chunks']) for data in [train_data, dev_data, test_data] for ex in data) == 0
+        assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 58
         
         
     def test_weibo_ner(self):
@@ -214,9 +233,7 @@ class TestConllIO(object):
         assert sum(len(ex['chunks']) for ex in test_data) == 320
         assert sum(len(ex['tokens']) for ex in test_data) == 14_844
         
-        span_sizes = [end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']]
-        assert max(span_sizes) == 14
-        assert math.ceil(numpy.quantile(span_sizes, 0.99)) == 8
+        assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 14
         
         
     def test_weibo_ner_2nd(self):
@@ -235,9 +252,14 @@ class TestConllIO(object):
         assert sum(len(ex['chunks']) for ex in test_data) == 418
         assert sum(len(ex['tokens']) for ex in test_data) == 14_842
         
-        span_sizes = [end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']]
-        assert max(span_sizes) == 11
-        assert math.ceil(numpy.quantile(span_sizes, 0.99)) == 7
+        assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 11
+        
+        tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-chinese", do_lower_case=True)
+        train_data = merge_enchars_for_bert_like(train_data, tokenizer, verbose=False)
+        dev_data   = merge_enchars_for_bert_like(dev_data,   tokenizer, verbose=False)
+        test_data  = merge_enchars_for_bert_like(test_data,  tokenizer, verbose=False)
+        assert sum(any(isinstance(start, float) or isinstance(end, float) for _, start, end in ex['chunks']) for data in [train_data, dev_data, test_data] for ex in data) == 1
+        assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 11
         
         
     def test_clerd(self):
