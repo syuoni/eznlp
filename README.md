@@ -1,5 +1,7 @@
 # Easy Natural Language Processing
 
+Neural networks are lazy (Chizat et al., 2019), and they learn shortcuts (Geirhos et al., 2020), so we design structures and objectives that can be easily optimized for better solutions. 
+
 `eznlp` is a `PyTorch`-based package for neural natural language processing, currently supporting the following tasks:
 
 * Text Classification ([Experimental Results](docs/text-classification.pdf))
@@ -84,3 +86,8 @@ If you find our code useful, please cite the following papers:
 - [ ] Radical-level features
 - [ ] Data augmentation
 - [ ] Loss increases in later training phases -> LR finder?
+
+
+## References
+* Chizat, L., Oyallon, E., and Bach, F. (2019). On lazy training in differentiable programming. *NeurIPS 2019*, 2937–2947. 
+* Geirhos, R., Jacobsen, J. H., Michaelis, C., Zemel, R., Brendel, W., Bethge, M., and Wichmann, F. A. (2020). Shortcut learning in deep neural networks. *Nature Machine Intelligence*, 2(11), 665-673. 
