@@ -147,6 +147,10 @@ dmypy.json
 
 !/publications/
 /publications/*
-!publications/framework/scheme.pdf
+!/publications/*/
+/publications/*/*
+!/publications/framework/scheme.pdf
+!/publications/boundary-smoothing/slides.pdf
+!/publications/boundary-smoothing/poster.pdf
 
 /test_script.py
