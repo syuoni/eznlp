@@ -595,3 +595,59 @@ def merge_enchars_for_bert_like(data: list, tokenizer: transformers.PreTrainedTo
     num_float_boundaries = sum(isinstance(start, float) or isinstance(end, float) for entry in new_data for label, start, end in entry['chunks'])
     logger.info(f"Non-integer chunks: {num_float_boundaries}")
     return new_data
+
+
+
+def merge_sentences_for_bert_like(data: list, doc_key: str):
+    """Merge sentences (according to `doc_key`) to documents in `data`. 
+    Modify the corresponding start/end indexes in `chunks`, `relations`, `attributes`. 
+    """
+    new_data = []
+    new_entry = {}
+    for entry in data:
+        tokens = entry['tokens']
+        if len(new_entry) == 0:
+            curr_start = 0
+            new_entry['tokens'] = tokens
+        elif entry[doc_key] == new_entry[doc_key]:
+            curr_start = len(new_entry['tokens'])
+            new_entry['tokens'] += tokens
+        else:
+            new_data.append(new_entry)
+            new_entry = {}
+            curr_start = 0
+            new_entry['tokens'] = tokens
+        
+        if 'chunks' in entry:
+            new_chunks = [(label, start+curr_start, end+curr_start) for label, start, end in entry['chunks']]
+            assert [new_entry['tokens'][s:e] for _, s, e in new_chunks] == [entry['tokens'][s:e] for _, s, e in entry['chunks']]
+            if 'chunks' in new_entry:
+                new_entry['chunks'].extend(new_chunks)
+            else:
+                new_entry['chunks'] = new_chunks
+        
+        if 'relations' in entry:
+            new_relations = [(label, (h_label, h_start+curr_start, h_end+curr_start), (t_label, t_start+curr_start, t_end+curr_start)) 
+                                 for label, (h_label, h_start, h_end), (t_label, t_start, t_end) in entry['relations']]
+            if 'relations' in new_entry:
+                new_entry['relations'].extend(new_relations)
+            else:
+                new_entry['relations'] = new_relations
+        
+        if 'attributes' in entry:
+            new_attributes = [(label, (ck_label, ck_start+curr_start, ck_end+curr_start)) 
+                                  for label, (ck_label, ck_start, ck_end) in entry['attributes']]
+            if 'attributes' in new_entry:
+                new_entry['attributes'].extend(new_attributes)
+            else:
+                new_entry['attributes'] = new_attributes
+        
+        if doc_key in new_entry:
+            assert ({k: v for k, v in entry.items() if k not in ('tokens', 'chunks', 'relations', 'attributes')} == 
+                    {k: v for k, v in new_entry.items() if k not in ('tokens', 'chunks', 'relations', 'attributes')})
+        else:
+            new_entry.update({k: v for k, v in entry.items() if k not in ('tokens', 'chunks', 'relations', 'attributes')})
+    
+    if len(new_entry) > 0:
+        new_data.append(new_entry)
+    return new_data

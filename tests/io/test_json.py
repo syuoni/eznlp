@@ -5,6 +5,7 @@ import jieba
 from eznlp.io import JsonIO, SQuADIO, KarpathyIO, TextClsIO, BratIO
 from eznlp.utils.chunk import detect_overlapping_level, filter_clashed_by_priority
 from eznlp.utils.chunk import FLAT, NESTED, ARBITRARY
+from eznlp.model.bert_like import merge_sentences_for_bert_like
 
 
 class TestJsonIO(object):
@@ -57,20 +58,28 @@ class TestJsonIO(object):
         
         
     def test_genia(self):
-        io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end')
+        io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', retain_meta=True)
         train_data = io.read("data/genia/term.train.json")
+        dev_data   = io.read("data/genia/term.dev.json")
         test_data  = io.read("data/genia/term.test.json")
         
-        assert len(train_data) == 16_528
-        assert sum(len(ex['chunks']) for ex in train_data) == 50_133
-        assert len(test_data) == 1_836
-        assert sum(len(ex['chunks']) for ex in test_data) == 5_466
+        assert len(train_data) == 15_023
+        assert sum(len(ex['chunks']) for ex in train_data) == 46_164
+        assert len(dev_data) == 1_669
+        assert sum(len(ex['chunks']) for ex in dev_data) == 4_371
+        assert len(test_data) == 1_854
+        assert sum(len(ex['chunks']) for ex in test_data) == 5_511
         
-        assert max(end-start for data in [train_data, test_data] for ex in data for _, start, end in ex['chunks']) == 18
+        # According to the original annotation, 31 spans may have 2 entity labels
+        assert sum(len(set([(s, e) for _, s, e in ex['chunks']])) for ex in train_data + dev_data + test_data) == 56_015
+        assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 18
+        
+        new_data = merge_sentences_for_bert_like(train_data + dev_data + test_data, doc_key='doc_key')
+        assert len(new_data) == 2_000
+        assert sum(len(ex['chunks']) for ex in new_data) == 56_046
         
         
     def test_genia_yu2020acl(self):
-        # TODO: document-level?
         io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end')
         train_data = io.read("data/genia-yu2020acl/train_dev.json")
         test_data  = io.read("data/genia-yu2020acl/test.json")
