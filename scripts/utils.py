@@ -15,8 +15,10 @@ import allennlp.modules
 import transformers
 import flair
 
+from eznlp.token import Full2Half
 from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO, TextClsIO, KarpathyIO, BratIO, Src2TrgIO
 from eznlp.io import PostIO
+from eznlp.model.bert_like import merge_sentences_for_bert_like
 from eznlp.vectors import Vectors, GloVe
 from eznlp.training import Trainer, LRLambda, collect_params, check_param_groups
 from eznlp.metrics import precision_recall_f1_report
@@ -119,7 +121,9 @@ dataset2language = {'conll2003': 'English',
                     'ace2004': 'English', 
                     'ace2005': 'English', 
                     'genia': 'English', 
-                    'genia_yu2020acl': 'English',
+                    'genia_yu2020acl': 'English', 
+                    'kbp2017': 'English', 
+                    'nne': 'English', 
                     'conll2004': 'English', 
                     'SciERC': 'English', 
                     'ace2005_rel': 'English',
@@ -207,21 +211,44 @@ def load_data(args: argparse.Namespace):
             logger.warning(f"Loading data with corruption rate of {args.corrupt_rate:.1f} \n"
                            f"Corruption Retrieval F1-score: {ave_scores['micro']['f1']*100:2.3f}%")
         
-    elif args.dataset == 'genia':
+    elif args.dataset.startswith('genia'):
         io = JsonIO(text_key='tokens', 
-                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', 
+                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', retain_keys=['doc_key', 'bibliomisc'], 
                     case_mode='None', number_mode='Zeros')
-        train_data = io.read("data/genia/term.train.json")
-        dev_data   = []
-        test_data  = io.read("data/genia/term.test.json")
+        if args.dataset == 'genia':
+            train_data = io.read("data/genia/term.train.json")
+            dev_data   = io.read("data/genia/term.dev.json")
+            test_data  = io.read("data/genia/term.test.json")
+        elif args.dataset == 'genia_yu2020acl':
+            train_data = io.read("data/genia-yu2020acl/train_dev.json")
+            dev_data   = []
+            test_data  = io.read("data/genia-yu2020acl/test.json")
         
-    elif args.dataset == 'genia_yu2020acl':
+        if args.doc_level:
+            train_data = merge_sentences_for_bert_like(train_data, doc_key='doc_key')
+            dev_data   = merge_sentences_for_bert_like(dev_data,   doc_key='doc_key')
+            test_data  = merge_sentences_for_bert_like(test_data,  doc_key='doc_key')
+        
+    elif args.dataset == 'kbp2017':
         io = JsonIO(text_key='tokens', 
-                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', 
+                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', retain_keys=['org_id'], 
                     case_mode='None', number_mode='Zeros')
-        train_data = io.read("data/genia-yu2020acl/train_dev.json")
-        dev_data   = []
-        test_data  = io.read("data/genia-yu2020acl/test.json")
+        train_data = io.read("data/kbp2017-shen2022acl/kbp17_train_context.json")
+        dev_data   = io.read("data/kbp2017-shen2022acl/kbp17_dev_context.json")
+        test_data  = io.read("data/kbp2017-shen2022acl/kbp17_test_context.json")
+        
+        if args.doc_level:
+            train_data = merge_sentences_for_bert_like(train_data, doc_key='org_id')
+            dev_data   = merge_sentences_for_bert_like(dev_data,   doc_key='org_id')
+            test_data  = merge_sentences_for_bert_like(test_data,  doc_key='org_id')
+        
+    elif args.dataset == 'nne':
+        io = JsonIO(text_key='tokens', 
+                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', retain_keys=['org_id'], 
+                    case_mode='None', number_mode='Zeros')
+        train_data = io.read("data/nne-shen2022acl/nne_train_context.json")
+        dev_data   = io.read("data/nne-shen2022acl/nne_dev_context.json")
+        test_data  = io.read("data/nne-shen2022acl/nne_test_context.json")
         
     elif args.dataset == 'conll2004':
         io = JsonIO(text_key='tokens', 
@@ -298,6 +325,8 @@ def load_data(args: argparse.Namespace):
         
     elif args.dataset == 'ontonotesv4_zh':
         io = ConllIO(text_col_id=2, tag_col_id=3, scheme='OntoNotes', sentence_sep_starts=["#end"], document_sep_starts=["#begin"], encoding='utf-8', token_sep="", pad_token="")
+        # Translate full-width characters to half-width ones, including "！", "？"
+        # io = ConllIO(text_col_id=2, tag_col_id=3, scheme='OntoNotes', sentence_sep_starts=["#end"], document_sep_starts=["#begin"], encoding='utf-8', token_sep="", pad_token="", pre_text_normalizer=Full2Half.full2half)
         train_data = io.read("data/ontonotesv4/train.chinese.vz_gold_conll")
         dev_data   = io.read("data/ontonotesv4/dev.chinese.vz_gold_conll")
         test_data  = io.read("data/ontonotesv4/test.chinese.vz_gold_conll")
@@ -360,7 +389,7 @@ def load_data(args: argparse.Namespace):
         io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', chunk_text_key=None, 
                     attribute_key='attributes', attribute_type_key='type', attribute_chunk_key='entity', 
                     relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
-                    is_whole_piece=False, retain_meta=True, encoding='utf-8', token_sep="", pad_token="")
+                    is_whole_piece=False, retain_keys=['visit_id', 'split'], encoding='utf-8', token_sep="", pad_token="")
         train_data = io.read("data/HwaMei/v20211230/train.json")
         dev_data   = io.read("data/HwaMei/v20211230/dev.json")
         test_data  = io.read("data/HwaMei/v20211230/test.json")
@@ -516,6 +545,7 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
             if size is not None:
                 PATH = f"assets/transformers/albert-{size.group()}-v2"
             # uncased: do_lower_case=True
+            # ALBERT by default uses dropout rate of 0
             return (transformers.AlbertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.AlbertTokenizer.from_pretrained(PATH))
             
