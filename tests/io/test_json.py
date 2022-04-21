@@ -18,6 +18,8 @@ class TestJsonIO(object):
     [3] Luan et al. 2019. A general framework for information extraction using dynamic span graphs. NAACL 2019. 
     [4] Zhong and Chen. 2020. A frustratingly easy approach for joint entity and relation extraction. NAACL 2020. 
     [5] Li et al. 2022. Unified Named Entity Recognition asWord-Word Relation Classification. AAAI 2022. 
+    [6] Shen et al. 2022. Parallel Instance Query Network for Named Entity Recognition. ACL 2022. 
+    [7] Ringland et al. 2019. NNE: A Dataset for Nested Named Entity Recognition in English Newswire. ACL 2019. 
     """
     def test_ace2004(self):
         io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end')
@@ -110,6 +112,22 @@ class TestJsonIO(object):
         new_data = merge_sentences_for_bert_like(train_data + dev_data + test_data, doc_key='org_id')
         assert len(new_data) == 619
         assert sum(len(ex['chunks']) for ex in new_data) == 45_714
+        
+        
+    def test_nne_shen2022acl(self):
+        io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', retain_keys=['org_id'])
+        train_data = io.read("data/nne-shen2022acl/nne_train_context.json")
+        dev_data   = io.read("data/nne-shen2022acl/nne_dev_context.json")
+        test_data  = io.read("data/nne-shen2022acl/nne_test_context.json")
+        
+        assert len(train_data) == 43_457
+        assert sum(len(ex['chunks']) for ex in train_data) == 248_136
+        assert len(dev_data) == 1_989
+        assert sum(len(ex['chunks']) for ex in dev_data) == 10_463
+        assert len(test_data) == 3_762
+        assert sum(len(ex['chunks']) for ex in test_data) == 21_196
+        
+        assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 16
         
         
         
