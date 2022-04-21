@@ -41,7 +41,7 @@ class JsonIO(IO):
                  relation_tail_key=None, 
                  drop_duplicated=True, 
                  is_whole_piece: bool=True, 
-                 retain_meta: bool=False, 
+                 retain_keys: list=None, 
                  encoding=None, 
                  verbose: bool=True, 
                  **token_kwargs):
@@ -69,7 +69,8 @@ class JsonIO(IO):
         
         self.drop_duplicated = drop_duplicated
         self.is_whole_piece = is_whole_piece
-        self.retain_meta = retain_meta
+        self.retain_keys = [] if retain_keys is None else retain_keys
+        assert all(key not in self.retain_keys for key in [self.text_key, self.chunk_key, self.relation_key, self.attribute_key])
         
         super().__init__(is_tokenized=is_tokenized, tokenize_callback=tokenize_callback, encoding=encoding, verbose=verbose, **token_kwargs)
         if not self.is_tokenized:
@@ -111,7 +112,7 @@ class JsonIO(IO):
                               chunks[rel[self.relation_head_key]], 
                               chunks[rel[self.relation_tail_key]]) for rel in raw_entry[self.relation_key]]
                 entry.update({'relations': [(rel_type, head, tail) for rel_type, head, tail in relations if head is not None and tail is not None]})
-                
+            
             if self.drop_duplicated:
                 entry['chunks'] = _filter_duplicated(entry['chunks'])
                 if self.attribute_key is not None:
@@ -119,11 +120,9 @@ class JsonIO(IO):
                 if self.relation_key is not None:
                     entry['relations'] = _filter_duplicated(entry['relations'])
             
-            if self.retain_meta:
-                entry.update({k:v for k, v in raw_entry.items() if k not in (self.text_key, self.chunk_key, self.attribute_key, self.relation_key)})
-            
+            entry.update({k:v for k, v in raw_entry.items() if k in self.retain_keys})
             data.append(entry)
-            
+        
         if len(errors) > 0 or len(mismatches) > 0:
             logger.warning(f"{len(errors)} errors and {len(mismatches)} mismatches detected during parsing {file_path}")
         
@@ -150,9 +149,7 @@ class JsonIO(IO):
                                                  self.relation_head_key: chunk2idx[head], 
                                                  self.relation_tail_key: chunk2idx[tail]} for rel_type, head, tail in entry['relations']]
             
-            if self.retain_meta:
-                raw_entry.update({k: v for k, v in entry.items() if k not in ('tokens', 'chunks', 'attributes', 'relations')})
-            
+            raw_entry.update({k: v for k, v in entry.items() if k in self.retain_keys})
             raw_data.append(raw_entry)
         
         with open(file_path, 'w', encoding=self.encoding) as f:
@@ -257,7 +254,7 @@ class TextClsIO(IO):
                  paired_text_key: str=None, 
                  label_key='label', 
                  is_whole_piece: bool=True, 
-                 retain_meta: bool=False, 
+                 retain_keys: list=None, 
                  mapping=None, 
                  encoding=None, 
                  verbose: bool=True, 
@@ -266,7 +263,8 @@ class TextClsIO(IO):
         self.paired_text_key = paired_text_key
         self.label_key = label_key
         self.is_whole_piece = is_whole_piece
-        self.retain_meta = retain_meta
+        self.retain_keys = [] if retain_keys is None else retain_keys
+        assert all(key not in self.retain_keys for key in [self.text_key, self.paired_text_key, self.label_key])
         self.mapping = {} if mapping is None else mapping
         super().__init__(is_tokenized=is_tokenized, tokenize_callback=tokenize_callback, encoding=encoding, verbose=verbose, **token_kwargs)
         
@@ -294,9 +292,7 @@ class TextClsIO(IO):
             if self.label_key in raw_entry:
                 entry.update({'label': raw_entry[self.label_key]})
             
-            if self.retain_meta:
-                entry.update({k:v for k, v in raw_entry.items() if k not in (self.text_key, self.paired_text_key, self.label_key)})
-            
+            entry.update({k:v for k, v in raw_entry.items() if k in self.retain_keys})
             data.append(entry)
         
         return data

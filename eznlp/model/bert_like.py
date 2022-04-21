@@ -401,6 +401,9 @@ def truncate_for_bert_like(data: list,
 
 
 
+_IE_KEYS = ['tokens', 'chunks', 'relations', 'attributes']
+
+
 def segment_uniformly_for_bert_like(data: list, tokenizer: transformers.PreTrainedTokenizer, update_raw_idx: bool=False, verbose=True):
     """Segment overlong tokens in `data`. 
     
@@ -445,7 +448,7 @@ def segment_uniformly_for_bert_like(data: list, tokenizer: transformers.PreTrain
                 if 'chunks' in entry:
                     new_entry['chunks'] = [(label, start-span_start, end-span_start) for label, start, end in entry['chunks'] if span_start <= start and end <= span_end]
                 
-                new_entry.update({k: v for k, v in entry.items() if k not in ('tokens', 'chunks', 'relations', 'attributes')})
+                new_entry.update({k: v for k, v in entry.items() if k not in _IE_KEYS})
                 new_entries.append(new_entry)
                 span_start = span_end
             
@@ -490,7 +493,7 @@ def _subtokenize_tokens(entry: dict, tokenizer: transformers.PreTrainedTokenizer
         new_entry['attributes'] = [(label, (ck_label, ori2sub_idx[ck_start], ori2sub_idx[ck_end])) 
                                        for label, (ck_label, ck_start, ck_end) in entry['attributes']]
     
-    new_entry.update({k: v for k, v in entry.items() if k not in ('tokens', 'chunks', 'relations', 'attributes')})
+    new_entry.update({k: v for k, v in entry.items() if k not in _IE_KEYS})
     return new_entry
 
 
@@ -570,7 +573,7 @@ def _merge_enchars(entry: dict, tokenizer: transformers.PreTrainedTokenizer, sub
         new_entry['attributes'] = [(label, (ck_label, ori2sub_idx[ck_start], ori2sub_idx[ck_end])) 
                                        for label, (ck_label, ck_start, ck_end) in entry['attributes']]
     
-    new_entry.update({k: v for k, v in entry.items() if k not in ('tokens', 'chunks', 'relations', 'attributes')})
+    new_entry.update({k: v for k, v in entry.items() if k not in _IE_KEYS})
     return new_entry
 
 
@@ -643,10 +646,9 @@ def merge_sentences_for_bert_like(data: list, doc_key: str):
                 new_entry['attributes'] = new_attributes
         
         if doc_key in new_entry:
-            assert ({k: v for k, v in entry.items() if k not in ('tokens', 'chunks', 'relations', 'attributes')} == 
-                    {k: v for k, v in new_entry.items() if k not in ('tokens', 'chunks', 'relations', 'attributes')})
+            assert {k: v for k, v in entry.items() if k not in _IE_KEYS} == {k: v for k, v in new_entry.items() if k not in _IE_KEYS}
         else:
-            new_entry.update({k: v for k, v in entry.items() if k not in ('tokens', 'chunks', 'relations', 'attributes')})
+            new_entry.update({k: v for k, v in entry.items() if k not in _IE_KEYS})
     
     if len(new_entry) > 0:
         new_data.append(new_entry)
