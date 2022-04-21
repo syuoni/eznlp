@@ -58,7 +58,7 @@ class TestJsonIO(object):
         
         
     def test_genia(self):
-        io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', retain_meta=True)
+        io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', retain_keys=['doc_key', 'bibliomisc'])
         train_data = io.read("data/genia/term.train.json")
         dev_data   = io.read("data/genia/term.dev.json")
         test_data  = io.read("data/genia/term.test.json")
@@ -90,6 +90,27 @@ class TestJsonIO(object):
         assert sum(len(ex['chunks']) for ex in test_data) == 5_506
         
         assert max(end-start for data in [train_data, test_data] for ex in data for _, start, end in ex['chunks']) == 18
+        
+        
+    def test_kbp2017_shen2022acl(self):
+        io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', retain_keys=['org_id'])
+        train_data = io.read("data/kbp2017-shen2022acl/kbp17_train_context.json")
+        dev_data   = io.read("data/kbp2017-shen2022acl/kbp17_dev_context.json")
+        test_data  = io.read("data/kbp2017-shen2022acl/kbp17_test_context.json")
+        
+        assert len(train_data) == 10_546
+        assert sum(len(ex['chunks']) for ex in train_data) == 31_235  # 31_236 reported in Shen et al. (2022), due to a duplicated entity
+        assert len(dev_data) == 545
+        assert sum(len(ex['chunks']) for ex in dev_data) == 1_879
+        assert len(test_data) == 4_267
+        assert sum(len(ex['chunks']) for ex in test_data) == 12_600  # 12_601 reported in Shen et al. (2022), due to a duplicated entity
+        
+        assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 49
+        
+        new_data = merge_sentences_for_bert_like(train_data + dev_data + test_data, doc_key='org_id')
+        assert len(new_data) == 619
+        assert sum(len(ex['chunks']) for ex in new_data) == 45_714
+        
         
         
     def test_ace2004_rel(self):
