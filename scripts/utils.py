@@ -562,6 +562,22 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=(not cased)))
             
+        elif pretrained_str.lower().startswith('biobert'):
+            if 'base' in pretrained_str.lower():
+                PATH = "assets/transformers/dmis-lab/biobert-base-cased-v1.1"
+            elif 'large' in pretrained_str.lower():
+                PATH = "assets/transformers/dmis-lab/biobert-large-cased-v1.1"
+            return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
+                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=False))
+            
+        elif pretrained_str.lower().startswith('pubmedbert'):
+            if 'full' in pretrained_str.lower():
+                PATH = "assets/transformers/microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext"
+            else:
+                PATH = "assets/transformers/microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract"
+            return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
+                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=True))
+            
     elif args.language.lower() == 'chinese':
         if pretrained_str.lower().startswith('bert'):
             if 'wwm' in pretrained_str.lower():
