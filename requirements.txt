@@ -1,0 +1,10 @@
+flair==0.8
+allennlp==2.1.0
+transformers==4.3.2
+tokenizers==0.10.1
+nltk==3.5
+truecase==0.0.12
+hanziconv==0.3.2
+spacy==2.3.2
+jieba==0.42.1
+pytorch-crf==0.7.2

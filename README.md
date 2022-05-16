@@ -1,6 +1,6 @@
 # Easy Natural Language Processing
 
-Neural networks are lazy (Chizat et al., 2019), and they learn shortcuts (Geirhos et al., 2020), so we design structures and objectives that can be easily optimized for better solutions. 
+Overparameterized neural networks are lazy (Chizat et al., 2019), so we design structures and objectives that can be easily optimized. 
 
 `eznlp` is a `PyTorch`-based package for neural natural language processing, currently supporting the following tasks:
 
@@ -16,18 +16,27 @@ Neural networks are lazy (Chizat et al., 2019), and they learn shortcuts (Geirho
 
 This repository also maintains the code of our papers: 
 * Check this [link](docs/boundary-smoothing.md) for "Boundary Smoothing for Named Entity Recognition" accepted to ACL 2022 main conference. 
+* Check this [link](publications/framework/scheme.pdf) for the annotation scheme described in "A Unified Framework of Medical Information Annotation and Extraction for Chinese Clinical Text". 
 
 
 ## Installation
-### With `pip`
+### Install dependencies
 ```bash
-$ pip install eznlp
+$ conda install numpy=1.18.5 pandas=1.0.5 xlrd=1.2.0 matplotlib=3.2.2 
+$ conda install pytorch=1.7.1 torchvision=0.8.2 torchtext=0.8.1 {cpuonly|cudatoolkit=10.2} -c pytorch 
+$ pip install -r requirements.txt 
 ```
 
-### From source
+### Install `eznlp`
+* From source (suggested)
 ```bash
 $ python setup.py sdist
-$ pip install dist/eznlp-<version>.tar.gz
+$ pip install dist/eznlp-<version>.tar.gz --no-deps
+```
+
+* With `pip`
+```bash
+$ pip install eznlp --no-deps
 ```
 
 
@@ -68,7 +77,7 @@ If you find our code useful, please cite the following papers:
 
 ```
 @article{zhu2021framework,
-  title={A Unified Framework of Medical Information Annotation and Extraction for {Chinese} Clinical Text},
+  title={A Unified Framework of Medical Information Annotation and Extraction for {C}hinese Clinical Text},
   author={Zhu, Enwei and Sheng, Qilin and Yang, Huanwan and Li, Jinpeng},
   journal={arXiv preprint arXiv:2203.03823},
   year={2021}
@@ -90,4 +99,3 @@ If you find our code useful, please cite the following papers:
 
 ## References
 * Chizat, L., Oyallon, E., and Bach, F. (2019). On lazy training in differentiable programming. *NeurIPS 2019*, 2937–2947. 
-* Geirhos, R., Jacobsen, J. H., Michaelis, C., Zemel, R., Brendel, W., Bethge, M., and Wichmann, F. A. (2020). Shortcut learning in deep neural networks. *Nature Machine Intelligence*, 2(11), 665-673. 
