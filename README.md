@@ -69,9 +69,13 @@ If you find our code useful, please cite the following papers:
 @inproceedings{zhu2022boundary,
   title={Boundary Smoothing for Named Entity Recognition},
   author={Zhu, Enwei and Li, Jinpeng},
-  booktitle={Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics},
+  booktitle={Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)},
+  month={may},
   year={2022},
+  address={Dublin, Ireland},
   publisher={Association for Computational Linguistics},
+  url={https://aclanthology.org/2022.acl-long.490},
+  pages={7096--7108}
 }
 ```
 
