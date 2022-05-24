@@ -63,6 +63,7 @@ class BoundarySelectionDecoderConfig(SingleDecoderConfigBase, BoundariesDecoderM
     def __init__(self, **kwargs):
         self.use_biaffine = kwargs.pop('use_biaffine', True)
         self.affine = kwargs.pop('affine', EncoderConfig(arch='FFN', hid_dim=150, num_layers=1, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2))
+        self.use_prod = kwargs.pop('use_prod', True)
         
         self.max_len = kwargs.pop('max_len', None)
         self.size_emb_dim = kwargs.pop('size_emb_dim', 25)
@@ -160,11 +161,13 @@ class BoundarySelectionDecoder(DecoderBase, BoundariesDecoderMixin):
         
         self.dropout = CombinedDropout(*config.hid_drop_rates)
         
-        self.U = torch.nn.Parameter(torch.empty(config.voc_dim, config.affine.out_dim, config.affine.out_dim))
+        if config.use_prod:
+            self.U = torch.nn.Parameter(torch.empty(config.voc_dim, config.affine.out_dim, config.affine.out_dim))
+            torch.nn.init.orthogonal_(self.U.data)
+        
         self.W = torch.nn.Parameter(torch.empty(config.voc_dim, config.affine.out_dim*2 + config.size_emb_dim))
         self.b = torch.nn.Parameter(torch.empty(config.voc_dim))
-        # TODO: Check the output std.dev.
-        torch.nn.init.orthogonal_(self.U.data)
+        # TODO: Check the output std.dev. 
         torch.nn.init.orthogonal_(self.W.data)
         torch.nn.init.zeros_(self.b.data)
         
@@ -186,10 +189,15 @@ class BoundarySelectionDecoder(DecoderBase, BoundariesDecoderMixin):
             affined_start = self.affine(full_hidden, batch.mask)
             affined_end = self.affine(full_hidden, batch.mask)
         
-        # affined_start: (batch, start_step, affine_dim) -> (batch, 1, start_step, affine_dim)
-        # affined_end: (batch, end_step, affine_dim) -> (batch, 1, affine_dim, end_step)
-        # scores1: (batch, 1, start_step, affine_dim) * (voc_dim, affine_dim, affine_dim) * (batch, 1, affine_dim, end_step) -> (batch, voc_dim, start_step, end_step)
-        scores1 = self.dropout(affined_start).unsqueeze(1).matmul(self.U).matmul(self.dropout(affined_end).permute(0, 2, 1).unsqueeze(1))
+        if hasattr(self, 'U'):
+            # affined_start: (batch, start_step, affine_dim) -> (batch, 1, start_step, affine_dim)
+            # affined_end: (batch, end_step, affine_dim) -> (batch, 1, affine_dim, end_step)
+            # scores1: (batch, 1, start_step, affine_dim) * (voc_dim, affine_dim, affine_dim) * (batch, 1, affine_dim, end_step) -> (batch, voc_dim, start_step, end_step)
+            scores1 = self.dropout(affined_start).unsqueeze(1).matmul(self.U).matmul(self.dropout(affined_end).permute(0, 2, 1).unsqueeze(1))
+            # scores: (batch, start_step, end_step, voc_dim)
+            scores = scores1.permute(0, 2, 3, 1)
+        else:
+            scores = 0
         
         # affined_cat: (batch, start_step, end_step, affine_dim*2)
         affined_cat = torch.cat([self.dropout(affined_start).unsqueeze(2).expand(-1, -1, affined_end.size(1), -1), 
@@ -204,7 +212,8 @@ class BoundarySelectionDecoder(DecoderBase, BoundariesDecoderMixin):
         # scores2: (voc_dim, affine_dim*2 + emb_dim) * (batch, start_step, end_step, affine_dim*2 + emb_dim, 1) -> (batch, start_step, end_step, voc_dim, 1)
         scores2 = self.W.matmul(affined_cat.unsqueeze(-1))
         # scores: (batch, start_step, end_step, voc_dim)
-        return scores1.permute(0, 2, 3, 1) + scores2.squeeze(-1) + self.b
+        scores = scores + scores2.squeeze(-1)
+        return scores + self.b
         
         
     def forward(self, batch: Batch, full_hidden: torch.Tensor):

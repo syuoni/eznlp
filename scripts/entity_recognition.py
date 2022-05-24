@@ -73,6 +73,8 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                help="whether to use biaffine")
     group_decoder.add_argument('--affine_arch', type=str, default='FFN', 
                                help="affine encoder architecture")
+    group_decoder.add_argument('--no_biaffine_prod', dest='use_biaffine_prod', default=True, action='store_false', 
+                               help="whether to use the production term in biaffine")
     group_decoder.add_argument('--affine_dim', type=int, default=150, 
                                help="affine encoder hidden dim")
     group_decoder.add_argument('--affine_num_layers', type=int, default=1, 
@@ -214,12 +216,16 @@ def build_ER_config(args: argparse.Namespace):
                                                          neg_sampling_power_decay=args.neg_sampling_power_decay, 
                                                          neg_sampling_surr_rate=args.neg_sampling_surr_rate, 
                                                          neg_sampling_surr_size=args.neg_sampling_surr_size, 
+                                                         sb_epsilon=args.sb_epsilon, 
+                                                         sb_size=args.sb_size, 
+                                                         sb_adj_factor=args.sb_adj_factor, 
                                                          max_span_size=args.max_span_size, 
                                                          size_emb_dim=args.size_emb_dim, 
                                                          in_drop_rates=drop_rates)
     elif args.ck_decoder == 'boundary_selection':
         decoder_config = BoundarySelectionDecoderConfig(use_biaffine=args.use_biaffine, 
                                                         affine=EncoderConfig(arch=args.affine_arch, hid_dim=args.affine_dim, num_layers=args.affine_num_layers, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2), 
+                                                        use_prod=args.use_biaffine_prod, 
                                                         fl_gamma=args.fl_gamma,
                                                         sl_epsilon=args.sl_epsilon, 
                                                         neg_sampling_rate=args.neg_sampling_rate, 

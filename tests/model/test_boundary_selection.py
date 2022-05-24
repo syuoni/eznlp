@@ -70,6 +70,14 @@ class TestModel(object):
         self._assert_trainable()
         
         
+    def test_model_wo_prod(self, conll2004_demo, device):
+        self.config = ExtractorConfig(decoder=BoundarySelectionDecoderConfig(use_prod=False))
+        self._setup_case(conll2004_demo, device)
+        assert not hasattr(self.model.decoder, 'U')
+        self._assert_batch_consistency()
+        self._assert_trainable()
+        
+        
     @pytest.mark.parametrize("from_subtokenized", [False, True])
     def test_model_with_bert_like(self, from_subtokenized, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
