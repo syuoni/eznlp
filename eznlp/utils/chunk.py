@@ -17,6 +17,12 @@ def _is_overlapping(chunk1: tuple, chunk2: tuple):
     return (s1 < e2 and s2 < e1)
 
 
+def _is_ordered_nested(chunk1: tuple, chunk2: tuple):
+    # `chunk1` is nested in `chunk2`
+    (_, s1, e1), (_, s2, e2) = chunk1, chunk2
+    return (s2 <= s1 and e1 <= e2)
+
+
 def _is_nested(chunk1: tuple, chunk2: tuple):
     # `NESTED`
     (_, s1, e1), (_, s2, e2) = chunk1, chunk2
@@ -51,6 +57,9 @@ def detect_overlapping_level(chunks: List[tuple]):
                 return ARBITRARY
     return level
 
+
+def count_nested(chunks: List[tuple]):
+    return sum(any(ck1[1:] != ck2[1:] and _is_ordered_nested(ck1, ck2) for ck2 in chunks) for ck1 in chunks)
 
 
 def chunk_pair_distance(chunk1: tuple, chunk2: tuple, overlap_distance: int=-1):
