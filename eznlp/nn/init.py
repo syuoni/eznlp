@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 from typing import List
+import functools
 import logging
 import torch
+import transformers
 
 logger = logging.getLogger(__name__)
 
@@ -153,3 +155,37 @@ def reinit_gru_(gru: torch.nn.GRU):
                                               gain=torch.nn.init.calculate_gain(nonlinearity))
         else:
             raise TypeError(f"Invalid GRU {gru}")
+
+
+
+def _reinit_bert_like_module(module: torch.nn.Module, std: float=0.02):
+    """Initializes each BERT module. 
+    The original Google-implemented BERT uses truncated_normal for initialization
+    cf https://github.com/pytorch/pytorch/pull/5617
+    cf https://github.com/tensorflow/tensorflow/blob/r1.8/tensorflow/python/ops/init_ops.py
+    
+    Implementation follows: `transformers/models/bert/modeling_bert.py/BertPreTrainedModel`
+    """
+    if isinstance(module, (torch.nn.Linear, torch.nn.Embedding)):
+        torch.nn.init.trunc_normal_(module.weight.data, std=std, a=-2*std, b=2*std)
+    elif isinstance(module, torch.nn.LayerNorm):
+        module.bias.data.zero_()
+        module.weight.data.fill_(1.0)
+    if isinstance(module, torch.nn.Linear) and module.bias is not None:
+        module.bias.data.zero_()
+
+
+def reinit_bert_like_(bert_like: transformers.modeling_utils.PreTrainedModel):
+    """Initializes BERT weights and prunes weights if needed. 
+    
+    Implementation follows: `transformers/modeling_utils.py/PreTrainedModel`
+    """
+    # Initialize weights
+    bert_like.apply(functools.partial(_reinit_bert_like_module, std=bert_like.config.initializer_range))
+    
+    # Prune heads if needed
+    if bert_like.config.pruned_heads:
+        bert_like.prune_heads(bert_like.config.pruned_heads)
+    
+    # Tie weights if needed
+    bert_like.tie_weights()

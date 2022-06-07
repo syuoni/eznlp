@@ -95,6 +95,10 @@ def add_base_arguments(parser: argparse.ArgumentParser):
                              help="bert-like architecture (None for w/o bert-like)")
     group_model.add_argument('--bert_drop_rate', type=float, default=0.2, 
                              help="dropout rate for BERT")
+    group_model.add_argument('--bert_freeze', default=False, action='store_true', 
+                             help="whether to freeze BERT weights")
+    group_model.add_argument('--bert_reinit', default=False, action='store_true', 
+                             help="whether to reinit BERT weights")
     group_model.add_argument('--use_interm2', default=False, action='store_true', 
                              help="whether to use intermediate2")
     return parser

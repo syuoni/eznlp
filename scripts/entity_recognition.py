@@ -11,6 +11,7 @@ import torch
 
 from eznlp import auto_device
 from eznlp.token import LexiconTokenizer
+from eznlp.nn.init import reinit_bert_like_
 from eznlp.dataset import Dataset
 from eznlp.config import ConfigDict
 from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig, CharConfig, SoftLexiconConfig
@@ -172,10 +173,12 @@ def collect_IE_assembly_config(args: argparse.Namespace):
     if args.bert_arch.lower() != 'none':
         # Cased tokenizer for NER task
         bert_like, tokenizer = load_pretrained(args.bert_arch, args, cased=True)
-        bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert_like, arch=args.bert_arch, from_subtokenized=args.pre_subtokenize, freeze=False)
+        if args.bert_reinit:
+            reinit_bert_like_(bert_like)
+        bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert_like, arch=args.bert_arch, from_subtokenized=args.pre_subtokenize, freeze=args.bert_freeze)
         if getattr(args, 'ck_decoder', '').startswith('specific_span') or getattr(args, 'rel_decoder', '').startswith('specific_span'):
             bert_like_config.output_hidden_states = True
-            span_bert_like_config = SpanBertLikeConfig(bert_like=bert_like, arch=args.bert_arch, freeze=False, 
+            span_bert_like_config = SpanBertLikeConfig(bert_like=bert_like, arch=args.bert_arch, freeze=args.bert_freeze, 
                                                        num_layers=None if args.sse_num_layers < 0 else args.sse_num_layers, 
                                                        share_weights_ext=args.sse_share_weights_ext, 
                                                        share_weights_int=args.sse_share_weights_int, 
