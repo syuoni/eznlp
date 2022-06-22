@@ -69,34 +69,14 @@ if __name__ == '__main__':
     elif args.task == 'entity_recognition' and args.language.lower() == 'english':
         if not args.use_bert:
             sampler = OptionSampler(num_epochs=100, 
-                                    optimizer=['SGD'], lr=[0.1], 
+                                    optimizer='SGD',  # 'Adadelta', 'AdamW'
+                                    lr=0.1,  # 1.0, 1e-3
                                     batch_size=32, 
                                     num_layers=[1, 2], 
-                                    # grad_clip=[-1, 5],
-                                    # use_locked_drop=[False, True],
-                                    ck_decoder='sequence_tagging',
+                                    ck_decoder='sequence_tagging',  # 'span_classification', 'boundary_selection'
                                     use_elmo=[False, True], 
                                     use_flair=[False, True], 
                                     char_arch=['LSTM', 'Conv'])
-            
-            # sampler = OptionSampler(num_epochs=100, 
-            #                         optimizer=['Adadelta'], lr=[1.0], 
-            #                         batch_size=64, 
-            #                         num_layers=[1, 2], 
-            #                         ck_decoder='span_classification',
-            #                         num_neg_chunks=[100, 200], 
-            #                         max_span_size=[5, 10], 
-            #                         ck_size_emb_dim=[10, 25],
-            #                         char_arch=['LSTM', 'Conv'])
-            
-            # sampler = OptionSampler(num_epochs=100, 
-            #                         optimizer=['AdamW'], lr=[1e-3], 
-            #                         batch_size=64, 
-            #                         num_layers=[1, 2], 
-            #                         ck_decoder='boundary_selection',
-            #                         affine_arch=['FFN', 'LSTM'],
-            #                         sb_epsilon=[0.0, 0.1],
-            #                         char_arch=['LSTM', 'Conv'])
         else:
             sampler = OptionSampler(doc_level=True, 
                                     train_with_dev=False, 
@@ -106,7 +86,10 @@ if __name__ == '__main__':
                                     finetune_lr=[1e-5, 2e-5], 
                                     # finetune_lr=numpy.logspace(-5.1, -4.5, num=100, base=10).tolist(), # 8e-6 ~ 3e-5
                                     batch_size=48, 
-                                    ck_decoder='sequence_tagging',
+                                    ck_decoder='sequence_tagging', # 'span_classification', 'boundary_selection', 'specific_span'
+                                    neg_sampling_rate=1.0, 
+                                    sb_epsilon=0.0, # [0.0, 0.1],
+                                    sb_size=1, 
                                     bert_drop_rate=0.2, 
                                     use_interm2=[False, True], 
                                     bert_arch=['BERT_base', 'RoBERTa_base', 
@@ -114,26 +97,6 @@ if __name__ == '__main__':
                                                'ALBERT_base', 'ALBERT_large', 'ALBERT_xlarge', 'ALBERT_xxlarge', 
                                                'BERT_large_wwm', 
                                                'SpanBERT_base', 'SpanBERT_large'])
-            
-            # sampler = OptionSampler(num_epochs=50, 
-            #                         lr=[1e-3, 2e-3], 
-            #                         finetune_lr=[1e-5, 2e-5], 
-            #                         batch_size=48, 
-            #                         ck_decoder='span_classification',
-            #                         bert_drop_rate=0.2, 
-            #                         use_interm2=[False, True], 
-            #                         bert_arch=['BERT_base', 'RoBERTa_base'])
-            
-            # sampler = OptionSampler(num_epochs=50, 
-            #                         lr=[1e-3, 2e-3], 
-            #                         finetune_lr=[1e-5, 2e-5], 
-            #                         batch_size=48, 
-            #                         ck_decoder='boundary_selection',
-            #                         affine_arch=['FFN', 'LSTM'],
-            #                         sb_epsilon=[0.0, 0.1],
-            #                         bert_drop_rate=0.2, 
-            #                         use_interm2=[False, True], 
-            #                         bert_arch=['BERT_base', 'RoBERTa_base'])
         
     elif args.task == 'entity_recognition' and args.language.lower() == 'chinese':
         if not args.use_bert:
@@ -165,17 +128,13 @@ if __name__ == '__main__':
                                     optimizer=['AdamW'], lr=[1e-3],
                                     batch_size=64, 
                                     num_layers=[1, 2], 
-                                    # num_neg_relations=[100, 200], 
-                                    # max_pair_distance=[100, 200], 
-                                    ck_size_emb_dim=[10, 25], 
-                                    ck_label_emb_dim=[10, 25])
+                                    size_emb_dim=[10, 25], 
+                                    label_emb_dim=[10, 25])
         else:
             sampler = OptionSampler(num_epochs=50, 
                                     lr=[1e-3, 2e-3], 
                                     finetune_lr=[1e-5, 2e-5], 
                                     batch_size=48, 
-                                    # num_neg_relations=[100, 200], 
-                                    # max_pair_distance=[100, 200], 
                                     bert_drop_rate=0.2, 
                                     use_interm2=[False, True], 
                                     bert_arch=['BERT_base', 'RoBERTa_base'])
@@ -189,11 +148,9 @@ if __name__ == '__main__':
                                     batch_size=64, 
                                     num_layers=[1, 2], 
                                     ck_decoder='span_classification',
-                                    num_neg_chunks=[100, 200],
-                                    num_neg_relations=[100, 200], 
                                     max_span_size=[5, 10],
-                                    ck_size_emb_dim=[10, 25], 
-                                    ck_label_emb_dim=[10, 25])
+                                    size_emb_dim=[10, 25], 
+                                    label_emb_dim=[10, 25])
         else:
             sampler = OptionSampler(num_epochs=50, 
                                     # lr=[1e-3, 2e-3], 
@@ -219,7 +176,7 @@ if __name__ == '__main__':
                                 ff_dim=[512, 1024, 2048], 
                                 num_layers=[3, 6], 
                                 teacher_forcing_rate=[0.5, 1.0])
-    
+        
     elif args.task == 'image2text':
         COMMAND = " ".join([COMMAND, "@scripts/options/rnn2text.opt"])
         sampler = OptionSampler(num_epochs=20, 
