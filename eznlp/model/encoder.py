@@ -280,6 +280,7 @@ class GehringConvEncoder(Encoder):
 
 
 
+# TODO: Initialization with (truncated) normal distribution with standard deviation of 0.02?
 class TransformerEncoder(Encoder):
     """Transformer encoder by Vaswani et al. (2017). 
     
