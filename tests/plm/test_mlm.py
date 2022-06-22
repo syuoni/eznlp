@@ -41,6 +41,7 @@ class TestMaskedLM(object):
         delta_mlm_logits = mlm_logits012[1:, :min_step] - mlm_logits123[:-1, :min_step]
         assert delta_mlm_logits.abs().max().item() < 1e-4
         
+        
     def _assert_trainable(self):
         optimizer = torch.optim.AdamW(self.model.parameters())
         trainer = MaskedLMTrainer(self.model, optimizer=optimizer, device=self.device)
@@ -64,6 +65,7 @@ class TestMaskedLM(object):
         self._assert_trainable()
         
         
+    @pytest.mark.slow
     @pytest.mark.parametrize("use_wwm", [False, True])
     @pytest.mark.parametrize("ngram_weights", [(1.0, ), (0.4, 0.3, 0.3)])
     @pytest.mark.parametrize("paired_task", ['None', 'NSP', 'SOP'])
