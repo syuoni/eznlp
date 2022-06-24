@@ -18,7 +18,6 @@ import flair
 from eznlp.token import Full2Half
 from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO, TextClsIO, KarpathyIO, BratIO, Src2TrgIO
 from eznlp.io import PostIO
-from eznlp.model.bert_like import merge_sentences_for_bert_like
 from eznlp.vectors import Vectors, GloVe
 from eznlp.training import Trainer, LRLambda, collect_params, check_param_groups
 from eznlp.metrics import precision_recall_f1_report
@@ -161,10 +160,7 @@ dataset2language.update({f'HwaMei_{s}': 'Chinese' for s in range(500, 1201, 100)
 
 def load_data(args: argparse.Namespace):
     if args.dataset == 'conll2003':
-        if args.doc_level:
-            io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', document_sep_starts=["-DOCSTART-"], document_level=True, case_mode='None', number_mode='Zeros')
-        else:
-            io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', case_mode='None', number_mode='Zeros')
+        io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', document_sep_starts=["-DOCSTART-"], case_mode='None', number_mode='Zeros')
         train_data = io.read("data/conll2003/eng.train")
         dev_data   = io.read("data/conll2003/eng.testa")
         test_data  = io.read("data/conll2003/eng.testb")
@@ -182,10 +178,7 @@ def load_data(args: argparse.Namespace):
         
         
     elif args.dataset == 'conll2012':
-        if args.doc_level:
-            io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end", "pt/"], document_sep_starts=["#begin"], document_level=True, encoding='utf-8', case_mode='None', number_mode='Zeros')
-        else:
-            io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end", "pt/"], document_sep_starts=["#begin"], encoding='utf-8', case_mode='None', number_mode='Zeros')
+        io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end", "pt/"], document_sep_starts=["#begin"], encoding='utf-8', case_mode='None', number_mode='Zeros')
         train_data = io.read("data/conll2012/train.english.v4_gold_conll")
         dev_data   = io.read("data/conll2012/dev.english.v4_gold_conll")
         test_data  = io.read("data/conll2012/test.english.v4_gold_conll")
@@ -228,11 +221,6 @@ def load_data(args: argparse.Namespace):
             dev_data   = []
             test_data  = io.read("data/genia-yu2020acl/test.json")
         
-        if args.doc_level:
-            train_data = merge_sentences_for_bert_like(train_data, doc_key='doc_key')
-            dev_data   = merge_sentences_for_bert_like(dev_data,   doc_key='doc_key')
-            test_data  = merge_sentences_for_bert_like(test_data,  doc_key='doc_key')
-        
     elif args.dataset == 'kbp2017':
         io = JsonIO(text_key='tokens', 
                     chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', retain_keys=['org_id'], 
@@ -240,11 +228,6 @@ def load_data(args: argparse.Namespace):
         train_data = io.read("data/kbp2017-shen2022acl/kbp17_train_context.json")
         dev_data   = io.read("data/kbp2017-shen2022acl/kbp17_dev_context.json")
         test_data  = io.read("data/kbp2017-shen2022acl/kbp17_test_context.json")
-        
-        if args.doc_level:
-            train_data = merge_sentences_for_bert_like(train_data, doc_key='org_id')
-            dev_data   = merge_sentences_for_bert_like(dev_data,   doc_key='org_id')
-            test_data  = merge_sentences_for_bert_like(test_data,  doc_key='org_id')
         
     elif args.dataset == 'nne':
         io = JsonIO(text_key='tokens', 

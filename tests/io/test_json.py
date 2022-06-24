@@ -5,7 +5,6 @@ import jieba
 from eznlp.io import JsonIO, SQuADIO, KarpathyIO, TextClsIO, BratIO
 from eznlp.utils.chunk import detect_overlapping_level, filter_clashed_by_priority
 from eznlp.utils.chunk import FLAT, NESTED, ARBITRARY
-from eznlp.model.bert_like import merge_sentences_for_bert_like
 
 
 class TestJsonIO(object):
@@ -76,9 +75,7 @@ class TestJsonIO(object):
         assert sum(len(set([(s, e) for _, s, e in ex['chunks']])) for ex in train_data + dev_data + test_data) == 56_015
         assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 18
         
-        new_data = merge_sentences_for_bert_like(train_data + dev_data + test_data, doc_key='doc_key')
-        assert len(new_data) == 2_000
-        assert sum(len(ex['chunks']) for ex in new_data) == 56_046
+        assert len(set([ex['doc_key'] for ex in train_data + dev_data + test_data])) == 2_000
         
         
     def test_genia_yu2020acl(self):
@@ -109,9 +106,7 @@ class TestJsonIO(object):
         
         assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 49
         
-        new_data = merge_sentences_for_bert_like(train_data + dev_data + test_data, doc_key='org_id')
-        assert len(new_data) == 619
-        assert sum(len(ex['chunks']) for ex in new_data) == 45_714
+        assert len(set([ex['org_id'] for ex in train_data + dev_data + test_data])) == 619
         
         
     def test_nne_shen2022acl(self):

@@ -415,7 +415,8 @@ def segment_uniformly_for_bert_like(data: list, tokenizer: transformers.PreTrain
     max_len = tokenizer.model_max_length - 2
     new_data = []
     num_segmented = 0
-    for raw_idx, entry in enumerate(tqdm.tqdm(data, disable=not verbose, ncols=100, desc="Segmenting data")):
+    num_conflict = 0
+    for raw_idx, entry in tqdm.tqdm(enumerate(data), disable=not verbose, ncols=100, desc="Segmenting data"):
         tokens = entry['tokens']
         nested_sub_tokens = _tokenized2nested(tokens.raw_text, tokenizer)
         sub_tok_seq_lens = [len(tok) for tok in nested_sub_tokens]
@@ -438,6 +439,7 @@ def segment_uniformly_for_bert_like(data: list, tokenizer: transformers.PreTrain
             for i in range(1, num_spans+1):
                 if i < num_spans:
                     _, span_end = find_ascending(cum_lens, span_size*i)
+                    num_conflict += (not is_segmentable[span_end])
                     while not is_segmentable[span_end]:
                         span_end -= 1
                 else:
@@ -467,6 +469,7 @@ def segment_uniformly_for_bert_like(data: list, tokenizer: transformers.PreTrain
         new_data.extend(new_entries)
     
     logger.info(f"Segmented sequences: {num_segmented} ({num_segmented/len(data)*100:.2f}%)")
+    logger.info(f"Conflict chunks: {num_conflict}")
     return new_data
 
 
@@ -601,25 +604,40 @@ def merge_enchars_for_bert_like(data: list, tokenizer: transformers.PreTrainedTo
 
 
 
-def merge_sentences_for_bert_like(data: list, doc_key: str):
+def merge_sentences_for_bert_like(data: list, tokenizer: transformers.PreTrainedTokenizer, doc_key: str, verbose=True):
     """Merge sentences (according to `doc_key`) to documents in `data`. 
     Modify the corresponding start/end indexes in `chunks`, `relations`, `attributes`. 
     """
+    if doc_key is None:
+        logger.warning(f"Specifying `doc_key=None` will merge consecutive sentences as long as possible")
+    
+    max_len = tokenizer.model_max_length - 2
     new_data = []
     new_entry = {}
-    for entry in data:
+    for entry in tqdm.tqdm(data, disable=not verbose, ncols=100, desc="Merging sentences"):
         tokens = entry['tokens']
+        num_sub_tokens = sum(len(tok) for tok in _tokenized2nested(tokens.raw_text, tokenizer))
+        
         if len(new_entry) == 0:
+            # Case (1): The first sentence of a document
             curr_start = 0
             new_entry['tokens'] = tokens
-        elif entry[doc_key] == new_entry[doc_key]:
+            cum_num_sub_tokens = num_sub_tokens
+            
+        elif (doc_key is None or entry[doc_key] == new_entry[doc_key]) and (cum_num_sub_tokens + num_sub_tokens <= max_len):
+            # Case (2): The current sentence can be merged 
             curr_start = len(new_entry['tokens'])
             new_entry['tokens'] += tokens
+            cum_num_sub_tokens += num_sub_tokens
+            
         else:
+            # Case (3): The current sentence cannot be merged
             new_data.append(new_entry)
             new_entry = {}
+            
             curr_start = 0
             new_entry['tokens'] = tokens
+            cum_num_sub_tokens = num_sub_tokens
         
         if 'chunks' in entry:
             new_chunks = [(label, start+curr_start, end+curr_start) for label, start, end in entry['chunks']]

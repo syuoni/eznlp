@@ -18,7 +18,7 @@ from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig, CharConfig,
 from eznlp.model import ELMoConfig, BertLikeConfig, SpanBertLikeConfig, FlairConfig
 from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderConfig, BoundarySelectionDecoderConfig, SpecificSpanClsDecoderConfig
 from eznlp.model import ExtractorConfig, SpecificSpanExtractorConfig
-from eznlp.model.bert_like import truecase_for_bert_like, segment_uniformly_for_bert_like, subtokenize_for_bert_like, merge_enchars_for_bert_like
+from eznlp.model.bert_like import truecase_for_bert_like, merge_sentences_for_bert_like, segment_uniformly_for_bert_like, subtokenize_for_bert_like, merge_enchars_for_bert_like
 from eznlp.training import Trainer, count_params, evaluate_entity_recognition
 
 from utils import add_base_arguments, parse_to_args
@@ -272,9 +272,19 @@ def process_IE_data(train_data, dev_data, test_data, args, config):
         dev_data   = truecase_for_bert_like(dev_data,   verbose=args.log_terminal)
         test_data  = truecase_for_bert_like(test_data,  verbose=args.log_terminal)
     
-    if (config.bert_like is not None and 
-            ((args.dataset in ('SIGHAN2006', 'yidu_s4k', 'cmeee')) or 
-             (args.dataset in ('conll2003', 'conll2012', 'genia', 'genia_yu2020acl', 'kbp2017') and args.doc_level))):
+    if (config.bert_like is not None and args.dataset in ('conll2003', 'conll2012', 'genia', 'genia_yu2020acl', 'kbp2017') and args.doc_level):
+        if args.dataset.startswith('conll'):
+            doc_key = 'doc_idx'
+        elif args.dataset.startswith('genia'):
+            doc_key = 'doc_key'
+        elif args.dataset.startswith('kbp2017'):
+            doc_key = 'org_id'
+        
+        train_data = merge_sentences_for_bert_like(train_data, config.bert_like.tokenizer, doc_key=doc_key, verbose=args.log_terminal)
+        dev_data   = merge_sentences_for_bert_like(dev_data,   config.bert_like.tokenizer, doc_key=doc_key, verbose=args.log_terminal)
+        test_data  = merge_sentences_for_bert_like(test_data,  config.bert_like.tokenizer, doc_key=doc_key, verbose=args.log_terminal)
+    
+    if (config.bert_like is not None and args.dataset in ('SIGHAN2006', 'yidu_s4k', 'cmeee')):
         train_data = segment_uniformly_for_bert_like(train_data, config.bert_like.tokenizer, update_raw_idx=True, verbose=args.log_terminal)
         dev_data   = segment_uniformly_for_bert_like(dev_data,   config.bert_like.tokenizer, update_raw_idx=True, verbose=args.log_terminal)
         test_data  = segment_uniformly_for_bert_like(test_data,  config.bert_like.tokenizer, update_raw_idx=True, verbose=args.log_terminal)
