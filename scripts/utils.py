@@ -307,8 +307,9 @@ def load_data(args: argparse.Namespace):
                     text_key='originalText', chunk_key='entities', chunk_type_key='label_type', chunk_start_key='start_pos', chunk_end_key='end_pos', 
                     is_whole_piece=False, encoding='utf-8-sig', token_sep="", pad_token="")
         train_data = io.read("data/yidu_s4k/subtask1_training_part1.txt") + io.read("data/yidu_s4k/subtask1_training_part2.txt")
-        # train_data, dev_data = sklearn.model_selection.train_test_split(train_data, test_size=0.2, random_state=args.seed)
-        dev_data   = []
+        dev_indexes   = set(range(0, len(train_data), 10))  # 10% is selected as the dev. split
+        train_indexes = set(range(len(train_data))) - dev_indexes
+        train_data, dev_data = [train_data[i] for i in train_indexes], [train_data[i] for i in dev_indexes]
         test_data  = io.read("data/yidu_s4k/subtask1_test_set_with_answer.json")
         
         
@@ -514,6 +515,14 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=False))
             
+        elif pretrained_str.lower().startswith('pert'):
+            if 'base' in pretrained_str.lower():
+                PATH = "assets/transformers/hfl/english-pert-base"
+            elif 'large' in pretrained_str.lower():
+                PATH = "assets/transformers/hfl/english-pert-large"
+            return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
+                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=True))
+            
         elif pretrained_str.lower().startswith('scibert'):
             PATH = "assets/transformers/allenai/scibert_scivocab_cased" if cased else "assets/transformers/allenai/scibert_scivocab_uncased"
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
@@ -543,10 +552,26 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=True))
             
+        elif pretrained_str.lower().startswith('pert'):
+            if 'base' in pretrained_str.lower():
+                PATH = "assets/transformers/hfl/chinese-pert-base"
+            elif 'large' in pretrained_str.lower():
+                PATH = "assets/transformers/hfl/chinese-pert-large"
+            return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
+                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=True))
+            
         elif pretrained_str.lower().startswith('ernie'):
             PATH = "assets/transformers/nghuyong/ernie-1.0"
-            return (transformers.AutoModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
-                    transformers.AutoTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=True))
+            return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
+                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=True))
+            
+        elif pretrained_str.lower().startswith('pcl'):
+            if 'wwm' in pretrained_str.lower():
+                PATH = "assets/transformers/pcl/medbert-wwm"
+            else:
+                PATH = "assets/transformers/pcl/medbert"
+            return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
+                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=True))
             
         elif pretrained_str.lower().startswith('syuoni_'):
             pretrained_str = pretrained_str.replace('syuoni_', '').replace('_', '-')
