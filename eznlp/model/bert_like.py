@@ -384,6 +384,9 @@ def segment_uniformly_for_bert_like(data: list, tokenizer: transformers.PreTrain
     
     Notes: Currently only supports entity recognition. 
     """
+    if len(data) == 0:
+        return data
+    
     assert 'relations' not in data[0]
     assert 'attributes' not in data[0]
     
