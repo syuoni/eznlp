@@ -2,6 +2,7 @@
 import os
 import sys
 import argparse
+import collections
 import datetime
 import pdb
 import glob
@@ -32,10 +33,20 @@ def parse_arguments(parser: argparse.ArgumentParser):
     parser = add_base_arguments(parser)
     
     group_data = parser.add_argument_group('dataset')
-    group_data.add_argument('--dataset', type=str, default='Wikipedia_zh', 
+    group_data.add_argument('--dataset', type=str, default='HwaMei', 
                             help="dataset name")
-    group_data.add_argument('--file_path', type=str, default='data/Wikipedia/text-zh/AA/wiki_00.cache', 
-                            help="prepared pretraining data file path(s); accept patterns like '**/*.cache', if enclosed in quotes")
+    group_data.add_argument('--folder_path', type=str, default='../HwaMei-text', 
+                            help="the folder path of prepared pretraining data")
+    group_data.add_argument('--no_hwamei', dest='use_hwamei', default=True, action='store_false', 
+                            help="whether to use HwaMei data")
+    group_data.add_argument('--use_wiki', default=False, action='store_true', 
+                            help="whether to use wiki data")
+    group_data.add_argument('--use_medical_corpora', default=False, action='store_true', 
+                            help="whether to use medical corpora")
+    group_data.add_argument('--use_medical_dialogue', default=False, action='store_true', 
+                            help="whether to use medical dialogue corpora")
+    group_data.add_argument('--use_common_corpora', default=False, action='store_true', 
+                            help="whether to use common corpora")
     
     group_pretrain = parser.add_argument_group('pretrain')
     group_pretrain.add_argument('--vocab_fix', default=False, action='store_true', 
@@ -96,7 +107,7 @@ if __name__ == '__main__':
     
     
     logger.info(header_format("Preparing", sep='-'))
-   
+    
     if use_ddp:
         torch.distributed.init_process_group(backend=args.ddp_backend)
         device = torch.device('cuda', args.local_rank)
@@ -117,9 +128,30 @@ if __name__ == '__main__':
         bert4pt = transformers.BertForPreTraining.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate)
     tokenizer = transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=True)
     
-    file_paths = glob.glob(args.file_path)
+    file_paths = []
+    if args.use_hwamei:
+        file_paths += glob.glob(f"{args.folder_path}/hm/*.cache")
+    if args.use_wiki:
+        file_paths += glob.glob(f"{args.folder_path}/wiki-zh/*/*.cache")
+    if args.use_medical_corpora:
+        file_paths += glob.glob(f"{args.folder_path}/medical-books/*.cache")
+        file_paths += glob.glob(f"{args.folder_path}/baikemy/*.cache")
+        file_paths += glob.glob(f"{args.folder_path}/med-prescription/*.cache")
+        file_paths += glob.glob(f"{args.folder_path}/tcmed-literature/*.cache")
+        file_paths += glob.glob(f"{args.folder_path}/wudao-med/*.cache")
+    if args.use_medical_dialogue:
+        file_paths += glob.glob(f"{args.folder_path}/med-dialogue/*.cache")
+        file_paths += glob.glob(f"{args.folder_path}/med-qa/*.cache")
+        file_paths += glob.glob(f"{args.folder_path}/cmc-dialogue/*.cache")
+    if args.use_common_corpora:
+        file_paths += glob.glob(f"{args.folder_path}/chatbot/*.cache")
+        file_paths += glob.glob(f"{args.folder_path}/weixin/*.cache")
+        file_paths += glob.glob(f"{args.folder_path}/thucnews/pretraining/*.cache")
+    
     assert len(file_paths) > 0
-    logger.info(f"Text data files: {len(file_paths)}")
+    sources = collections.Counter([fn.replace(f"{args.folder_path}/", "").split("/")[0] for fn in file_paths])
+    for src, num in sources.items():
+        logger.info(f"Text files of {src}: {num}")
     
     io = RawTextIO(encoding='utf-8', verbose=args.log_terminal)
     train_data = []

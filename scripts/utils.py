@@ -501,11 +501,18 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
                     transformers.RobertaTokenizer.from_pretrained(PATH, add_prefix_space=True))
             
         elif pretrained_str.lower().startswith('albert'):
-            size = re.search("x*(base|large)", pretrained_str.lower())
+            size = re.search("base|x*large", pretrained_str.lower())
             if size is not None:
                 PATH = f"assets/transformers/albert-{size.group()}-v2"
             return (transformers.AlbertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.AlbertTokenizer.from_pretrained(PATH))
+            
+        elif pretrained_str.lower().startswith('electra'):
+            size = re.search("small|base|large", pretrained_str.lower())
+            if size is not None:
+                PATH = f"assets/transformers/google/electra-{size.group()}-discriminator"
+            return (transformers.ElectraModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
+                    transformers.ElectraTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=True))
             
         elif pretrained_str.lower().startswith('spanbert'):
             if 'base' in pretrained_str.lower():
