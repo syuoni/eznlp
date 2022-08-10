@@ -13,7 +13,7 @@ MAX_SIZE_ID_COV_RATE = 0.975
 
 
 def _spans_from_surrounding(span: Tuple[int], distance: int, num_tokens: int):
-    """Spans from the surrounding area of the given `span`.
+    """Spans with given `distance` to the given `span`.
     """
     for k in range(distance):
         for start_offset, end_offset in [(-k, -distance+k), 
@@ -22,6 +22,13 @@ def _spans_from_surrounding(span: Tuple[int], distance: int, num_tokens: int):
                                          (distance-k, -k)]:
             start, end = span[0]+start_offset, span[1]+end_offset
             if 0 <= start < end <= num_tokens:
+                yield (start, end)
+
+
+def _spans_from_nested(span: Tuple[int]):
+    for start in range(span[0], span[1]):
+        for end in range(start+1, span[1]+1):
+            if (start, end) != span:
                 yield (start, end)
 
 
@@ -107,17 +114,16 @@ class Boundaries(TargetWrapper):
         
         num_tokens = len(entry['tokens'])
         
-        if training and (config.neg_sampling_rate < 1 or config.neg_sampling_power_decay > 0):
+        if training and (config.neg_sampling_rate < 1 or 
+                         config.neg_sampling_power_decay > 0 or 
+                         config.nested_sampling_rate < 1):
             span_size_ids = torch.arange(num_tokens) - torch.arange(num_tokens).unsqueeze(-1)
             non_mask_rate = config.neg_sampling_rate * (span_size_ids+1)**(-config.neg_sampling_power_decay)
             non_mask_rate.masked_fill_(span_size_ids < 0, 0)
             non_mask_rate.clamp_(max=1)
             
-            # Sampling rate is 1 for positive samples
-            for label, start, end in self.chunks:
-                non_mask_rate[start, end-1] = 1
-            
             # Extra sampling rate surrounding positive samples
+            # p <- p + (1-p)*p_{surr}
             if config.neg_sampling_surr_rate > 0 and config.neg_sampling_surr_size > 0:
                 surr_non_mask = torch.zeros_like(non_mask_rate, dtype=torch.bool)
                 for label, start, end in self.chunks:
@@ -125,6 +131,19 @@ class Boundaries(TargetWrapper):
                         for surr_start, surr_end in _spans_from_surrounding((start, end), dist, num_tokens):
                             surr_non_mask[surr_start, surr_end-1] = True
                 non_mask_rate[surr_non_mask] += (1 - non_mask_rate[surr_non_mask]) * config.neg_sampling_surr_rate
+            
+            # Reduce sampling rate for spans nested in positive samples
+            # p <- p * p_{nest}
+            if config.nested_sampling_rate < 1:
+                nest_non_mask = torch.zeros_like(non_mask_rate, dtype=torch.bool)
+                for label, start, end in self.chunks:
+                    for nest_start, nest_end in _spans_from_nested((start, end)):
+                        nest_non_mask[nest_start, nest_end-1] = True
+                non_mask_rate[nest_non_mask] *= config.nested_sampling_rate
+            
+            # Sampling rate set to 1 for positive samples
+            for label, start, end in self.chunks:
+                non_mask_rate[start, end-1] = 1
             
             # Bernoulli sampling according probability in `non_mask_rate`
             self.non_mask = non_mask_rate.bernoulli().bool() 

@@ -34,6 +34,7 @@ class SpecificSpanClsDecoderConfig(SingleDecoderConfigBase, BoundariesDecoderMix
         self.neg_sampling_power_decay = kwargs.pop('neg_sampling_power_decay', 0.0)  # decay = 0.5, 1.0
         self.neg_sampling_surr_rate = kwargs.pop('neg_sampling_surr_rate', 0.0)
         self.neg_sampling_surr_size = kwargs.pop('neg_sampling_surr_size', 5)
+        self.nested_sampling_rate = kwargs.pop('nested_sampling_rate', 1.0)
         
         self.none_label = kwargs.pop('none_label', '<none>')
         self.idx2label = kwargs.pop('idx2label', None)
