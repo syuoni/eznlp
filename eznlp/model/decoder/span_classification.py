@@ -44,6 +44,7 @@ class SpanClassificationDecoderConfig(SingleDecoderConfigBase, BoundariesDecoder
         self.none_label = kwargs.pop('none_label', '<none>')
         self.idx2label = kwargs.pop('idx2label', None)
         self.overlapping_level = kwargs.pop('overlapping_level', None)
+        self.chunk_priority = kwargs.pop('chunk_priority', 'confidence')
         
         # Boundary smoothing epsilon
         self.sb_epsilon = kwargs.pop('sb_epsilon', 0.0)
@@ -116,6 +117,7 @@ class SpanClassificationDecoder(DecoderBase, BoundariesDecoderMixin):
         self.none_label = config.none_label
         self.idx2label = config.idx2label
         self.overlapping_level = config.overlapping_level
+        self.chunk_priority = config.chunk_priority
         
         if config.agg_mode.lower().endswith('_pooling'):
             self.aggregating = SequencePooling(mode=config.agg_mode.replace('_pooling', ''))
@@ -201,8 +203,12 @@ class SpanClassificationDecoder(DecoderBase, BoundariesDecoderMixin):
                 confidences = [conf for conf, is_v in zip(confidences, is_valid) if is_v]
                 chunks = [ck for ck, is_v in zip(chunks, is_valid) if is_v]
             
-            # Sort chunks from high to low confidences
-            chunks = [ck for _, ck in sorted(zip(confidences, chunks), reverse=True)]
+            if self.chunk_priority.lower().startswith('len'):
+                # Sort chunks by lengths: long -> short 
+                chunks = sorted(chunks, key=lambda ck: ck[2]-ck[1], reverse=True)
+            else:
+                # Sort chunks by confidences: high -> low 
+                chunks = [ck for _, ck in sorted(zip(confidences, chunks), reverse=True)]
             chunks = filter_clashed_by_priority(chunks, allow_level=self.overlapping_level)
             
             batch_chunks.append(chunks)
