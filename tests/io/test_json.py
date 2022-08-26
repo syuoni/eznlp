@@ -3,7 +3,7 @@ import pytest
 import jieba
 
 from eznlp.io import JsonIO, SQuADIO, KarpathyIO, TextClsIO, BratIO
-from eznlp.utils.chunk import detect_overlapping_level, filter_clashed_by_priority
+from eznlp.utils.chunk import detect_overlapping_level, filter_clashed_by_priority, count_nested
 from eznlp.utils.chunk import FLAT, NESTED, ARBITRARY
 
 
@@ -36,7 +36,8 @@ class TestJsonIO(object):
         assert sum(len(ex['chunks']) for ex in test_data) == 3_031
         assert max(ck[2]-ck[1] for ex in test_data for ck in ex['chunks']) == 43
         
-        assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 57
+        assert sum(count_nested(ex['chunks']) for ex in train_data+dev_data+test_data) == 7_832
+        assert max(end-start for ex in train_data+dev_data+test_data for _, start, end in ex['chunks']) == 57
         
         
     def test_ace2005(self):
@@ -55,7 +56,8 @@ class TestJsonIO(object):
         assert sum(len(ex['chunks']) for ex in test_data) == 3_027
         assert max(ck[2]-ck[1] for ex in test_data for ck in ex['chunks']) == 27
         
-        assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 49
+        assert sum(count_nested(ex['chunks']) for ex in train_data+dev_data+test_data) == 7_460
+        assert max(end-start for ex in train_data+dev_data+test_data for _, start, end in ex['chunks']) == 49
         
         
     def test_genia(self):
@@ -71,11 +73,12 @@ class TestJsonIO(object):
         assert len(test_data) == 1_854
         assert sum(len(ex['chunks']) for ex in test_data) == 5_511
         
+        assert sum(count_nested(ex['chunks']) for ex in train_data+dev_data+test_data) == 5_431
         # According to the original annotation, 31 spans may have 2 entity labels
-        assert sum(len(set([(s, e) for _, s, e in ex['chunks']])) for ex in train_data + dev_data + test_data) == 56_015
-        assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 18
+        assert sum(len(set([(s, e) for _, s, e in ex['chunks']])) for ex in train_data+dev_data+test_data) == 56_015
+        assert max(end-start for ex in train_data+dev_data+test_data for _, start, end in ex['chunks']) == 18
         
-        assert len(set([ex['doc_key'] for ex in train_data + dev_data + test_data])) == 2_000
+        assert len(set([ex['doc_key'] for ex in train_data+dev_data+test_data])) == 2_000
         
         
     def test_genia_yu2020acl(self):
@@ -88,7 +91,7 @@ class TestJsonIO(object):
         assert len(test_data) == 1_854
         assert sum(len(ex['chunks']) for ex in test_data) == 5_506
         
-        assert max(end-start for data in [train_data, test_data] for ex in data for _, start, end in ex['chunks']) == 18
+        assert max(end-start for ex in train_data+test_data for _, start, end in ex['chunks']) == 18
         
         
     def test_kbp2017_shen2022acl(self):
@@ -104,9 +107,10 @@ class TestJsonIO(object):
         assert len(test_data) == 4_267
         assert sum(len(ex['chunks']) for ex in test_data) == 12_600  # 12_601 reported in Shen et al. (2022), due to a duplicated entity
         
-        assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 49
+        assert sum(count_nested(ex['chunks']) for ex in train_data+dev_data+test_data) == 7_479
+        assert max(end-start for ex in train_data+dev_data+test_data for _, start, end in ex['chunks']) == 49
         
-        assert len(set([ex['org_id'] for ex in train_data + dev_data + test_data])) == 619
+        assert len(set([ex['org_id'] for ex in train_data+dev_data+test_data])) == 619
         
         
     def test_nne_shen2022acl(self):
@@ -122,7 +126,7 @@ class TestJsonIO(object):
         assert len(test_data) == 3_762
         assert sum(len(ex['chunks']) for ex in test_data) == 21_196
         
-        assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 16
+        assert max(end-start for ex in train_data+dev_data+test_data for _, start, end in ex['chunks']) == 16
         
         
         
@@ -183,8 +187,8 @@ class TestJsonIO(object):
         assert sum(len(ex['chunks']) for ex in test_data) == 1_079
         assert sum(len(ex['relations']) for ex in test_data) == 422
         
-        assert max(detect_overlapping_level(ex['chunks']) for data in [train_data, dev_data, test_data] for ex in data) == FLAT
-        assert all(filter_clashed_by_priority(ex['chunks'], allow_level=FLAT) == ex['chunks'] for data in [train_data, dev_data, test_data] for ex in data)
+        assert max(detect_overlapping_level(ex['chunks']) for ex in train_data+dev_data+test_data) == FLAT
+        assert all(filter_clashed_by_priority(ex['chunks'], allow_level=FLAT) == ex['chunks'] for ex in train_data+dev_data+test_data)
         
         
     def test_SciERC(self):
@@ -211,8 +215,8 @@ class TestJsonIO(object):
         assert sum(len(ex['chunks']) for ex in test_data) == 1_685
         assert sum(len(ex['relations']) for ex in test_data) == 974
         
-        assert max(detect_overlapping_level(ex['chunks']) for data in [train_data, dev_data, test_data] for ex in data) == NESTED
-        assert all(filter_clashed_by_priority(ex['chunks'], allow_level=NESTED) == ex['chunks'] for data in [train_data, dev_data, test_data] for ex in data)
+        assert max(detect_overlapping_level(ex['chunks']) for ex in train_data+dev_data+test_data) == NESTED
+        assert all(filter_clashed_by_priority(ex['chunks'], allow_level=NESTED) == ex['chunks'] for ex in train_data+dev_data+test_data)
         
         
     def test_ADE(self):
@@ -261,8 +265,8 @@ class TestJsonIO(object):
         assert len(test_errors) == 0
         assert len(test_mismatches) == 0
         
-        assert max(detect_overlapping_level(ex['chunks']) for data in [train_data, test_data] for ex in data) == FLAT
-        assert all(filter_clashed_by_priority(ex['chunks'], allow_level=FLAT) == ex['chunks'] for data in [train_data, test_data] for ex in data)
+        assert max(detect_overlapping_level(ex['chunks']) for ex in train_data+test_data) == FLAT
+        assert all(filter_clashed_by_priority(ex['chunks'], allow_level=FLAT) == ex['chunks'] for ex in train_data+test_data)
         
         
     def test_cmeee(self):
@@ -283,8 +287,8 @@ class TestJsonIO(object):
         assert len(dev_mismatches) == 0
         assert len(test_data) == 3_000
         
-        assert max(detect_overlapping_level(ex['chunks']) for data in [train_data, dev_data] for ex in data) == ARBITRARY
-        assert all(filter_clashed_by_priority(ex['chunks'], allow_level=ARBITRARY) == ex['chunks'] for data in [train_data, dev_data] for ex in data)
+        assert max(detect_overlapping_level(ex['chunks']) for ex in train_data+dev_data) == ARBITRARY
+        assert all(filter_clashed_by_priority(ex['chunks'], allow_level=ARBITRARY) == ex['chunks'] for ex in train_data+dev_data)
         
         
     def test_cmeie(self):
