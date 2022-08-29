@@ -63,7 +63,7 @@ def detect_nested_against(chunks1: List[tuple], chunks2: List[tuple], strict: bo
     """
     nested_chunks = []
     for ck1 in chunks1:
-        if any(_is_ordered_nested(ck1, ck2) and (not strict or ck1[1:] != ck2[1:]) for ck2 in chunks2):
+        if any(_is_ordered_nested(ck1, ck2) and (ck1 != ck2) and (not strict or ck1[1:] != ck2[1:]) for ck2 in chunks2):
             nested_chunks.append(ck1)
     return nested_chunks
 
