@@ -58,24 +58,20 @@ def detect_overlapping_level(chunks: List[tuple]):
     return level
 
 
-def detect_nested_against(chunks1: List[tuple], chunks2: List[tuple], strict: bool=True):
+def detect_nested(chunks1: List[tuple], chunks2: List[tuple]=None, strict: bool=True):
     """Return chunks from `chunks1` that are nested in any chunk from `chunks2`. 
     """
+    if chunks2 is None:
+        chunks2 = chunks1
+    
     nested_chunks = []
     for ck1 in chunks1:
         if any(_is_ordered_nested(ck1, ck2) and (ck1 != ck2) and (not strict or ck1[1:] != ck2[1:]) for ck2 in chunks2):
             nested_chunks.append(ck1)
     return nested_chunks
 
-def detect_nested(chunks: List[tuple], strict: bool=True):
-    return detect_nested_against(chunks, chunks, strict=strict)
-
-def count_nested_against(chunks1: List[tuple], chunks2: List[tuple], strict: bool=True):
-    return len(detect_nested_against(chunks1, chunks2, strict=strict))
-
-def count_nested(chunks: List[tuple], strict: bool=True):
-    # return sum(any(ck1[1:] != ck2[1:] and _is_ordered_nested(ck1, ck2) for ck2 in chunks) for ck1 in chunks)
-    return len(detect_nested(chunks, strict=strict))
+def count_nested(chunks1: List[tuple], chunks2: List[tuple]=None, strict: bool=True):
+    return len(detect_nested(chunks1, chunks2=chunks2, strict=strict))
 
 
 def chunk_pair_distance(chunk1: tuple, chunk2: tuple, overlap_distance: int=-1):
