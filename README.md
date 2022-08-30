@@ -23,7 +23,7 @@ This repository also maintains the code of our papers:
 ### Install dependencies
 ```bash
 $ conda install numpy=1.18.5 pandas=1.0.5 xlrd=1.2.0 matplotlib=3.2.2 
-$ conda install pytorch=1.7.1 torchvision=0.8.2 torchtext=0.8.1 {cpuonly|cudatoolkit=10.2} -c pytorch 
+$ conda install pytorch=1.7.1 torchvision=0.8.2 torchtext=0.8.1 {cpuonly|cudatoolkit=10.2|cudatoolkit=11.0} -c pytorch 
 $ pip install -r requirements.txt 
 ```
 
