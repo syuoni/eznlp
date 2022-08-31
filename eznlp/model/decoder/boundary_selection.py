@@ -226,7 +226,7 @@ class BoundarySelectionDecoder(DecoderBase, BoundariesDecoderMixin):
         for curr_scores, boundaries_obj, curr_len in zip(batch_scores, batch.boundaries_objs, batch.seq_lens.cpu().tolist()):
             curr_non_mask = getattr(boundaries_obj, 'non_mask', self._get_span_non_mask(curr_len))
             
-            loss = self.criterion(curr_scores[:curr_len, :curr_len][curr_non_mask], boundaries_obj.boundary2label_id[curr_non_mask])
+            loss = self.criterion(curr_scores[:curr_len, :curr_len][curr_non_mask], boundaries_obj.label_ids[curr_non_mask])
             losses.append(loss)
         return torch.stack(losses)
         

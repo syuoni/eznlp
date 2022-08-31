@@ -201,9 +201,9 @@ class SpecificSpanRelClsDecoder(DecoderBase, DiagBoundariesPairsDecoderMixin):
                 dbp_obj.to(self.W.device)
         
         
-    def _get_diagonal_span_size_ids(self, seq_len: int, max_span_size: int):
+    def _get_diagonal_span_size_ids(self, seq_len: int):
         span_size_ids = self._span_size_ids[:seq_len, :seq_len]
-        return torch.cat([span_size_ids.diagonal(offset=k-1) for k in range(1, max_span_size+1)], dim=-1)
+        return torch.cat([span_size_ids.diagonal(offset=k-1) for k in range(1, min(self.max_span_size, seq_len)+1)], dim=-1)
         
         
     def compute_scores(self, batch: Batch, full_hidden: torch.Tensor, all_query_hidden: Dict[int, torch.Tensor]):
@@ -213,14 +213,12 @@ class SpecificSpanRelClsDecoder(DecoderBase, DiagBoundariesPairsDecoderMixin):
         
         batch_scores = []
         for i, curr_len in enumerate(batch.seq_lens.cpu().tolist()):
-            curr_max_span_size = min(self.max_span_size, curr_len)
-            
             # (curr_len-k+1, hid_dim) -> (num_spans = \sum_k curr_len-k+1, hid_dim)
-            span_hidden = torch.cat([all_hidden[k-1][i, :curr_len-k+1] for k in range(1, curr_max_span_size+1)], dim=0)
+            span_hidden = torch.cat([all_hidden[k-1][i, :curr_len-k+1] for k in range(1, min(self.max_span_size, curr_len)+1)], dim=0)
             
             if hasattr(self, 'size_embedding'):
                 # size_embedded: (num_spans, emb_dim)
-                size_embedded = self.size_embedding(self._get_diagonal_span_size_ids(curr_len, curr_max_span_size))
+                size_embedded = self.size_embedding(self._get_diagonal_span_size_ids(curr_len))
                 span_hidden = torch.cat([span_hidden, size_embedded], dim=-1)
             
             if hasattr(self, 'affine_head'):
@@ -270,13 +268,11 @@ class SpecificSpanRelClsDecoder(DecoderBase, DiagBoundariesPairsDecoderMixin):
         
         batch_relations = []
         for scores, dbp_obj, curr_len in zip(batch_scores, batch.dbp_objs, batch.seq_lens.cpu().tolist()):
-            curr_max_span_size = min(self.max_span_size, curr_len)
-            
             confidences, label_ids = scores.softmax(dim=-1).max(dim=-1)
             labels = [self.idx2label[i] for i in label_ids.flatten().cpu().tolist()]
             
             relations = []
-            for label, ((h_start, h_end), (t_start, t_end)) in zip(labels, _span_pairs_from_diagonals(curr_len, curr_max_span_size)):
+            for label, ((h_start, h_end), (t_start, t_end)) in zip(labels, _span_pairs_from_diagonals(curr_len, self.max_span_size)):
                 head = (dbp_obj.span2ck_label.get((h_start, h_end), self.ck_none_label), h_start, h_end)
                 tail = (dbp_obj.span2ck_label.get((t_start, t_end), self.ck_none_label), t_start, t_end)
                 if label != self.none_label and head[0] != self.ck_none_label and tail[0] != self.ck_none_label:

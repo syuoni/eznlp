@@ -149,9 +149,9 @@ class SpecificSpanClsDecoder(DecoderBase, BoundariesDecoderMixin):
         self.criterion = config.instantiate_criterion(reduction='sum')
         
         
-    def _get_diagonal_span_size_ids(self, seq_len: int, max_span_size: int):
+    def _get_diagonal_span_size_ids(self, seq_len: int):
         span_size_ids = self._span_size_ids[:seq_len, :seq_len]
-        return torch.cat([span_size_ids.diagonal(offset=k-1) for k in range(1, max_span_size+1)], dim=-1)
+        return torch.cat([span_size_ids.diagonal(offset=k-1) for k in range(1, min(self.max_span_size, seq_len)+1)], dim=-1)
         
         
     def get_logits(self, batch: Batch, full_hidden: torch.Tensor, all_query_hidden: Dict[int, torch.Tensor], return_states: bool=False):
@@ -161,14 +161,12 @@ class SpecificSpanClsDecoder(DecoderBase, BoundariesDecoderMixin):
         
         batch_logits, batch_states = [], []
         for i, curr_len in enumerate(batch.seq_lens.cpu().tolist()):
-            curr_max_span_size = min(self.max_span_size, curr_len)
-            
             # (curr_len-k+1, hid_dim) -> (num_spans = \sum_k curr_len-k+1, hid_dim)
-            span_hidden = torch.cat([all_hidden[k-1][i, :curr_len-k+1] for k in range(1, curr_max_span_size+1)], dim=0)
+            span_hidden = torch.cat([all_hidden[k-1][i, :curr_len-k+1] for k in range(1, min(self.max_span_size, curr_len)+1)], dim=0)
             
             if hasattr(self, 'size_embedding'):
                 # size_embedded: (num_spans = \sum_k curr_len-k+1, emb_dim)
-                size_embedded = self.size_embedding(self._get_diagonal_span_size_ids(curr_len, curr_max_span_size))
+                size_embedded = self.size_embedding(self._get_diagonal_span_size_ids(curr_len))
                 span_hidden = torch.cat([span_hidden, size_embedded], dim=-1)
             
             # No mask input needed here
@@ -190,12 +188,10 @@ class SpecificSpanClsDecoder(DecoderBase, BoundariesDecoderMixin):
         
         losses = []
         for logits, boundaries_obj, curr_len in zip(batch_logits, batch.boundaries_objs, batch.seq_lens.cpu().tolist()):
-            curr_max_span_size = min(self.max_span_size, curr_len)
-            
             # label_ids: (num_spans = \sum_k curr_len-k+1, ) or (num_spans = \sum_k curr_len-k+1, logit_dim)
-            label_ids = boundaries_obj.diagonal_label_ids(curr_max_span_size)
+            label_ids = boundaries_obj.diagonal_label_ids
             if hasattr(boundaries_obj, 'non_mask'):
-                non_mask = boundaries_obj.diagonal_non_mask(curr_max_span_size)
+                non_mask = boundaries_obj.diagonal_non_mask
                 logits, label_ids = logits[non_mask], label_ids[non_mask]
             
             loss = self.criterion(logits, label_ids)
@@ -204,9 +200,7 @@ class SpecificSpanClsDecoder(DecoderBase, BoundariesDecoderMixin):
         if hasattr(self, 'inex_mkmmd'):
             aux_losses = []
             for states, boundaries_obj, curr_len in zip(batch_states, batch.boundaries_objs, batch.seq_lens.cpu().tolist()):
-                curr_max_span_size = min(self.max_span_size, curr_len)
-                
-                nest_non_mask = boundaries_obj.diagonal_nest_non_mask(curr_max_span_size)
+                nest_non_mask = boundaries_obj.diagonal_nest_non_mask
                 aux_loss = 0.0
                 if nest_non_mask.any() and (not nest_non_mask.all()):
                     aux_loss = self.inex_mkmmd(states['span_hidden'][nest_non_mask], states['span_hidden'][~nest_non_mask])
@@ -221,11 +215,9 @@ class SpecificSpanClsDecoder(DecoderBase, BoundariesDecoderMixin):
         
         batch_chunks = []
         for logits, boundaries_obj, curr_len in zip(batch_logits, batch.boundaries_objs, batch.seq_lens.cpu().tolist()):
-            curr_max_span_size = min(self.max_span_size, curr_len)
-            
             confidences, label_ids = logits.softmax(dim=-1).max(dim=-1)
             labels = [self.idx2label[i] for i in label_ids.cpu().tolist()]
-            chunks = [(label, start, end) for label, (start, end) in zip(labels, _spans_from_diagonals(curr_len, curr_max_span_size)) if label != self.none_label]
+            chunks = [(label, start, end) for label, (start, end) in zip(labels, _spans_from_diagonals(curr_len, self.max_span_size)) if label != self.none_label]
             confidences = [conf for label, conf in zip(labels, confidences.cpu().tolist()) if label != self.none_label]
             assert len(confidences) == len(chunks)
             
