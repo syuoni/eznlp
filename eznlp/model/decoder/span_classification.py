@@ -7,7 +7,7 @@ import torch
 
 from ...wrapper import Batch
 from ...utils.chunk import detect_overlapping_level, filter_clashed_by_priority
-from ...nn.modules import SequencePooling, SequenceAttention, CombinedDropout, SoftLabelCrossEntropyLoss
+from ...nn.modules import SequencePooling, SequenceAttention, CombinedDropout, SoftLabelCrossEntropyLoss, MultiKernelMaxMeanDiscrepancyLoss
 from ...nn.functional import seq_lens2mask
 from ...nn.init import reinit_embedding_, reinit_layer_
 from .base import SingleDecoderConfigBase, DecoderBase
@@ -37,7 +37,13 @@ class SpanClassificationDecoderConfig(SingleDecoderConfigBase, BoundariesDecoder
         self.neg_sampling_power_decay = kwargs.pop('neg_sampling_power_decay', 0.0)  # decay = 0.5, 1.0
         self.neg_sampling_surr_rate = kwargs.pop('neg_sampling_surr_rate', 0.0)
         self.neg_sampling_surr_size = kwargs.pop('neg_sampling_surr_size', 5)
+        
+        # Spans internal (i.e., nested) / external spans to gold entities
         self.nested_sampling_rate = kwargs.pop('nested_sampling_rate', 1.0)
+        self.inex_mkmmd_lambda = kwargs.pop('inex_mkmmd_lambda', 0.0)
+        self.inex_mkmmd_num_kernels = kwargs.pop('inex_mkmmd_num_kernels', 5)
+        self.inex_mkmmd_multiplier = kwargs.pop('inex_mkmmd_multiplier', 2.0)
+        self.inex_mkmmd_xsample = kwargs.pop('inex_mkmmd_xsample', False)
         
         self.agg_mode = kwargs.pop('agg_mode', 'max_pooling')
         
@@ -118,6 +124,7 @@ class SpanClassificationDecoder(DecoderBase, BoundariesDecoderMixin):
         self.idx2label = config.idx2label
         self.overlapping_level = config.overlapping_level
         self.chunk_priority = config.chunk_priority
+        self.inex_mkmmd_lambda = config.inex_mkmmd_lambda
         
         if config.agg_mode.lower().endswith('_pooling'):
             self.aggregating = SequencePooling(mode=config.agg_mode.replace('_pooling', ''))
@@ -132,6 +139,9 @@ class SpanClassificationDecoder(DecoderBase, BoundariesDecoderMixin):
         self._span_size_ids.masked_fill_(self._span_size_ids < 0, 0)
         self._span_size_ids.masked_fill_(self._span_size_ids > config.max_size_id, config.max_size_id)
         
+        if config.inex_mkmmd_lambda > 0:
+            self.inex_mkmmd = MultiKernelMaxMeanDiscrepancyLoss(config.inex_mkmmd_num_kernels, config.inex_mkmmd_multiplier)
+        
         self.dropout = CombinedDropout(*config.in_drop_rates)
         self.hid2logit = torch.nn.Linear(config.in_dim+config.size_emb_dim, config.voc_dim)
         reinit_layer_(self.hid2logit, 'sigmoid')
@@ -144,9 +154,9 @@ class SpanClassificationDecoder(DecoderBase, BoundariesDecoderMixin):
         return torch.cat([span_size_ids.diagonal(offset=k-1) for k in range(1, max_span_size+1)], dim=-1)
         
         
-    def get_logits(self, batch: Batch, full_hidden: torch.Tensor):
+    def get_logits(self, batch: Batch, full_hidden: torch.Tensor, return_states: bool=False):
         # full_hidden: (batch, step, hid_dim)
-        batch_logits = []
+        batch_logits, batch_states = [], []
         for i, curr_len in enumerate(batch.seq_lens.cpu().tolist()):
             curr_max_span_size = min(self.max_span_size, curr_len)
             
@@ -163,12 +173,16 @@ class SpanClassificationDecoder(DecoderBase, BoundariesDecoderMixin):
             
             logits = self.hid2logit(span_hidden)
             batch_logits.append(logits)
+            batch_states.append({'span_hidden': span_hidden})
         
-        return batch_logits
+        if return_states:
+            return batch_logits, batch_states
+        else:
+            return batch_logits
         
         
     def forward(self, batch: Batch, full_hidden: torch.Tensor):
-        batch_logits = self.get_logits(batch, full_hidden)
+        batch_logits, batch_states = self.get_logits(batch, full_hidden, return_states=True)
         
         losses = []
         for logits, boundaries_obj, curr_len in zip(batch_logits, batch.boundaries_objs, batch.seq_lens.cpu().tolist()):
@@ -182,6 +196,19 @@ class SpanClassificationDecoder(DecoderBase, BoundariesDecoderMixin):
             
             loss = self.criterion(logits, label_ids)
             losses.append(loss)
+        
+        if hasattr(self, 'inex_mkmmd'):
+            aux_losses = []
+            for states, boundaries_obj, curr_len in zip(batch_states, batch.boundaries_objs, batch.seq_lens.cpu().tolist()):
+                curr_max_span_size = min(self.max_span_size, curr_len)
+                
+                nest_non_mask = boundaries_obj.diagonal_nest_non_mask(curr_max_span_size)
+                aux_loss = 0.0
+                if nest_non_mask.any() and (not nest_non_mask.all()):
+                    aux_loss = self.inex_mkmmd(states['span_hidden'][nest_non_mask], states['span_hidden'][~nest_non_mask])
+                aux_losses.append(aux_loss)
+            losses = [l+al for l, al in zip(losses, aux_losses)]
+        
         return torch.stack(losses)
         
         

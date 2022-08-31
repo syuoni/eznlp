@@ -59,6 +59,12 @@ class TestModel(object):
         self._assert_batch_consistency()
         self._assert_trainable()
         
+    @pytest.mark.parametrize("inex_mkmmd_lambda", [0.0, 0.5, 1.0])
+    def test_model_with_inex_mkmmd(self, inex_mkmmd_lambda, conll2004_demo, device):
+        self.config = ExtractorConfig(decoder=SpanClassificationDecoderConfig(inex_mkmmd_lambda=inex_mkmmd_lambda, nested_sampling_rate=0.0))
+        self._setup_case(conll2004_demo, device)
+        self._assert_batch_consistency()
+        self._assert_trainable()
         
     @pytest.mark.parametrize("from_subtokenized", [False, True])
     def test_model_with_bert_like(self, from_subtokenized, conll2004_demo, bert_with_tokenizer, device):

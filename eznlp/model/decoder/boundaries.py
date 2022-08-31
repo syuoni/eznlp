@@ -114,6 +114,12 @@ class Boundaries(TargetWrapper):
         
         num_tokens = len(entry['tokens'])
         
+        if getattr(config, 'inex_mkmmd_lambda', 0.0) > 0 or config.nested_sampling_rate < 1:
+            self.nest_non_mask = torch.zeros(num_tokens, num_tokens, dtype=torch.bool)
+            for label, start, end in self.chunks:
+                for nest_start, nest_end in _spans_from_nested((start, end)):
+                    self.nest_non_mask[nest_start, nest_end-1] = True
+        
         if training and (config.neg_sampling_rate < 1 or 
                          config.neg_sampling_power_decay > 0 or 
                          config.nested_sampling_rate < 1):
@@ -135,11 +141,7 @@ class Boundaries(TargetWrapper):
             # Reduce sampling rate for spans nested in positive samples
             # p <- p * p_{nest}
             if config.nested_sampling_rate < 1:
-                nest_non_mask = torch.zeros_like(non_mask_rate, dtype=torch.bool)
-                for label, start, end in self.chunks:
-                    for nest_start, nest_end in _spans_from_nested((start, end)):
-                        nest_non_mask[nest_start, nest_end-1] = True
-                non_mask_rate[nest_non_mask] *= config.nested_sampling_rate
+                non_mask_rate[self.nest_non_mask] *= config.nested_sampling_rate
             
             # Sampling rate set to 1 for positive samples
             for label, start, end in self.chunks:
@@ -206,6 +208,14 @@ class Boundaries(TargetWrapper):
         
         # non_mask: (\sum_k seq_len-k+1, )
         return torch.cat([self.non_mask.diagonal(offset=k-1) for k in range(1, max_span_size+1)], dim=-1)
+        
+        
+    def diagonal_nest_non_mask(self, max_span_size: int=None):
+        if max_span_size is None:
+            max_span_size = self.boundary2label_id.size(0)
+        
+        # nest_non_mask: (\sum_k seq_len-k+1, )
+        return torch.cat([self.nest_non_mask.diagonal(offset=k-1) for k in range(1, max_span_size+1)], dim=-1)
 
 
 
