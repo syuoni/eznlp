@@ -18,6 +18,7 @@ class TestConllIO(object):
     [3] Jie and Lu. 2019. Dependency-guided LSTM-CRF for named entity recognition. 
     [4] Zhang and Yang. 2018. Chinese NER Using Lattice LSTM. 
     [5] Ma et al. 2020. Simplify the Usage of Lexicon in Chinese NER. 
+    [6] Wang et al. 2019. CrossWeigh: Training Named Entity Tagger from Imperfect Annotations. 
     """
     def _assert_flatten_consistency(self, data):
         flattened_data = self.io.flatten_to_characters(data)
@@ -68,6 +69,24 @@ class TestConllIO(object):
         
         self._assert_flatten_consistency(test_data)
         assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 10
+        
+        
+    def test_conllpp(self):
+        self.io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO2', document_sep_starts=["-DOCSTART-"])
+        train_data = self.io.read("data/conllpp/conllpp_train.txt")
+        dev_data   = self.io.read("data/conllpp/conllpp_dev.txt")
+        test_data  = self.io.read("data/conllpp/conllpp_test.txt")
+        
+        assert len(train_data) == 14_987 - 946
+        assert len(dev_data) == 3_466 - 216
+        assert len(test_data) == 3_684 - 231
+        
+        assert sum(len(ex['chunks']) for ex in train_data) == 23_499
+        assert sum(len(ex['tokens']) for ex in train_data) == 204_567 - 946
+        assert sum(len(ex['chunks']) for ex in dev_data) == 5_942
+        assert sum(len(ex['tokens']) for ex in dev_data) == 51_578 - 216
+        assert sum(len(ex['chunks']) for ex in test_data) == 5_702
+        assert sum(len(ex['tokens']) for ex in test_data) == 46_666 - 231
         
         
     @pytest.mark.parametrize("doc_level", [False, True])
