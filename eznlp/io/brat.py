@@ -16,6 +16,13 @@ logger = logging.getLogger(__name__)
 class BratIO(IO):
     """An IO interface of brat-format files. 
     
+    Notes
+    -----
+    For Chinese text with inserted spaces, `ins_space_tokenize_callback` is the word-level tokenizer, 
+    and `tokenize_callback` is the character-level tokenizer. 
+    
+    If `max_len` is specified, it will segment the text by `hie_seps` such that the segments are as long as possible to be close to `max_len`; 
+    If `max_len` is not specified (`None`), it will segment the text by `hie_seps` such that the segments are as short as possible. 
     """
     def __init__(self, 
                  tokenize_callback='char', 
@@ -41,6 +48,7 @@ class BratIO(IO):
         self.parse_relations = parse_relations
         
         self.max_len = max_len
+        self.token_sep = token_kwargs.get('token_sep', " ")
         self.line_sep = line_sep
         self.sentence_seps = ["。"] if sentence_seps is None else sentence_seps
         self.phrase_seps = ["；", "，", ";", ","] if phrase_seps is None else phrase_seps
@@ -110,7 +118,7 @@ class BratIO(IO):
         
     def _segment_text(self, text: str):
         for start, end in segment_text_with_hierarchical_seps(text, hie_seps=self.hie_seps, length=self.max_len):
-            if end - start <= self.max_len:
+            if self.max_len is None or end - start <= self.max_len:
                 yield (start, end)
             else:
                 for sub_start, sub_end in segment_text_uniformly(text[start:end], max_span_size=self.max_len):
@@ -128,7 +136,7 @@ class BratIO(IO):
                 chunk_id, (chunk_type, chunk_start_in_text, chunk_end_in_text, chunk_text) = self._parse_text_chunk_ann(new_anns[-1] + ann)
                 chunk_end_in_text = chunk_start_in_text + len(chunk_text)
                 new_anns[-1] = self._build_text_chunk_ann(chunk_id, (chunk_type, chunk_start_in_text, chunk_end_in_text, chunk_text))
-                
+        
         return new_anns
         
         
@@ -141,6 +149,7 @@ class BratIO(IO):
                 anns = self._fix_broken_chunk_text(anns)
             assert all(ann.startswith(('T', 'A', 'R', '*', '#')) for ann in anns)
         
+        # Restore "\n" -> "\r\n"
         if ("\n" in text) and (self.line_sep not in text):
             text = text.replace("\n", self.line_sep)
         
@@ -157,7 +166,7 @@ class BratIO(IO):
         # Parse attributes
         if self.parse_attrs:
             text_attrs = [self._parse_attr_ann(ann) for ann in anns if ann.startswith('A')]
-            
+        
         # Parse relations
         if self.parse_relations:
             text_relations = [self._parse_relation_ann(ann) for ann in anns if ann.startswith('R')]
@@ -181,22 +190,22 @@ class BratIO(IO):
                 assert len(curr_chunks) == len(curr_text_chunks)
                 errors.extend(curr_errors)
                 mismatches.extend(curr_mismatches)
-                data_entry = {'tokens': tokens, 'chunks': [ck for ck in curr_chunks if ck is not None]}
+                entry = {'tokens': tokens, 'chunks': [ck for ck in curr_chunks if ck is not None]}
                 
                 if self.parse_attrs:
                     curr_attrs = [(attr_name, curr_chunks[curr_chunk_id2idx[chunk_id]]) 
                                       for attr_id, chunk_id, attr_name in text_attrs 
                                       if chunk_id in curr_idx2chunk_id]
-                    data_entry.update({'attributes': [(attr_name, ck) for attr_name, ck in curr_attrs if ck is not None]})
-                    
+                    entry.update({'attributes': [(attr_name, ck) for attr_name, ck in curr_attrs if ck is not None]})
+                
                 if self.parse_relations:
                     relations = [(rel_type, curr_chunks[curr_chunk_id2idx[head_id]],curr_chunks[curr_chunk_id2idx[tail_id]]) 
                                      for rel_id, head_id, tail_id, rel_type in text_relations 
                                      if head_id in curr_idx2chunk_id and tail_id in curr_idx2chunk_id]
-                    data_entry.update({'relations': [(rel_type, head, tail) for rel_type, head, tail in relations if head is not None and tail is not None]})
+                    entry.update({'relations': [(rel_type, head, tail) for rel_type, head, tail in relations if head is not None and tail is not None]})
                 
-                data.append(data_entry)
-                
+                data.append(entry)
+        
         if len(errors) > 0 or len(mismatches) > 0:
             logger.warning(f"{len(errors)} errors and {len(mismatches)} mismatches detected during parsing {file_path}")
         
@@ -214,7 +223,7 @@ class BratIO(IO):
             data.extend(curr_data)
             errors.extend(curr_errors)
             mismatches.extend(curr_mismatches)
-            
+        
         if return_errors:
             return data, errors, mismatches
         else:
@@ -232,10 +241,10 @@ class BratIO(IO):
         text_chunks, attr_anns, rel_anns = {}, [], []
         
         span_start_in_text = 0
-        for data_entry in data:
-            tokens, curr_chunks = data_entry['tokens'], data_entry['chunks']
+        for entry in data:
+            tokens, curr_chunks = entry['tokens'], entry['chunks']
             
-            curr_text = "".join(tokens.raw_text)
+            curr_text = self.token_sep.join(tokens.raw_text)
             text_spans.append(curr_text)
             
             curr_text_chunks = self.text_translator.chunks2text_chunks(curr_chunks, tokens, curr_text, append_chunk_text=True)
@@ -244,20 +253,20 @@ class BratIO(IO):
             text_chunks.update({chunk_id: (chunk_type, chunk_start_in_text+span_start_in_text, chunk_end_in_text+span_start_in_text, chunk_text) 
                                     for chunk_id, (chunk_type, chunk_start_in_text, chunk_end_in_text, chunk_text) 
                                     in zip(curr_idx2chunk_id, curr_text_chunks)})
-            chunk_idx += len(data_entry['chunks'])
+            chunk_idx += len(entry['chunks'])
             span_start_in_text += len(curr_text) + len(self.line_sep)
             
             if self.parse_attrs:
                 curr_attr_anns = [self._build_attr_ann(f"A{attr_idx+k}", curr_idx2chunk_id[curr_chunks.index(chunk)], attr_name) 
-                                      for k, (attr_name, chunk) in enumerate(data_entry['attributes'])]
+                                      for k, (attr_name, chunk) in enumerate(entry['attributes'])]
                 attr_anns.extend(curr_attr_anns)
-                attr_idx += len(data_entry['attributes'])
+                attr_idx += len(entry['attributes'])
             
             if self.parse_relations:
                 curr_rel_anns = [self._build_relation_ann(f"R{rel_idx+k}", curr_idx2chunk_id[curr_chunks.index(head)], curr_idx2chunk_id[curr_chunks.index(tail)], rel_type)
-                                     for k, (rel_type, head, tail) in enumerate(data_entry['relations'])]
+                                     for k, (rel_type, head, tail) in enumerate(entry['relations'])]
                 rel_anns.extend(curr_rel_anns)
-                rel_idx += len(data_entry['relations'])
+                rel_idx += len(entry['relations'])
         
         
         text = self.line_sep.join(text_spans)
@@ -268,9 +277,10 @@ class BratIO(IO):
         if self.has_ins_space:
             text, text_chunks = self._insert_spaces(text, text_chunks)
             self._check_text_chunks(text, text_chunks)
-            
+        
         text_chunk_anns = [self._build_text_chunk_ann(chunk_id, text_chunk) for chunk_id, text_chunk in text_chunks.items()]
         
+        # Map "\r\n" -> "\n"
         with open(file_path, 'w', encoding=self.encoding) as f:
             f.write(text.replace(self.line_sep, "\n"))
             f.write("\n")
@@ -291,7 +301,7 @@ class BratIO(IO):
             if (not re.fullmatch("\s+", tok)) and (len(tokenized) > 0):
                 tokenized.append(self.inserted_mark)
             tokenized.append(tok)
-            
+        
         text = "".join(tokenized)
         text = re.sub(f"[“/]{self.inserted_mark}(?!\s)",    lambda x: x.group().replace(self.inserted_mark, ""), text)
         text = re.sub(f"(?<!\s){self.inserted_mark}[”：/]", lambda x: x.group().replace(self.inserted_mark, ""), text)
@@ -325,7 +335,7 @@ class BratIO(IO):
             chunk_text = text[chunk_start_in_text:chunk_end_in_text]
             
             text_chunks[chunk_id] = (chunk_type, chunk_start_in_text, chunk_end_in_text, chunk_text)
-            
+        
         return text, text_chunks
         
         
@@ -357,5 +367,5 @@ class BratIO(IO):
             chunk_text = text[chunk_start_in_text:chunk_end_in_text]
             
             text_chunks[chunk_id] = (chunk_type, chunk_start_in_text, chunk_end_in_text, chunk_text)
-            
+        
         return text, text_chunks

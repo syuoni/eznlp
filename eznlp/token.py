@@ -486,7 +486,11 @@ class TokenSequence(object):
             (3) spacy.language.Language, jieba.Tokenizer.cut, jieba.Tokenizer.tokenize: split text by given tokenize method. 
         """
         if tokenize_callback is None or (isinstance(tokenize_callback, str) and tokenize_callback.lower().startswith('space')):
-            token_list = [Token(tok_text, **kwargs) for tok_text in raw_text.split()]
+            # token_list = [Token(tok_text, **kwargs) for tok_text in raw_text.split()]
+            space_spans = [space.span() for space in re.finditer("\s+", raw_text)]
+            token_spans = [(s, e) for s, e in zip([0] + [s[1] for s in space_spans], 
+                                                  [s[0] for s in space_spans] + [len(raw_text)]) if s<e]
+            token_list = [Token(raw_text[s:e], start=s, end=e, **kwargs) for s, e in token_spans]
         elif isinstance(tokenize_callback, str) and tokenize_callback.lower().startswith('char'):
             token_list = [Token(tok_text, start=k, end=k+1, **kwargs) for k, tok_text in enumerate(raw_text)]
         elif isinstance(tokenize_callback, spacy.language.Language):
