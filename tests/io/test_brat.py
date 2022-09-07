@@ -95,8 +95,6 @@ def test_read_write_consistency(has_ins_space):
 def test_read_write_consistency_conll2003():
     conll_io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', document_sep_starts=["-DOCSTART-"])
     data = conll_io.read("data/conll2003/demo.eng.train")
-    for entry in data:
-        entry['tokens'].build_pseudo_boundaries()
     
     brat_io = BratIO(tokenize_callback='space', max_len=None, 
                      token_sep=" ", line_sep="\r\n", sentence_seps=[], phrase_seps=[], 

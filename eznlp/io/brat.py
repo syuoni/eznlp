@@ -48,7 +48,6 @@ class BratIO(IO):
         self.parse_relations = parse_relations
         
         self.max_len = max_len
-        self.token_sep = token_kwargs.get('token_sep', " ")
         self.line_sep = line_sep
         self.sentence_seps = ["。"] if sentence_seps is None else sentence_seps
         self.phrase_seps = ["；", "，", ";", ","] if phrase_seps is None else phrase_seps
@@ -244,7 +243,7 @@ class BratIO(IO):
         for entry in data:
             tokens, curr_chunks = entry['tokens'], entry['chunks']
             
-            curr_text = self.token_sep.join(tokens.raw_text)
+            curr_text = tokens.to_raw_text()
             text_spans.append(curr_text)
             
             curr_text_chunks = self.text_translator.chunks2text_chunks(curr_chunks, tokens, curr_text, append_chunk_text=True)
