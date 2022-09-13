@@ -201,9 +201,7 @@ class SpecificSpanClsDecoder(DecoderBase, BoundariesDecoderMixin):
             aux_losses = []
             for states, boundaries_obj, curr_len in zip(batch_states, batch.boundaries_objs, batch.seq_lens.cpu().tolist()):
                 nest_non_mask = boundaries_obj.diagonal_nest_non_mask
-                aux_loss = 0.0
-                if nest_non_mask.any() and (not nest_non_mask.all()):
-                    aux_loss = self.inex_mkmmd(states['span_hidden'][nest_non_mask], states['span_hidden'][~nest_non_mask])
+                aux_loss = self.inex_mkmmd(states['span_hidden'][nest_non_mask], states['span_hidden'][~nest_non_mask])
                 aux_losses.append(aux_loss)
             losses = [l+al for l, al in zip(losses, aux_losses)]
         

@@ -31,7 +31,14 @@ class MultiKernelMaxMeanDiscrepancyLoss(torch.nn.Module):
         k12 = kernels[:num1, num1:].mean()
         k21 = kernels[num1:, :num1].mean()
         k22 = kernels[num1:, num1:].mean()
-        return (k11 - k12 - k21 + k22)
+        if num1 == 0 and num2 == 0:
+            return torch.tensor(0.0, device=x1.device)
+        elif num1 == 0:
+            return k22
+        elif num2 == 0:
+            return k11
+        else:
+            return (k11 - k12 - k21 + k22)
         
     def extra_repr(self):
         return f"num_kernels={self.num_kernels}, multiplier={self.multiplier}, sigma={self.sigma}"
