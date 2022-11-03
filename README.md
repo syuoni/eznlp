@@ -84,6 +84,7 @@ $ python scripts/attribute_extraction.py --dataset <dataset> [options]
 
 
 ## Future Plans
+- [ ] Upgrade `transformers` to a newer version
 - [ ] Unify the data interchange format as a dict, i.e., `entry`
 - [ ] Reorganize `JsonIO`
 - [ ] File names: classification -> cls
