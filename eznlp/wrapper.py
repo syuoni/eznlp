@@ -54,7 +54,7 @@ class TensorWrapper(object):
         
         Parameters
         ----------
-        func: callable
+        func: Callable
             a function appliable to `torch.Tensor`
         
         Notes
