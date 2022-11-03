@@ -16,6 +16,14 @@ metrics_re = {'acc': re.compile("(?<=Accuracy: )\d+\.\d+(?=%)"),
               'micro_f1': re.compile("(?<=Micro F1-score: )\d+\.\d+(?=%)"), 
               'bleu4': re.compile("(?<=BLEU-4: )\d+\.\d+(?=%)")}
 
+FILTER_COLS = ['pdb', 'profile', 'log_terminal', 'use_amp', 
+               'emb_dim', 'emb_freeze', 'char_arch', 'use_bigram', 'use_softword', 'use_softlexicon', 'use_locked_drop', 
+               'use_elmo', 'use_flair', 'bert_freeze', 'bert_reinit', 
+               'dataset', 'corrupt_rate', 'save_preds', 'pipeline', 
+               'fl_gamma', 'sl_epsilon', 
+               'scheme', 'use_crf', 
+               'use_biaffine', 'use_biaffine_prod', 'neg_sampling_surr_rate', 'neg_sampling_surr_size']
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -74,9 +82,9 @@ if __name__ == '__main__':
                 exp_results.append(exp_res)
         
         df = pandas.DataFrame(exp_results)
-        filter_cols = ['log_terminal', 'profile', 'pdb', 'pipeline', 'save_preds', 'dataset', 'use_amp', 'seed', 'fl_gamma', 'grad_clip', 'use_locked_drop', 
-                       'scheme', 'use_crf', 'num_neg_chunks', 'max_span_size', 'size_emb_dim', 'agg_mode']
-        df = df.iloc[:, ~df.columns.isin(filter_cols)]
+        df = df.iloc[:, ~df.columns.isin(FILTER_COLS)]
+        df['batch_size'] = df['batch_size'] * df['num_grad_acc_steps']
+        del df['num_grad_acc_steps']
         df.to_excel(f"cache/{args.dataset}-collected-{timestamp}.xlsx", index=False)
         
     elif args.format == 'zip':

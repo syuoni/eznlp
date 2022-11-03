@@ -120,6 +120,7 @@ spacy_nlp_de = spacy.load("de_core_news_sm", disable=['tagger', 'parser', 'ner']
 
 
 dataset2language = {'conll2003': 'English', 
+                    'conll2003nff': 'English', 
                     'conll2012': 'English', 
                     'ace2004': 'English', 
                     'ace2005': 'English', 
@@ -159,11 +160,17 @@ dataset2language.update({f'ace2004_rel_cv{k}': 'English' for k in range(5)})
 dataset2language.update({f'HwaMei_{s}': 'Chinese' for s in range(500, 1201, 100)})
 
 def load_data(args: argparse.Namespace):
-    if args.dataset == 'conll2003':
+    if args.dataset.startswith('conll2003'):
         io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', document_sep_starts=["-DOCSTART-"], case_mode='None', number_mode='Zeros')
         train_data = io.read("data/conll2003/eng.train")
         dev_data   = io.read("data/conll2003/eng.testa")
         test_data  = io.read("data/conll2003/eng.testb")
+        
+        if 'nff' in args.dataset:
+            json_io = JsonIO(text_key='tokens', 
+                             chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', retain_keys=['doc_idx'], 
+                             case_mode='None', number_mode='Zeros')
+            test_data = json_io.read("data/conll2003/eng.testb.nested.gold.json")
         
         if args.corrupt_rate > 0 and args.doc_level:
             set_chunks_gold = [ex['chunks'] for ex in train_data]
@@ -526,6 +533,13 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
             # cased: do_lower_case=False
             return (transformers.RobertaModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.RobertaTokenizer.from_pretrained(PATH, add_prefix_space=True))
+            
+        elif pretrained_str.lower().startswith('deberta'):
+            size = re.search("x*(base|large)", pretrained_str.lower())
+            if size is not None:
+                PATH = f"assets/transformers/microsoft/deberta-{size.group()}"
+            return (transformers.DebertaModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
+                    transformers.DebertaTokenizer.from_pretrained(PATH, add_prefix_space=True))
             
         elif pretrained_str.lower().startswith('albert'):
             size = re.search("x*(base|large)", pretrained_str.lower())
