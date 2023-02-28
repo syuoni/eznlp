@@ -6,6 +6,7 @@ from eznlp.dataset import Dataset
 from eznlp.model import EncoderConfig, BertLikeConfig, SpanBertLikeConfig
 from eznlp.model import SpecificSpanRelClsDecoderConfig, SpecificSpanSparseRelClsDecoderConfig
 from eznlp.model import SpecificSpanExtractorConfig
+from eznlp.model.bert_like import subtokenize_for_bert_like
 from eznlp.training import Trainer
 
 
@@ -78,9 +79,10 @@ class TestModel(object):
         else:
             decoder_config = SpecificSpanRelClsDecoderConfig(neg_sampling_rate=neg_sampling_rate, size_emb_dim=size_emb_dim, max_span_size=3)
         self.config = SpecificSpanExtractorConfig(decoder=decoder_config, 
-                                                  bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False, output_hidden_states=True), 
+                                                  bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False, from_subtokenized=True, output_hidden_states=True), 
                                                   span_bert_like=SpanBertLikeConfig(bert_like=bert, freeze=False, num_layers=num_layers, share_weights_ext=True, share_weights_int=True, init_agg_mode=agg_mode), 
                                                   intermediate2=EncoderConfig(arch='LSTM', hid_dim=400))
+        conll2004_demo = subtokenize_for_bert_like(conll2004_demo, tokenizer, verbose=False)
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
@@ -90,9 +92,10 @@ class TestModel(object):
     def test_prediction_without_gold(self, use_sparse, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
         self.config = SpecificSpanExtractorConfig(decoder='specific_span_sparse_rel' if use_sparse else 'specific_span_rel', 
-                                                  bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False, output_hidden_states=True), 
+                                                  bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False, from_subtokenized=True, output_hidden_states=True), 
                                                   span_bert_like=SpanBertLikeConfig(bert_like=bert), 
                                                   intermediate2=None)
+        conll2004_demo = subtokenize_for_bert_like(conll2004_demo, tokenizer, verbose=False)
         self._setup_case(conll2004_demo, device)
         
         data_wo_gold = [{'tokens': entry['tokens'], 

@@ -56,9 +56,9 @@ class TestConllIO(object):
             train_data = merge_sentences_for_bert_like(train_data, tokenizer, doc_key='doc_idx', verbose=False)
             dev_data   = merge_sentences_for_bert_like(dev_data,   tokenizer, doc_key='doc_idx', verbose=False)
             test_data  = merge_sentences_for_bert_like(test_data,  tokenizer, doc_key='doc_idx', verbose=False)
-            assert len(train_data) == 1_075
-            assert len(dev_data) == 261
-            assert len(test_data) == 261
+            assert len(train_data) == 1_055
+            assert len(dev_data) == 256
+            assert len(test_data) == 251
         
         assert sum(len(ex['chunks']) for ex in train_data) == 23_499
         assert sum(len(ex['tokens']) for ex in train_data) == 204_567 - 946
@@ -105,9 +105,9 @@ class TestConllIO(object):
             train_data = merge_sentences_for_bert_like(train_data, tokenizer, doc_key='doc_idx', verbose=False)
             dev_data   = merge_sentences_for_bert_like(dev_data,   tokenizer, doc_key='doc_idx', verbose=False)
             test_data  = merge_sentences_for_bert_like(test_data,  tokenizer, doc_key='doc_idx', verbose=False)
-            assert len(train_data) == 3_828
-            assert len(dev_data) == 517
-            assert len(test_data) == 522
+            assert len(train_data) == 3_781
+            assert len(dev_data) == 509
+            assert len(test_data) == 510
         
         assert sum(len(ex['chunks']) for ex in train_data) == 81_828
         assert sum(len(ex['tokens']) for ex in train_data) == 1_088_503

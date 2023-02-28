@@ -135,7 +135,7 @@ def elmo():
                                  num_output_representations=1)
 
 
-BERT_PATH = "assets/transformers/bert-base-cased"
+BERT_PATH = "assets/transformers/bert-base-uncased"
 ROBERTA_PATH = "assets/transformers/roberta-base"
 ALBERT_PATH = "assets/transformers/albert-base-v2"
 
