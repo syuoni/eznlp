@@ -134,6 +134,10 @@ class QueryBertLikeEncoder(torch.nn.Module):
         
         all_query_states = () if output_query_states else None
         all_self_attentions = () if output_attentions else None
+        # The top query states are computed: 
+        #     (1) by the top Transformer block
+        #     (2) from the second-top query states and second-top hidden states (key/value states)
+        # Hence, the top hidden states are *not* used, because there is no more upper Transformer blocks 
         for i, (layer_module, hidden_states) in enumerate(zip(self.layer, all_hidden_states[:-1])):
             if output_query_states:
                 all_query_states = all_query_states + (query_states,)

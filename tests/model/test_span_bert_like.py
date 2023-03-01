@@ -8,8 +8,10 @@ from eznlp.training import count_params
 
 def test_span_bert_like(bert_like_with_tokenizer):
     bert_like, tokenizer = bert_like_with_tokenizer
+    bert_like.eval()
     config = SpanBertLikeConfig(bert_like=bert_like, max_span_size=5)
     span_bert_like = config.instantiate()
+    span_bert_like.eval()
     
     x_ids = torch.randint(0, 1000, size=(4, 10))
     bert_outs = bert_like(x_ids, output_hidden_states=True)

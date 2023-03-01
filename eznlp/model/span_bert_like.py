@@ -22,6 +22,8 @@ class SpanBertLikeConfig(Config):
             self.num_layers = self.bert_like.config.num_hidden_layers
         assert 0 < self.num_layers <= self.bert_like.config.num_hidden_layers
         
+        # TODO: Include span size 1
+        self.min_span_size = kwargs.pop('min_span_size', None)
         self.max_span_size = kwargs.pop('max_span_size', None)
         self.share_weights_ext = kwargs.pop('share_weights_ext', True)  # Share weights externally, i.e., with `bert_like`
         self.share_weights_int = kwargs.pop('share_weights_int', True)  # Share weights internally, i.e., between `query_bert_like` of different span sizes

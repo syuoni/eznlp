@@ -235,7 +235,7 @@ class BertLikeEmbedder(torch.nn.Module):
         if self.use_gamma:
             bert_hidden = self.gamma * bert_hidden
         
-        # Remove the `[CLS]` and `[SEP]` positions. 
+        # Remove `[CLS]` and `[SEP]` 
         bert_hidden = bert_hidden[:, 1:-1]
         sub_mask = sub_mask[:, 2:]
         
