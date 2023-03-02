@@ -22,7 +22,7 @@ def test_masked_span_bert_like(bert_like_with_tokenizer):
     
     
     batch_chunks = [[('EntA', 0, 1), ('EntB', 1, 2), ('EntA', 2, 3)], 
-                    [('EntA', 1, 5)], 
+                    [('EntA', 0, 20)], 
                     [('EntA', 5, 10), ('EntB', 7, 10), ('EntA', 7, 8)], 
                     [('EntA', 18, 20), ('EntB', 17, 19), ('EntA', 0, 3), ('EntA', 1, 2)]]
     
@@ -46,13 +46,14 @@ def test_masked_span_bert_like(bert_like_with_tokenizer):
     mspb_config = MaskedSpanBertLikeConfig(bert_like=bert_like)
     masked_span_bert_like = mspb_config.instantiate()
     masked_span_bert_like.eval()
-    span_query_hidden, ctx_query_hidden = masked_span_bert_like(bert_outs['hidden_states'], span_attention_mask, ctx_attention_mask)
+    all_last_query_states = masked_span_bert_like(bert_outs['hidden_states'], span_attention_mask, ctx_attention_mask)
+    span_query_hidden = all_last_query_states['span_query_state']
     
     # Check the masked span representations are consistent to naive span representations
     for k, chunks in enumerate(batch_chunks):
         for i, (label, start, end) in enumerate(chunks):
             # Exception for span size 1
-            if end-start > 1: 
+            if end-start > 1 and end-start <= 5: 
                 delta_hidden = span_query_hidden[k, i] - all_hidden[end-start-1][k, start]
                 assert delta_hidden.abs().max().item() < 1e-5
 
@@ -65,6 +66,6 @@ def test_trainble_config(freeze, bert_like_with_tokenizer):
     span_bert_like = config.instantiate()
     
     if freeze:
-        assert count_params(span_bert_like) == 0
+        assert count_params(span_bert_like.query_bert_like) == 0
     else:
-        assert count_params(span_bert_like) == count_params(bert_like.encoder)
+        assert count_params(span_bert_like.query_bert_like) == count_params(bert_like.encoder)

@@ -83,6 +83,8 @@ class MaskedSpanExtractor(ModelBase):
         
     def forward2states(self, batch: Batch):
         bert_hidden, all_bert_hidden = self.bert_like(**batch.bert_like)
-        span_query_hidden, ctx_query_hidden = self.masked_span_bert_like(all_bert_hidden, **batch.masked_span_bert_like)
+        all_last_query_states = self.masked_span_bert_like(all_bert_hidden, **batch.masked_span_bert_like)
         
-        return {'full_hidden': bert_hidden, 'span_query_hidden': span_query_hidden, 'ctx_query_hidden': ctx_query_hidden}
+        return {'full_hidden': bert_hidden, 
+                'span_query_hidden': all_last_query_states['span_query_state'], 
+                'ctx_query_hidden': all_last_query_states['ctx_query_state']}

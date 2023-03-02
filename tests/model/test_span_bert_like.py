@@ -36,8 +36,8 @@ def test_trainble_config(share_weights_int, freeze, bert_like_with_tokenizer):
     span_bert_like = config.instantiate()
     
     if freeze:
-        assert count_params(span_bert_like) == 0
+        assert count_params(span_bert_like.query_bert_like) == 0
     elif share_weights_int:
-        assert count_params(span_bert_like) == count_params(bert_like.encoder)
+        assert count_params(span_bert_like.query_bert_like) == count_params(bert_like.encoder)
     else:
-        assert count_params(span_bert_like) == count_params(bert_like.encoder)*4
+        assert count_params(span_bert_like.query_bert_like) == count_params(bert_like.encoder)*4

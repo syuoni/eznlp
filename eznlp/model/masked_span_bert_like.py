@@ -6,6 +6,7 @@ import transformers
 
 from ..nn.modules import SequencePooling, SequenceAttention
 from ..nn.modules import QueryBertLikeEncoder
+from ..nn.init import reinit_vector_parameter_
 from ..config import Config
 
 
@@ -92,6 +93,9 @@ class MaskedSpanBertLikeEncoder(torch.nn.Module):
         assert config.share_weights_int
         # Share the module across all span sizes
         self.query_bert_like = QueryBertLikeEncoder(config.bert_like.encoder, num_layers=config.num_layers, share_weights=config.share_weights_ext)
+        # Trainable context vector for the span covering the whole sequence
+        self.zero_context = torch.nn.Parameter(torch.empty(config.hid_dim))
+        reinit_vector_parameter_(self.zero_context)
         
         self.freeze = config.freeze
         self.num_layers = config.num_layers
@@ -128,10 +132,15 @@ class MaskedSpanBertLikeEncoder(torch.nn.Module):
         all_hidden_states = all_hidden_states[-(self.num_layers+1):]
         batch_size, num_steps, hid_dim = all_hidden_states[0].size()
         
-        all_last_query_states = tuple() 
+        # All masked attention will produce NaN gradients
+        zero_ctx_indic = ctx_attention_mask.all(dim=-1)
+        if zero_ctx_indic.any().item(): 
+            ctx_attention_mask[zero_ctx_indic] = False
         
+        all_last_query_states = OrderedDict()
         if isinstance(self.init_aggregating, (SequencePooling, SequenceAttention)): 
-            for attention_mask in [span_attention_mask, ctx_attention_mask]: 
+            for key, attention_mask in zip(['span_query_state', 'ctx_query_state'], 
+                                           [span_attention_mask, ctx_attention_mask]): 
                 # reshaped_states: (B, L, H) -> (B, NC, L, H) -> (B*NC, L, H)
                 # attention_mask: (B, NC, L) -> (B*NC, L)
                 reshaped_states0 = all_hidden_states[0].unsqueeze(1).expand(-1, attention_mask.size(1), -1, -1).contiguous().view(-1, num_steps, hid_dim)
@@ -141,6 +150,9 @@ class MaskedSpanBertLikeEncoder(torch.nn.Module):
                 query_states = query_states.view(batch_size, -1, hid_dim)
                 
                 query_outs = self.query_bert_like(query_states, all_hidden_states, self.get_extended_attention_mask(attention_mask))
-                all_last_query_states += (query_outs['last_query_state'], )
+                all_last_query_states[key] = query_outs['last_query_state']
+        
+        if zero_ctx_indic.any().item(): 
+            all_last_query_states['ctx_query_state'] = torch.where(zero_ctx_indic.unsqueeze(-1), self.zero_context, all_last_query_states['ctx_query_state'])
         
         return all_last_query_states
