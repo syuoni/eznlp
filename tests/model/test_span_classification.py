@@ -4,7 +4,7 @@ import torch
 
 from eznlp.dataset import Dataset
 from eznlp.model import EncoderConfig, BertLikeConfig, SpanClassificationDecoderConfig, ExtractorConfig
-from eznlp.model.bert_like import subtokenize_for_bert_like
+from eznlp.model import BertLikePreProcessor
 from eznlp.training import Trainer
 
 
@@ -73,7 +73,8 @@ class TestModel(object):
                                       bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, from_subtokenized=from_subtokenized), 
                                       intermediate2=None)
         if from_subtokenized:
-            conll2004_demo = subtokenize_for_bert_like(conll2004_demo, tokenizer, verbose=False)
+            preprocessor = BertLikePreProcessor(tokenizer, verbose=False)
+            conll2004_demo = preprocessor.subtokenize_for_data(conll2004_demo)
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()

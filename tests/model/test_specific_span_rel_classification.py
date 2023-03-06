@@ -6,7 +6,7 @@ from eznlp.dataset import Dataset
 from eznlp.model import EncoderConfig, BertLikeConfig, SpanBertLikeConfig
 from eznlp.model import SpecificSpanRelClsDecoderConfig, SpecificSpanSparseRelClsDecoderConfig
 from eznlp.model import SpecificSpanExtractorConfig
-from eznlp.model.bert_like import subtokenize_for_bert_like
+from eznlp.model import BertLikePreProcessor
 from eznlp.training import Trainer
 
 
@@ -82,7 +82,8 @@ class TestModel(object):
                                                   bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False, from_subtokenized=True, output_hidden_states=True), 
                                                   span_bert_like=SpanBertLikeConfig(bert_like=bert, freeze=False, num_layers=num_layers, share_weights_ext=True, share_weights_int=True, init_agg_mode=agg_mode), 
                                                   intermediate2=EncoderConfig(arch='LSTM', hid_dim=400))
-        conll2004_demo = subtokenize_for_bert_like(conll2004_demo, tokenizer, verbose=False)
+        preprocessor = BertLikePreProcessor(tokenizer, verbose=False)
+        conll2004_demo = preprocessor.subtokenize_for_data(conll2004_demo)
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
@@ -95,7 +96,8 @@ class TestModel(object):
                                                   bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False, from_subtokenized=True, output_hidden_states=True), 
                                                   span_bert_like=SpanBertLikeConfig(bert_like=bert), 
                                                   intermediate2=None)
-        conll2004_demo = subtokenize_for_bert_like(conll2004_demo, tokenizer, verbose=False)
+        preprocessor = BertLikePreProcessor(tokenizer, verbose=False)
+        conll2004_demo = preprocessor.subtokenize_for_data(conll2004_demo)
         self._setup_case(conll2004_demo, device)
         
         data_wo_gold = [{'tokens': entry['tokens'], 

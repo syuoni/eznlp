@@ -6,7 +6,7 @@ from eznlp.dataset import Dataset
 from eznlp.model import EncoderConfig, BertLikeConfig, MaskedSpanBertLikeConfig, SpanBertLikeConfig
 from eznlp.model import MaskedSpanRelClsDecoderConfig, SpecificSpanClsDecoderConfig
 from eznlp.model import MaskedSpanExtractorConfig, SpecificSpanExtractorConfig
-from eznlp.model.bert_like import subtokenize_for_bert_like
+from eznlp.model import BertLikePreProcessor
 from eznlp.training import Trainer
 
 
@@ -76,7 +76,8 @@ class TestModel(object):
         self.config = MaskedSpanExtractorConfig(decoder=decoder_config, 
                                                 bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False, from_subtokenized=True, output_hidden_states=True), 
                                                 masked_span_bert_like=MaskedSpanBertLikeConfig(bert_like=bert, freeze=False, num_layers=num_layers, share_weights_ext=True, share_weights_int=True, init_agg_mode=agg_mode))
-        conll2004_demo = subtokenize_for_bert_like(conll2004_demo, tokenizer, verbose=False)
+        preprocessor = BertLikePreProcessor(tokenizer, verbose=False)
+        conll2004_demo = preprocessor.subtokenize_for_data(conll2004_demo)
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
@@ -87,12 +88,13 @@ class TestModel(object):
         self.config = MaskedSpanExtractorConfig(decoder='masked_span_rel', 
                                                 bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False, from_subtokenized=True, output_hidden_states=True), 
                                                 masked_span_bert_like=MaskedSpanBertLikeConfig(bert_like=bert))
-        conll2004_demo = subtokenize_for_bert_like(conll2004_demo, tokenizer, verbose=False)
+        preprocessor = BertLikePreProcessor(tokenizer, verbose=False)
+        conll2004_demo = preprocessor.subtokenize_for_data(conll2004_demo)
         self._setup_case(conll2004_demo, device)
         
         data_wo_gold = [{'tokens': entry['tokens'], 
                          'chunks_pred': entry['chunks']} for entry in conll2004_demo]
-        data_wo_gold = subtokenize_for_bert_like(data_wo_gold, self.config.bert_like.tokenizer, verbose=False)
+        data_wo_gold = preprocessor.subtokenize_for_data(data_wo_gold)
         dataset_wo_gold = Dataset(data_wo_gold, self.config, training=False)
         
         trainer = Trainer(self.model, device=device)
@@ -108,7 +110,8 @@ def test_consistency_with_span_bert_like(conll2004_demo, bert_with_tokenizer, de
                                              bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False, from_subtokenized=True, output_hidden_states=True), 
                                              span_bert_like=SpanBertLikeConfig(bert_like=bert), 
                                              intermediate2=None)
-    conll2004_demo = subtokenize_for_bert_like(conll2004_demo, tokenizer, verbose=False)
+    preprocessor = BertLikePreProcessor(tokenizer, verbose=False)
+    conll2004_demo = preprocessor.subtokenize_for_data(conll2004_demo)
     sse_dataset = Dataset(conll2004_demo, sse_config)
     sse_dataset.build_vocabs_and_dims()
     sse_model = sse_config.instantiate().to(device)

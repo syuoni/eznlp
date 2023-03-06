@@ -98,7 +98,7 @@ class TestBertLikePreProcessor(object):
         
     @pytest.mark.parametrize("token_len", [1, 2, 5])
     @pytest.mark.parametrize("max_len", [50, 120])
-    def test_segment_uniformly_for_data(self, bert_with_tokenizer, token_len, max_len):
+    def test_segment_sentences_for_data(self, bert_with_tokenizer, token_len, max_len):
         bert, tokenizer = bert_with_tokenizer
         preprocessor = BertLikePreProcessor(tokenizer, verbose=False)
         tokenizer.model_max_length = max_len + 2
@@ -106,7 +106,7 @@ class TestBertLikePreProcessor(object):
         tokens = TokenSequence.from_tokenized_text([c*token_len for c in random.choices(string.ascii_letters, k=100)])
         chunks = [('EntA', k*10, k*10+5) for k in range(10)]
         data = [{'tokens': tokens, 'chunks': chunks}]
-        new_data = preprocessor.segment_uniformly_for_data(data)
+        new_data = preprocessor.segment_sentences_for_data(data)
         
         assert all(len(entry['tokens']) <= max_len for entry in new_data)
         assert all(0 <= start and end <= len(entry['tokens']) for entry in new_data for label, start, end in entry['chunks'])

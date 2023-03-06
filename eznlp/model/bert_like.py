@@ -328,7 +328,7 @@ class BertLikePreProcessor(object):
         
         
     @classmethod
-    def _truncate_tokens(cls, tokens: TokenSequence, sub_tok_seq_lens: List[int], max_len: int, mode: str='head+tail'):
+    def _truncate(cls, tokens: TokenSequence, sub_tok_seq_lens: List[int], max_len: int, mode: str='head+tail'):
         if mode.lower() == 'head-only':
             head_len, tail_len = max_len, 0
         elif mode.lower() == 'tail-only':
@@ -381,7 +381,7 @@ class BertLikePreProcessor(object):
                 # Case for single sentence 
                 max_len = self.tokenizer_max_length - 2
                 if sum(sub_tok_seq_lens) > max_len:
-                    entry['tokens'] = self._truncate_tokens(tokens, sub_tok_seq_lens, max_len, mode=mode)
+                    entry['tokens'] = self._truncate(tokens, sub_tok_seq_lens, max_len, mode=mode)
                     num_truncated += 1
             
             else:
@@ -397,20 +397,20 @@ class BertLikePreProcessor(object):
                     # AD-HOC: Other ratio?
                     max_len1 = max_len // 2
                     if num_sub_toks <= max_len1:
-                        entry['paired_tokens'] = self._truncate_tokens(p_tokens, p_sub_tok_seq_lens, max_len-num_sub_toks, mode=mode)
+                        entry['paired_tokens'] = self._truncate(p_tokens, p_sub_tok_seq_lens, max_len-num_sub_toks, mode=mode)
                     elif num_p_sub_toks <= max_len-max_len1:
-                        entry['tokens'] = self._truncate_tokens(tokens, sub_tok_seq_lens, max_len-num_p_sub_toks, mode=mode)
+                        entry['tokens'] = self._truncate(tokens, sub_tok_seq_lens, max_len-num_p_sub_toks, mode=mode)
                     else:
-                        entry['tokens'] = self._truncate_tokens(tokens, sub_tok_seq_lens, max_len1, mode=mode)
-                        entry['paired_tokens'] = self._truncate_tokens(p_tokens, p_sub_tok_seq_lens, max_len-max_len1, mode=mode)
+                        entry['tokens'] = self._truncate(tokens, sub_tok_seq_lens, max_len1, mode=mode)
+                        entry['paired_tokens'] = self._truncate(p_tokens, p_sub_tok_seq_lens, max_len-max_len1, mode=mode)
                     num_truncated += 1
         
         logger.info(f"Truncated sequences: {num_truncated} ({num_truncated/len(data)*100:.2f}%)")
         return data
         
         
-    def segment_uniformly_for_data(self, data: List[dict], update_raw_idx: bool=False):
-        """Segment overlong tokens in `data`. 
+    def segment_sentences_for_data(self, data: List[dict], update_raw_idx: bool=False):
+        """Segment overlong sentences in `data`. 
         
         Notes: Currently only supports entity recognition. 
         """
@@ -478,7 +478,7 @@ class BertLikePreProcessor(object):
         return new_data
         
         
-    def _subtokenize_tokens(self, entry: dict, num_digits: int=3):
+    def _subtokenize(self, entry: dict, num_digits: int=3):
         tokens = entry['tokens']
         nested_sub_tokens = _tokenized2nested(tokens.raw_text, self.tokenizer)
         sub_tokens = [sub_tok for i, tok in enumerate(nested_sub_tokens) for sub_tok in tok]
@@ -510,7 +510,7 @@ class BertLikePreProcessor(object):
         """
         new_data = []
         for entry in tqdm.tqdm(data, disable=not self.verbose, ncols=100, desc="Subtokenizing words in data"):
-            new_entry = self._subtokenize_tokens(entry, num_digits=num_digits)
+            new_entry = self._subtokenize(entry, num_digits=num_digits)
             new_data.append(new_entry)
         
         num_subtokenized = sum(len(entry['sub2ori_idx'])!=len(entry['ori2sub_idx']) for entry in new_data)

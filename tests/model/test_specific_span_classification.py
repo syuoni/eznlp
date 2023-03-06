@@ -5,7 +5,7 @@ import torch
 from eznlp.dataset import Dataset
 from eznlp.model import EncoderConfig
 from eznlp.model import BertLikeConfig, SpanBertLikeConfig, SpecificSpanClsDecoderConfig, SpecificSpanExtractorConfig
-from eznlp.model.bert_like import subtokenize_for_bert_like
+from eznlp.model import BertLikePreProcessor
 from eznlp.training import Trainer, count_params
 
 
@@ -85,7 +85,8 @@ class TestModel(object):
                                                   intermediate2=EncoderConfig(arch='LSTM', hid_dim=400) if use_interm2 else None, 
                                                   share_interm2=share_interm2)
         if from_subtokenized:
-            conll2004_demo = subtokenize_for_bert_like(conll2004_demo, tokenizer, verbose=False)
+            preprocessor = BertLikePreProcessor(tokenizer, verbose=False)
+            conll2004_demo = preprocessor.subtokenize_for_data(conll2004_demo)
         self._setup_case(conll2004_demo, device)
         
         num_model_params = count_params(self.model)
