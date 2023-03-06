@@ -14,6 +14,7 @@ from ..token import TokenSequence
 from ..nn.modules import SequenceGroupAggregating, ScalarMix
 from ..nn.functional import seq_lens2mask
 from ..config import Config
+from ..utils import assign_consecutive_to_buckets
 
 logger = logging.getLogger(__name__)
 
@@ -604,70 +605,108 @@ class BertLikePreProcessor(object):
         return new_data
         
         
-    def merge_sentences_for_data(self, data: List[dict], doc_key: str):
+    def _merge_sentences_for_doc(self, doc: List[dict], doc_sub_lens: List[int], mode: str='min_max_length'):
+        max_len = self.tokenizer_max_length - 2
+        
+        # Greedy
+        cum_sub_lens = 0
+        buckets = [0]
+        k = 0
+        for sub_len in doc_sub_lens:
+            if cum_sub_lens + sub_len <= max_len: 
+                cum_sub_lens += sub_len
+                buckets[k] += 1
+            else:
+                k += 1
+                cum_sub_lens = sub_len
+                buckets.append(1)
+        
+        # Minimize the maximum length of merged sequences
+        if mode.lower() == 'min_max_length':
+            buckets = assign_consecutive_to_buckets(doc_sub_lens, len(buckets))
+        
+        assert sum(buckets) == len(doc)
+        
+        new_doc = []
+        i = 0
+        for num_entries in buckets:
+            new_entry = {}
+            for _ in range(num_entries):
+                entry = doc[i]
+                if len(new_entry) == 0:
+                    curr_start = 0
+                    new_entry['tokens'] = entry['tokens']
+                else:
+                    curr_start = len(new_entry['tokens'])
+                    new_entry['tokens'] += entry['tokens']
+                
+                if 'chunks' in entry:
+                    new_chunks = [(label, start+curr_start, end+curr_start) for label, start, end in entry['chunks']]
+                    assert [new_entry['tokens'][s:e] for _, s, e in new_chunks] == [entry['tokens'][s:e] for _, s, e in entry['chunks']]
+                    if 'chunks' in new_entry:
+                        new_entry['chunks'].extend(new_chunks)
+                    else:
+                        new_entry['chunks'] = new_chunks
+                
+                if 'relations' in entry:
+                    new_relations = [(label, (h_label, h_start+curr_start, h_end+curr_start), (t_label, t_start+curr_start, t_end+curr_start)) 
+                                        for label, (h_label, h_start, h_end), (t_label, t_start, t_end) in entry['relations']]
+                    if 'relations' in new_entry:
+                        new_entry['relations'].extend(new_relations)
+                    else:
+                        new_entry['relations'] = new_relations
+                
+                if 'attributes' in entry:
+                    new_attributes = [(label, (ck_label, ck_start+curr_start, ck_end+curr_start)) 
+                                        for label, (ck_label, ck_start, ck_end) in entry['attributes']]
+                    if 'attributes' in new_entry:
+                        new_entry['attributes'].extend(new_attributes)
+                    else:
+                        new_entry['attributes'] = new_attributes
+                
+                others = {k: v for k, v in entry.items() if k not in _IE_KEYS}
+                new_others = {k: v for k, v in new_entry.items() if k not in _IE_KEYS}
+                if len(others) > 0:
+                    if curr_start == 0:
+                        new_entry.update(others)
+                    else:
+                        assert others == new_others
+                
+                i += 1
+            
+            new_doc.append(new_entry)
+        
+        return new_doc
+        
+        
+    def merge_sentences_for_data(self, data: List[dict], doc_key: str, mode: str='min_max_length'):
         """Merge sentences (according to `doc_key`) to documents in `data`. 
         Modify the corresponding start/end indexes in `chunks`, `relations`, `attributes`. 
+        
+        Merging methods:
+            1. greedy;
+            2. min_max_length: minimize the maximum length of merged sequences for each document.
         """
         if doc_key is None:
-            logger.warning(f"Specifying `doc_key=None` will merge consecutive sentences as long as possible")
+            logger.warning(f"Specifying `doc_key=None` will regard all sentences as a document")
         
-        max_len = self.tokenizer_max_length - 2
         new_data = []
-        new_entry = {}
+        doc, doc_sub_lens = [], []
         for entry in tqdm.tqdm(data, disable=not self.verbose, ncols=100, desc="Merging sentences"):
             tokens = entry['tokens']
             num_sub_tokens = sum(len(tok) for tok in _tokenized2nested(tokens.raw_text, self.tokenizer))
             
-            if len(new_entry) == 0:
-                # Case (1): The first sentence of a document
-                curr_start = 0
-                new_entry['tokens'] = tokens
-                cum_num_sub_tokens = num_sub_tokens
+            if (doc_key is None or len(doc) == 0 or entry[doc_key] == doc[0][doc_key]):
+                doc.append(entry)
+                doc_sub_lens.append(num_sub_tokens)
+            else: 
+                new_doc = self._merge_sentences_for_doc(doc, doc_sub_lens, mode=mode)
+                new_data.extend(new_doc)
                 
-            elif (doc_key is None or entry[doc_key] == new_entry[doc_key]) and (cum_num_sub_tokens + num_sub_tokens <= max_len):
-                # Case (2): The current sentence can be merged 
-                curr_start = len(new_entry['tokens'])
-                new_entry['tokens'] += tokens
-                cum_num_sub_tokens += num_sub_tokens
-                
-            else:
-                # Case (3): The current sentence cannot be merged
-                new_data.append(new_entry)
-                new_entry = {}
-                
-                curr_start = 0
-                new_entry['tokens'] = tokens
-                cum_num_sub_tokens = num_sub_tokens
-            
-            if 'chunks' in entry:
-                new_chunks = [(label, start+curr_start, end+curr_start) for label, start, end in entry['chunks']]
-                assert [new_entry['tokens'][s:e] for _, s, e in new_chunks] == [entry['tokens'][s:e] for _, s, e in entry['chunks']]
-                if 'chunks' in new_entry:
-                    new_entry['chunks'].extend(new_chunks)
-                else:
-                    new_entry['chunks'] = new_chunks
-            
-            if 'relations' in entry:
-                new_relations = [(label, (h_label, h_start+curr_start, h_end+curr_start), (t_label, t_start+curr_start, t_end+curr_start)) 
-                                    for label, (h_label, h_start, h_end), (t_label, t_start, t_end) in entry['relations']]
-                if 'relations' in new_entry:
-                    new_entry['relations'].extend(new_relations)
-                else:
-                    new_entry['relations'] = new_relations
-            
-            if 'attributes' in entry:
-                new_attributes = [(label, (ck_label, ck_start+curr_start, ck_end+curr_start)) 
-                                    for label, (ck_label, ck_start, ck_end) in entry['attributes']]
-                if 'attributes' in new_entry:
-                    new_entry['attributes'].extend(new_attributes)
-                else:
-                    new_entry['attributes'] = new_attributes
-            
-            if doc_key in new_entry:
-                assert {k: v for k, v in entry.items() if k not in _IE_KEYS} == {k: v for k, v in new_entry.items() if k not in _IE_KEYS}
-            else:
-                new_entry.update({k: v for k, v in entry.items() if k not in _IE_KEYS})
+                doc, doc_sub_lens = [entry], [num_sub_tokens]
         
-        if len(new_entry) > 0:
-            new_data.append(new_entry)
+        if len(doc) > 0:
+            new_doc = self._merge_sentences_for_doc(doc, doc_sub_lens, mode=mode)
+            new_data.extend(new_doc)
+        
         return new_data
