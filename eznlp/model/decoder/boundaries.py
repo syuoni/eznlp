@@ -111,6 +111,8 @@ class Boundaries(TargetWrapper):
         if 'sub2ori_idx' in entry:
             self.sub2ori_idx = entry['sub2ori_idx']
             self.ori2sub_idx = entry['ori2sub_idx']
+        if 'tok2sent_idx' in entry:
+            self.tok2sent_idx = entry['tok2sent_idx']
         
         self.num_tokens = len(entry['tokens'])
         self.max_span_size = min(getattr(config, 'max_span_size', self.num_tokens), self.num_tokens)

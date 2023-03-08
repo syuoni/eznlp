@@ -215,18 +215,6 @@ class SpanClassificationDecoder(DecoderBase, BoundariesDecoderMixin):
             confidences = [conf for label, conf in zip(labels, confidences.cpu().tolist()) if label != self.none_label]
             assert len(confidences) == len(chunks)
             
-            if hasattr(boundaries_obj, 'sub2ori_idx'):
-                is_valid = [isinstance(boundaries_obj.sub2ori_idx[start], int) and isinstance(boundaries_obj.sub2ori_idx[end], int) for label, start, end in chunks]
-                confidences = [conf for conf, is_v in zip(confidences, is_valid) if is_v]
-                chunks = [ck for ck, is_v in zip(chunks, is_valid) if is_v]
-            
-            if self.chunk_priority.lower().startswith('len'):
-                # Sort chunks by lengths: long -> short 
-                chunks = sorted(chunks, key=lambda ck: ck[2]-ck[1], reverse=True)
-            else:
-                # Sort chunks by confidences: high -> low 
-                chunks = [ck for _, ck in sorted(zip(confidences, chunks), reverse=True)]
-            chunks = filter_clashed_by_priority(chunks, allow_level=self.overlapping_level)
-            
+            chunks = self._filter(chunks, confidences, boundaries_obj)
             batch_chunks.append(chunks)
         return batch_chunks

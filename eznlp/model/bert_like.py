@@ -494,10 +494,9 @@ class BertLikePreProcessor(object):
                      'sub2ori_idx': sub2ori_idx, 
                      'ori2sub_idx': ori2sub_idx}
         
-        if 'sentence_boundaries' in entry:
-            new_entry['sentence_boundaries'] = [(ori2sub_idx[start], ori2sub_idx[end]) for start, end in entry['sentence_boundaries']]
-            assert new_entry['sentence_boundaries'][0][0] == 0
-            assert new_entry['sentence_boundaries'][-1][1] == len(new_entry['tokens'])
+        if 'tok2sent_idx' in entry:
+            new_entry['tok2sent_idx'] = [entry['tok2sent_idx'][int(oi)] for oi in sub2ori_idx[:-1]]
+            assert len(new_entry['tok2sent_idx']) == len(new_entry['tokens'])
         
         if 'chunks' in entry:
             new_entry['chunks'] = [(label, ori2sub_idx[start], ori2sub_idx[end]) for label, start, end in entry['chunks']]
@@ -582,10 +581,9 @@ class BertLikePreProcessor(object):
                      'sub2ori_idx': sub2ori_idx, 
                      'ori2sub_idx': ori2sub_idx}
         
-        if 'sentence_boundaries' in entry:
-            new_entry['sentence_boundaries'] = [(ori2sub_idx[start], ori2sub_idx[end]) for start, end in entry['sentence_boundaries']]
-            assert new_entry['sentence_boundaries'][0][0] == 0
-            assert new_entry['sentence_boundaries'][-1][1] == len(new_entry['tokens'])
+        if 'tok2sent_idx' in entry:
+            new_entry['tok2sent_idx'] = [entry['tok2sent_idx'][oi] for oi in sub2ori_idx[:-1]]
+            assert len(new_entry['tok2sent_idx']) == len(new_entry['tokens'])
         
         if 'chunks' in entry:
             new_entry['chunks'] = [(label, ori2sub_idx[start], ori2sub_idx[end]) for label, start, end in entry['chunks']]
@@ -649,16 +647,16 @@ class BertLikePreProcessor(object):
         i = 0
         for num_entries in buckets:
             new_entry = {}
-            for _ in range(num_entries):
+            for sidx in range(num_entries):
                 entry = doc[i]
                 if len(new_entry) == 0:
                     curr_start = 0
                     new_entry['tokens'] = entry['tokens']
-                    new_entry['sentence_boundaries'] = [(curr_start, len(new_entry['tokens']))]
+                    new_entry['tok2sent_idx'] = [sidx for _ in range(len(entry['tokens']))]
                 else:
                     curr_start = len(new_entry['tokens'])
                     new_entry['tokens'] += entry['tokens']
-                    new_entry['sentence_boundaries'].append((curr_start, len(new_entry['tokens'])))
+                    new_entry['tok2sent_idx'].extend([sidx for _ in range(len(entry['tokens']))])
                 
                 if 'chunks' in entry:
                     new_chunks = [(label, start+curr_start, end+curr_start) for label, start, end in entry['chunks']]
