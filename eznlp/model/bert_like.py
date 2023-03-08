@@ -271,7 +271,6 @@ def _tokenized2nested(tokenized_raw_text: List[str], tokenizer: transformers.Pre
 
 
 
-_IE_KEYS = ['tokens', 'chunks', 'relations', 'attributes']
 
 class BertLikePreProcessor(object):
     def __init__(self, tokenizer: transformers.PreTrainedTokenizer, verbose: bool=True):
@@ -454,9 +453,12 @@ class BertLikePreProcessor(object):
                     
                     new_entry = {'tokens': tokens[span_start:span_end]}
                     if 'chunks' in entry:
-                        new_entry['chunks'] = [(label, start-span_start, end-span_start) for label, start, end in entry['chunks'] if span_start <= start and end <= span_end]
+                        new_chunks = [(label, start-span_start, end-span_start) for label, start, end in entry['chunks'] if span_start <= start and end <= span_end]
+                        assert [new_entry['tokens'][s:e] for _, s, e in new_chunks] == [entry['tokens'][s:e] for _, s, e in entry['chunks'] if span_start <= s and e <= span_end]
+                        new_entry['chunks'] = new_chunks
                     
-                    new_entry.update({k: v for k, v in entry.items() if k not in _IE_KEYS})
+                    others = {k: v for k, v in entry.items() if k not in new_entry}
+                    new_entry.update(others)
                     new_entries.append(new_entry)
                     span_start = span_end
                 
@@ -492,16 +494,24 @@ class BertLikePreProcessor(object):
                      'sub2ori_idx': sub2ori_idx, 
                      'ori2sub_idx': ori2sub_idx}
         
+        if 'sentence_boundaries' in entry:
+            new_entry['sentence_boundaries'] = [(ori2sub_idx[start], ori2sub_idx[end]) for start, end in entry['sentence_boundaries']]
+            assert new_entry['sentence_boundaries'][0][0] == 0
+            assert new_entry['sentence_boundaries'][-1][1] == len(new_entry['tokens'])
+        
         if 'chunks' in entry:
             new_entry['chunks'] = [(label, ori2sub_idx[start], ori2sub_idx[end]) for label, start, end in entry['chunks']]
         if 'relations' in entry:
             new_entry['relations'] = [(label, (h_label, ori2sub_idx[h_start], ori2sub_idx[h_end]), (t_label, ori2sub_idx[t_start], ori2sub_idx[t_end])) 
                                           for label, (h_label, h_start, h_end), (t_label, t_start, t_end) in entry['relations']]
+            assert all(head in new_entry['chunks'] and tail in new_entry['chunks'] for label, head, tail in new_entry['relations'])
         if 'attributes' in entry:
             new_entry['attributes'] = [(label, (ck_label, ori2sub_idx[ck_start], ori2sub_idx[ck_end])) 
                                            for label, (ck_label, ck_start, ck_end) in entry['attributes']]
+            assert all(chunk in new_entry['chunks'] for label, chunk in entry['attributes'])
         
-        new_entry.update({k: v for k, v in entry.items() if k not in _IE_KEYS})
+        others = {k: v for k, v in entry.items() if k not in new_entry}
+        new_entry.update(others)
         return new_entry
         
         
@@ -572,16 +582,24 @@ class BertLikePreProcessor(object):
                      'sub2ori_idx': sub2ori_idx, 
                      'ori2sub_idx': ori2sub_idx}
         
+        if 'sentence_boundaries' in entry:
+            new_entry['sentence_boundaries'] = [(ori2sub_idx[start], ori2sub_idx[end]) for start, end in entry['sentence_boundaries']]
+            assert new_entry['sentence_boundaries'][0][0] == 0
+            assert new_entry['sentence_boundaries'][-1][1] == len(new_entry['tokens'])
+        
         if 'chunks' in entry:
             new_entry['chunks'] = [(label, ori2sub_idx[start], ori2sub_idx[end]) for label, start, end in entry['chunks']]
         if 'relations' in entry:
             new_entry['relations'] = [(label, (h_label, ori2sub_idx[h_start], ori2sub_idx[h_end]), (t_label, ori2sub_idx[t_start], ori2sub_idx[t_end])) 
                                           for label, (h_label, h_start, h_end), (t_label, t_start, t_end) in entry['relations']]
+            assert all(head in new_entry['chunks'] and tail in new_entry['chunks'] for label, head, tail in new_entry['relations'])
         if 'attributes' in entry:
             new_entry['attributes'] = [(label, (ck_label, ori2sub_idx[ck_start], ori2sub_idx[ck_end])) 
                                            for label, (ck_label, ck_start, ck_end) in entry['attributes']]
+            assert all(chunk in new_entry['chunks'] for label, chunk in entry['attributes'])
         
-        new_entry.update({k: v for k, v in entry.items() if k not in _IE_KEYS})
+        others = {k: v for k, v in entry.items() if k not in new_entry}
+        new_entry.update(others)
         return new_entry
         
         
@@ -636,9 +654,11 @@ class BertLikePreProcessor(object):
                 if len(new_entry) == 0:
                     curr_start = 0
                     new_entry['tokens'] = entry['tokens']
+                    new_entry['sentence_boundaries'] = [(curr_start, len(new_entry['tokens']))]
                 else:
                     curr_start = len(new_entry['tokens'])
                     new_entry['tokens'] += entry['tokens']
+                    new_entry['sentence_boundaries'].append((curr_start, len(new_entry['tokens'])))
                 
                 if 'chunks' in entry:
                     new_chunks = [(label, start+curr_start, end+curr_start) for label, start, end in entry['chunks']]
@@ -650,7 +670,8 @@ class BertLikePreProcessor(object):
                 
                 if 'relations' in entry:
                     new_relations = [(label, (h_label, h_start+curr_start, h_end+curr_start), (t_label, t_start+curr_start, t_end+curr_start)) 
-                                        for label, (h_label, h_start, h_end), (t_label, t_start, t_end) in entry['relations']]
+                                         for label, (h_label, h_start, h_end), (t_label, t_start, t_end) in entry['relations']]
+                    assert all(head in new_entry['chunks'] and tail in new_entry['chunks'] for label, head, tail in new_relations)
                     if 'relations' in new_entry:
                         new_entry['relations'].extend(new_relations)
                     else:
@@ -658,20 +679,16 @@ class BertLikePreProcessor(object):
                 
                 if 'attributes' in entry:
                     new_attributes = [(label, (ck_label, ck_start+curr_start, ck_end+curr_start)) 
-                                        for label, (ck_label, ck_start, ck_end) in entry['attributes']]
+                                          for label, (ck_label, ck_start, ck_end) in entry['attributes']]
+                    assert all(chunk in new_entry['chunks'] for label, chunk in new_attributes)
                     if 'attributes' in new_entry:
                         new_entry['attributes'].extend(new_attributes)
                     else:
                         new_entry['attributes'] = new_attributes
                 
-                others = {k: v for k, v in entry.items() if k not in _IE_KEYS}
-                new_others = {k: v for k, v in new_entry.items() if k not in _IE_KEYS}
-                if len(others) > 0:
-                    if curr_start == 0:
-                        new_entry.update(others)
-                    else:
-                        assert others == new_others
-                
+                # Check other fields (e.g., meta info) consistent? 
+                others = {k: v for k, v in entry.items() if k not in new_entry}
+                new_entry.update(others)
                 i += 1
             
             new_doc.append(new_entry)
