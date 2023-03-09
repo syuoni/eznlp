@@ -67,6 +67,12 @@ class DiagBoundariesPairsDecoderMixin(DecoderMixinBase):
     def evaluate(self, y_gold: List[List[tuple]], y_pred: List[List[tuple]]):
         scores, ave_scores = precision_recall_f1_report(y_gold, y_pred)
         return ave_scores['micro']['f1']
+        
+        
+    def _filter(self, relations: List[tuple]):
+        relations = [(label, head, tail) for label, head, tail in relations if ((label, head[0], tail[0]) in self.existing_rht_labels 
+                                                                                and (self.existing_self_rel or head[1:] != tail[1:]))]
+        return relations
 
 
 
@@ -91,8 +97,6 @@ class SpecificSpanRelClsDecoderConfig(SingleDecoderConfigBase, DiagBoundariesPai
         self.idx2label = kwargs.pop('idx2label', None)
         self.ck_none_label = kwargs.pop('ck_none_label', '<none>')
         self.idx2ck_label = kwargs.pop('idx2ck_label', None)
-        self.filter_by_labels = kwargs.pop('filter_by_labels', True)
-        self.filter_self_relation = kwargs.pop('filter_self_relation', True)
         super().__init__(**kwargs)
         
     @property
@@ -141,7 +145,7 @@ class SpecificSpanRelClsDecoderConfig(SingleDecoderConfigBase, DiagBoundariesPai
         
         counter = Counter((label, head[0], tail[0]) for data in partitions for entry in data for label, head, tail in entry['relations'])
         self.existing_rht_labels = set(list(counter.keys()))
-        self.existing_self_relation = any(head[1:]==tail[1:] for data in partitions for entry in data for label, head, tail in entry['relations'])
+        self.existing_self_rel = any(head[1:]==tail[1:] for data in partitions for entry in data for label, head, tail in entry['relations'])
         
         
     def instantiate(self):
@@ -158,10 +162,8 @@ class SpecificSpanRelClsDecoder(DecoderBase, DiagBoundariesPairsDecoderMixin):
         self.idx2label = config.idx2label
         self.ck_none_label = config.ck_none_label
         self.idx2ck_label = config.idx2ck_label
-        self.filter_by_labels = config.filter_by_labels
         self.existing_rht_labels = config.existing_rht_labels
-        self.filter_self_relation = config.filter_self_relation
-        self.existing_self_relation = config.existing_self_relation
+        self.existing_self_rel = config.existing_self_rel
         
         if config.use_biaffine:
             self.affine_head = config.affine.instantiate()
@@ -277,8 +279,7 @@ class SpecificSpanRelClsDecoder(DecoderBase, DiagBoundariesPairsDecoderMixin):
                 tail = (dbp_obj.span2ck_label.get((t_start, t_end), self.ck_none_label), t_start, t_end)
                 if label != self.none_label and head[0] != self.ck_none_label and tail[0] != self.ck_none_label:
                     relations.append((label, head, tail))
-            relations = [(label, head, tail) for label, head, tail in relations 
-                             if  (not self.filter_by_labels or ((label, head[0], tail[0]) in self.existing_rht_labels)) 
-                             and (not self.filter_self_relation or self.existing_self_relation or (head[1:] != tail[1:]))]
+            relations = self._filter(relations)
             batch_relations.append(relations)
+        
         return batch_relations

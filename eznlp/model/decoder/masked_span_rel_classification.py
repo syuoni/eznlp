@@ -25,7 +25,7 @@ class MaskedSpanRelClsDecoderConfig(SingleDecoderConfigBase, ChunkPairsDecoderMi
         self.fusing = kwargs.pop('fusing', 'concat')
         self.affine = kwargs.pop('affine', EncoderConfig(arch='FFN', hid_dim=150, num_layers=1, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2))
         self.use_context = kwargs.pop('use_context', True)
-        if (self.use_context):
+        if self.use_context:
             self.affine_ctx = copy.deepcopy(self.affine)
         
         self.size_emb_dim = kwargs.pop('size_emb_dim', 0)
@@ -38,8 +38,6 @@ class MaskedSpanRelClsDecoderConfig(SingleDecoderConfigBase, ChunkPairsDecoderMi
         self.idx2label = kwargs.pop('idx2label', None)
         self.ck_none_label = kwargs.pop('ck_none_label', '<none>')
         self.idx2ck_label = kwargs.pop('idx2ck_label', None)
-        self.filter_by_labels = kwargs.pop('filter_by_labels', True)
-        self.filter_self_relation = kwargs.pop('filter_self_relation', True)
         super().__init__(**kwargs)
         
     @property
@@ -73,7 +71,7 @@ class MaskedSpanRelClsDecoderConfig(SingleDecoderConfigBase, ChunkPairsDecoderMi
         
         counter = Counter((label, head[0], tail[0]) for data in partitions for entry in data for label, head, tail in entry['relations'])
         self.existing_rht_labels = set(list(counter.keys()))
-        self.existing_self_relation = any(head[1:]==tail[1:] for data in partitions for entry in data for label, head, tail in entry['relations'])
+        self.existing_self_rel = any(head[1:]==tail[1:] for data in partitions for entry in data for label, head, tail in entry['relations'])
         
         
     def instantiate(self):
@@ -90,10 +88,8 @@ class MaskedSpanRelClsDecoder(DecoderBase, ChunkPairsDecoderMixin):
         self.idx2label = config.idx2label
         self.ck_none_label = config.ck_none_label
         self.idx2ck_label = config.idx2ck_label
-        self.filter_by_labels = config.filter_by_labels
         self.existing_rht_labels = config.existing_rht_labels
-        self.filter_self_relation = config.filter_self_relation
-        self.existing_self_relation = config.existing_self_relation
+        self.existing_self_rel = config.existing_self_rel
         
         self.affine_head = config.affine.instantiate()
         self.affine_tail = config.affine.instantiate()
@@ -201,8 +197,7 @@ class MaskedSpanRelClsDecoder(DecoderBase, ChunkPairsDecoderMixin):
                 confidences, label_ids = scores.softmax(dim=-1).max(dim=-1)
                 labels = [self.idx2label[i] for i in label_ids.flatten().cpu().tolist()]
                 relations = [(label, head, tail) for label, (head, tail) in zip(labels, itertools.product(cp_obj.chunks, cp_obj.chunks)) if label != self.none_label]
-                relations = [(label, head, tail) for label, head, tail in relations 
-                                if  (not self.filter_by_labels or ((label, head[0], tail[0]) in self.existing_rht_labels)) 
-                                and (not self.filter_self_relation or self.existing_self_relation or (head[1:] != tail[1:]))]
+                relations = self._filter(relations)
             batch_relations.append(relations)
+        
         return batch_relations
