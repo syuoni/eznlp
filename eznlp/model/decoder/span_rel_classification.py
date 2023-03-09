@@ -9,6 +9,7 @@ import torch
 
 from ...wrapper import Batch
 from ...nn.modules import SequencePooling, SequenceAttention, CombinedDropout
+from ...nn.modules import BiAffineFusor, TriAffineFusor
 from ...nn.functional import seq_lens2mask
 from ...nn.init import reinit_embedding_, reinit_layer_, reinit_vector_parameter_
 from ...metrics import precision_recall_f1_report
@@ -93,9 +94,9 @@ class ChunkPairsDecoderMixin(DecoderMixinBase):
             
             if return_valid_only: 
                 if is_valid:
-                    yield (head, tail)
+                    yield head, tail
             else: 
-                yield (is_valid, (head, tail))
+                yield head, tail, is_valid
 
 
 
@@ -104,9 +105,11 @@ class SpanRelClassificationDecoderConfig(SingleDecoderConfigBase, ChunkPairsDeco
         self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
         
         self.use_context = kwargs.pop('use_context', True)
-        self.fusing = kwargs.pop('fusing', 'concat')
-        self.size_emb_dim = kwargs.pop('size_emb_dim', 25)
-        self.label_emb_dim = kwargs.pop('label_emb_dim', 25)
+        self.size_emb_dim = kwargs.pop('size_emb_dim', 0)
+        self.label_emb_dim = kwargs.pop('label_emb_dim', 0)
+        self.fusing_mode = kwargs.pop('fusing_mode', 'concat')
+        if self.fusing_mode.lower().startswith('affine'):
+            assert self.size_emb_dim == 0 and self.label_emb_dim == 0
         
         self.neg_sampling_rate = kwargs.pop('neg_sampling_rate', 1.0)
         # self.neg_sampling_power_decay = kwargs.pop('neg_sampling_power_decay', 0.0)  # decay = 0.5, 1.0
@@ -114,6 +117,7 @@ class SpanRelClassificationDecoderConfig(SingleDecoderConfigBase, ChunkPairsDeco
         # self.neg_sampling_surr_size = kwargs.pop('neg_sampling_surr_size', 5)
         
         self.agg_mode = kwargs.pop('agg_mode', 'max_pooling')
+        self.ck_loss_weight = kwargs.pop('ck_loss_weight', 0)
         
         self.none_label = kwargs.pop('none_label', '<none>')
         self.idx2label = kwargs.pop('idx2label', None)
@@ -154,8 +158,11 @@ class SpanRelClassificationDecoderConfig(SingleDecoderConfigBase, ChunkPairsDeco
 class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
     def __init__(self, config: SpanRelClassificationDecoderConfig):
         super().__init__()
+        self.use_context = config.use_context
+        self.fusing_mode = config.fusing_mode
         self.max_size_id = config.max_size_id
         self.neg_sampling_rate = config.neg_sampling_rate
+        self.ck_loss_weight = config.ck_loss_weight
         self.none_label = config.none_label
         self.idx2label = config.idx2label
         self.ck_none_label = config.ck_none_label
@@ -168,11 +175,13 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
             self.aggregating = SequencePooling(mode=config.agg_mode.replace('_pooling', ''))
         elif config.agg_mode.lower().endswith('_attention'):
             self.aggregating = SequenceAttention(config.in_dim, scoring=config.agg_mode.replace('_attention', ''))
-        # Trainable context vector for overlapping chunk pairs
-        self.zero_context = torch.nn.Parameter(torch.empty(config.in_dim))
-        reinit_vector_parameter_(self.zero_context)
-        # A placeholder context vector for invalid chunk pairs
-        self.register_buffer('none_context', torch.zeros(config.in_dim))
+        
+        if config.use_context: 
+            # Trainable context vector for overlapping chunk pairs
+            self.zero_context = torch.nn.Parameter(torch.empty(config.in_dim))
+            reinit_vector_parameter_(self.zero_context)
+            # A placeholder context vector for invalid chunk pairs
+            self.register_buffer('none_context', torch.zeros(config.in_dim))
         
         if config.size_emb_dim > 0:
             self.size_embedding = torch.nn.Embedding(config.max_size_id+1, config.size_emb_dim)
@@ -183,8 +192,21 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
             reinit_embedding_(self.label_embedding)
         
         self.dropout = CombinedDropout(*config.in_drop_rates)
-        self.hid2logit = torch.nn.Linear(config.in_dim*3+config.size_emb_dim*2+config.label_emb_dim*2, config.voc_dim)
-        reinit_layer_(self.hid2logit, 'sigmoid')
+        if config.fusing_mode.lower().startswith('concat'):
+            if config.use_context: 
+                self.hid2logit = torch.nn.Linear(config.in_dim*3+config.size_emb_dim*2+config.label_emb_dim*2, config.voc_dim)
+            else:
+                self.hid2logit = torch.nn.Linear(config.in_dim*2+config.size_emb_dim*2+config.label_emb_dim*2, config.voc_dim)
+            reinit_layer_(self.hid2logit, 'sigmoid')
+        elif config.fusing_mode.lower().startswith('affine'):
+            if config.use_context: 
+                self.hid2logit = TriAffineFusor(config.in_dim, config.voc_dim)
+            else:
+                self.hid2logit = BiAffineFusor(config.in_dim, config.voc_dim)
+        
+        if config.ck_loss_weight > 0: 
+            self.ck_hid2logit = torch.nn.Linear(config.in_dim+config.size_emb_dim+config.label_emb_dim, config.ck_voc_dim)
+            reinit_layer_(self.ck_hid2logit, 'sigmoid')
         
         self.criterion = config.instantiate_criterion(reduction='sum')
         
@@ -203,11 +225,10 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
         # full_hidden: (batch, step, hid_dim)
         batch_logits = []
         for i, cp_obj in enumerate(batch.cp_objs):
-            num_chunks = len(cp_obj.chunks)
             if not cp_obj.has_valid_cp: 
-                # Empty row produces loss of 0, when `criterion` uses `reduction='sum'`
-                logits = torch.empty(0, self.hid2logit.out_features, device=full_hidden.device)
+                logits = None
             else:
+                num_chunks = len(cp_obj.chunks)
                 # span_hidden: (num_chunks, span_size, hid_dim) -> (num_chunks, hid_dim)
                 span_hidden = [full_hidden[i, start:end] for label, start, end in cp_obj.chunks]
                 span_mask = seq_lens2mask(torch.tensor([h.size(0) for h in span_hidden], dtype=torch.long, device=full_hidden.device))
@@ -224,27 +245,42 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
                     label_embedded = self.label_embedding(cp_obj.ck_label_ids)
                     span_hidden = torch.cat([span_hidden, self.dropout(label_embedded)], dim=-1)
                 
-                # contexts: (num_chunks^2, ctx_span_size, hid_dim) -> (num_chunks^2, hid_dim)
-                contexts = []
-                for is_valid, ((h_label, h_start, h_end), (t_label, t_start, t_end)) in self.enumerate_chunk_pairs(cp_obj): 
-                    if not is_valid: 
-                        contexts.append(self.none_context.unsqueeze(0))
-                    elif h_end < t_start:
-                        contexts.append(full_hidden[i, h_end:t_start])
-                    elif t_end < h_start:
-                        contexts.append(full_hidden[i, t_end:h_start])
-                    else:
-                        contexts.append(self.zero_context.unsqueeze(0))
-                ctx_mask = seq_lens2mask(torch.tensor([c.size(0) for c in contexts], dtype=torch.long, device=full_hidden.device))
-                contexts = torch.nn.utils.rnn.pad_sequence(contexts, batch_first=True, padding_value=0.0)
-                contexts = self.aggregating(self.dropout(contexts), mask=ctx_mask)
+                if self.use_context: 
+                    # contexts: (num_chunks^2, ctx_span_size, hid_dim) -> (num_chunks^2, hid_dim) -> (num_chunks, num_chunks, hid_dim)
+                    contexts = []
+                    for (h_label, h_start, h_end), (t_label, t_start, t_end), is_valid in self.enumerate_chunk_pairs(cp_obj): 
+                        if not is_valid: 
+                            contexts.append(self.none_context.unsqueeze(0))
+                        elif h_end < t_start:
+                            contexts.append(full_hidden[i, h_end:t_start])
+                        elif t_end < h_start:
+                            contexts.append(full_hidden[i, t_end:h_start])
+                        else:
+                            contexts.append(self.zero_context.unsqueeze(0))
+                    ctx_mask = seq_lens2mask(torch.tensor([c.size(0) for c in contexts], dtype=torch.long, device=full_hidden.device))
+                    contexts = torch.nn.utils.rnn.pad_sequence(contexts, batch_first=True, padding_value=0.0)
+                    contexts = self.aggregating(self.dropout(contexts), mask=ctx_mask)
+                    contexts = contexts.view(num_chunks, num_chunks, -1)
                 
-                # hidden_cat: (num_chunks, num_chunks, hid_dim*3)
-                hidden_cat = torch.cat([span_hidden.unsqueeze(1).expand(-1, num_chunks, -1), 
-                                        span_hidden.unsqueeze(0).expand(num_chunks, -1, -1), 
-                                        contexts.view(num_chunks, num_chunks, -1)], dim=-1)
-                # logits: (num_chunks, num_chunks, logit_dim)
-                logits = self.hid2logit(hidden_cat)
+                head_hidden = span_hidden.unsqueeze(1).expand(-1, num_chunks, -1)
+                tail_hidden = span_hidden.unsqueeze(0).expand(num_chunks, -1, -1)
+                if self.fusing_mode.startswith('concat'):
+                    # hidden_cat: (num_chunks, num_chunks, hid_dim*3)
+                    hidden_cat = torch.cat([head_hidden, tail_hidden], dim=-1)
+                    if self.use_context: 
+                        hidden_cat = torch.cat([hidden_cat, contexts], dim=-1)
+                    # logits: (num_chunks, num_chunks, logit_dim)
+                    logits = self.hid2logit(hidden_cat)
+                elif self.fusing_mode.lower().startswith('affine'):
+                    if self.use_context:
+                        logits = self.hid2logit(head_hidden, tail_hidden, contexts)
+                    else:
+                        logits = self.hid2logit(head_hidden, tail_hidden)
+                
+                if self.ck_loss_weight > 0:
+                    ck_logits = self.ck_hid2logit(span_hidden)
+                    logits = (logits, ck_logits)
+            
             batch_logits.append(logits)
         
         return batch_logits
@@ -259,8 +295,13 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
                 loss = torch.tensor(0.0, device=full_hidden.device)
             else:
                 label_ids = cp_obj.cp2label_id
+                ck_label_ids_gold = cp_obj.ck_label_ids_gold
+                if self.ck_loss_weight > 0: 
+                    logits, ck_logits = logits
                 logits, label_ids = logits[cp_obj.non_mask], label_ids[cp_obj.non_mask]
                 loss = self.criterion(logits, label_ids)
+                if self.ck_loss_weight > 0: 
+                    loss = loss + self.ck_loss_weight*self.criterion(ck_logits, ck_label_ids_gold)
             losses.append(loss)
         return torch.stack(losses)
         
@@ -273,9 +314,11 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
             if not cp_obj.has_valid_cp: 
                 relations = []
             else:
+                if self.ck_loss_weight > 0:
+                    logits, _ = logits
                 confidences, label_ids = logits.softmax(dim=-1).max(dim=-1)
                 labels = [self.idx2label[i] for i in label_ids.flatten().cpu().tolist()]
-                relations = [(label, head, tail) for label, (is_valid, (head, tail)) in zip(labels, self.enumerate_chunk_pairs(cp_obj)) if is_valid and label != self.none_label]
+                relations = [(label, head, tail) for label, (head, tail, is_valid) in zip(labels, self.enumerate_chunk_pairs(cp_obj)) if is_valid and label != self.none_label]
                 relations = self._filter(relations)
             batch_relations.append(relations)
         

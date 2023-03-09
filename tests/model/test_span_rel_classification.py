@@ -51,11 +51,12 @@ class TestModel(object):
         assert isinstance(self.config.name, str) and len(self.config.name) > 0
         
         
+    @pytest.mark.parametrize("use_context", [True, False])
+    @pytest.mark.parametrize("fusing_mode", ['concat', 'affine'])
     @pytest.mark.parametrize("agg_mode", ['max_pooling', 'multiplicative_attention'])
-    @pytest.mark.parametrize("label_emb_dim", [25, 0])
-    @pytest.mark.parametrize("fl_gamma", [0.0, 2.0])
-    def test_model(self, agg_mode, label_emb_dim, fl_gamma, conll2004_demo, device):
-        self.config = ExtractorConfig(decoder=SpanRelClassificationDecoderConfig(agg_mode=agg_mode, label_emb_dim=label_emb_dim, fl_gamma=fl_gamma))
+    @pytest.mark.parametrize("ck_loss_weight", [0, 0.5])
+    def test_model(self, use_context, fusing_mode, agg_mode, ck_loss_weight, conll2004_demo, device):
+        self.config = ExtractorConfig(decoder=SpanRelClassificationDecoderConfig(use_context=use_context, fusing_mode=fusing_mode, agg_mode=agg_mode, ck_loss_weight=ck_loss_weight))
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()

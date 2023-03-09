@@ -77,7 +77,7 @@ class ChunkPairs(TargetWrapper):
         span2ck_label_gold = {(start, end): label for label, start, end in self.chunks_gold}
         self.ck_label_ids_gold = torch.tensor([config.ck_label2idx[span2ck_label_gold.get((start, end), config.ck_none_label)] for label, start, end in self.chunks], dtype=torch.long)
         
-        is_valid_list = [is_valid for is_valid, _ in config.enumerate_chunk_pairs(self)]
+        is_valid_list = [is_valid for _, _, is_valid in config.enumerate_chunk_pairs(self)]
         self.has_valid_cp = any(is_valid_list) 
         self.non_mask = torch.tensor(is_valid_list, dtype=torch.bool).view(num_chunks, num_chunks)
         
