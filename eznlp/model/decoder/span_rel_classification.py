@@ -12,11 +12,15 @@ from ...nn.modules import SequencePooling, SequenceAttention, CombinedDropout
 from ...nn.functional import seq_lens2mask
 from ...nn.init import reinit_embedding_, reinit_layer_, reinit_vector_parameter_
 from ...metrics import precision_recall_f1_report
+from ...utils.chunk import chunk_pair_distance
 from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
 from .boundaries import MAX_SIZE_ID_COV_RATE
 from .chunks import ChunkPairs
 
 logger = logging.getLogger(__name__)
+
+
+MAX_CP_DISTANCE_TOL = 10
 
 
 class ChunkPairsDecoderMixin(DecoderMixinBase):
@@ -74,6 +78,24 @@ class ChunkPairsDecoderMixin(DecoderMixinBase):
         relations = [(label, head, tail) for label, head, tail in relations if ((label, head[0], tail[0]) in self.existing_rht_labels 
                                                                                 and (self.existing_self_rel or head[1:] != tail[1:]))]
         return relations
+        
+        
+    def enumerate_chunk_pairs(self, cp_obj, return_valid_only: bool=False):
+        for head, tail in itertools.product(cp_obj.chunks, cp_obj.chunks): 
+            is_valid = True
+            if hasattr(cp_obj, 'tok2sent_idx') and (cp_obj.tok2sent_idx[head[1]] != cp_obj.tok2sent_idx[tail[1]]): 
+                is_valid = False
+            if chunk_pair_distance(head, tail) > self.max_cp_distance + MAX_CP_DISTANCE_TOL: 
+                is_valid = False
+            if (not self.existing_self_rel and head[1:] == tail[1:]):
+                is_valid = False
+            # TODO: ht_labels?
+            
+            if return_valid_only: 
+                if is_valid:
+                    yield (head, tail)
+            else: 
+                yield (is_valid, (head, tail))
 
 
 
@@ -81,6 +103,8 @@ class SpanRelClassificationDecoderConfig(SingleDecoderConfigBase, ChunkPairsDeco
     def __init__(self, **kwargs):
         self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
         
+        self.use_context = kwargs.pop('use_context', True)
+        self.fusing = kwargs.pop('fusing', 'concat')
         self.size_emb_dim = kwargs.pop('size_emb_dim', 25)
         self.label_emb_dim = kwargs.pop('label_emb_dim', 25)
         
@@ -119,6 +143,7 @@ class SpanRelClassificationDecoderConfig(SingleDecoderConfigBase, ChunkPairsDeco
         counter = Counter((label, head[0], tail[0]) for data in partitions for entry in data for label, head, tail in entry['relations'])
         self.existing_rht_labels = set(list(counter.keys()))
         self.existing_self_rel = any(head[1:]==tail[1:] for data in partitions for entry in data for label, head, tail in entry['relations'])
+        self.max_cp_distance = max(chunk_pair_distance(head, tail) for data in partitions for entry in data for label, head, tail in entry['relations'])
         
         
     def instantiate(self):
@@ -137,14 +162,17 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
         self.idx2ck_label = config.idx2ck_label
         self.existing_rht_labels = config.existing_rht_labels
         self.existing_self_rel = config.existing_self_rel
+        self.max_cp_distance = config.max_cp_distance
         
         if config.agg_mode.lower().endswith('_pooling'):
             self.aggregating = SequencePooling(mode=config.agg_mode.replace('_pooling', ''))
         elif config.agg_mode.lower().endswith('_attention'):
             self.aggregating = SequenceAttention(config.in_dim, scoring=config.agg_mode.replace('_attention', ''))
-        # Trainable context vector for overlapping chunks
+        # Trainable context vector for overlapping chunk pairs
         self.zero_context = torch.nn.Parameter(torch.empty(config.in_dim))
         reinit_vector_parameter_(self.zero_context)
+        # A placeholder context vector for invalid chunk pairs
+        self.register_buffer('none_context', torch.zeros(config.in_dim))
         
         if config.size_emb_dim > 0:
             self.size_embedding = torch.nn.Embedding(config.max_size_id+1, config.size_emb_dim)
@@ -176,7 +204,7 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
         batch_logits = []
         for i, cp_obj in enumerate(batch.cp_objs):
             num_chunks = len(cp_obj.chunks)
-            if num_chunks == 0:
+            if not cp_obj.has_valid_cp: 
                 # Empty row produces loss of 0, when `criterion` uses `reduction='sum'`
                 logits = torch.empty(0, self.hid2logit.out_features, device=full_hidden.device)
             else:
@@ -198,8 +226,10 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
                 
                 # contexts: (num_chunks^2, ctx_span_size, hid_dim) -> (num_chunks^2, hid_dim)
                 contexts = []
-                for (h_label, h_start, h_end), (t_label, t_start, t_end) in itertools.product(cp_obj.chunks, cp_obj.chunks):
-                    if h_end < t_start:
+                for is_valid, ((h_label, h_start, h_end), (t_label, t_start, t_end)) in self.enumerate_chunk_pairs(cp_obj): 
+                    if not is_valid: 
+                        contexts.append(self.none_context.unsqueeze(0))
+                    elif h_end < t_start:
                         contexts.append(full_hidden[i, h_end:t_start])
                     elif t_end < h_start:
                         contexts.append(full_hidden[i, t_end:h_start])
@@ -225,15 +255,11 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
         
         losses = []
         for logits, cp_obj in zip(batch_logits, batch.cp_objs):
-            if len(cp_obj.chunks) == 0:
+            if not cp_obj.has_valid_cp: 
                 loss = torch.tensor(0.0, device=full_hidden.device)
             else:
                 label_ids = cp_obj.cp2label_id
-                if hasattr(cp_obj, 'non_mask'):
-                    non_mask = cp_obj.non_mask
-                    logits, label_ids = logits[non_mask], label_ids[non_mask]
-                else:
-                    logits, label_ids = logits.flatten(end_dim=1), label_ids.flatten(end_dim=1)
+                logits, label_ids = logits[cp_obj.non_mask], label_ids[cp_obj.non_mask]
                 loss = self.criterion(logits, label_ids)
             losses.append(loss)
         return torch.stack(losses)
@@ -244,12 +270,12 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
         
         batch_relations = []
         for logits, cp_obj in zip(batch_logits, batch.cp_objs):
-            if len(cp_obj.chunks) == 0:
+            if not cp_obj.has_valid_cp: 
                 relations = []
             else:
                 confidences, label_ids = logits.softmax(dim=-1).max(dim=-1)
                 labels = [self.idx2label[i] for i in label_ids.flatten().cpu().tolist()]
-                relations = [(label, head, tail) for label, (head, tail) in zip(labels, itertools.product(cp_obj.chunks, cp_obj.chunks)) if label != self.none_label]
+                relations = [(label, head, tail) for label, (is_valid, (head, tail)) in zip(labels, self.enumerate_chunk_pairs(cp_obj)) if is_valid and label != self.none_label]
                 relations = self._filter(relations)
             batch_relations.append(relations)
         
