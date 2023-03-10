@@ -27,13 +27,12 @@ class ChunkPairs(TargetWrapper):
         # `max_span_size` is the threshold to filter out extra-length chunks; `None` means no filtering
         self.max_span_size = getattr(config, 'max_span_size', None) 
         self.num_tokens = len(entry['tokens'])
-        # Gold chunks are *inaccessible* in the evaluation mode
-        self.chunks_gold = entry['chunks'] if training else []
+        self.chunks_gold = entry.get('chunks', None)
+        self.span2ck_label_gold = {} if self.chunks_gold is None else {(start, end): label for label, start, end in self.chunks_gold}
         self.chunks_pred = entry.get('chunks_pred', None)
         self.relations = entry.get('relations', None)
         if 'tok2sent_idx' in entry:
             self.tok2sent_idx = entry['tok2sent_idx']
-        
         if self.chunks_pred is not None:
             self.build(config)
         
@@ -49,19 +48,23 @@ class ChunkPairs(TargetWrapper):
         self._chunks_pred = chunks
         
         if self.chunks_pred is not None:
-            # Do not use ```chunks = list(set(chunks_gold + chunks_pred))```, which may return non-deterministic order. 
-            # In the early training stage, the chunk-decoder may produce too many predicted chunks, so do sampling here. 
-            chunks_extra = [ck for ck in self.chunks_pred if ck not in self.chunks_gold]
-            num_neg_chunks = max(len(self.chunks_gold), int(self.num_tokens*0.2)-len(self.chunks_gold), 10)
+            # Gold chunks are *inaccessible* in the evaluation mode
+            if self.training and self.chunks_gold is not None: 
+                self.chunks = [ck for ck in self.chunks_gold]
+            else:
+                self.chunks = []
+            
+            # Do not use ```chunks = list(set(chunks + chunks_pred))```, which may return non-deterministic order. 
+            # In the early stage of joint training, the chunk-decoder may produce too many predicted chunks, so do sampling here. 
+            chunks_extra = [ck for ck in self.chunks_pred if ck[1:] not in self.span2ck_label_gold]
+            num_neg_chunks = max(int(self.num_tokens*0.35), 20)
             if len(chunks_extra) > num_neg_chunks:
                 chunks_extra = random.sample(chunks_extra, num_neg_chunks)
-            self.chunks = self.chunks_gold + chunks_extra
+            self.chunks.extend(chunks_extra)
             
             if self.max_span_size is not None:
                 self.chunks = [ck for ck in self.chunks if ck[2]-ck[1] <= self.max_span_size]
             
-            # In merged chunks, there may exist two chunks with a same span but different chunk-types. 
-            # In this case, auxiliary chunk-type embeddings may be useful. 
             self.chunk2idx = {ck: i for i, ck in enumerate(self.chunks)}
         
         
@@ -74,8 +77,7 @@ class ChunkPairs(TargetWrapper):
         # `ck_label_ids` is for model input; it includes predicted chunk labels which may be incorrect
         # `ck_label_ids_gold` is for model target; it's chunk labels are all consistent with ground truth
         self.ck_label_ids = torch.tensor([config.ck_label2idx[label] for label, start, end in self.chunks], dtype=torch.long)
-        span2ck_label_gold = {(start, end): label for label, start, end in self.chunks_gold}
-        self.ck_label_ids_gold = torch.tensor([config.ck_label2idx[span2ck_label_gold.get((start, end), config.ck_none_label)] for label, start, end in self.chunks], dtype=torch.long)
+        self.ck_label_ids_gold = torch.tensor([config.ck_label2idx[self.span2ck_label_gold.get((start, end), config.ck_none_label)] for label, start, end in self.chunks], dtype=torch.long)
         
         is_valid_list = [is_valid for _, _, is_valid in config.enumerate_chunk_pairs(self)]
         self.has_valid_cp = any(is_valid_list) 
@@ -126,9 +128,11 @@ class ChunkSingles(TargetWrapper):
     def __init__(self, entry: dict, config: SingleDecoderConfigBase, training: bool=True):
         super().__init__(training)
         
-        self.max_span_size = getattr(config, 'max_span_size', None)  # The indicator for filtering extra-length chunks
+        # `max_span_size` is the threshold to filter out extra-length chunks; `None` means no filtering
+        self.max_span_size = getattr(config, 'max_span_size', None)
         self.num_tokens = len(entry['tokens'])
-        self.chunks_gold = entry['chunks'] if training else []
+        self.chunks_gold = entry.get('chunks', None)
+        self.span2ck_label_gold = {} if self.chunks_gold is None else {(start, end): label for label, start, end in self.chunks_gold}
         self.chunks_pred = entry.get('chunks_pred', None)
         self.attributes = entry.get('attributes', None)
         if self.chunks_pred is not None:
@@ -146,19 +150,23 @@ class ChunkSingles(TargetWrapper):
         self._chunks_pred = chunks
         
         if self.chunks_pred is not None:
-            # Do not use ```chunks = list(set(chunks_gold + chunks_pred))```, which may return non-deterministic order. 
-            # In the early training stage, the chunk-decoder may produce too many predicted chunks, so do sampling here. 
-            chunks_extra = [ck for ck in self.chunks_pred if ck not in self.chunks_gold]
-            num_neg_chunks = max(len(self.chunks_gold), int(self.num_tokens*0.2)-len(self.chunks_gold), 10)
+            # Gold chunks are *inaccessible* in the evaluation mode
+            if self.training and self.chunks_gold is not None: 
+                self.chunks = [ck for ck in self.chunks_gold]
+            else:
+                self.chunks = []
+            
+            # Do not use ```chunks = list(set(chunks + chunks_pred))```, which may return non-deterministic order. 
+            # In the early stage of joint training, the chunk-decoder may produce too many predicted chunks, so do sampling here. 
+            chunks_extra = [ck for ck in self.chunks_pred if ck[1:] not in self.span2ck_label_gold]
+            num_neg_chunks = max(int(self.num_tokens*0.35), 20)
             if len(chunks_extra) > num_neg_chunks:
                 chunks_extra = random.sample(chunks_extra, num_neg_chunks)
-            self.chunks = self.chunks_gold + chunks_extra
+            self.chunks.extend(chunks_extra)
             
             if self.max_span_size is not None:
                 self.chunks = [ck for ck in self.chunks if ck[2]-ck[1] <= self.max_span_size]
             
-            # In merged chunks, there may exist two chunks with a same span but different chunk-types. 
-            # In this case, auxiliary chunk-type embeddings may be useful. 
             self.chunk2idx = {ck: i for i, ck in enumerate(self.chunks)}
         
         
@@ -167,7 +175,11 @@ class ChunkSingles(TargetWrapper):
         
         self.span_size_ids = torch.tensor([end-start-1 for label, start, end in self.chunks], dtype=torch.long)
         self.span_size_ids.masked_fill_(self.span_size_ids > config.max_size_id, config.max_size_id)
+        
+        # `ck_label_ids` is for model input; it includes predicted chunk labels which may be incorrect
+        # `ck_label_ids_gold` is for model target; it's chunk labels are all consistent with ground truth
         self.ck_label_ids = torch.tensor([config.ck_label2idx[label] for label, start, end in self.chunks], dtype=torch.long)
+        self.ck_label_ids_gold = torch.tensor([config.ck_label2idx[self.span2ck_label_gold.get((start, end), config.ck_none_label)] for label, start, end in self.chunks], dtype=torch.long)
         
         if self.training and config.neg_sampling_rate < 1:
             non_mask_rate = config.neg_sampling_rate * torch.ones(num_chunks, dtype=torch.float)
