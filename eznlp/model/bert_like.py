@@ -273,13 +273,14 @@ def _tokenized2nested(tokenized_raw_text: List[str], tokenizer: transformers.Pre
 
 
 class BertLikePreProcessor(object):
-    def __init__(self, tokenizer: transformers.PreTrainedTokenizer, verbose: bool=True):
+    def __init__(self, tokenizer: transformers.PreTrainedTokenizer, tokenizer_max_length: int=None, verbose: bool=True):
         self.tokenizer = tokenizer
+        if tokenizer_max_length is None: 
+            self.tokenizer_max_length = tokenizer.model_max_length
+        else:
+            assert tokenizer_max_length <= tokenizer.model_max_length
+            self.tokenizer_max_length = tokenizer_max_length
         self.verbose = verbose
-        
-    @property
-    def tokenizer_max_length(self):
-        return self.tokenizer.model_max_length
         
         
     @classmethod
