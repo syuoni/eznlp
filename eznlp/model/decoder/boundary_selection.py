@@ -82,10 +82,11 @@ class BoundariesDecoderMixin(DecoderMixinBase):
 
 class BoundarySelectionDecoderConfig(SingleDecoderConfigBase, BoundariesDecoderMixin):
     def __init__(self, **kwargs):
-        self.reduction = kwargs.pop('reduction', EncoderConfig(arch='FFN', hid_dim=150, num_layers=1, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2))
+        self.reduction = kwargs.pop('reduction', EncoderConfig(arch='FFN', hid_dim=150, num_layers=1, in_drop_rates=(0.0, 0.0, 0.0), hid_drop_rate=0.0))
         
         self.max_len = kwargs.pop('max_len', None)
         self.size_emb_dim = kwargs.pop('size_emb_dim', 25)
+        self.in_drop_rates = kwargs.pop('in_drop_rates', (0.4, 0.0, 0.0))
         self.hid_drop_rates = kwargs.pop('hid_drop_rates', (0.2, 0.0, 0.0))
         
         self.neg_sampling_rate = kwargs.pop('neg_sampling_rate', 1.0)
@@ -111,7 +112,7 @@ class BoundarySelectionDecoderConfig(SingleDecoderConfigBase, BoundariesDecoderM
         return self._name_sep.join([self.reduction.arch, self.criterion])
         
     def __repr__(self):
-        repr_attr_dict = {key: getattr(self, key) for key in ['in_dim', 'hid_drop_rates', 'criterion']}
+        repr_attr_dict = {key: getattr(self, key) for key in ['in_dim', 'in_drop_rates', 'hid_drop_rates', 'criterion']}
         return self._repr_non_config_attrs(repr_attr_dict)
         
     @property
@@ -178,7 +179,8 @@ class BoundarySelectionDecoder(DecoderBase, BoundariesDecoderMixin):
         self._span_size_ids.masked_fill_(self._span_size_ids < 0, 0)
         self._span_size_ids.masked_fill_(self._span_size_ids > config.max_size_id, config.max_size_id)
         
-        self.dropout = CombinedDropout(*config.hid_drop_rates)
+        self.in_dropout = CombinedDropout(*config.in_drop_rates)
+        self.hid_dropout = CombinedDropout(*config.hid_drop_rates)
         
         self.U = torch.nn.Parameter(torch.empty(config.voc_dim, config.reduction.out_dim, config.reduction.out_dim))
         self.W = torch.nn.Parameter(torch.empty(config.voc_dim, config.reduction.out_dim*2 + config.size_emb_dim))
@@ -198,23 +200,23 @@ class BoundarySelectionDecoder(DecoderBase, BoundariesDecoderMixin):
         
         
     def compute_scores(self, batch: Batch, full_hidden: torch.Tensor):
-        reduced_start = self.reduction_start(full_hidden, batch.mask)
-        reduced_end = self.reduction_end(full_hidden, batch.mask)
+        reduced_start = self.reduction_start(self.in_dropout(full_hidden), batch.mask)
+        reduced_end = self.reduction_end(self.in_dropout(full_hidden), batch.mask)
         
         # reduced_start: (batch, start_step, red_dim) -> (batch, 1, start_step, red_dim)
         # reduced_end: (batch, end_step, red_dim) -> (batch, 1, red_dim, end_step)
         # scores1: (batch, 1, start_step, red_dim) * (voc_dim, red_dim, red_dim) * (batch, 1, red_dim, end_step) -> (batch, voc_dim, start_step, end_step)
-        scores1 = self.dropout(reduced_start).unsqueeze(1).matmul(self.U).matmul(self.dropout(reduced_end).permute(0, 2, 1).unsqueeze(1))
+        scores1 = self.hid_dropout(reduced_start).unsqueeze(1).matmul(self.U).matmul(self.hid_dropout(reduced_end).permute(0, 2, 1).unsqueeze(1))
         
         # reduced_cat: (batch, start_step, end_step, red_dim*2)
-        reduced_cat = torch.cat([self.dropout(reduced_start).unsqueeze(2).expand(-1, -1, reduced_end.size(1), -1), 
-                                 self.dropout(reduced_end).unsqueeze(1).expand(-1, reduced_start.size(1), -1, -1)], dim=-1)
+        reduced_cat = torch.cat([self.hid_dropout(reduced_start).unsqueeze(2).expand(-1, -1, reduced_end.size(1), -1), 
+                                 self.hid_dropout(reduced_end).unsqueeze(1).expand(-1, reduced_start.size(1), -1, -1)], dim=-1)
         
         if hasattr(self, 'size_embedding'):
             # size_embedded: (start_step, end_step, emb_dim)
             size_embedded = self.size_embedding(self._get_span_size_ids(full_hidden.size(1)))
             # reduced_cat: (batch, start_step, end_step, red_dim*2 + emb_dim)
-            reduced_cat = torch.cat([reduced_cat, self.dropout(size_embedded).unsqueeze(0).expand(full_hidden.size(0), -1, -1, -1)], dim=-1)
+            reduced_cat = torch.cat([reduced_cat, self.hid_dropout(size_embedded).unsqueeze(0).expand(full_hidden.size(0), -1, -1, -1)], dim=-1)
         
         # scores2: (voc_dim, red_dim*2 + emb_dim) * (batch, start_step, end_step, red_dim*2 + emb_dim, 1) -> (batch, start_step, end_step, voc_dim, 1)
         scores2 = self.W.matmul(reduced_cat.unsqueeze(-1))
