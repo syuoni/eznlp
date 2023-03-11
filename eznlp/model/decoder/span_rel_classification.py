@@ -3,6 +3,7 @@ from typing import List
 from collections import Counter
 import itertools
 import logging
+import copy
 import math
 import numpy
 import torch
@@ -14,6 +15,7 @@ from ...nn.functional import seq_lens2mask
 from ...nn.init import reinit_embedding_, reinit_layer_, reinit_vector_parameter_
 from ...metrics import precision_recall_f1_report
 from ...utils.chunk import chunk_pair_distance
+from ..encoder import EncoderConfig
 from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
 from .boundaries import MAX_SIZE_ID_COV_RATE
 from .chunks import ChunkPairs
@@ -102,14 +104,16 @@ class ChunkPairsDecoderMixin(DecoderMixinBase):
 
 class SpanRelClassificationDecoderConfig(SingleDecoderConfigBase, ChunkPairsDecoderMixin):
     def __init__(self, **kwargs):
-        self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
-        
         self.use_context = kwargs.pop('use_context', True)
         self.size_emb_dim = kwargs.pop('size_emb_dim', 0)
         self.label_emb_dim = kwargs.pop('label_emb_dim', 0)
         self.fusing_mode = kwargs.pop('fusing_mode', 'concat')
-        if self.fusing_mode.lower().startswith('affine'):
-            assert self.size_emb_dim == 0 and self.label_emb_dim == 0
+        self.reduction = kwargs.pop('reduction', EncoderConfig(arch='FFN', hid_dim=150, num_layers=1, in_drop_rates=(0.0, 0.0, 0.0), hid_drop_rate=0.0))
+        if self.use_context: 
+            self.reduction_ctx = copy.deepcopy(self.reduction)
+        
+        self.in_drop_rates = kwargs.pop('in_drop_rates', (0.4, 0.0, 0.0))
+        self.hid_drop_rates = kwargs.pop('hid_drop_rates', (0.2, 0.0, 0.0))
         
         self.neg_sampling_rate = kwargs.pop('neg_sampling_rate', 1.0)
         # self.neg_sampling_power_decay = kwargs.pop('neg_sampling_power_decay', 0.0)  # decay = 0.5, 1.0
@@ -131,8 +135,21 @@ class SpanRelClassificationDecoderConfig(SingleDecoderConfigBase, ChunkPairsDeco
         return self._name_sep.join([self.agg_mode, self.criterion])
         
     def __repr__(self):
-        repr_attr_dict = {key: getattr(self, key) for key in ['in_dim', 'in_drop_rates', 'agg_mode', 'criterion']}
+        repr_attr_dict = {key: getattr(self, key) for key in ['in_dim', 'in_drop_rates', 'hid_drop_rates', 'agg_mode', 'criterion']}
         return self._repr_non_config_attrs(repr_attr_dict)
+        
+    @property
+    def in_dim(self): 
+        return self._in_dim
+        
+    @in_dim.setter
+    def in_dim(self, dim: int): 
+        if dim is not None: 
+            self._in_dim = dim
+            self.reduction.in_dim = dim + self.size_emb_dim + self.label_emb_dim
+            if self.use_context:
+                self.reduction_ctx.in_dim = dim
+        
         
     def build_vocab(self, *partitions):
         counter = Counter(label for data in partitions for entry in data for label, start, end in entry['chunks'])
@@ -191,18 +208,24 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
             self.label_embedding = torch.nn.Embedding(config.ck_voc_dim, config.label_emb_dim)
             reinit_embedding_(self.label_embedding)
         
-        self.dropout = CombinedDropout(*config.in_drop_rates)
+        self.in_dropout = CombinedDropout(*config.in_drop_rates)
+        self.hid_dropout = CombinedDropout(*config.hid_drop_rates)
+        
         if config.fusing_mode.lower().startswith('concat'):
             if config.use_context: 
                 self.hid2logit = torch.nn.Linear(config.in_dim*3+config.size_emb_dim*2+config.label_emb_dim*2, config.voc_dim)
             else:
                 self.hid2logit = torch.nn.Linear(config.in_dim*2+config.size_emb_dim*2+config.label_emb_dim*2, config.voc_dim)
             reinit_layer_(self.hid2logit, 'sigmoid')
+            
         elif config.fusing_mode.lower().startswith('affine'):
+            self.reduction_head = config.reduction.instantiate()
+            self.reduction_tail = config.reduction.instantiate()
             if config.use_context: 
-                self.hid2logit = TriAffineFusor(config.in_dim, config.voc_dim)
+                self.reduction_ctx = config.reduction_ctx.instantiate()
+                self.hid2logit = TriAffineFusor(config.reduction.out_dim, config.voc_dim)
             else:
-                self.hid2logit = BiAffineFusor(config.in_dim, config.voc_dim)
+                self.hid2logit = BiAffineFusor(config.reduction.out_dim, config.voc_dim)
         
         if config.ck_loss_weight > 0: 
             self.ck_hid2logit = torch.nn.Linear(config.in_dim+config.size_emb_dim+config.label_emb_dim, config.ck_voc_dim)
@@ -233,17 +256,17 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
                 span_hidden = [full_hidden[i, start:end] for label, start, end in cp_obj.chunks]
                 span_mask = seq_lens2mask(torch.tensor([h.size(0) for h in span_hidden], dtype=torch.long, device=full_hidden.device))
                 span_hidden = torch.nn.utils.rnn.pad_sequence(span_hidden, batch_first=True, padding_value=0.0)
-                span_hidden = self.aggregating(self.dropout(span_hidden), mask=span_mask)
+                span_hidden = self.aggregating(self.in_dropout(span_hidden), mask=span_mask)
                 
                 if hasattr(self, 'size_embedding'):
                     # size_embedded: (num_chunks, emb_dim)
                     size_embedded = self.size_embedding(cp_obj.span_size_ids)
-                    span_hidden = torch.cat([span_hidden, self.dropout(size_embedded)], dim=-1)
+                    span_hidden = torch.cat([span_hidden, self.in_dropout(size_embedded)], dim=-1)
                 
                 if hasattr(self, 'label_embedding'):
                     # label_embedded: (num_chunks, emb_dim)
                     label_embedded = self.label_embedding(cp_obj.ck_label_ids)
-                    span_hidden = torch.cat([span_hidden, self.dropout(label_embedded)], dim=-1)
+                    span_hidden = torch.cat([span_hidden, self.in_dropout(label_embedded)], dim=-1)
                 
                 if self.use_context: 
                     # contexts: (num_chunks^2, ctx_span_size, hid_dim) -> (num_chunks^2, hid_dim) -> (num_chunks, num_chunks, hid_dim)
@@ -259,11 +282,12 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
                             contexts.append(self.zero_context.unsqueeze(0))
                     ctx_mask = seq_lens2mask(torch.tensor([c.size(0) for c in contexts], dtype=torch.long, device=full_hidden.device))
                     contexts = torch.nn.utils.rnn.pad_sequence(contexts, batch_first=True, padding_value=0.0)
-                    contexts = self.aggregating(self.dropout(contexts), mask=ctx_mask)
+                    contexts = self.aggregating(self.in_dropout(contexts), mask=ctx_mask)
                     contexts = contexts.view(num_chunks, num_chunks, -1)
                 
                 head_hidden = span_hidden.unsqueeze(1).expand(-1, num_chunks, -1)
                 tail_hidden = span_hidden.unsqueeze(0).expand(num_chunks, -1, -1)
+                
                 if self.fusing_mode.startswith('concat'):
                     # hidden_cat: (num_chunks, num_chunks, hid_dim*3)
                     hidden_cat = torch.cat([head_hidden, tail_hidden], dim=-1)
@@ -271,11 +295,15 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
                         hidden_cat = torch.cat([hidden_cat, contexts], dim=-1)
                     # logits: (num_chunks, num_chunks, logit_dim)
                     logits = self.hid2logit(hidden_cat)
+                    
                 elif self.fusing_mode.lower().startswith('affine'):
+                    reduced_head = self.reduction_head(head_hidden)
+                    reduced_tail = self.reduction_tail(tail_hidden)
                     if self.use_context:
-                        logits = self.hid2logit(head_hidden, tail_hidden, contexts)
+                        reduced_ctx = self.reduction_ctx(contexts)
+                        logits = self.hid2logit(self.hid_dropout(reduced_head), self.hid_dropout(reduced_tail), self.hid_dropout(reduced_ctx))
                     else:
-                        logits = self.hid2logit(head_hidden, tail_hidden)
+                        logits = self.hid2logit(self.hid_dropout(reduced_head), self.hid_dropout(reduced_tail))
                 
                 if self.ck_loss_weight > 0:
                     ck_logits = self.ck_hid2logit(span_hidden)
