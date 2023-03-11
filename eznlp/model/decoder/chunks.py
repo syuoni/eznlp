@@ -28,7 +28,6 @@ class ChunkPairs(TargetWrapper):
         self.max_span_size = getattr(config, 'max_span_size', None) 
         self.num_tokens = len(entry['tokens'])
         self.chunks_gold = entry.get('chunks', None)
-        self.span2ck_label_gold = {} if self.chunks_gold is None else {(start, end): label for label, start, end in self.chunks_gold}
         self.chunks_pred = entry.get('chunks_pred', None)
         self.relations = entry.get('relations', None)
         if 'tok2sent_idx' in entry:
@@ -56,7 +55,8 @@ class ChunkPairs(TargetWrapper):
             
             # Do not use ```chunks = list(set(chunks + chunks_pred))```, which may return non-deterministic order. 
             # In the early stage of joint training, the chunk-decoder may produce too many predicted chunks, so do sampling here. 
-            chunks_extra = [ck for ck in self.chunks_pred if ck[1:] not in self.span2ck_label_gold]
+            existing_spans = {ck[1:] for ck in self.chunks}
+            chunks_extra = [ck for ck in self.chunks_pred if ck[1:] not in existing_spans]
             num_neg_chunks = max(int(self.num_tokens*0.35), 20)
             if len(chunks_extra) > num_neg_chunks:
                 chunks_extra = random.sample(chunks_extra, num_neg_chunks)
@@ -77,7 +77,8 @@ class ChunkPairs(TargetWrapper):
         # `ck_label_ids` is for model input; it includes predicted chunk labels which may be incorrect
         # `ck_label_ids_gold` is for model target; it's chunk labels are all consistent with ground truth
         self.ck_label_ids = torch.tensor([config.ck_label2idx[label] for label, start, end in self.chunks], dtype=torch.long)
-        self.ck_label_ids_gold = torch.tensor([config.ck_label2idx[self.span2ck_label_gold.get((start, end), config.ck_none_label)] for label, start, end in self.chunks], dtype=torch.long)
+        span2ck_label_gold = {} if self.chunks_gold is None else {(start, end): label for label, start, end in self.chunks_gold}
+        self.ck_label_ids_gold = torch.tensor([config.ck_label2idx[span2ck_label_gold.get((start, end), config.ck_none_label)] for label, start, end in self.chunks], dtype=torch.long)
         
         is_valid_list = [is_valid for _, _, is_valid in config.enumerate_chunk_pairs(self)]
         self.has_valid_cp = any(is_valid_list) 
@@ -132,7 +133,6 @@ class ChunkSingles(TargetWrapper):
         self.max_span_size = getattr(config, 'max_span_size', None)
         self.num_tokens = len(entry['tokens'])
         self.chunks_gold = entry.get('chunks', None)
-        self.span2ck_label_gold = {} if self.chunks_gold is None else {(start, end): label for label, start, end in self.chunks_gold}
         self.chunks_pred = entry.get('chunks_pred', None)
         self.attributes = entry.get('attributes', None)
         if self.chunks_pred is not None:
@@ -158,7 +158,8 @@ class ChunkSingles(TargetWrapper):
             
             # Do not use ```chunks = list(set(chunks + chunks_pred))```, which may return non-deterministic order. 
             # In the early stage of joint training, the chunk-decoder may produce too many predicted chunks, so do sampling here. 
-            chunks_extra = [ck for ck in self.chunks_pred if ck[1:] not in self.span2ck_label_gold]
+            existing_spans = {ck[1:] for ck in self.chunks}
+            chunks_extra = [ck for ck in self.chunks_pred if ck[1:] not in existing_spans]
             num_neg_chunks = max(int(self.num_tokens*0.35), 20)
             if len(chunks_extra) > num_neg_chunks:
                 chunks_extra = random.sample(chunks_extra, num_neg_chunks)
@@ -179,7 +180,8 @@ class ChunkSingles(TargetWrapper):
         # `ck_label_ids` is for model input; it includes predicted chunk labels which may be incorrect
         # `ck_label_ids_gold` is for model target; it's chunk labels are all consistent with ground truth
         self.ck_label_ids = torch.tensor([config.ck_label2idx[label] for label, start, end in self.chunks], dtype=torch.long)
-        self.ck_label_ids_gold = torch.tensor([config.ck_label2idx[self.span2ck_label_gold.get((start, end), config.ck_none_label)] for label, start, end in self.chunks], dtype=torch.long)
+        span2ck_label_gold = {} if self.chunks_gold is None else {(start, end): label for label, start, end in self.chunks_gold}
+        self.ck_label_ids_gold = torch.tensor([config.ck_label2idx[span2ck_label_gold.get((start, end), config.ck_none_label)] for label, start, end in self.chunks], dtype=torch.long)
         
         if self.training and config.neg_sampling_rate < 1:
             non_mask_rate = config.neg_sampling_rate * torch.ones(num_chunks, dtype=torch.float)
