@@ -81,7 +81,7 @@ class TestBertLikePreProcessor(object):
     def test_truncate_for_data(self, mode, bert_with_tokenizer):
         bert, tokenizer = bert_with_tokenizer
         preprocessor = BertLikePreProcessor(tokenizer, verbose=False)
-        max_len = preprocessor.tokenizer_max_length - 2
+        max_len = preprocessor.model_max_length - 2
         
         tabular_io = TabularIO(text_col_id=3, label_col_id=2, sep="\t\t", mapping={"<sssss>": "\n"}, encoding='utf-8', case_mode='lower')
         data = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.test.ss")
@@ -100,7 +100,7 @@ class TestBertLikePreProcessor(object):
     @pytest.mark.parametrize("max_len", [50, 120])
     def test_segment_sentences_for_data(self, bert_with_tokenizer, token_len, max_len):
         bert, tokenizer = bert_with_tokenizer
-        preprocessor = BertLikePreProcessor(tokenizer, tokenizer_max_length=max_len+2, verbose=False)
+        preprocessor = BertLikePreProcessor(tokenizer, model_max_length=max_len+2, verbose=False)
         
         tokens = TokenSequence.from_tokenized_text([c*token_len for c in random.choices(string.ascii_letters, k=100)])
         chunks = [('EntA', k*10, k*10+5) for k in range(10)]

@@ -273,13 +273,13 @@ def _tokenized2nested(tokenized_raw_text: List[str], tokenizer: transformers.Pre
 
 
 class BertLikePreProcessor(object):
-    def __init__(self, tokenizer: transformers.PreTrainedTokenizer, tokenizer_max_length: int=None, verbose: bool=True):
+    def __init__(self, tokenizer: transformers.PreTrainedTokenizer, model_max_length: int=None, verbose: bool=True):
         self.tokenizer = tokenizer
-        if tokenizer_max_length is None: 
-            self.tokenizer_max_length = tokenizer.model_max_length
+        if model_max_length is None: 
+            self.model_max_length = tokenizer.model_max_length
         else:
-            assert tokenizer_max_length <= tokenizer.model_max_length
-            self.tokenizer_max_length = tokenizer_max_length
+            assert model_max_length <= tokenizer.model_max_length
+            self.model_max_length = model_max_length
         self.verbose = verbose
         
         
@@ -380,7 +380,7 @@ class BertLikePreProcessor(object):
             
             if 'paired_tokens' not in entry:
                 # Case for single sentence 
-                max_len = self.tokenizer_max_length - 2
+                max_len = self.model_max_length - 2
                 if sum(sub_tok_seq_lens) > max_len:
                     entry['tokens'] = self._truncate(tokens, sub_tok_seq_lens, max_len, mode=mode)
                     num_truncated += 1
@@ -391,7 +391,7 @@ class BertLikePreProcessor(object):
                 p_nested_sub_tokens = _tokenized2nested(p_tokens.raw_text, self.tokenizer)
                 p_sub_tok_seq_lens = [len(tok) for tok in p_nested_sub_tokens]
                 
-                max_len = self.tokenizer_max_length - 3
+                max_len = self.model_max_length - 3
                 num_sub_toks, num_p_sub_toks = sum(sub_tok_seq_lens), sum(p_sub_tok_seq_lens)
                 
                 if num_sub_toks + num_p_sub_toks > max_len:
@@ -418,7 +418,7 @@ class BertLikePreProcessor(object):
         assert 'relations' not in data[0]
         assert 'attributes' not in data[0]
         
-        max_len = self.tokenizer_max_length - 2
+        max_len = self.model_max_length - 2
         new_data = []
         num_segmented = 0
         num_conflict = 0
@@ -623,7 +623,7 @@ class BertLikePreProcessor(object):
         
         
     def _merge_sentences_for_doc(self, doc: List[dict], doc_sub_lens: List[int], mode: str='min_max_length'):
-        max_len = self.tokenizer_max_length - 2
+        max_len = self.model_max_length - 2
         
         # Greedy
         cum_sub_lens = 0
