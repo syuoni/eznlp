@@ -18,6 +18,7 @@ class MultiAffineFusor(torch.nn.Module):
         
         self.U = torch.nn.Parameter(torch.empty(out_dim, *(in_dim+1 for _ in range(num_affines))))
         torch.nn.init.orthogonal_(self.U.data)
+        torch.nn.init.zeros_(self.U.view(out_dim, -1)[:, -1])  # bias initialized as zeros
         self.register_buffer('_const', torch.ones(1, dtype=torch.float))
         
         
