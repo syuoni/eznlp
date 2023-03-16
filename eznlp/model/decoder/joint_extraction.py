@@ -12,7 +12,7 @@ from .span_rel_classification import SpanRelClassificationDecoderConfig
 from .boundary_selection import BoundarySelectionDecoderConfig
 from .specific_span_classification import SpecificSpanClsDecoderConfig
 from .specific_span_rel_classification import SpecificSpanRelClsDecoderConfig
-from .specific_span_sparse_rel_classification import SpecificSpanSparseRelClsDecoderConfig
+from .specific_span_rel_classification_unfiltered import UnfilteredSpecificSpanRelClsDecoderConfig
 
 
 class JointExtractionDecoderMixin(DecoderMixinBase):
@@ -91,8 +91,8 @@ class JointExtractionDecoderConfig(Config, JointExtractionDecoderMixin):
             self.rel_decoder = SpanRelClassificationDecoderConfig()
         elif rel_decoder.lower().startswith('specific_span_rel'):
             self.rel_decoder = SpecificSpanRelClsDecoderConfig()
-        elif rel_decoder.lower().startswith('specific_span_sparse_rel'):
-            self.rel_decoder = SpecificSpanSparseRelClsDecoderConfig()
+        elif rel_decoder.lower().startswith('unfiltered_specific_span_rel'):
+            self.rel_decoder = UnfilteredSpecificSpanRelClsDecoderConfig()
         
         self.ck_loss_weight = kwargs.pop('ck_loss_weight', 1.0)
         self.attr_loss_weight = kwargs.pop('attr_loss_weight', 1.0)

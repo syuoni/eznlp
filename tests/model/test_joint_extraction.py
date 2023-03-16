@@ -6,7 +6,7 @@ from eznlp.dataset import Dataset
 from eznlp.model import EncoderConfig, BertLikeConfig, SpanBertLikeConfig
 from eznlp.model import SequenceTaggingDecoderConfig, BoundarySelectionDecoderConfig
 from eznlp.model import SpanClassificationDecoderConfig, SpanAttrClassificationDecoderConfig, SpanRelClassificationDecoderConfig
-from eznlp.model import SpecificSpanClsDecoderConfig, SpecificSpanRelClsDecoderConfig, SpecificSpanSparseRelClsDecoderConfig
+from eznlp.model import SpecificSpanClsDecoderConfig, SpecificSpanRelClsDecoderConfig, UnfilteredSpecificSpanRelClsDecoderConfig
 from eznlp.model import JointExtractionDecoderConfig
 from eznlp.model import ExtractorConfig, SpecificSpanExtractorConfig
 from eznlp.training import Trainer
@@ -110,11 +110,11 @@ class TestModel(object):
         
         
         
-    @pytest.mark.parametrize("use_sparse", [False, True])
-    def test_model_with_specific_span(self, use_sparse, conll2004_demo, bert_with_tokenizer, device):
+    @pytest.mark.parametrize("use_unfiltered", [False, True])
+    def test_model_with_specific_span(self, use_unfiltered, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
-        if use_sparse:
-            rel_decoder_config = SpecificSpanSparseRelClsDecoderConfig(max_span_size=3)
+        if use_unfiltered:
+            rel_decoder_config = UnfilteredSpecificSpanRelClsDecoderConfig(max_span_size=3)
         else:
             rel_decoder_config = SpecificSpanRelClsDecoderConfig(max_span_size=3)
         
@@ -126,11 +126,11 @@ class TestModel(object):
         self._assert_trainable()
         
         
-    @pytest.mark.parametrize("use_sparse", [False, True])
-    def test_prediction_without_gold_for_specific_span(self, use_sparse, conll2004_demo, bert_with_tokenizer, device):
+    @pytest.mark.parametrize("use_unfiltered", [False, True])
+    def test_prediction_without_gold_for_specific_span(self, use_unfiltered, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
-        if use_sparse:
-            rel_decoder_config = SpecificSpanSparseRelClsDecoderConfig(max_span_size=3)
+        if use_unfiltered:
+            rel_decoder_config = UnfilteredSpecificSpanRelClsDecoderConfig(max_span_size=3)
         else:
             rel_decoder_config = SpecificSpanRelClsDecoderConfig(max_span_size=3)
         

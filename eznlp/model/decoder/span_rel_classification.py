@@ -241,7 +241,10 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
             if cp_obj.chunks_pred is None:
                 cp_obj.chunks_pred = chunks_pred
                 cp_obj.build(self)
-                cp_obj.to(self.hid2logit.weight.device)
+                if self.fusing_mode.startswith('concat'):
+                    cp_obj.to(self.hid2logit.weight.device)
+                elif self.fusing_mode.lower().startswith('affine'):
+                    cp_obj.to(self.hid2logit.U.device)
         
         
     def _collect_shallow_contexts(self, full_hidden: torch.Tensor, i: int, cp_obj: ChunkPairs): 
