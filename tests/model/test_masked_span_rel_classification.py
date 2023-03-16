@@ -61,21 +61,18 @@ class TestModel(object):
         assert isinstance(self.config.name, str) and len(self.config.name) > 0
         
         
-    @pytest.mark.parametrize("num_layers, agg_mode, neg_sampling_rate, size_emb_dim", 
-                             [(3,  'max_pooling',  1.0, 0),  # Baseline
-                              (12, 'max_pooling',  1.0, 0),  # Number of layers
-                              (6,  'max_pooling',  1.0, 0), 
-                              (1,  'max_pooling',  1.0, 0), 
-                              (3,  'mean_pooling', 1.0, 0),  # Initial aggregation
-                              (3,  'multiplicative_attention', 1.0, 0), 
-                              (3,  'max_pooling',  0.5, 0),  # Use negative sampling
-                              (3,  'max_pooling',  1.0, 25)])  # Use size embedding
-    def test_model(self, num_layers, agg_mode, neg_sampling_rate, size_emb_dim, conll2004_demo, bert_with_tokenizer, device):
+    @pytest.mark.parametrize("num_layers, use_context, context_mode, fusing_mode, ck_loss_weight", 
+                             [(3,  True,  'specific', 'affine', 0.0),  # Baseline
+                              (12, True,  'specific', 'affine', 0.0),  # Number of layers
+                              (3,  False, 'specific', 'affine', 0.0),  # Context
+                              (3,  True,  'specific', 'concat', 0.0),  # Fusing mode
+                              (3,  True,  'specific', 'affine', 0.5)]) # Chunk loss weight
+    def test_model(self, num_layers, use_context, context_mode, fusing_mode, ck_loss_weight, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
-        decoder_config = MaskedSpanRelClsDecoderConfig(neg_sampling_rate=neg_sampling_rate, size_emb_dim=size_emb_dim)
+        decoder_config = MaskedSpanRelClsDecoderConfig(use_context=use_context, context_mode=context_mode, fusing_mode=fusing_mode, ck_loss_weight=ck_loss_weight)
         self.config = MaskedSpanExtractorConfig(decoder=decoder_config, 
                                                 bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False, from_subtokenized=True, output_hidden_states=True), 
-                                                masked_span_bert_like=MaskedSpanBertLikeConfig(bert_like=bert, freeze=False, num_layers=num_layers, share_weights_ext=True, share_weights_int=True, init_agg_mode=agg_mode))
+                                                masked_span_bert_like=MaskedSpanBertLikeConfig(bert_like=bert, freeze=False, num_layers=num_layers, share_weights_ext=True, share_weights_int=True))
         preprocessor = BertLikePreProcessor(tokenizer, verbose=False)
         conll2004_demo = preprocessor.subtokenize_for_data(conll2004_demo)
         self._setup_case(conll2004_demo, device)

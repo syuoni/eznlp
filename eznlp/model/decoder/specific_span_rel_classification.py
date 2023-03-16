@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from typing import List, Dict
 from collections import Counter
-import itertools
 import logging
 import copy
 import math
@@ -238,7 +237,6 @@ class SpecificSpanRelClsDecoder(DecoderBase, ChunkPairsDecoderMixin):
             if not cp_obj.has_valid_cp: 
                 logits = None
             else: 
-                num_chunks = len(cp_obj.chunks)
                 # span_hidden: (num_chunks, hid_dim)
                 span_hidden = torch.stack([all_hidden[end-start-1][i, start] for label, start, end in cp_obj.chunks])
                 

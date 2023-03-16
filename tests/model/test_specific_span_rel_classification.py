@@ -64,8 +64,8 @@ class TestModel(object):
     @pytest.mark.parametrize("use_unfiltered, num_layers, use_context, context_mode, fusing_mode, ck_loss_weight", 
                              [(False, 3,  True,  'specific', 'affine', 0.0),  # Baseline
                               (False, 12, True,  'specific', 'affine', 0.0),  # Number of layers
-                              (False, 12, True,  'shallow',  'affine', 0.0),  # Context
-                              (False, 12, False, 'specific', 'affine', 0.0), 
+                              (False, 3,  False, 'specific', 'affine', 0.0),  # Context
+                              (False, 3,  True,  'shallow',  'affine', 0.0),
                               (False, 3,  True,  'specific', 'concat', 0.0),  # Fusing mode
                               (False, 3,  True,  'specific', 'affine', 0.5),  # Chunk loss weight
                               (True,  3,  True,  'specific', 'affine', 0.0),  # Unfiltered chunk
