@@ -28,30 +28,30 @@ def test_masked_span_bert_like(bert_like_with_tokenizer):
     
     batch_sub_mask = torch.zeros(B, L, dtype=torch.bool)
     max_num_chunks = max(len(chunks) for chunks in batch_chunks)
-    span_attention_mask = batch_sub_mask.unsqueeze(1).repeat(1, max_num_chunks, 1)
-    ctx_attention_mask = batch_sub_mask.unsqueeze(1).repeat(1, max_num_chunks, 1)
+    batch_ck2tok_mask = batch_sub_mask.unsqueeze(1).repeat(1, max_num_chunks, 1)
+    batch_ctx2tok_mask = batch_sub_mask.unsqueeze(1).repeat(1, max_num_chunks, 1)
     
     for k, chunks in enumerate(batch_chunks):
         num_tokens, num_chunks = L, len(chunks)
         
         ck2tok_mask = torch.ones(num_chunks, num_tokens, dtype=torch.bool)
-        for i, (label, start, end) in enumerate(chunks):
+        for i, (_, start, end) in enumerate(chunks):
             for j in range(start, end):
                 ck2tok_mask[i, j] = False
         
         # Assign to batched attention mask
-        span_attention_mask[k, :num_chunks, :num_tokens].logical_or_(ck2tok_mask)
-        ctx_attention_mask[k, :num_chunks, :num_tokens].logical_or_(~ck2tok_mask)
+        batch_ck2tok_mask[k, :num_chunks, :num_tokens].logical_or_(ck2tok_mask)
+        batch_ctx2tok_mask[k, :num_chunks, :num_tokens].logical_or_(~ck2tok_mask)
     
     mspb_config = MaskedSpanBertLikeConfig(bert_like=bert_like)
     masked_span_bert_like = mspb_config.instantiate()
     masked_span_bert_like.eval()
-    all_last_query_states = masked_span_bert_like(bert_outs['hidden_states'], span_attention_mask, ctx_attention_mask)
+    all_last_query_states = masked_span_bert_like(bert_outs['hidden_states'], ck2tok_mask=batch_ck2tok_mask, ctx2tok_mask=batch_ctx2tok_mask)
     span_query_hidden = all_last_query_states['span_query_state']
     
     # Check the masked span representations are consistent to naive span representations
     for k, chunks in enumerate(batch_chunks):
-        for i, (label, start, end) in enumerate(chunks):
+        for i, (_, start, end) in enumerate(chunks):
             # Exception for span size 1
             if end-start > 1 and end-start <= 5: 
                 delta_hidden = span_query_hidden[k, i] - all_hidden[end-start-1][k, start]

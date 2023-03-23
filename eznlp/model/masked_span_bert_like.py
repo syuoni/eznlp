@@ -29,7 +29,7 @@ class MaskedSpanBertLikeConfig(Config):
         self.init_agg_mode = kwargs.pop('init_agg_mode', 'max_pooling')
         self.init_drop_rate = kwargs.pop('init_drop_rate', 0.2)
         super().__init__(**kwargs)
-    
+        
     @property
     def name(self):
         return f"{self.arch}({self.num_layers})"
@@ -42,38 +42,6 @@ class MaskedSpanBertLikeConfig(Config):
         state = self.__dict__.copy()
         state['bert_like'] = None
         return state
-        
-        
-    def exemplify(self, cp_obj):
-        # Attention mask for each example
-        num_tokens, num_chunks = cp_obj.num_tokens, len(cp_obj.chunks)
-        
-        ck2tok_mask = torch.ones(num_chunks, num_tokens, dtype=torch.bool)
-        for i, (label, start, end) in enumerate(cp_obj.chunks):
-            for j in range(start, end):
-                ck2tok_mask[i, j] = False
-        return {'ck2tok_mask': ck2tok_mask}
-        
-        
-    def batchify(self, batch_ex: List[dict], batch_sub_mask: torch.Tensor):
-        # Batchify chunk-to-token attention mask
-        # Remove `[CLS]` and `[SEP]` 
-        batch_sub_mask = batch_sub_mask[:, 2:]
-        max_num_chunks = max(ex['ck2tok_mask'].size(0) for ex in batch_ex)
-        span_attention_mask = batch_sub_mask.unsqueeze(1).repeat(1, max_num_chunks, 1)
-        ctx_attention_mask = batch_sub_mask.unsqueeze(1).repeat(1, max_num_chunks, 1)
-        
-        for i, ex in enumerate(batch_ex):
-            ck2tok_mask = ex['ck2tok_mask']
-            num_chunks, num_tokens = ck2tok_mask.size()
-            
-            # Assign to batched attention mask
-            span_attention_mask[i, :num_chunks, :num_tokens].logical_or_(ck2tok_mask)
-            ctx_attention_mask[i, :num_chunks, :num_tokens].logical_or_(~ck2tok_mask)
-        
-        return {'span_attention_mask': span_attention_mask, 
-                'ctx_attention_mask': ctx_attention_mask}
-        
         
     def instantiate(self):
         return MaskedSpanBertLikeEncoder(self)
@@ -127,32 +95,54 @@ class MaskedSpanBertLikeEncoder(torch.nn.Module):
         return attention_mask.float() * -10000
         
         
-    def forward(self, all_hidden_states: List[torch.Tensor], span_attention_mask: torch.Tensor, ctx_attention_mask: torch.Tensor):
-        # Remove the unused layers of hidden states
-        all_hidden_states = all_hidden_states[-(self.num_layers+1):]
+    def _forward_aggregation(self, all_hidden_states: List[torch.Tensor], init_mask: torch.Tensor, attention_mask: torch.Tensor): 
         batch_size, num_steps, hid_dim = all_hidden_states[0].size()
+        num_items = init_mask.size(1)
         
         # All masked attention will produce NaN gradients
-        zero_ctx_indic = ctx_attention_mask.all(dim=-1)
-        if zero_ctx_indic.any().item(): 
-            ctx_attention_mask[zero_ctx_indic] = False
+        zero_indic = init_mask.all(dim=-1).logical_or(attention_mask.all(dim=-1))
+        if zero_indic.any().item(): 
+            # DO NOT inplace modify tensors 
+            # Note that this function may be called for multiple times, and these masking tensors may be reused
+            init_mask = init_mask.masked_fill(zero_indic.unsqueeze(-1), False)
+            attention_mask = attention_mask.masked_fill(zero_indic.unsqueeze(-1), False)
+        
+        if isinstance(self.init_aggregating, (SequencePooling, SequenceAttention)): 
+            # reshaped_states: (B, L, H) -> (B, NI, L, H) -> (B*NI, L, H)
+            reshaped_states0 = all_hidden_states[0].unsqueeze(1).expand(-1, num_items, -1, -1).contiguous().view(-1, num_steps, hid_dim)
+            
+            # init_mask: (B, NI, L) -> (B*NI, L)
+            # query_states: (B*NI, H) -> (B, NI, H)
+            # Initial context queries are also created from span attention mask (instead of context attention mask)
+            query_states = self.init_aggregating(self.dropout(reshaped_states0), mask=init_mask.view(-1, num_steps))
+            query_states = query_states.view(batch_size, -1, hid_dim)
+            
+            # attention_mask: (B, NI, L)
+            query_outs = self.query_bert_like(query_states, all_hidden_states, self.get_extended_attention_mask(attention_mask))
+        
+        if zero_indic.any().item(): 
+            # DO NOT inplace modify tensors 
+            query_outs['last_query_state'] = torch.where(zero_indic.unsqueeze(-1), self.zero_context, query_outs['last_query_state'])
+        
+        return query_outs
+        
+        
+    def forward(self, 
+                all_hidden_states: List[torch.Tensor], 
+                ck2tok_mask: torch.Tensor, 
+                ctx2tok_mask: torch.Tensor, 
+                pair2tok_mask: torch.Tensor=None):
+        # Remove the unused layers of hidden states
+        all_hidden_states = all_hidden_states[-(self.num_layers+1):]
         
         all_last_query_states = OrderedDict()
-        if isinstance(self.init_aggregating, (SequencePooling, SequenceAttention)): 
-            for key, attention_mask in zip(['span_query_state', 'ctx_query_state'], 
-                                           [span_attention_mask, ctx_attention_mask]): 
-                # reshaped_states: (B, L, H) -> (B, NC, L, H) -> (B*NC, L, H)
-                # attention_mask: (B, NC, L) -> (B*NC, L)
-                reshaped_states0 = all_hidden_states[0].unsqueeze(1).expand(-1, attention_mask.size(1), -1, -1).contiguous().view(-1, num_steps, hid_dim)
-                
-                # query_states: (B*NC, H) -> (B, NC, H)
-                query_states = self.init_aggregating(self.dropout(reshaped_states0), mask=attention_mask.view(-1, num_steps))
-                query_states = query_states.view(batch_size, -1, hid_dim)
-                
-                query_outs = self.query_bert_like(query_states, all_hidden_states, self.get_extended_attention_mask(attention_mask))
-                all_last_query_states[key] = query_outs['last_query_state']
+        span_query_outs = self._forward_aggregation(all_hidden_states, init_mask=ck2tok_mask, attention_mask=ck2tok_mask)
+        all_last_query_states['span_query_state'] = span_query_outs['last_query_state']
         
-        if zero_ctx_indic.any().item(): 
-            all_last_query_states['ctx_query_state'] = torch.where(zero_ctx_indic.unsqueeze(-1), self.zero_context, all_last_query_states['ctx_query_state'])
+        if pair2tok_mask is None:
+            ctx_query_outs = self._forward_aggregation(all_hidden_states, init_mask=ck2tok_mask, attention_mask=ctx2tok_mask)
+        else:
+            ctx_query_outs = self._forward_aggregation(all_hidden_states, init_mask=pair2tok_mask, attention_mask=ctx2tok_mask)
+        all_last_query_states['ctx_query_state'] = ctx_query_outs['last_query_state']
         
         return all_last_query_states

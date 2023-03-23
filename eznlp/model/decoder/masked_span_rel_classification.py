@@ -24,8 +24,10 @@ logger = logging.getLogger(__name__)
 class MaskedSpanRelClsDecoderConfig(SingleDecoderConfigBase, ChunkPairsDecoderMixin):
     def __init__(self, **kwargs):
         self.use_context = kwargs.pop('use_context', True)
-        self.context_mode = kwargs.pop('context_mode', 'specific')
+        self.context_mode = kwargs.pop('context_mode', 'pair_specific')
         assert not (self.use_context and self.context_mode.lower().count('none'))
+        self.context_ext_win = kwargs.pop('context_ext_win', 0)
+        self.context_exc_ck = kwargs.pop('context_exc_ck', True)
         
         self.size_emb_dim = kwargs.pop('size_emb_dim', 0)
         self.label_emb_dim = kwargs.pop('label_emb_dim', 0)
@@ -85,6 +87,77 @@ class MaskedSpanRelClsDecoderConfig(SingleDecoderConfigBase, ChunkPairsDecoderMi
         self.max_cp_distance = max(chunk_pair_distance(head, tail) for data in partitions for entry in data for label, head, tail in entry['relations'])
         
         
+    def exemplify(self, entry: dict, training: bool=True):
+        example = super().exemplify(entry, training)
+        
+        # Attention mask for each example
+        cp_obj = example['cp_obj']
+        num_tokens, num_chunks = cp_obj.num_tokens, len(cp_obj.chunks)
+        example['masked_span_bert_like'] = {}
+        
+        ck2tok_mask = torch.ones(num_chunks, num_tokens, dtype=torch.bool)
+        for i, (label, start, end) in enumerate(cp_obj.chunks):
+            for j in range(start, end):
+                ck2tok_mask[i, j] = False
+        example['masked_span_bert_like'].update({'ck2tok_mask': ck2tok_mask})
+        
+        if self.context_mode.lower().count('pair'):
+            chunk_pairs = list(self.enumerate_chunk_pairs(cp_obj, return_valid_only=True))
+            num_pairs = len(chunk_pairs)
+            pair2tok_mask = torch.ones(num_pairs, num_tokens, dtype=torch.bool)
+            for i, ((_, h_start, h_end), (_, t_start, t_end)) in enumerate(chunk_pairs): 
+                for j in range(h_start, h_end):
+                    pair2tok_mask[i, j] = False
+                for j in range(t_start, t_end):
+                    pair2tok_mask[i, j] = False
+            
+            ctx2tok_mask = torch.ones(num_pairs, num_tokens, dtype=torch.bool)
+            for i, ((_, h_start, h_end), (_, t_start, t_end)) in enumerate(chunk_pairs): 
+                c_start = max(min(h_start, t_start) - self.context_ext_win, 0)
+                c_end = min(max(h_end, t_end) + self.context_ext_win, num_tokens)
+                for j in range(c_start, c_end): 
+                    # Context does not excluding chunk ranges, or `j` not in chunk ranges
+                    if (not self.context_exc_ck) or pair2tok_mask[i, j].item(): 
+                        ctx2tok_mask[i, j] = False
+            
+            example['masked_span_bert_like'].update({'pair2tok_mask': pair2tok_mask, 
+                                                     'ctx2tok_mask': ctx2tok_mask})
+            
+        else: 
+            ctx2tok_mask = torch.ones(num_chunks, num_tokens, dtype=torch.bool)
+            for i, (_, start, end) in enumerate(cp_obj.chunks): 
+                c_start = max(start - self.context_ext_win, 0)
+                c_end = min(end + self.context_ext_win, num_tokens)
+                for j in range(c_start, c_end): 
+                    if (not self.context_exc_ck) or ck2tok_mask[i, j].item(): 
+                        ctx2tok_mask[i, j] = False
+            
+            example['masked_span_bert_like'].update({'ctx2tok_mask': ctx2tok_mask})
+        
+        return example
+        
+        
+    def batchify(self, batch_examples: List[dict], batch_sub_mask: torch.Tensor):
+        batch = super().batchify(batch_examples)
+        
+        # Batchify chunk-to-token attention mask
+        # Remove `[CLS]` and `[SEP]` 
+        batch_sub_mask = batch_sub_mask[:, 2:]
+        batch['masked_span_bert_like'] = {}
+        for mask_name in batch_examples[0]['masked_span_bert_like'].keys(): 
+            max_num_items = max(ex['masked_span_bert_like'][mask_name].size(0) for ex in batch_examples)
+            batch_item2tok_mask = batch_sub_mask.unsqueeze(1).repeat(1, max_num_items, 1)
+            
+            for i, ex in enumerate(batch_examples): 
+                item2tok_mask = ex['masked_span_bert_like'][mask_name]
+                num_items, num_tokens = item2tok_mask.size()
+                batch_item2tok_mask[i, :num_items, :num_tokens].logical_or_(item2tok_mask)
+            
+            batch['masked_span_bert_like'].update({mask_name: batch_item2tok_mask})
+        
+        return batch
+        
+        
     def instantiate(self):
         return MaskedSpanRelClsDecoder(self)
 
@@ -127,19 +200,26 @@ class MaskedSpanRelClsDecoder(DecoderBase, ChunkPairsDecoderMixin):
         
         if config.fusing_mode.lower().startswith('concat'):
             if config.use_context: 
-                self.hid2logit = torch.nn.Linear(config.in_dim*4+config.size_emb_dim*2+config.label_emb_dim*2, config.voc_dim)
+                if self.context_mode.lower().count('pair'):
+                    full_hid_dim = config.in_dim*3 + config.size_emb_dim*2 + config.label_emb_dim*2
+                else: 
+                    full_hid_dim = config.in_dim*4 + config.size_emb_dim*2 + config.label_emb_dim*2
             else:
-                self.hid2logit = torch.nn.Linear(config.in_dim*2+config.size_emb_dim*2+config.label_emb_dim*2, config.voc_dim)
+                full_hid_dim = config.in_dim*2 + config.size_emb_dim*2 + config.label_emb_dim*2
+            self.hid2logit = torch.nn.Linear(full_hid_dim, config.voc_dim)
             reinit_layer_(self.hid2logit, 'sigmoid')
             
         elif config.fusing_mode.lower().startswith('affine'):
             self.reduction_head = config.reduction.instantiate()
             self.reduction_tail = config.reduction.instantiate()
             if config.use_context: 
-                self.reduction_hctx = config.reduction_ctx.instantiate()
-                self.reduction_tctx = config.reduction_ctx.instantiate()
-                self.hid2logit_hctx = TriAffineFusor(config.reduction.out_dim, config.voc_dim)
-                self.hid2logit_tctx = TriAffineFusor(config.reduction.out_dim, config.voc_dim)
+                if self.context_mode.lower().count('pair'):
+                    self.reduction_ctx = config.reduction_ctx.instantiate()
+                else:
+                    self.reduction_hctx = config.reduction_ctx.instantiate()
+                    self.reduction_tctx = config.reduction_ctx.instantiate()
+                    self.ctx_fusor = BiAffineFusor(config.reduction.out_dim, config.reduction.out_dim)
+                self.hid2logit = TriAffineFusor(config.reduction.out_dim, config.voc_dim)
             else:
                 self.hid2logit = BiAffineFusor(config.reduction.out_dim, config.voc_dim)
         
@@ -150,6 +230,21 @@ class MaskedSpanRelClsDecoder(DecoderBase, ChunkPairsDecoderMixin):
         self.criterion = config.instantiate_criterion(reduction='sum')
         
         
+    def _collect_pair_specific_contexts(self, ctx_query_hidden: torch.Tensor, i: int, cp_obj: ChunkPairs):
+        # contexts: (num_chunks^2, hid_dim) -> (num_chunks, num_chunks, hid_dim)
+        contexts = []
+        valid_pair_idx = 0
+        for (_, h_start, h_end), (_, t_start, t_end), is_valid in self.enumerate_chunk_pairs(cp_obj): 
+            if not is_valid: 
+                contexts.append(self.none_context)
+            else:
+                contexts.append(ctx_query_hidden[i, valid_pair_idx])
+                valid_pair_idx += 1
+        contexts = self.in_dropout(torch.stack(contexts))
+        contexts = contexts.view(len(cp_obj.chunks), len(cp_obj.chunks), -1)
+        return contexts
+        
+        
     def get_logits(self, batch: Batch, full_hidden: torch.Tensor, span_query_hidden: torch.Tensor, ctx_query_hidden: torch.Tensor):
         # full_hidden: (batch, step, hid_dim)
         # span_query_hidden/ctx_query_hidden: (batch, num_chunks, hid_dim)
@@ -158,9 +253,8 @@ class MaskedSpanRelClsDecoder(DecoderBase, ChunkPairsDecoderMixin):
             if not cp_obj.has_valid_cp: 
                 logits = None
             else:
-                # span_hidden/ctx_hidden: (num_chunks, hid_dim)
+                # span_hidden: (num_chunks, hid_dim)
                 span_hidden = span_query_hidden[i, :len(cp_obj.chunks)]
-                ctx_hidden = ctx_query_hidden[i, :len(cp_obj.chunks)]
                 
                 if hasattr(self, 'size_embedding'):
                     # size_embedded: (num_chunks, emb_dim)
@@ -174,14 +268,25 @@ class MaskedSpanRelClsDecoder(DecoderBase, ChunkPairsDecoderMixin):
                 
                 head_hidden = self.in_dropout(span_hidden).unsqueeze(1).expand(-1, len(cp_obj.chunks), -1)
                 tail_hidden = self.in_dropout(span_hidden).unsqueeze(0).expand(len(cp_obj.chunks), -1, -1)
-                hctx_hidden = self.in_dropout(ctx_hidden).unsqueeze(1).expand(-1, len(cp_obj.chunks), -1)
-                tctx_hidden = self.in_dropout(ctx_hidden).unsqueeze(0).expand(len(cp_obj.chunks), -1, -1)
+                
+                if self.use_context:
+                    if self.context_mode.lower().count('pair'):
+                        # contexts: (num_chunks, num_chunks, hid_dim)
+                        contexts = self._collect_pair_specific_contexts(ctx_query_hidden, i, cp_obj)
+                    else: 
+                        # ctx_hidden: (num_chunks, hid_dim) -> (num_chunks, num_chunks, hid_dim)
+                        ctx_hidden = ctx_query_hidden[i, :len(cp_obj.chunks)]
+                        h_contexts = self.in_dropout(ctx_hidden).unsqueeze(1).expand(-1, len(cp_obj.chunks), -1)
+                        t_contexts = self.in_dropout(ctx_hidden).unsqueeze(0).expand(len(cp_obj.chunks), -1, -1)
                 
                 if self.fusing_mode.startswith('concat'):
                     # hidden_cat: (num_chunks, num_chunks, hid_dim*4)
                     hidden_cat = torch.cat([head_hidden, tail_hidden], dim=-1)
                     if self.use_context: 
-                        hidden_cat = torch.cat([hidden_cat, hctx_hidden, tctx_hidden], dim=-1)
+                        if self.context_mode.lower().count('pair'):
+                            hidden_cat = torch.cat([hidden_cat, contexts], dim=-1)
+                        else: 
+                            hidden_cat = torch.cat([hidden_cat, h_contexts, t_contexts], dim=-1)
                     # logits: (num_chunks, num_chunks, logit_dim)
                     logits = self.hid2logit(hidden_cat)
                     
@@ -189,11 +294,13 @@ class MaskedSpanRelClsDecoder(DecoderBase, ChunkPairsDecoderMixin):
                     reduced_head = self.reduction_head(head_hidden)
                     reduced_tail = self.reduction_tail(tail_hidden)
                     if self.use_context: 
-                        reduced_hctx = self.reduction_hctx(hctx_hidden)
-                        reduced_tctx = self.reduction_tctx(tctx_hidden)
-                        logits_hctx = self.hid2logit_hctx(self.hid_dropout(reduced_head), self.hid_dropout(reduced_tail), self.hid_dropout(reduced_hctx))
-                        logits_tctx = self.hid2logit_tctx(self.hid_dropout(reduced_head), self.hid_dropout(reduced_tail), self.hid_dropout(reduced_tctx))
-                        logits = (logits_hctx + logits_tctx) * (0.5**0.5)
+                        if self.context_mode.lower().count('pair'):
+                            reduced_ctx = self.reduction_ctx(contexts)
+                        else:
+                            reduced_hctx = self.reduction_hctx(h_contexts)
+                            reduced_tctx = self.reduction_tctx(t_contexts)
+                            reduced_ctx = self.ctx_fusor(self.hid_dropout(reduced_hctx), self.hid_dropout(reduced_tctx))
+                        logits = self.hid2logit(self.hid_dropout(reduced_head), self.hid_dropout(reduced_tail), self.hid_dropout(reduced_ctx))
                     else:
                         logits = self.hid2logit(self.hid_dropout(reduced_head), self.hid_dropout(reduced_tail))
                 

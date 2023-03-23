@@ -44,15 +44,13 @@ class MaskedSpanExtractorConfig(ModelConfigBase):
         example = {}
         example['bert_like'] = self.bert_like.exemplify(entry['tokens'])
         example.update(self.decoder.exemplify(entry, training=training))
-        example['masked_span_bert_like'] = self.masked_span_bert_like.exemplify(example['cp_obj'])
         return example
         
         
     def batchify(self, batch_examples: List[dict]):
         batch = {}
         batch['bert_like'] = self.bert_like.batchify([ex['bert_like'] for ex in batch_examples])
-        batch.update(self.decoder.batchify(batch_examples))
-        batch['masked_span_bert_like'] = self.masked_span_bert_like.batchify([ex['masked_span_bert_like'] for ex in batch_examples], batch['bert_like']['sub_mask'])
+        batch.update(self.decoder.batchify(batch_examples, batch_sub_mask=batch['bert_like']['sub_mask']))
         return batch
         
         
