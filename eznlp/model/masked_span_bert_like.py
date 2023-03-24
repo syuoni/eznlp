@@ -98,6 +98,8 @@ class MaskedSpanBertLikeEncoder(torch.nn.Module):
     def _forward_aggregation(self, all_hidden_states: List[torch.Tensor], init_mask: torch.Tensor, attention_mask: torch.Tensor): 
         batch_size, num_steps, hid_dim = all_hidden_states[0].size()
         num_items = init_mask.size(1)
+        if num_items == 0: 
+            return dict(last_query_state=torch.empty(batch_size, 0, hid_dim, device=init_mask.device))
         
         # All masked attention will produce NaN gradients
         zero_indic = init_mask.all(dim=-1).logical_or(attention_mask.all(dim=-1))

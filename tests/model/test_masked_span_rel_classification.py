@@ -65,11 +65,11 @@ class TestModel(object):
                              [(3,  True,  'pair-specific', 0, True,  'affine', 0.0),  # Baseline
                               (12, True,  'pair-specific', 0, True,  'affine', 0.0),  # Number of layers
                               (3,  False, 'pair-specific', 0, True,  'affine', 0.0),  # Context
-                              (3,  True,  'specific',      0, True,  'affine', 0.0), 
+                              (3,  True,  'specific',      5, True,  'affine', 0.0), 
                               (3,  True,  'pair-specific', 5, True,  'affine', 0.0), 
                               (3,  True,  'pair-specific', 0, False, 'affine', 0.0), 
                               (3,  True,  'pair-specific', 0, True,  'concat', 0.0),  # Fusing mode
-                              (3,  True,  'specific',      0, True,  'concat', 0.0), 
+                              (3,  True,  'specific',      5, True,  'concat', 0.0), 
                               (3,  True,  'pair-specific', 0, True,  'affine', 0.5)]) # Chunk loss weight
     def test_model(self, num_layers, use_context, context_mode, context_ext_win, context_exc_ck, fusing_mode, ck_loss_weight, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer

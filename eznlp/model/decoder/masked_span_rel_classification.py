@@ -26,6 +26,7 @@ class MaskedSpanRelClsDecoderConfig(SingleDecoderConfigBase, ChunkPairsDecoderMi
         self.use_context = kwargs.pop('use_context', True)
         self.context_mode = kwargs.pop('context_mode', 'pair_specific')
         assert not (self.use_context and self.context_mode.lower().count('none'))
+        # If `context_mode` is non-paired, `context_ext_win` should be strictly positive
         self.context_ext_win = kwargs.pop('context_ext_win', 0)
         self.context_exc_ck = kwargs.pop('context_exc_ck', True)
         
