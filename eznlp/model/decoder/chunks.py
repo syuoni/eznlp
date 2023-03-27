@@ -4,6 +4,7 @@ import random
 import torch
 
 from ...wrapper import TargetWrapper
+from ...utils.relation import detect_inverse
 from .base import SingleDecoderConfigBase, DecoderBase
 
 
@@ -98,7 +99,8 @@ class ChunkPairs(TargetWrapper):
         
         if self.relations is not None:
             self.cp2label_id = torch.full((num_chunks, num_chunks), config.none_idx, dtype=torch.long)
-            for label, head, tail in self.relations:
+            inverse_relations = detect_inverse(self.relations) if config.use_inv_rel else []
+            for label, head, tail in self.relations + inverse_relations:
                 if head in self.chunk2idx and tail in self.chunk2idx:
                     hk = self.chunk2idx[head]
                     tk = self.chunk2idx[tail]

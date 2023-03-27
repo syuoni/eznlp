@@ -12,6 +12,7 @@ from ...nn.modules import CombinedDropout
 from ...nn.modules import BiAffineFusor, TriAffineFusor
 from ...nn.init import reinit_embedding_, reinit_layer_, reinit_vector_parameter_
 from ...utils.chunk import chunk_pair_distance
+from ...utils.relation import INV_REL_PREFIX
 from ..encoder import EncoderConfig
 from .base import SingleDecoderConfigBase, DecoderBase
 from .boundaries import MAX_SIZE_ID_COV_RATE
@@ -44,6 +45,8 @@ class MaskedSpanRelClsDecoderConfig(SingleDecoderConfigBase, ChunkPairsDecoderMi
         
         self.ck_loss_weight = kwargs.pop('ck_loss_weight', 0)
         
+        self.sym_rel_labels = kwargs.pop('sym_rel_labels', [])
+        self.use_inv_rel = kwargs.pop('use_inv_rel', False)
         self.none_label = kwargs.pop('none_label', '<none>')
         self.idx2label = kwargs.pop('idx2label', None)
         self.ck_none_label = kwargs.pop('ck_none_label', '<none>')
@@ -81,9 +84,12 @@ class MaskedSpanRelClsDecoderConfig(SingleDecoderConfigBase, ChunkPairsDecoderMi
         
         counter = Counter(label for data in partitions for entry in data for label, head, tail in entry['relations'])
         self.idx2label = [self.none_label] + list(counter.keys())
+        if self.use_inv_rel: 
+            self.idx2label = self.idx2label + [f"{INV_REL_PREFIX}{label}" for label in self.idx2label if label != self.none_label and label not in self.sym_rel_labels]
         
         counter = Counter((label, head[0], tail[0]) for data in partitions for entry in data for label, head, tail in entry['relations'])
         self.existing_rht_labels = set(list(counter.keys()))
+        self.existing_ht_labels = set(rht[1:] for rht in self.existing_rht_labels)
         self.existing_self_rel = any(head[1:]==tail[1:] for data in partitions for entry in data for label, head, tail in entry['relations'])
         self.max_cp_distance = max(chunk_pair_distance(head, tail) for data in partitions for entry in data for label, head, tail in entry['relations'])
         
@@ -173,11 +179,13 @@ class MaskedSpanRelClsDecoder(DecoderBase, ChunkPairsDecoderMixin):
         self.max_size_id = config.max_size_id
         self.neg_sampling_rate = config.neg_sampling_rate
         self.ck_loss_weight = config.ck_loss_weight
+        self.use_inv_rel = config.use_inv_rel
         self.none_label = config.none_label
         self.idx2label = config.idx2label
         self.ck_none_label = config.ck_none_label
         self.idx2ck_label = config.idx2ck_label
         self.existing_rht_labels = config.existing_rht_labels
+        self.existing_ht_labels = config.existing_ht_labels
         self.existing_self_rel = config.existing_self_rel
         self.max_cp_distance = config.max_cp_distance
         

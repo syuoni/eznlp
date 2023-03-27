@@ -15,6 +15,7 @@ from ...nn.functional import seq_lens2mask
 from ...nn.init import reinit_embedding_, reinit_layer_, reinit_vector_parameter_
 from ...metrics import precision_recall_f1_report
 from ...utils.chunk import chunk_pair_distance
+from ...utils.relation import INV_REL_PREFIX
 from ..encoder import EncoderConfig
 from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
 from .boundaries import MAX_SIZE_ID_COV_RATE
@@ -78,6 +79,14 @@ class ChunkPairsDecoderMixin(DecoderMixinBase):
         
         
     def _filter(self, relations: List[tuple]):
+        # `existing_rht_labels` do not include inverse relation types, so process inverse relations first
+        if self.use_inv_rel: 
+            inv_relations = [(label, head, tail) for label, head, tail in relations if label.startswith(INV_REL_PREFIX)]
+            relations = [(label, head, tail) for label, head, tail in relations if not label.startswith(INV_REL_PREFIX)]
+            for label, head, tail in inv_relations:
+                if (rel := (label.replace(INV_REL_PREFIX, ''), tail, head)) not in relations:
+                    relations.append(rel)
+        
         relations = [(label, head, tail) for label, head, tail in relations if ((label, head[0], tail[0]) in self.existing_rht_labels 
                                                                                 and (self.existing_self_rel or head[1:] != tail[1:]))]
         return relations
@@ -92,7 +101,12 @@ class ChunkPairsDecoderMixin(DecoderMixinBase):
                 is_valid = False
             if (not self.existing_self_rel and head[1:] == tail[1:]):
                 is_valid = False
-            # TODO: ht_labels?
+            if self.use_inv_rel: 
+                if (head[0], tail[0]) not in self.existing_ht_labels and (tail[0], head[0]) not in self.existing_ht_labels:
+                    is_valid = False
+            else:
+                if (head[0], tail[0]) not in self.existing_ht_labels:
+                    is_valid = False
             
             if return_valid_only: 
                 if is_valid:
@@ -123,6 +137,8 @@ class SpanRelClassificationDecoderConfig(SingleDecoderConfigBase, ChunkPairsDeco
         self.agg_mode = kwargs.pop('agg_mode', 'max_pooling')
         self.ck_loss_weight = kwargs.pop('ck_loss_weight', 0)
         
+        self.sym_rel_labels = kwargs.pop('sym_rel_labels', [])
+        self.use_inv_rel = kwargs.pop('use_inv_rel', False)
         self.none_label = kwargs.pop('none_label', '<none>')
         self.idx2label = kwargs.pop('idx2label', None)
         self.ck_none_label = kwargs.pop('ck_none_label', '<none>')
@@ -160,9 +176,12 @@ class SpanRelClassificationDecoderConfig(SingleDecoderConfigBase, ChunkPairsDeco
         
         counter = Counter(label for data in partitions for entry in data for label, head, tail in entry['relations'])
         self.idx2label = [self.none_label] + list(counter.keys())
+        if self.use_inv_rel: 
+            self.idx2label = self.idx2label + [f"{INV_REL_PREFIX}{label}" for label in self.idx2label if label != self.none_label and label not in self.sym_rel_labels]
         
         counter = Counter((label, head[0], tail[0]) for data in partitions for entry in data for label, head, tail in entry['relations'])
         self.existing_rht_labels = set(list(counter.keys()))
+        self.existing_ht_labels = set(rht[1:] for rht in self.existing_rht_labels)
         self.existing_self_rel = any(head[1:]==tail[1:] for data in partitions for entry in data for label, head, tail in entry['relations'])
         self.max_cp_distance = max(chunk_pair_distance(head, tail) for data in partitions for entry in data for label, head, tail in entry['relations'])
         
@@ -180,11 +199,13 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
         self.max_size_id = config.max_size_id
         self.neg_sampling_rate = config.neg_sampling_rate
         self.ck_loss_weight = config.ck_loss_weight
+        self.use_inv_rel = config.use_inv_rel
         self.none_label = config.none_label
         self.idx2label = config.idx2label
         self.ck_none_label = config.ck_none_label
         self.idx2ck_label = config.idx2ck_label
         self.existing_rht_labels = config.existing_rht_labels
+        self.existing_ht_labels = config.existing_ht_labels
         self.existing_self_rel = config.existing_self_rel
         self.max_cp_distance = config.max_cp_distance
         

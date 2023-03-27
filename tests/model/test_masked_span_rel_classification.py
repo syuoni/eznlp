@@ -61,19 +61,21 @@ class TestModel(object):
         assert isinstance(self.config.name, str) and len(self.config.name) > 0
         
         
-    @pytest.mark.parametrize("num_layers, use_context, context_mode, context_ext_win, context_exc_ck, fusing_mode, ck_loss_weight", 
-                             [(3,  True,  'pair-specific', 0, True,  'affine', 0.0),  # Baseline
-                              (12, True,  'pair-specific', 0, True,  'affine', 0.0),  # Number of layers
-                              (3,  False, 'pair-specific', 0, True,  'affine', 0.0),  # Context
-                              (3,  True,  'specific',      5, True,  'affine', 0.0), 
-                              (3,  True,  'pair-specific', 5, True,  'affine', 0.0), 
-                              (3,  True,  'pair-specific', 0, False, 'affine', 0.0), 
-                              (3,  True,  'pair-specific', 0, True,  'concat', 0.0),  # Fusing mode
-                              (3,  True,  'specific',      5, True,  'concat', 0.0), 
-                              (3,  True,  'pair-specific', 0, True,  'affine', 0.5)]) # Chunk loss weight
-    def test_model(self, num_layers, use_context, context_mode, context_ext_win, context_exc_ck, fusing_mode, ck_loss_weight, conll2004_demo, bert_with_tokenizer, device):
+    @pytest.mark.parametrize("num_layers, use_context, context_mode, context_ext_win, context_exc_ck, fusing_mode, ck_loss_weight, use_inv_rel", 
+                             [(3,  True,  'pair-specific', 0, True,  'affine', 0.0, False),  # Baseline
+                              (12, True,  'pair-specific', 0, True,  'affine', 0.0, False),  # Number of layers
+                              (3,  False, 'pair-specific', 0, True,  'affine', 0.0, False),  # Context
+                              (3,  True,  'specific',      5, True,  'affine', 0.0, False), 
+                              (3,  True,  'pair-specific', 5, True,  'affine', 0.0, False), 
+                              (3,  True,  'pair-specific', 0, False, 'affine', 0.0, False), 
+                              (3,  True,  'pair-specific', 0, True,  'concat', 0.0, False),  # Fusing mode
+                              (3,  True,  'specific',      5, True,  'concat', 0.0, False), 
+                              (3,  True,  'pair-specific', 0, True,  'affine', 0.5, False),  # Chunk loss weight
+                              (3,  True,  'pair-specific', 0, True,  'affine', 0.0, True),   # Inverse relation
+                              (3,  True,  'specific',      5, True,  'affine', 0.0, True)]) 
+    def test_model(self, num_layers, use_context, context_mode, context_ext_win, context_exc_ck, fusing_mode, ck_loss_weight, use_inv_rel, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
-        decoder_config = MaskedSpanRelClsDecoderConfig(use_context=use_context, context_mode=context_mode, context_ext_win=context_ext_win, context_exc_ck=context_exc_ck, fusing_mode=fusing_mode, ck_loss_weight=ck_loss_weight)
+        decoder_config = MaskedSpanRelClsDecoderConfig(use_context=use_context, context_mode=context_mode, context_ext_win=context_ext_win, context_exc_ck=context_exc_ck, fusing_mode=fusing_mode, ck_loss_weight=ck_loss_weight, use_inv_rel=use_inv_rel)
         self.config = MaskedSpanExtractorConfig(decoder=decoder_config, 
                                                 bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False, from_subtokenized=True, output_hidden_states=True), 
                                                 masked_span_bert_like=MaskedSpanBertLikeConfig(bert_like=bert, freeze=False, num_layers=num_layers, share_weights_ext=True, share_weights_int=True))
