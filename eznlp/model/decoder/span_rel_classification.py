@@ -136,6 +136,7 @@ class SpanRelClassificationDecoderConfig(SingleDecoderConfigBase, ChunkPairsDeco
         
         self.agg_mode = kwargs.pop('agg_mode', 'max_pooling')
         self.ck_loss_weight = kwargs.pop('ck_loss_weight', 0)
+        self.l2_loss_weight = kwargs.pop('l2_loss_weight', 0)
         
         self.sym_rel_labels = kwargs.pop('sym_rel_labels', [])
         self.use_inv_rel = kwargs.pop('use_inv_rel', False)
@@ -199,6 +200,7 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
         self.max_size_id = config.max_size_id
         self.neg_sampling_rate = config.neg_sampling_rate
         self.ck_loss_weight = config.ck_loss_weight
+        self.l2_loss_weight = config.l2_loss_weight
         self.use_inv_rel = config.use_inv_rel
         self.none_label = config.none_label
         self.idx2label = config.idx2label
@@ -357,6 +359,8 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
                 loss = self.criterion(logits, label_ids)
                 if self.ck_loss_weight > 0: 
                     loss = loss + self.ck_loss_weight*self.criterion(ck_logits, ck_label_ids_gold)
+                if self.l2_loss_weight > 0 and self.fusing_mode.lower().startswith('affine'):
+                    loss = loss + self.l2_loss_weight*(self.hid2logit.U**2).sum()
             losses.append(loss)
         return torch.stack(losses)
         
