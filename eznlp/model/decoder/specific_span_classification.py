@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 
 class SpecificSpanClsDecoderConfig(SingleDecoderConfigBase, BoundariesDecoderMixin):
     def __init__(self, **kwargs):
+        self.min_span_size = kwargs.pop('min_span_size', 2)
+        assert self.min_span_size in (1, 2)
         self.max_span_size_ceiling = kwargs.pop('max_span_size_ceiling', 20)
         self.max_span_size_cov_rate = kwargs.pop('max_span_size_cov_rate', 0.995)
         self.max_span_size = kwargs.pop('max_span_size', None)
@@ -111,6 +113,7 @@ class SpecificSpanClsDecoderConfig(SingleDecoderConfigBase, BoundariesDecoderMix
 class SpecificSpanClsDecoder(DecoderBase, BoundariesDecoderMixin):
     def __init__(self, config: SpecificSpanClsDecoderConfig):
         super().__init__()
+        self.min_span_size = config.min_span_size
         self.max_span_size = config.max_span_size
         self.none_label = config.none_label
         self.idx2label = config.idx2label
@@ -145,7 +148,10 @@ class SpecificSpanClsDecoder(DecoderBase, BoundariesDecoderMixin):
     def get_logits(self, batch: Batch, full_hidden: torch.Tensor, all_query_hidden: Dict[int, torch.Tensor], return_states: bool=False):
         # full_hidden: (batch, step, hid_dim)
         # query_hidden: (batch, step-k+1, hid_dim)
-        all_hidden = [full_hidden] + list(all_query_hidden.values())
+        if self.min_span_size == 1: 
+            all_hidden = list(all_query_hidden.values())
+        else:
+            all_hidden = [full_hidden] + list(all_query_hidden.values())
         
         batch_logits, batch_states = [], []
         for i, curr_len in enumerate(batch.seq_lens.cpu().tolist()):

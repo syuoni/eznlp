@@ -106,10 +106,11 @@ class TestModel(object):
 
 
 
-def test_consistency_with_span_bert_like(conll2004_demo, bert_with_tokenizer, device):
+@pytest.mark.parametrize("min_span_size", [2, 1])
+def test_consistency_with_span_bert_like(min_span_size, conll2004_demo, bert_with_tokenizer, device):
     bert, tokenizer = bert_with_tokenizer
     
-    sse_config = SpecificSpanExtractorConfig(decoder=SpecificSpanClsDecoderConfig(max_span_size=5), 
+    sse_config = SpecificSpanExtractorConfig(decoder=SpecificSpanClsDecoderConfig(min_span_size=min_span_size, max_span_size=5), 
                                              bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False, from_subtokenized=True, output_hidden_states=True), 
                                              span_bert_like=SpanBertLikeConfig(bert_like=bert), 
                                              intermediate2=None)
@@ -138,7 +139,7 @@ def test_consistency_with_span_bert_like(conll2004_demo, bert_with_tokenizer, de
     
     for k, entry in enumerate(conll2004_demo[:8]):
         for i, (label, start, end) in enumerate(entry['chunks']): 
-            # Exception for span size 1
-            if end-start > 1 and end-start <= 5: 
+            # Exception for span size 1 if `min_span_size` is 2
+            if (min_span_size == 1 or end-start > 1)  and end-start <= 5: 
                 delta_hidden = mse_states['span_query_hidden'][k, i] - sse_states['all_query_hidden'][end-start][k, start]
                 assert delta_hidden.abs().max().item() < 1e-5

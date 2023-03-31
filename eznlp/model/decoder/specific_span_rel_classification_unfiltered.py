@@ -84,6 +84,8 @@ class UnfilteredSpecificSpanRelClsDecoderConfig(SingleDecoderConfigBase, DiagBou
         self.in_drop_rates = kwargs.pop('in_drop_rates', (0.4, 0.0, 0.0))
         self.hid_drop_rates = kwargs.pop('hid_drop_rates', (0.2, 0.0, 0.0))
         
+        self.min_span_size = kwargs.pop('min_span_size', 2)
+        assert self.min_span_size in (1, 2)
         self.max_span_size_ceiling = kwargs.pop('max_span_size_ceiling', 20)
         self.max_span_size_cov_rate = kwargs.pop('max_span_size_cov_rate', 0.995)
         self.max_span_size = kwargs.pop('max_span_size', None)
@@ -152,6 +154,7 @@ class UnfilteredSpecificSpanRelClsDecoder(DecoderBase, DiagBoundariesPairsDecode
     def __init__(self, config: UnfilteredSpecificSpanRelClsDecoderConfig):
         super().__init__()
         self.fusing_mode = config.fusing_mode
+        self.min_span_size = config.min_span_size
         self.max_span_size = config.max_span_size
         self.max_size_id = config.max_size_id
         self.neg_sampling_rate = config.neg_sampling_rate
@@ -193,7 +196,10 @@ class UnfilteredSpecificSpanRelClsDecoder(DecoderBase, DiagBoundariesPairsDecode
     def get_logits(self, batch: Batch, full_hidden: torch.Tensor, all_query_hidden: Dict[int, torch.Tensor]):
         # full_hidden: (batch, step, hid_dim)
         # query_hidden: (batch, step-k+1, hid_dim)
-        all_hidden = [full_hidden] + list(all_query_hidden.values())
+        if self.min_span_size == 1: 
+            all_hidden = list(all_query_hidden.values())
+        else:
+            all_hidden = [full_hidden] + list(all_query_hidden.values())
         
         batch_logits = []
         for i, curr_len in enumerate(batch.seq_lens.cpu().tolist()):

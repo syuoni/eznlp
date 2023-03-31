@@ -125,6 +125,10 @@ class JointExtractionDecoderConfig(Config, JointExtractionDecoderMixin):
             decoder.in_dim = dim
         
     @property
+    def min_span_size(self):
+        return self.ck_decoder.min_span_size
+        
+    @property
     def max_span_size(self):
         return self.ck_decoder.max_span_size
         
