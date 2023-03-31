@@ -64,7 +64,7 @@ class TestModel(object):
     @pytest.mark.parametrize("use_unfiltered, num_layers, min_span_size, use_context, context_mode, fusing_mode, ck_loss_weight", 
                              [(False, 3,  2, True,  'specific', 'affine', 0.0),  # Baseline
                               (False, 12, 2, True,  'specific', 'affine', 0.0),  # Number of layers
-                              (False, 3,  1, True,  'specific', 'affine', 0.0),  # Minimun span size
+                              (False, 3,  1, True,  'specific', 'affine', 0.0),  # Minimum span size
                               (False, 3,  2, False, 'specific', 'affine', 0.0),  # Context
                               (False, 3,  2, True,  'shallow',  'affine', 0.0),
                               (False, 3,  2, True,  'specific', 'concat', 0.0),  # Fusing mode

@@ -64,7 +64,7 @@ class TestModel(object):
                               (False, 12, 2, 'max_pooling',  True,  True,  False, True,  1.0, 0, 0),  # Number of layers
                               (False, 6,  2, 'max_pooling',  True,  True,  False, True,  1.0, 0, 0), 
                               (False, 1,  2, 'max_pooling',  True,  True,  False, True,  1.0, 0, 0), 
-                              (False, 3,  1, 'max_pooling',  True,  True,  False, True,  1.0, 0, 0),  # Minimun span size
+                              (False, 3,  1, 'max_pooling',  True,  True,  False, True,  1.0, 0, 0),  # Minimum span size
                               (False, 3,  2, 'mean_pooling', True,  True,  False, True,  1.0, 0, 0),  # Initial aggregation
                               (False, 3,  2, 'multiplicative_attention', True,  True,  False, True,  1.0, 0, 0), 
                               (False, 3,  2, 'conv',         True,  True,  False, True,  1.0, 0, 0), 
