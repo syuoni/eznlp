@@ -7,10 +7,12 @@ from eznlp.training import count_params
 
 
 @pytest.mark.parametrize("min_span_size", [2, 1])
-def test_span_bert_like(min_span_size, bert_like_with_tokenizer):
+@pytest.mark.parametrize("use_init_size_emb", [False, True])
+def test_span_bert_like(min_span_size, use_init_size_emb, bert_like_with_tokenizer):
     bert_like, tokenizer = bert_like_with_tokenizer
     bert_like.eval()
-    config = SpanBertLikeConfig(bert_like=bert_like, min_span_size=min_span_size, max_span_size=5)
+    config = SpanBertLikeConfig(bert_like=bert_like, min_span_size=min_span_size, max_span_size=5, use_init_size_emb=use_init_size_emb)
+    config.max_size_id = 3
     span_bert_like = config.instantiate()
     span_bert_like.eval()
     
@@ -34,11 +36,13 @@ def test_span_bert_like(min_span_size, bert_like_with_tokenizer):
 
 
 @pytest.mark.parametrize("min_span_size", [2, 1])
+@pytest.mark.parametrize("use_init_size_emb", [False, True])
 @pytest.mark.parametrize("share_weights_int", [False, True])
 @pytest.mark.parametrize("freeze", [False, True])
-def test_trainble_config(min_span_size, share_weights_int, freeze, bert_like_with_tokenizer):
+def test_trainble_config(min_span_size, use_init_size_emb, share_weights_int, freeze, bert_like_with_tokenizer):
     bert_like, tokenizer = bert_like_with_tokenizer
-    config = SpanBertLikeConfig(bert_like=bert_like, min_span_size=min_span_size, max_span_size=5, share_weights_ext=False, share_weights_int=share_weights_int, freeze=freeze)
+    config = SpanBertLikeConfig(bert_like=bert_like, min_span_size=min_span_size, max_span_size=5, use_init_size_emb=use_init_size_emb, share_weights_ext=False, share_weights_int=share_weights_int, freeze=freeze)
+    config.max_size_id = 3
     span_bert_like = config.instantiate()
     
     if freeze:

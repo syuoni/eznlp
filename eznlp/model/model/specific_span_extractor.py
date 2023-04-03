@@ -66,6 +66,7 @@ class SpecificSpanExtractorConfig(ModelConfigBase):
         self.decoder.build_vocab(*partitions)
         self.span_bert_like.min_span_size = self.decoder.min_span_size
         self.span_bert_like.max_span_size = self.decoder.max_span_size
+        self.span_bert_like.max_size_id = self.decoder.max_size_id
         
         
     def exemplify(self, entry: dict, training: bool=True):

@@ -6,6 +6,7 @@ import transformers
 
 from ..nn.modules import SequencePooling, SequenceAttention
 from ..nn.modules import QueryBertLikeEncoder
+from ..nn.init import reinit_embedding_
 from ..config import Config
 
 
@@ -24,6 +25,7 @@ class SpanBertLikeConfig(Config):
         
         self.min_span_size = kwargs.pop('min_span_size', None)
         self.max_span_size = kwargs.pop('max_span_size', None)
+        self.use_init_size_emb = kwargs.pop('use_init_size_emb', False)
         self.share_weights_ext = kwargs.pop('share_weights_ext', True)  # Share weights externally, i.e., with `bert_like`
         self.share_weights_int = kwargs.pop('share_weights_int', True)  # Share weights internally, i.e., between `query_bert_like` of different span sizes
         assert (not self.share_weights_ext) or self.share_weights_int
@@ -70,6 +72,13 @@ class SpanBertLikeEncoder(torch.nn.Module):
         
         self.dropout = torch.nn.Dropout(config.init_drop_rate)
         
+        if config.use_init_size_emb:
+            self.size_embedding = torch.nn.Embedding(config.max_size_id+1, config.hid_dim)
+            reinit_embedding_(self.size_embedding)
+            
+            self.register_buffer('_span_size_ids', torch.arange(config.max_span_size))
+            self._span_size_ids.masked_fill_(self._span_size_ids > config.max_size_id, config.max_size_id)
+        
         if config.share_weights_int:
             # Share the module across all span sizes
             self.query_bert_like = QueryBertLikeEncoder(config.bert_like.encoder, num_layers=config.num_layers, share_weights=config.share_weights_ext)
@@ -115,6 +124,11 @@ class SpanBertLikeEncoder(torch.nn.Module):
                 query_states = self.init_aggregating[k-self.min_span_size](self.dropout(all_hidden_states[0].permute(0, 2, 1))).permute(0, 2, 1)
                 # query_states: (B, L-K+1, H) -> (B*(L-K+1), 1, H)
                 query_states = query_states.flatten(end_dim=1).unsqueeze(1)
+            
+            if hasattr(self, 'size_embedding'):
+                # size_embedded: (hid_dim, )
+                size_embedded = self.size_embedding(self._span_size_ids[k-1])
+                query_states = query_states + size_embedded
             
             if self.share_weights_int:
                 query_outs = self.query_bert_like(query_states, reshaped_states)

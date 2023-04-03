@@ -132,6 +132,10 @@ class JointExtractionDecoderConfig(Config, JointExtractionDecoderMixin):
     def max_span_size(self):
         return self.ck_decoder.max_span_size
         
+    @property
+    def max_size_id(self):
+        return self.ck_decoder.max_size_id
+        
     def build_vocab(self, *partitions):
         for decoder in self.decoders:
             decoder.build_vocab(*partitions)
