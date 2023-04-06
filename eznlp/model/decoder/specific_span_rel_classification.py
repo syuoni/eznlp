@@ -16,8 +16,8 @@ from ...utils.chunk import chunk_pair_distance
 from ...utils.relation import INV_REL_PREFIX
 from ..encoder import EncoderConfig
 from .base import SingleDecoderConfigBase, DecoderBase
-from .boundaries import MAX_SIZE_ID_COV_RATE, MAX_DIST_ID_COV_RATE
-from .chunks import ChunkPairs
+from .boundaries import MAX_SIZE_ID_COV_RATE
+from .chunks import ChunkPairs, MAX_DIST_ID_COV_RATE
 from .span_rel_classification import ChunkPairsDecoderMixin
 
 logger = logging.getLogger(__name__)

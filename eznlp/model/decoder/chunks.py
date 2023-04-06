@@ -9,6 +9,10 @@ from ...utils.relation import detect_inverse
 from .base import SingleDecoderConfigBase, DecoderBase
 
 
+MAX_DIST_ID_COV_RATE = 0.975
+MAX_CP_DIST_TOL = 5
+
+
 class ChunkPairs(TargetWrapper):
     """A wrapper of chunk-pairs with underlying relations. 
     This object enumerates all pairs between all positive spans (entity spans). 
