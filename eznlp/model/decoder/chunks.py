@@ -82,7 +82,7 @@ class ChunkPairs(TargetWrapper):
         span2ck_label_gold = {} if self.chunks_gold is None else {(start, end): label for label, start, end in self.chunks_gold}
         self.ck_label_ids_gold = torch.tensor([config.ck_label2idx[span2ck_label_gold.get((start, end), config.ck_none_label)] for label, start, end in self.chunks], dtype=torch.long)
         
-        self.cp_dist_ids = torch.tensor([chunk_pair_distance(head, tail) for head, tail, _ in config.enumerate_chunk_pairs(self)], dtype=torch.long)
+        self.cp_dist_ids = torch.tensor([chunk_pair_distance(head, tail) for head, tail in config.enumerate_chunk_pairs(self, return_valid_only=True)], dtype=torch.long)
         self.cp_dist_ids.masked_fill_(self.cp_dist_ids < 0, 0)
         self.cp_dist_ids.masked_fill_(self.cp_dist_ids > config.max_dist_id, config.max_dist_id)
         

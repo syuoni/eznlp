@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import pytest
+import copy
 import torch
 
 from eznlp.dataset import Dataset
@@ -61,24 +62,27 @@ class TestModel(object):
         assert isinstance(self.config.name, str) and len(self.config.name) > 0
         
         
-    @pytest.mark.parametrize("num_layers, use_context, context_mode, context_ext_win, context_exc_ck, fusing_mode, ck_loss_weight, use_inv_rel", 
-                             [(3,  True,  'pair-specific', 0, True,  'affine', 0.0, False),  # Baseline
-                              (12, True,  'pair-specific', 0, True,  'affine', 0.0, False),  # Number of layers
-                              (3,  False, 'pair-specific', 0, True,  'affine', 0.0, False),  # Context
-                              (3,  True,  'specific',      5, True,  'affine', 0.0, False), 
-                              (3,  True,  'pair-specific', 5, True,  'affine', 0.0, False), 
-                              (3,  True,  'pair-specific', 0, False, 'affine', 0.0, False), 
-                              (3,  True,  'pair-specific', 0, True,  'concat', 0.0, False),  # Fusing mode
-                              (3,  True,  'specific',      5, True,  'concat', 0.0, False), 
-                              (3,  True,  'pair-specific', 0, True,  'affine', 0.5, False),  # Chunk loss weight
-                              (3,  True,  'pair-specific', 0, True,  'affine', 0.0, True),   # Inverse relation
-                              (3,  True,  'specific',      5, True,  'affine', 0.0, True)]) 
-    def test_model(self, num_layers, use_context, context_mode, context_ext_win, context_exc_ck, fusing_mode, ck_loss_weight, use_inv_rel, conll2004_demo, bert_with_tokenizer, device):
+    @pytest.mark.parametrize("num_layers, use_init_size_emb, use_init_dist_emb, use_context, context_mode, context_ext_win, context_exc_ck, fusing_mode, ck_loss_weight, use_inv_rel", 
+                             [(3,  False, False, True,  'pair-specific', 0, True,  'affine', 0.0, False),  # Baseline
+                              (12, False, False, True,  'pair-specific', 0, True,  'affine', 0.0, False),  # Number of layers
+                              (3,  True,  False, True,  'pair-specific', 0, True,  'affine', 0.0, False),  # Use initial size/dist embedding
+                              (3,  False, True,  True,  'pair-specific', 0, True,  'affine', 0.0, False), 
+                              (3,  True,  True,  True,  'pair-specific', 0, True,  'affine', 0.0, False), 
+                              (3,  False, False, False, 'pair-specific', 0, True,  'affine', 0.0, False),  # Context
+                              (3,  False, False, True,  'specific',      5, True,  'affine', 0.0, False), 
+                              (3,  False, False, True,  'pair-specific', 5, True,  'affine', 0.0, False), 
+                              (3,  False, False, True,  'pair-specific', 0, False, 'affine', 0.0, False), 
+                              (3,  False, False, True,  'pair-specific', 0, True,  'concat', 0.0, False),  # Fusing mode
+                              (3,  False, False, True,  'specific',      5, True,  'concat', 0.0, False), 
+                              (3,  False, False, True,  'pair-specific', 0, True,  'affine', 0.5, False),  # Chunk loss weight
+                              (3,  False, False, True,  'pair-specific', 0, True,  'affine', 0.0, True),   # Inverse relation
+                              (3,  False, False, True,  'specific',      5, True,  'affine', 0.0, True)]) 
+    def test_model(self, num_layers, use_init_size_emb, use_init_dist_emb, use_context, context_mode, context_ext_win, context_exc_ck, fusing_mode, ck_loss_weight, use_inv_rel, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
         decoder_config = MaskedSpanRelClsDecoderConfig(use_context=use_context, context_mode=context_mode, context_ext_win=context_ext_win, context_exc_ck=context_exc_ck, fusing_mode=fusing_mode, ck_loss_weight=ck_loss_weight, use_inv_rel=use_inv_rel)
         self.config = MaskedSpanExtractorConfig(decoder=decoder_config, 
                                                 bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False, from_subtokenized=True, output_hidden_states=True), 
-                                                masked_span_bert_like=MaskedSpanBertLikeConfig(bert_like=bert, freeze=False, num_layers=num_layers, share_weights_ext=True, share_weights_int=True))
+                                                masked_span_bert_like=MaskedSpanBertLikeConfig(bert_like=bert, freeze=False, num_layers=num_layers, use_init_size_emb=use_init_size_emb, use_init_dist_emb=use_init_dist_emb, share_weights_ext=True, share_weights_int=True))
         preprocessor = BertLikePreProcessor(tokenizer, verbose=False)
         conll2004_demo = preprocessor.subtokenize_for_data(conll2004_demo)
         self._setup_case(conll2004_demo, device)
@@ -107,12 +111,13 @@ class TestModel(object):
 
 
 @pytest.mark.parametrize("min_span_size", [2, 1])
-def test_consistency_with_span_bert_like(min_span_size, conll2004_demo, bert_with_tokenizer, device):
+@pytest.mark.parametrize("use_init_size_emb", [False, True])
+def test_consistency_with_span_bert_like(min_span_size, use_init_size_emb, conll2004_demo, bert_with_tokenizer, device):
     bert, tokenizer = bert_with_tokenizer
     
     sse_config = SpecificSpanExtractorConfig(decoder=SpecificSpanClsDecoderConfig(min_span_size=min_span_size, max_span_size=5), 
                                              bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False, from_subtokenized=True, output_hidden_states=True), 
-                                             span_bert_like=SpanBertLikeConfig(bert_like=bert), 
+                                             span_bert_like=SpanBertLikeConfig(bert_like=bert, use_init_size_emb=use_init_size_emb), 
                                              intermediate2=None)
     preprocessor = BertLikePreProcessor(tokenizer, verbose=False)
     conll2004_demo = preprocessor.subtokenize_for_data(conll2004_demo)
@@ -126,12 +131,14 @@ def test_consistency_with_span_bert_like(min_span_size, conll2004_demo, bert_wit
     
     mse_config = MaskedSpanExtractorConfig(decoder='masked_span_rel', 
                                            bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False, from_subtokenized=True, output_hidden_states=True), 
-                                           masked_span_bert_like=MaskedSpanBertLikeConfig(bert_like=bert))
+                                           masked_span_bert_like=MaskedSpanBertLikeConfig(bert_like=bert, use_init_size_emb=use_init_size_emb))
     for entry in conll2004_demo:
         entry['chunks_pred'] = entry['chunks']
     mse_dataset = Dataset(conll2004_demo, mse_config)
     mse_dataset.build_vocabs_and_dims()
     mse_model = mse_config.instantiate().to(device)
+    if use_init_size_emb: 
+        mse_model.masked_span_bert_like.size_embedding = copy.deepcopy(sse_model.span_bert_like.size_embedding)
     mse_model.eval()
     mse_batch = [mse_dataset[i] for i in range(8)]
     mse_batch = mse_dataset.collate(mse_batch).to(device)
