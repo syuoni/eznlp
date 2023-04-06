@@ -128,7 +128,8 @@ class SpanBertLikeEncoder(torch.nn.Module):
             if hasattr(self, 'size_embedding'):
                 # size_embedded: (hid_dim, )
                 size_embedded = self.size_embedding(self._span_size_ids[k-1])
-                query_states = query_states + size_embedded
+                # apply dropout after expanding the embedding tensor 
+                query_states = query_states + self.dropout(size_embedded.expand_as(query_states))
             
             if self.share_weights_int:
                 query_outs = self.query_bert_like(query_states, reshaped_states)

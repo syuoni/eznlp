@@ -15,7 +15,7 @@ from ...utils.chunk import chunk_pair_distance
 from ...utils.relation import INV_REL_PREFIX
 from ..encoder import EncoderConfig
 from .base import SingleDecoderConfigBase, DecoderBase
-from .boundaries import MAX_SIZE_ID_COV_RATE
+from .boundaries import MAX_SIZE_ID_COV_RATE, MAX_DIST_ID_COV_RATE
 from .chunks import ChunkPairs
 from .span_rel_classification import ChunkPairsDecoderMixin
 
@@ -92,7 +92,10 @@ class MaskedSpanRelClsDecoderConfig(SingleDecoderConfigBase, ChunkPairsDecoderMi
         self.existing_rht_labels = set(list(counter.keys()))
         self.existing_ht_labels = set(rht[1:] for rht in self.existing_rht_labels)
         self.existing_self_rel = any(head[1:]==tail[1:] for data in partitions for entry in data for label, head, tail in entry['relations'])
-        self.max_cp_distance = max(chunk_pair_distance(head, tail) for data in partitions for entry in data for label, head, tail in entry['relations'])
+        
+        cp_distances = [chunk_pair_distance(head, tail) for data in partitions for entry in data for label, head, tail in entry['relations']]
+        self.max_dist_id = math.ceil(numpy.quantile(cp_distances, MAX_DIST_ID_COV_RATE))
+        self.max_cp_dist = max(cp_distances)
         
         
     def exemplify(self, entry: dict, training: bool=True):
@@ -101,7 +104,8 @@ class MaskedSpanRelClsDecoderConfig(SingleDecoderConfigBase, ChunkPairsDecoderMi
         # Attention mask for each example
         cp_obj = example['cp_obj']
         num_tokens, num_chunks = cp_obj.num_tokens, len(cp_obj.chunks)
-        example['masked_span_bert_like'] = {}
+        example['masked_span_bert_like'] = {'span_size_ids': cp_obj.span_size_ids, 
+                                            'cp_dist_ids': cp_obj.cp_dist_ids}
         
         ck2tok_mask = torch.ones(num_chunks, num_tokens, dtype=torch.bool)
         for i, (label, start, end) in enumerate(cp_obj.chunks):
@@ -152,16 +156,22 @@ class MaskedSpanRelClsDecoderConfig(SingleDecoderConfigBase, ChunkPairsDecoderMi
         # Remove `[CLS]` and `[SEP]` 
         batch_sub_mask = batch_sub_mask[:, 2:]
         batch['masked_span_bert_like'] = {}
-        for mask_name in batch_examples[0]['masked_span_bert_like'].keys(): 
-            max_num_items = max(ex['masked_span_bert_like'][mask_name].size(0) for ex in batch_examples)
-            batch_item2tok_mask = batch_sub_mask.unsqueeze(1).repeat(1, max_num_items, 1)
-            
-            for i, ex in enumerate(batch_examples): 
-                item2tok_mask = ex['masked_span_bert_like'][mask_name]
-                num_items, num_tokens = item2tok_mask.size()
-                batch_item2tok_mask[i, :num_items, :num_tokens].logical_or_(item2tok_mask)
-            
-            batch['masked_span_bert_like'].update({mask_name: batch_item2tok_mask})
+        for tensor_name in batch_examples[0]['masked_span_bert_like'].keys(): 
+            if tensor_name.endswith('_mask'): 
+                max_num_items = max(ex['masked_span_bert_like'][tensor_name].size(0) for ex in batch_examples)
+                batch_item2tok_mask = batch_sub_mask.unsqueeze(1).repeat(1, max_num_items, 1)
+                
+                for i, ex in enumerate(batch_examples): 
+                    item2tok_mask = ex['masked_span_bert_like'][tensor_name]
+                    num_items, num_tokens = item2tok_mask.size()
+                    batch_item2tok_mask[i, :num_items, :num_tokens].logical_or_(item2tok_mask)
+                
+                batch['masked_span_bert_like'].update({tensor_name: batch_item2tok_mask})
+                
+            elif tensor_name.endswith('_ids'):
+                batch_ids = [ex['masked_span_bert_like'][tensor_name] for ex in batch_examples]
+                batch_ids = torch.nn.utils.rnn.pad_sequence(batch_ids, batch_first=True, padding_value=0)
+                batch['masked_span_bert_like'].update({tensor_name: batch_ids})
         
         return batch
         
@@ -189,7 +199,8 @@ class MaskedSpanRelClsDecoder(DecoderBase, ChunkPairsDecoderMixin):
         self.existing_rht_labels = config.existing_rht_labels
         self.existing_ht_labels = config.existing_ht_labels
         self.existing_self_rel = config.existing_self_rel
-        self.max_cp_distance = config.max_cp_distance
+        self.max_cp_dist = config.max_cp_dist
+        self.max_dist_id = config.max_dist_id
         
         if config.use_context: 
             # Trainable context vector for overlapping chunk pairs

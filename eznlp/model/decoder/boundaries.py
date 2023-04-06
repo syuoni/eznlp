@@ -10,6 +10,7 @@ from .base import SingleDecoderConfigBase, DecoderBase
 
 
 MAX_SIZE_ID_COV_RATE = 0.975
+MAX_DIST_ID_COV_RATE = 0.975
 
 
 def _spans_from_surrounding(span: Tuple[int], distance: int, num_tokens: int):

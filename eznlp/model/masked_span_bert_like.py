@@ -6,7 +6,7 @@ import transformers
 
 from ..nn.modules import SequencePooling, SequenceAttention
 from ..nn.modules import QueryBertLikeEncoder
-from ..nn.init import reinit_vector_parameter_
+from ..nn.init import reinit_vector_parameter_, reinit_embedding_
 from ..config import Config
 
 
@@ -23,6 +23,8 @@ class MaskedSpanBertLikeConfig(Config):
             self.num_layers = self.bert_like.config.num_hidden_layers
         assert 0 < self.num_layers <= self.bert_like.config.num_hidden_layers
         
+        self.use_init_size_emb = kwargs.pop('use_init_size_emb', False)
+        self.use_init_dist_emb = kwargs.pop('use_init_dist_emb', False)
         self.share_weights_ext = kwargs.pop('share_weights_ext', True)  # Share weights externally, i.e., with `bert_like`
         self.share_weights_int = kwargs.pop('share_weights_int', True)  # Share weights internally, i.e., between `query_bert_like` of different span sizes
         assert self.share_weights_int
@@ -57,6 +59,14 @@ class MaskedSpanBertLikeEncoder(torch.nn.Module):
             self.init_aggregating = SequenceAttention(config.hid_dim, scoring=config.init_agg_mode.replace('_attention', ''))
         
         self.dropout = torch.nn.Dropout(config.init_drop_rate)
+        
+        if config.use_init_size_emb:
+            self.size_embedding = torch.nn.Embedding(config.max_size_id+1, config.hid_dim)
+            reinit_embedding_(self.size_embedding)
+        
+        if config.use_init_dist_emb:
+            self.dist_embedding = torch.nn.Embedding(config.max_dist_id+1, config.hid_dim)
+            reinit_embedding_(self.dist_embedding)
         
         assert config.share_weights_int
         # Share the module across all span sizes
@@ -95,7 +105,7 @@ class MaskedSpanBertLikeEncoder(torch.nn.Module):
         return attention_mask.float() * -10000
         
         
-    def _forward_aggregation(self, all_hidden_states: List[torch.Tensor], init_mask: torch.Tensor, attention_mask: torch.Tensor): 
+    def _forward_aggregation(self, all_hidden_states: List[torch.Tensor], init_mask: torch.Tensor, attention_mask: torch.Tensor, init_embedded: torch.Tensor=None): 
         batch_size, num_steps, hid_dim = all_hidden_states[0].size()
         num_items = init_mask.size(1)
         if num_items == 0: 
@@ -118,9 +128,12 @@ class MaskedSpanBertLikeEncoder(torch.nn.Module):
             # Initial context queries are also created from span attention mask (instead of context attention mask)
             query_states = self.init_aggregating(self.dropout(reshaped_states0), mask=init_mask.view(-1, num_steps))
             query_states = query_states.view(batch_size, -1, hid_dim)
-            
-            # attention_mask: (B, NI, L)
-            query_outs = self.query_bert_like(query_states, all_hidden_states, self.get_extended_attention_mask(attention_mask))
+        
+        if init_embedded is not None:
+            query_states = query_states + self.dropout(init_embedded)
+        
+        # attention_mask: (B, NI, L)
+        query_outs = self.query_bert_like(query_states, all_hidden_states, self.get_extended_attention_mask(attention_mask))
         
         if zero_indic.any().item(): 
             # DO NOT inplace modify tensors 
@@ -131,6 +144,8 @@ class MaskedSpanBertLikeEncoder(torch.nn.Module):
         
     def forward(self, 
                 all_hidden_states: List[torch.Tensor], 
+                span_size_ids: torch.Tensor, 
+                cp_dist_ids: torch.Tensor, 
                 ck2tok_mask: torch.Tensor, 
                 ctx2tok_mask: torch.Tensor, 
                 pair2tok_mask: torch.Tensor=None):
@@ -138,13 +153,23 @@ class MaskedSpanBertLikeEncoder(torch.nn.Module):
         all_hidden_states = all_hidden_states[-(self.num_layers+1):]
         
         all_last_query_states = OrderedDict()
-        span_query_outs = self._forward_aggregation(all_hidden_states, init_mask=ck2tok_mask, attention_mask=ck2tok_mask)
+        span_init_embedded = None
+        if hasattr(self, 'size_embedding'): 
+            # size_embedded: (batch, num_chunks, hid_dim)
+            size_embedded = self.size_embedding(span_size_ids)
+            span_init_embedded = size_embedded 
+        span_query_outs = self._forward_aggregation(all_hidden_states, init_mask=ck2tok_mask, attention_mask=ck2tok_mask, init_embedded=span_init_embedded)
         all_last_query_states['span_query_state'] = span_query_outs['last_query_state']
         
         if pair2tok_mask is None:
-            ctx_query_outs = self._forward_aggregation(all_hidden_states, init_mask=ck2tok_mask, attention_mask=ctx2tok_mask)
+            ctx_query_outs = self._forward_aggregation(all_hidden_states, init_mask=ck2tok_mask, attention_mask=ctx2tok_mask, init_embedded=span_init_embedded)
         else:
-            ctx_query_outs = self._forward_aggregation(all_hidden_states, init_mask=pair2tok_mask, attention_mask=ctx2tok_mask)
+            ctx_init_embedded = None
+            if hasattr(self, 'dist_embedding'): 
+                # dist_embedded: (batch, num_pairs, hid_dim)
+                dist_embedded = self.dist_embedding(cp_dist_ids)
+                ctx_init_embedded = dist_embedded 
+            ctx_query_outs = self._forward_aggregation(all_hidden_states, init_mask=pair2tok_mask, attention_mask=ctx2tok_mask, init_embedded=ctx_init_embedded)
         all_last_query_states['ctx_query_state'] = ctx_query_outs['last_query_state']
         
         return all_last_query_states

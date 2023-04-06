@@ -74,14 +74,13 @@ def count_nested(chunks1: List[tuple], chunks2: List[tuple]=None, strict: bool=T
     return len(detect_nested(chunks1, chunks2=chunks2, strict=strict))
 
 
-def chunk_pair_distance(chunk1: tuple, chunk2: tuple, overlap_distance: int=-1):
+def chunk_pair_distance(chunk1: tuple, chunk2: tuple):
+    """Return the distance between two chunks. 
+    If the two chunks do not overlap, the distance is the size of span between them.
+    If the two chunks overlap (e.g., nested), the distance is the negative size of overlapping span. 
+    """
     (_, s1, e1), (_, s2, e2) = chunk1, chunk2
-    if e1 <= s2:
-        return s2 - e1
-    elif e2 <= s1:
-        return s1 - e2
-    else:
-        return overlap_distance
+    return max(s1, s2) - min(e1, e2)
 
 
 

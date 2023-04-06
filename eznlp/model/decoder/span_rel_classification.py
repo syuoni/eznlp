@@ -18,13 +18,13 @@ from ...utils.chunk import chunk_pair_distance
 from ...utils.relation import INV_REL_PREFIX
 from ..encoder import EncoderConfig
 from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
-from .boundaries import MAX_SIZE_ID_COV_RATE
+from .boundaries import MAX_SIZE_ID_COV_RATE, MAX_DIST_ID_COV_RATE
 from .chunks import ChunkPairs
 
 logger = logging.getLogger(__name__)
 
 
-MAX_CP_DISTANCE_TOL = 10
+MAX_CP_DIST_TOL = 5
 
 
 class ChunkPairsDecoderMixin(DecoderMixinBase):
@@ -97,7 +97,7 @@ class ChunkPairsDecoderMixin(DecoderMixinBase):
             is_valid = True
             if hasattr(cp_obj, 'tok2sent_idx') and (cp_obj.tok2sent_idx[head[1]] != cp_obj.tok2sent_idx[tail[1]]): 
                 is_valid = False
-            if chunk_pair_distance(head, tail) > self.max_cp_distance + MAX_CP_DISTANCE_TOL: 
+            if chunk_pair_distance(head, tail) > self.max_cp_dist + MAX_CP_DIST_TOL: 
                 is_valid = False
             if (not self.existing_self_rel and head[1:] == tail[1:]):
                 is_valid = False
@@ -184,7 +184,10 @@ class SpanRelClassificationDecoderConfig(SingleDecoderConfigBase, ChunkPairsDeco
         self.existing_rht_labels = set(list(counter.keys()))
         self.existing_ht_labels = set(rht[1:] for rht in self.existing_rht_labels)
         self.existing_self_rel = any(head[1:]==tail[1:] for data in partitions for entry in data for label, head, tail in entry['relations'])
-        self.max_cp_distance = max(chunk_pair_distance(head, tail) for data in partitions for entry in data for label, head, tail in entry['relations'])
+        
+        cp_distances = [chunk_pair_distance(head, tail) for data in partitions for entry in data for label, head, tail in entry['relations']]
+        self.max_dist_id = math.ceil(numpy.quantile(cp_distances, MAX_DIST_ID_COV_RATE))
+        self.max_cp_dist = max(cp_distances)
         
         
     def instantiate(self):
@@ -209,7 +212,8 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
         self.existing_rht_labels = config.existing_rht_labels
         self.existing_ht_labels = config.existing_ht_labels
         self.existing_self_rel = config.existing_self_rel
-        self.max_cp_distance = config.max_cp_distance
+        self.max_cp_dist = config.max_cp_dist
+        self.max_dist_id = config.max_dist_id
         
         if config.agg_mode.lower().endswith('_pooling'):
             self.aggregating = SequencePooling(mode=config.agg_mode.replace('_pooling', ''))
