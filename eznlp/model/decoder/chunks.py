@@ -120,6 +120,16 @@ class ChunkPairs(TargetWrapper):
                     # In this case, `cp2label_id` is only for forwarding to a "fake" loss, but not for backwarding. 
                     # (2) `head`/`tail` is filtered out because of exceeding `max_span_size`.
                     assert (not self.training) or (head[2]-head[1] > self.max_span_size) or (tail[2]-tail[1] > self.max_span_size)
+            
+            if config.ss_epsilon > 0:
+                # Soft label loss for simplified smoothing
+                self.cp2label_id = torch.nn.functional.one_hot(self.cp2label_id, num_classes=config.voc_dim).float()
+                self.cp2label_id = self.cp2label_id * (1 - config.ss_epsilon)
+                self.cp2label_id[:, :, config.none_idx] += 1 - self.cp2label_id.sum(dim=-1)
+                
+                self.ck_label_ids_gold = torch.nn.functional.one_hot(self.ck_label_ids_gold, num_classes=config.ck_voc_dim).float()
+                self.ck_label_ids_gold = self.ck_label_ids_gold * (1 - config.ss_epsilon)
+                self.ck_label_ids_gold[:, config.ck_none_idx] += 1 - self.ck_label_ids_gold.sum(dim=-1)
 
 
 

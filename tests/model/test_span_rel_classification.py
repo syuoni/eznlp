@@ -52,13 +52,12 @@ class TestModel(object):
         
         
     @pytest.mark.parametrize("use_context", [True, False])
-    @pytest.mark.parametrize("size_emb_dim", [0, 25])
     @pytest.mark.parametrize("fusing_mode", ['concat', 'affine'])
-    @pytest.mark.parametrize("agg_mode", ['max_pooling', 'multiplicative_attention'])
+    @pytest.mark.parametrize("ss_epsilon", [0.0, 0.1])
     @pytest.mark.parametrize("ck_loss_weight", [0, 0.5])
     @pytest.mark.parametrize("use_inv_rel", [False, True])
-    def test_model(self, use_context, size_emb_dim, fusing_mode, agg_mode, ck_loss_weight, use_inv_rel, conll2004_demo, device):
-        self.config = ExtractorConfig(decoder=SpanRelClassificationDecoderConfig(use_context=use_context, size_emb_dim=size_emb_dim, fusing_mode=fusing_mode, agg_mode=agg_mode, ck_loss_weight=ck_loss_weight, use_inv_rel=use_inv_rel))
+    def test_model(self, use_context, fusing_mode, ss_epsilon, ck_loss_weight, use_inv_rel, conll2004_demo, device):
+        self.config = ExtractorConfig(decoder=SpanRelClassificationDecoderConfig(use_context=use_context, fusing_mode=fusing_mode, ss_epsilon=ss_epsilon, ck_loss_weight=ck_loss_weight, use_inv_rel=use_inv_rel))
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()

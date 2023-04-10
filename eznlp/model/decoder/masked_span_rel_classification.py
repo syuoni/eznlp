@@ -9,7 +9,7 @@ import torch
 
 from ...wrapper import Batch
 from ...nn.modules import CombinedDropout
-from ...nn.modules import BiAffineFusor, TriAffineFusor
+from ...nn.modules import SoftLabelCrossEntropyLoss, BiAffineFusor, TriAffineFusor
 from ...nn.init import reinit_embedding_, reinit_layer_, reinit_vector_parameter_
 from ...utils.chunk import chunk_pair_distance
 from ...utils.relation import INV_REL_PREFIX
@@ -52,6 +52,9 @@ class MaskedSpanRelClsDecoderConfig(SingleDecoderConfigBase, ChunkPairsDecoderMi
         self.idx2label = kwargs.pop('idx2label', None)
         self.ck_none_label = kwargs.pop('ck_none_label', '<none>')
         self.idx2ck_label = kwargs.pop('idx2ck_label', None)
+        
+        # Simplified smoothing epsilon
+        self.ss_epsilon = kwargs.pop('ss_epsilon', 0.0)
         super().__init__(**kwargs)
         
         
@@ -74,6 +77,19 @@ class MaskedSpanRelClsDecoderConfig(SingleDecoderConfigBase, ChunkPairsDecoderMi
             self.reduction.in_dim = dim + self.size_emb_dim + self.label_emb_dim
             if self.use_context:
                 self.reduction_ctx.in_dim = dim
+        
+    @property
+    def criterion(self):
+        if self.ss_epsilon > 0:
+            return f"SS({self.ss_epsilon:.2f})"
+        else:
+            return super().criterion
+        
+    def instantiate_criterion(self, **kwargs):
+        if self.criterion.lower().startswith('ss'):
+            return SoftLabelCrossEntropyLoss(**kwargs)
+        else:
+            return super().instantiate_criterion(**kwargs)
         
         
     def build_vocab(self, *partitions):
@@ -196,6 +212,7 @@ class MaskedSpanRelClsDecoder(DecoderBase, ChunkPairsDecoderMixin):
         self.idx2label = config.idx2label
         self.ck_none_label = config.ck_none_label
         self.idx2ck_label = config.idx2ck_label
+        self.ss_epsilon = config.ss_epsilon
         self.existing_rht_labels = config.existing_rht_labels
         self.existing_ht_labels = config.existing_ht_labels
         self.existing_self_rel = config.existing_self_rel
