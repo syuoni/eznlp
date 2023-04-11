@@ -35,6 +35,9 @@ class SpecificSpanRelClsDecoderConfig(SingleDecoderConfigBase, ChunkPairsDecoder
         self.reduction = kwargs.pop('reduction', EncoderConfig(arch='FFN', hid_dim=150, num_layers=1, in_drop_rates=(0.0, 0.0, 0.0), hid_drop_rate=0.0))
         if self.use_context: 
             self.reduction_ctx = copy.deepcopy(self.reduction)
+        if self.fusing_mode.lower().startswith('concat'):
+            self.reduction_cat = copy.deepcopy(self.reduction)
+            self.reduction_cat.hid_dim = self.reduction.hid_dim*self.num_hidden
         
         self.in_drop_rates = kwargs.pop('in_drop_rates', (0.4, 0.0, 0.0))
         self.hid_drop_rates = kwargs.pop('hid_drop_rates', (0.2, 0.0, 0.0))
@@ -71,6 +74,10 @@ class SpecificSpanRelClsDecoderConfig(SingleDecoderConfigBase, ChunkPairsDecoder
         return self._repr_non_config_attrs(repr_attr_dict)
         
     @property
+    def num_hidden(self):
+        return 3 if self.use_context else 2
+        
+    @property
     def in_dim(self):
         return self._in_dim
         
@@ -81,6 +88,8 @@ class SpecificSpanRelClsDecoderConfig(SingleDecoderConfigBase, ChunkPairsDecoder
             self.reduction.in_dim = dim + self.size_emb_dim + self.label_emb_dim
             if self.use_context:
                 self.reduction_ctx.in_dim = dim
+            if self.fusing_mode.lower().startswith('concat'):
+                self.reduction_cat.in_dim = self.in_dim*self.num_hidden + self.size_emb_dim*2 + self.label_emb_dim*2
         
     @property
     def criterion(self):
@@ -186,10 +195,11 @@ class SpecificSpanRelClsDecoder(DecoderBase, ChunkPairsDecoderMixin):
         self.hid_dropout = CombinedDropout(*config.hid_drop_rates)
         
         if config.fusing_mode.lower().startswith('concat'):
-            if config.use_context: 
-                self.hid2logit = torch.nn.Linear(config.in_dim*3+config.size_emb_dim*2+config.label_emb_dim*2, config.voc_dim)
+            if config.reduction_cat.num_layers > 0 and config.reduction_cat.out_dim > 0:
+                self.reduction_cat = config.reduction_cat.instantiate()
+                self.hid2logit = torch.nn.Linear(config.reduction_cat.out_dim, config.voc_dim)
             else:
-                self.hid2logit = torch.nn.Linear(config.in_dim*2+config.size_emb_dim*2+config.label_emb_dim*2, config.voc_dim)
+                self.hid2logit = torch.nn.Linear(config.reduction_cat.in_dim, config.voc_dim)
             reinit_layer_(self.hid2logit, 'sigmoid')
             
         elif config.fusing_mode.lower().startswith('affine'):
@@ -299,8 +309,12 @@ class SpecificSpanRelClsDecoder(DecoderBase, ChunkPairsDecoderMixin):
                         else: 
                             contexts = self._collect_specific_contexts(all_hidden, i, cp_obj)
                         hidden_cat = torch.cat([hidden_cat, contexts], dim=-1)
-                    # logits: (num_chunks, num_chunks, logit_dim)
-                    logits = self.hid2logit(hidden_cat)
+                    if hasattr(self, 'reduction_cat'):
+                        reduced_cat = self.reduction_cat(hidden_cat)
+                        logits = self.hid2logit(self.hid_dropout(reduced_cat))
+                    else: 
+                        # logits: (num_chunks, num_chunks, logit_dim)
+                        logits = self.hid2logit(hidden_cat)
                     
                 elif self.fusing_mode.lower().startswith('affine'):
                     reduced_head = self.reduction_head(head_hidden)
