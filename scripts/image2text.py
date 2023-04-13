@@ -53,9 +53,9 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                help="transformer position-wise feedforward dim")
     # Loss
     group_decoder.add_argument('--fl_gamma', type=float, default=0.0, 
-                               help="Focal Loss gamma")
+                               help="focal Loss gamma")
     group_decoder.add_argument('--sl_epsilon', type=float, default=0.0, 
-                               help="Label smoothing loss epsilon")
+                               help="label smoothing loss epsilon")
     return parse_to_args(parser)
 
 

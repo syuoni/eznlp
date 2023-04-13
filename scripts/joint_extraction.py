@@ -43,9 +43,9 @@ def parse_arguments(parser: argparse.ArgumentParser):
     
     # Loss
     group_decoder.add_argument('--fl_gamma', type=float, default=0.0, 
-                               help="Focal Loss gamma")
+                               help="focal Loss gamma")
     group_decoder.add_argument('--sl_epsilon', type=float, default=0.0, 
-                               help="Label smoothing loss epsilon")
+                               help="label smoothing loss epsilon")
     
     # Sequence tagging
     group_decoder.add_argument('--scheme', type=str, default='BIOES', 
@@ -66,25 +66,23 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                help="chunk label embedding dim")
     
     # Boundary selection
-    group_decoder.add_argument('--no_biaffine', dest='use_biaffine', default=True, action='store_false', 
-                               help="whether to use biaffine")
-    group_decoder.add_argument('--affine_arch', type=str, default='FFN', 
-                               help="affine encoder architecture")
-    group_decoder.add_argument('--affine_dim', type=int, default=150, 
-                               help="affine encoder hidden dim")
-    group_decoder.add_argument('--affine_num_layers', type=int, default=1, 
-                               help="number of affine encoder layers")
+    group_decoder.add_argument('--red_arch', type=str, default='FFN', 
+                               help="pre-affine dimension reduction architecture")
+    group_decoder.add_argument('--red_dim', type=int, default=150, 
+                               help="pre-affine dimension reduction hidden dim")
+    group_decoder.add_argument('--red_num_layers', type=int, default=1, 
+                               help="number of layers in pre-affine dimension reduction")
     group_decoder.add_argument('--neg_sampling_rate', type=float, default=1.0, 
-                               help="Negative sampling rate")
+                               help="negative sampling rate")
     group_decoder.add_argument('--neg_sampling_power_decay', type=float, default=0.0, 
-                               help="Negative sampling rate power decay parameter")
+                               help="negative sampling rate power decay parameter")
     group_decoder.add_argument('--neg_sampling_surr_rate', type=float, default=0.0, 
-                               help="Extra negative sampling rate surrounding positive samples")
+                               help="extra negative sampling rate surrounding positive samples")
     group_decoder.add_argument('--neg_sampling_surr_size', type=int, default=5, 
-                               help="Extra negative sampling rate surrounding size")
+                               help="extra negative sampling rate surrounding size")
     
     group_decoder.add_argument('--sb_epsilon', type=float, default=0.0, 
-                               help="Boundary smoothing loss epsilon")
+                               help="boundary smoothing loss epsilon")
     return parse_to_args(parser)
 
 
@@ -110,8 +108,8 @@ def build_joint_config(args: argparse.Namespace):
                                                             size_emb_dim=args.size_emb_dim, 
                                                             in_drop_rates=drop_rates)
     elif args.ck_decoder == 'boundary_selection':
-        ck_decoder_config = BoundarySelectionDecoderConfig(use_biaffine=args.use_biaffine, 
-                                                           affine=EncoderConfig(arch=args.affine_arch, hid_dim=args.affine_dim, num_layers=args.affine_num_layers, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2), 
+        reduction_config = EncoderConfig(arch=args.red_arch, hid_dim=args.red_dim, num_layers=args.red_num_layers, in_drop_rates=(0.0, 0.0, 0.0), hid_drop_rate=0.0)
+        ck_decoder_config = BoundarySelectionDecoderConfig(reduction=reduction_config, 
                                                            fl_gamma=args.fl_gamma,
                                                            sl_epsilon=args.sl_epsilon, 
                                                            neg_sampling_rate=args.neg_sampling_rate, 
@@ -119,9 +117,7 @@ def build_joint_config(args: argparse.Namespace):
                                                            neg_sampling_surr_rate=args.neg_sampling_surr_rate, 
                                                            neg_sampling_surr_size=args.neg_sampling_surr_size, 
                                                            sb_epsilon=args.sb_epsilon,
-                                                           size_emb_dim=args.size_emb_dim, 
-                                                           #hid_drop_rates=drop_rates,
-                                                           )
+                                                           size_emb_dim=args.size_emb_dim)
     
     if args.attr_decoder == 'None':
         attr_decoder_config = None
