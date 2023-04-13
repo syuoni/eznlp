@@ -9,7 +9,7 @@ import torch
 import transformers
 
 from eznlp.token import TokenSequence
-from eznlp.model import BertLikeConfig, BertLikePreProcessor
+from eznlp.model import BertLikeConfig, BertLikePreProcessor, BertLikePostProcessor
 from eznlp.model.bert_like import _tokenized2nested
 from eznlp.training import count_params
 from eznlp.io import TabularIO
@@ -169,3 +169,21 @@ class TestBertLikePreProcessor(object):
                 if isinstance(new_ck[1], float) or isinstance(new_ck[2], float):
                     continue
                 assert "".join(entry['tokens'].raw_text[ck[1]:ck[2]]).lower() == "".join(new_entry['tokens'].raw_text[new_ck[1]:new_ck[2]]).replace(sub_prefix, "").lower()
+
+
+
+class TestBertLikePostProcessor(object):
+    @pytest.mark.parametrize("model_max_length", [52, 102])
+    def test_restore_chunks_for_data(self, model_max_length, bert_like_with_tokenizer, conll2003_demo):
+        bert_like, tokenizer = bert_like_with_tokenizer
+        preprocessor = BertLikePreProcessor(tokenizer, model_max_length=model_max_length, verbose=False)
+        
+        set_chunks_ori = [entry['chunks'] for entry in conll2003_demo]
+        new_data = preprocessor.merge_sentences_for_data(conll2003_demo, doc_key=None)
+        new_data = preprocessor.subtokenize_for_data(new_data)
+        assert len(new_data) < 10
+        
+        postprocessor = BertLikePostProcessor(verbose=False)
+        set_chunks_restored = postprocessor.restore_chunks_for_data(new_data)
+        assert len(set_chunks_restored) == 10
+        assert set_chunks_restored == set_chunks_ori

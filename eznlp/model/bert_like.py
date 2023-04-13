@@ -726,3 +726,36 @@ class BertLikePreProcessor(object):
             new_data.extend(new_doc)
         
         return new_data
+
+
+
+class BertLikePostProcessor(object):
+    def __init__(self, verbose: bool=True):
+        self.verbose = verbose
+        
+    def restore_chunks_for_data(self, data: List[dict]):
+        set_chunks = []
+        for entry in tqdm.tqdm(data, disable=not self.verbose, ncols=100, desc="Restoring chunks"):
+            num_tokens = len(entry['tokens'])
+            sub2ori_idx = entry.get('sub2ori_idx', [i for i in range(num_tokens+1)])
+            ori2sub_idx = entry.get('ori2sub_idx', [i for i in range(num_tokens+1)])
+            tok2sent_idx = entry.get('tok2sent_idx', [0 for _ in range(num_tokens)])
+            
+            # Restore chunks at the document leval
+            ori_chunks = [(label, sub2ori_idx[start], sub2ori_idx[end]) for label, start, end in entry['chunks']]
+            
+            # Restore chunks to the sentence level
+            # Restore `tok2sent_idx` first, because `tok2sent_idx` has been changed to sub-token indexes in pre-processing
+            tok2sent_idx = [tok2sent_idx[si] for si in ori2sub_idx[:-1]]
+            sent_starts = [tok2sent_idx.index(sidx) for sidx in range(tok2sent_idx[-1]+1)]
+            doc_chunks = [[] for _ in range(tok2sent_idx[-1]+1)]
+            
+            for label, start, end in ori_chunks:
+                sidx = tok2sent_idx[start]
+                assert tok2sent_idx[end-1] == sidx
+                curr_start = sent_starts[sidx]
+                doc_chunks[sidx].append((label, start-curr_start, end-curr_start))
+            
+            set_chunks.extend(doc_chunks)
+        
+        return set_chunks
