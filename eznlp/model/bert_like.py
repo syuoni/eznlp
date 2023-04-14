@@ -499,16 +499,20 @@ class BertLikePreProcessor(object):
             new_entry['tok2sent_idx'] = [entry['tok2sent_idx'][int(oi)] for oi in sub2ori_idx[:-1]]
             assert len(new_entry['tok2sent_idx']) == len(new_entry['tokens'])
         
-        if 'chunks' in entry:
-            new_entry['chunks'] = [(label, ori2sub_idx[start], ori2sub_idx[end]) for label, start, end in entry['chunks']]
-        if 'relations' in entry:
-            new_entry['relations'] = [(label, (h_label, ori2sub_idx[h_start], ori2sub_idx[h_end]), (t_label, ori2sub_idx[t_start], ori2sub_idx[t_end])) 
-                                          for label, (h_label, h_start, h_end), (t_label, t_start, t_end) in entry['relations']]
-            assert all(head in new_entry['chunks'] and tail in new_entry['chunks'] for label, head, tail in new_entry['relations'])
-        if 'attributes' in entry:
-            new_entry['attributes'] = [(label, (ck_label, ori2sub_idx[ck_start], ori2sub_idx[ck_end])) 
-                                           for label, (ck_label, ck_start, ck_end) in entry['attributes']]
-            assert all(chunk in new_entry['chunks'] for label, chunk in entry['attributes'])
+        for ck_key in (key for key in entry.keys() if key.startswith('chunks')):
+            new_entry[ck_key] = [(label, ori2sub_idx[start], ori2sub_idx[end]) for label, start, end in entry[ck_key]]
+        
+        for rel_key in (key for key in entry.keys() if key.startswith('relations')):
+            ck_key = rel_key.replace('relations', 'chunks')
+            new_entry[rel_key] = [(label, (h_label, ori2sub_idx[h_start], ori2sub_idx[h_end]), (t_label, ori2sub_idx[t_start], ori2sub_idx[t_end])) 
+                                      for label, (h_label, h_start, h_end), (t_label, t_start, t_end) in entry[rel_key]]
+            assert all(head in new_entry[ck_key] and tail in new_entry[ck_key] for label, head, tail in new_entry[rel_key])
+        
+        for attr_key in (key for key in entry.keys() if key.startswith('attributes')):
+            ck_key = attr_key.replace('attributes', 'chunks')
+            new_entry[attr_key] = [(label, (ck_label, ori2sub_idx[ck_start], ori2sub_idx[ck_end])) 
+                                       for label, (ck_label, ck_start, ck_end) in entry[attr_key]]
+            assert all(chunk in new_entry[ck_key] for label, chunk in entry[attr_key])
         
         others = {k: v for k, v in entry.items() if k not in new_entry}
         new_entry.update(others)
@@ -586,16 +590,20 @@ class BertLikePreProcessor(object):
             new_entry['tok2sent_idx'] = [entry['tok2sent_idx'][oi] for oi in sub2ori_idx[:-1]]
             assert len(new_entry['tok2sent_idx']) == len(new_entry['tokens'])
         
-        if 'chunks' in entry:
-            new_entry['chunks'] = [(label, ori2sub_idx[start], ori2sub_idx[end]) for label, start, end in entry['chunks']]
-        if 'relations' in entry:
-            new_entry['relations'] = [(label, (h_label, ori2sub_idx[h_start], ori2sub_idx[h_end]), (t_label, ori2sub_idx[t_start], ori2sub_idx[t_end])) 
-                                          for label, (h_label, h_start, h_end), (t_label, t_start, t_end) in entry['relations']]
-            assert all(head in new_entry['chunks'] and tail in new_entry['chunks'] for label, head, tail in new_entry['relations'])
-        if 'attributes' in entry:
-            new_entry['attributes'] = [(label, (ck_label, ori2sub_idx[ck_start], ori2sub_idx[ck_end])) 
-                                           for label, (ck_label, ck_start, ck_end) in entry['attributes']]
-            assert all(chunk in new_entry['chunks'] for label, chunk in entry['attributes'])
+        for ck_key in (key for key in entry.keys() if key.startswith('chunks')):
+            new_entry[ck_key] = [(label, ori2sub_idx[start], ori2sub_idx[end]) for label, start, end in entry[ck_key]]
+        
+        for rel_key in (key for key in entry.keys() if key.startswith('relations')):
+            ck_key = rel_key.replace('relations', 'chunks')
+            new_entry[rel_key] = [(label, (h_label, ori2sub_idx[h_start], ori2sub_idx[h_end]), (t_label, ori2sub_idx[t_start], ori2sub_idx[t_end])) 
+                                      for label, (h_label, h_start, h_end), (t_label, t_start, t_end) in entry[rel_key]]
+            assert all(head in new_entry[ck_key] and tail in new_entry[ck_key] for label, head, tail in new_entry[rel_key])
+        
+        for attr_key in (key for key in entry.keys() if key.startswith('attributes')):
+            ck_key = attr_key.replace('attributes', 'chunks')
+            new_entry[attr_key] = [(label, (ck_label, ori2sub_idx[ck_start], ori2sub_idx[ck_end])) 
+                                       for label, (ck_label, ck_start, ck_end) in entry[attr_key]]
+            assert all(chunk in new_entry[ck_key] for label, chunk in entry[attr_key])
         
         others = {k: v for k, v in entry.items() if k not in new_entry}
         new_entry.update(others)
@@ -659,31 +667,33 @@ class BertLikePreProcessor(object):
                     new_entry['tokens'] += entry['tokens']
                     new_entry['tok2sent_idx'].extend([sidx for _ in range(len(entry['tokens']))])
                 
-                if 'chunks' in entry:
-                    new_chunks = [(label, start+curr_start, end+curr_start) for label, start, end in entry['chunks']]
-                    assert [new_entry['tokens'][s:e] for _, s, e in new_chunks] == [entry['tokens'][s:e] for _, s, e in entry['chunks']]
-                    if 'chunks' in new_entry:
-                        new_entry['chunks'].extend(new_chunks)
+                for ck_key in (key for key in entry.keys() if key.startswith('chunks')):
+                    new_chunks = [(label, start+curr_start, end+curr_start) for label, start, end in entry[ck_key]]
+                    assert [new_entry['tokens'][s:e] for _, s, e in new_chunks] == [entry['tokens'][s:e] for _, s, e in entry[ck_key]]
+                    if ck_key in new_entry:
+                        new_entry[ck_key].extend(new_chunks)
                     else:
-                        new_entry['chunks'] = new_chunks
+                        new_entry[ck_key] = new_chunks
                 
-                if 'relations' in entry:
+                for rel_key in (key for key in entry.keys() if key.startswith('relations')):
+                    ck_key = rel_key.replace('relations', 'chunks')
                     new_relations = [(label, (h_label, h_start+curr_start, h_end+curr_start), (t_label, t_start+curr_start, t_end+curr_start)) 
-                                         for label, (h_label, h_start, h_end), (t_label, t_start, t_end) in entry['relations']]
-                    assert all(head in new_entry['chunks'] and tail in new_entry['chunks'] for label, head, tail in new_relations)
-                    if 'relations' in new_entry:
-                        new_entry['relations'].extend(new_relations)
+                                         for label, (h_label, h_start, h_end), (t_label, t_start, t_end) in entry[rel_key]]
+                    assert all(head in new_entry[ck_key] and tail in new_entry[ck_key] for label, head, tail in new_relations)
+                    if rel_key in new_entry:
+                        new_entry[rel_key].extend(new_relations)
                     else:
-                        new_entry['relations'] = new_relations
+                        new_entry[rel_key] = new_relations
                 
-                if 'attributes' in entry:
+                for attr_key in (key for key in entry.keys() if key.startswith('attributes')):
+                    ck_key = attr_key.replace('attributes', 'chunks')
                     new_attributes = [(label, (ck_label, ck_start+curr_start, ck_end+curr_start)) 
-                                          for label, (ck_label, ck_start, ck_end) in entry['attributes']]
-                    assert all(chunk in new_entry['chunks'] for label, chunk in new_attributes)
-                    if 'attributes' in new_entry:
-                        new_entry['attributes'].extend(new_attributes)
+                                          for label, (ck_label, ck_start, ck_end) in entry[attr_key]]
+                    assert all(chunk in new_entry[ck_key] for label, chunk in new_attributes)
+                    if attr_key in new_entry:
+                        new_entry[attr_key].extend(new_attributes)
                     else:
-                        new_entry['attributes'] = new_attributes
+                        new_entry[attr_key] = new_attributes
                 
                 # Check other fields (e.g., meta info) consistent? 
                 others = {k: v for k, v in entry.items() if k not in new_entry}
