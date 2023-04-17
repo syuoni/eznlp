@@ -22,7 +22,7 @@ FILTER_COLS = ['pdb', 'profile', 'log_terminal', 'use_amp',
                'dataset', 'corrupt_rate', 'save_preds', 'pipeline', 
                'fl_gamma', 'sl_epsilon', 
                'scheme', 'use_crf', 
-               'use_biaffine', 'use_biaffine_prod', 'neg_sampling_surr_rate', 'neg_sampling_surr_size']
+               'neg_sampling_surr_rate', 'neg_sampling_surr_size']
 
 
 if __name__ == '__main__':
@@ -56,18 +56,18 @@ if __name__ == '__main__':
         for fn in logging_fns:
             with open(fn) as f:
                 log_text = f.read()
-                
+            
             try:
+                # Results on the test set may be unavailable
+                _, log_text = log_text.split("Evaluating on dev-set", maxsplit=1)
+                log_text_dev, log_text_test = log_text.split("Evaluating on test-set", maxsplit=1)
+                
                 exp_res = dict_re.search(log_text).group()
                 exp_res = eval(exp_res)
                 exp_res['logging_timestamp'] = fn.split(os.path.sep)[2]
                 
                 num_metrics = 0
                 for me_name, me_re in metrics_re.items():
-                    # Results on the test set may be unavailable
-                    log_text_dev, *log_text_test = log_text.split("Evaluating on test-set")
-                    log_text_test = "".join(log_text_test)
-                    
                     for sp_name, sp_text in zip(['dev', 'test'], [log_text_dev, log_text_test]):
                         metric_list = me_re.findall(sp_text)
                         for k, metric in enumerate(metric_list):

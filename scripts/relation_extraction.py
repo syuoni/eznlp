@@ -16,6 +16,7 @@ from eznlp.model import EncoderConfig
 from eznlp.model import SpanRelClassificationDecoderConfig, SpecificSpanRelClsDecoderConfig, UnfilteredSpecificSpanRelClsDecoderConfig, MaskedSpanRelClsDecoderConfig
 from eznlp.model import ExtractorConfig, SpecificSpanExtractorConfig, MaskedSpanExtractorConfig
 from eznlp.training import Trainer, count_params, evaluate_relation_extraction
+from eznlp.training.evaluation import _eval_ent
 from eznlp.utils.relation import detect_missing_symmetric
 
 from utils import add_base_arguments, parse_to_args
@@ -35,8 +36,8 @@ def parse_arguments(parser: argparse.ArgumentParser):
                             help="whether to pre-subtokenize words in data")
     group_data.add_argument('--pre_merge_enchars', default=False, action='store_true', 
                             help="whether to pre-merge English characters in data")
-    group_data.add_argument('--pipeline_path', type=str, default="", 
-                            help="path to load predicted chunks for pipeline")
+    group_data.add_argument('--chunks_pred_path', type=str, default="", 
+                            help="path to load predicted chunks for pipeline modeling/evaluation")
     
     group_decoder = parser.add_argument_group('decoder configurations')
     group_decoder.add_argument('--rel_decoder', type=str, default='span_rel_classification', 
@@ -210,30 +211,40 @@ if __name__ == '__main__':
     if device.type.startswith('cuda'):
         torch.cuda.set_device(device)
     
-    if len(args.pipeline_path) > 0:
-        if not os.path.exists(f"{args.pipeline_path}/data-for-pipeline.pth"):
-            raise RuntimeError("`pipeline_path` is specified but not existing")
-        logger.info(f"Loading data from {args.pipeline_path} for pipeline...")
-        train_data, dev_data, test_data = torch.load(f"{args.pipeline_path}/data-for-pipeline.pth")
-    else:
-        logger.info(f"Loading original data {args.dataset}...")
-        train_data, dev_data, test_data = load_data(args)
-        # for data in [train_data, dev_data, test_data]:
-        #     for entry in data:
-        #         entry['chunks_pred'] = entry['chunks']
-    
+    train_data, dev_data, test_data = load_data(args)
     args.language = dataset2language[args.dataset]
+    if len(args.chunks_pred_path) > 0:
+        for entry in train_data:
+            entry['chunks_pred'] = entry['chunks']
+        
+        logger.info("Predicted chunks are provided, performing end-to-end evaluation")
+        set_chunks_pred = torch.load(f"{args.chunks_pred_path}/dev.chunks.pred.pth")
+        set_chunks_gold = [entry['chunks'] for entry in dev_data]
+        logger.info("Evaluating predicted chunks on dev-set")
+        _eval_ent(set_chunks_gold, set_chunks_pred)
+        for entry, chunks_pred in zip(dev_data, set_chunks_pred):
+            entry['chunks_pred'] = chunks_pred
+        
+        set_chunks_pred = torch.load(f"{args.chunks_pred_path}/test.chunks.pred.pth")
+        set_chunks_gold = [entry['chunks'] for entry in test_data]
+        logger.info("Evaluating predicted chunks on test-set")
+        _eval_ent(set_chunks_gold, set_chunks_pred)
+        for entry, chunks_pred in zip(test_data, set_chunks_pred):
+            entry['chunks_pred'] = chunks_pred
+        
+    else:
+        logger.warning("Predicted chunks are NOT provided, using gold chunks for evaluation")
+        for data in [train_data, dev_data, test_data]:
+            for entry in data:
+                entry['chunks_pred'] = entry['chunks']
+    
     config = build_RE_config(args)
     train_data, dev_data, test_data = process_IE_data(train_data, dev_data, test_data, args, config)
     
-    for data in [train_data, dev_data, test_data]:
-        for entry in data:
-            entry['chunks_pred'] = entry['chunks']
-    # TODO: after process_IE_data?
-    # Remove entries without chunks
-    train_data = [entry for entry in train_data if (len(entry['chunks']) > 0 or len(entry['chunks_pred']) > 0)]
-    dev_data   = [entry for entry in dev_data   if (len(entry['chunks']) > 0 or len(entry['chunks_pred']) > 0)]
-    test_data  = [entry for entry in test_data  if (len(entry['chunks']) > 0 or len(entry['chunks_pred']) > 0)]
+    # Remove entries without chunks, because either gold or predicted relations must be empty
+    train_data = [entry for entry in train_data if len(entry['chunks'])+len(entry['chunks_pred']) > 0]
+    dev_data   = [entry for entry in dev_data   if len(entry['chunks'])+len(entry['chunks_pred']) > 0]
+    test_data  = [entry for entry in test_data  if len(entry['chunks'])+len(entry['chunks_pred']) > 0]
     
     # Add missing symmetric relations
     if args.dataset.startswith('ace2004_rel_cv') or args.dataset in ('ace2005_rel', 'SciERC'): 

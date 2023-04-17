@@ -19,7 +19,7 @@ from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig, CharConfig,
 from eznlp.model import ELMoConfig, BertLikeConfig, SpanBertLikeConfig, MaskedSpanBertLikeConfig, FlairConfig
 from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderConfig, BoundarySelectionDecoderConfig, SpecificSpanClsDecoderConfig
 from eznlp.model import ExtractorConfig, SpecificSpanExtractorConfig
-from eznlp.model import BertLikePreProcessor
+from eznlp.model import BertLikePreProcessor, BertLikePostProcessor
 from eznlp.training import Trainer, count_params, evaluate_entity_recognition
 
 from utils import add_base_arguments, parse_to_args
@@ -47,9 +47,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
     group_data.add_argument('--eval_inex', default=False, action='store_true', 
                             help="whether to evaluate internal/external-entity NER results")
     group_data.add_argument('--save_preds', default=False, action='store_true', 
-                            help="whether to save predictions on the test split (typically in case without ground truth)")
-    group_data.add_argument('--pipeline', default=False, action='store_true', 
-                            help="whether to save predictions on all splits for pipeline modeling")
+                            help="whether to save predictions on the dev/test splits (e.g., in case without ground truth)")
     
     group_decoder = parser.add_argument_group('decoder configurations')
     group_decoder.add_argument('--ck_decoder', type=str, default='sequence_tagging', 
@@ -460,6 +458,11 @@ if __name__ == '__main__':
     model = torch.load(f"{save_path}/{config.name}.pth", map_location=device)
     trainer = Trainer(model, device=device)
     
+    if args.train_with_dev:
+        # Restore the original splits
+        train_set = Dataset(train_data, train_set.config, training=False)
+        dev_set   = Dataset(dev_data,   train_set.config, training=False)
+    
     if args.remove_nested:
         logger.info("Adding back nested entities...")
         config.decoder.overlapping_level = NESTED
@@ -477,24 +480,24 @@ if __name__ == '__main__':
     logger.info("Evaluating on dev-set")
     evaluate_entity_recognition(trainer, dev_set,  batch_size=args.batch_size, eval_inex=args.eval_inex)
     logger.info("Evaluating on test-set")
-    evaluate_entity_recognition(trainer, test_set, batch_size=args.batch_size, eval_inex=args.eval_inex, 
-                                pp_callback=dataset2pp_callback.get(args.dataset, None), save_preds=args.save_preds)
-    if args.save_preds:
-        torch.save(test_data, f"{save_path}/test-data-with-preds.pth")
+    evaluate_entity_recognition(trainer, test_set, batch_size=args.batch_size, eval_inex=args.eval_inex, pp_callback=dataset2pp_callback.get(args.dataset, None))
     
-    if args.pipeline:
-        # Replace gold chunks with predicted chunks for pipeline
-        if args.train_with_dev:
-            # Retrieve the original splits
-            train_set = Dataset(train_data, train_set.config, training=True)
-            dev_set   = Dataset(dev_data,   train_set.config, training=False)
+    if args.save_preds:
+        postprocessor = BertLikePostProcessor(verbose=args.log_terminal)
         
-        for dataset, data in zip([train_set, dev_set, test_set], [train_data, dev_data, test_data]):
-            set_chunks_pred = trainer.predict(dataset, batch_size=args.batch_size)
-            for ex, chunks_pred in zip(data, set_chunks_pred):
-                ex['chunks_pred'] = chunks_pred
+        logger.info("Saving predictions on dev-set")
+        set_chunks_pred = trainer.predict(dev_set, batch_size=args.batch_size)
+        for entry, chunks_pred in zip(dev_data, set_chunks_pred): 
+            entry['chunks'] = chunks_pred
+        set_chunks_pred = postprocessor.restore_chunks_for_data(dev_data)
+        torch.save(set_chunks_pred, f"{save_path}/dev.chunks.pred.pth")
         
-        torch.save((train_data, dev_data, test_data), f"{save_path}/data-for-pipeline.pth")
+        logger.info("Saving predictions on test-set")
+        set_chunks_pred = trainer.predict(test_set, batch_size=args.batch_size)
+        for entry, chunks_pred in zip(test_data, set_chunks_pred):
+            entry['chunks'] = chunks_pred
+        set_chunks_pred = postprocessor.restore_chunks_for_data(test_data)
+        torch.save(set_chunks_pred, f"{save_path}/test.chunks.pred.pth")
     
     logger.info(" ".join(sys.argv))
     logger.info(pprint.pformat(args.__dict__))
