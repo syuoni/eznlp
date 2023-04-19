@@ -48,7 +48,12 @@ def test_paired_inputs_config(paired_inputs, bert_like_with_tokenizer):
     
     if paired_inputs:
         assert 'sub_tok_type_ids' in example
-        assert example['sub_tok_type_ids'].sum().item() == 101
+        if isinstance(bert_like, transformers.AlbertModel):
+            # `AlbertTokenizer` may tokenize a single character into multiple subtokens
+            #  e.g., 's' -> ['▁', 's']
+            assert example['sub_tok_type_ids'].sum().item() >= 101
+        else:
+            assert example['sub_tok_type_ids'].sum().item() == 101
     else:
         assert 'sub_tok_type_ids' not in example
 

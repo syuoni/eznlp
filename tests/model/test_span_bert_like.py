@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import pytest
 import torch
+import transformers
 
 from eznlp.model import SpanBertLikeConfig
 from eznlp.training import count_params
@@ -28,6 +29,7 @@ def test_span_bert_like(min_span_size, use_init_size_emb, bert_like_with_tokeniz
     else:
         all_hidden = [bert_outs['last_hidden_state']] + list(all_last_query_states.values())
     
+    # The first example in the batch; there are totally 40 (=10+9+8+7+6) span representations
     i = 0
     span_hidden = torch.cat([hidden[i] for hidden in all_hidden], dim=0)
     diff = (span_hidden.unsqueeze(0) - span_hidden.unsqueeze(1)).abs().sum(dim=-1)
@@ -45,9 +47,13 @@ def test_trainble_config(min_span_size, use_init_size_emb, share_weights_int, fr
     config.max_size_id = 3
     span_bert_like = config.instantiate()
     
+    num_params = count_params(bert_like.encoder)
+    if isinstance(bert_like, transformers.AlbertModel):
+        num_params -= count_params(bert_like.encoder.embedding_hidden_mapping_in)
+    
     if freeze:
         assert count_params(span_bert_like.query_bert_like) == 0
     elif share_weights_int:
-        assert count_params(span_bert_like.query_bert_like) == count_params(bert_like.encoder)
+        assert count_params(span_bert_like.query_bert_like) == num_params
     else:
-        assert count_params(span_bert_like.query_bert_like) == count_params(bert_like.encoder)*(6-min_span_size)
+        assert count_params(span_bert_like.query_bert_like) == num_params*(6-min_span_size)

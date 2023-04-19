@@ -2,6 +2,7 @@
 import pytest
 import copy
 import torch
+import transformers
 
 from eznlp.model.decoder.chunks import ChunkPairs
 from eznlp.model import SpanBertLikeConfig, MaskedSpanBertLikeConfig
@@ -81,7 +82,11 @@ def test_trainble_config(use_init_size_emb, freeze, bert_like_with_tokenizer):
     config.max_size_id = 3
     span_bert_like = config.instantiate()
     
+    num_params = count_params(bert_like.encoder)
+    if isinstance(bert_like, transformers.AlbertModel):
+        num_params -= count_params(bert_like.encoder.embedding_hidden_mapping_in)
+    
     if freeze:
         assert count_params(span_bert_like.query_bert_like) == 0
     else:
-        assert count_params(span_bert_like.query_bert_like) == count_params(bert_like.encoder)
+        assert count_params(span_bert_like.query_bert_like) == num_params

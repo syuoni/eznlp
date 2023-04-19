@@ -159,16 +159,18 @@ def roberta_with_tokenizer():
 def albert_with_tokenizer():
     """ALBERT by default uses dropout rate of 0. 
     """
-    return  (transformers.AlbertModel.from_pretrained(ALBERT_PATH), 
-             transformers.AlbertTokenizer.from_pretrained(ALBERT_PATH))
+    return (transformers.AlbertModel.from_pretrained(ALBERT_PATH), 
+            transformers.AlbertTokenizer.from_pretrained(ALBERT_PATH))
 
 
-@pytest.fixture(params=['bert', 'roberta'])
-def bert_like_with_tokenizer(request, bert_with_tokenizer, roberta_with_tokenizer):
+@pytest.fixture(params=['bert', 'roberta', 'albert'])
+def bert_like_with_tokenizer(request, bert_with_tokenizer, roberta_with_tokenizer, albert_with_tokenizer):
     if request.param == 'bert':
         return bert_with_tokenizer
     elif request.param == 'roberta':
         return roberta_with_tokenizer
+    elif request.param == 'albert':
+        return albert_with_tokenizer
 
 
 @pytest.fixture
