@@ -33,7 +33,7 @@ def test_span_bert_like(min_span_size, use_init_size_emb, bert_like_with_tokeniz
     i = 0
     span_hidden = torch.cat([hidden[i] for hidden in all_hidden], dim=0)
     diff = (span_hidden.unsqueeze(0) - span_hidden.unsqueeze(1)).abs().sum(dim=-1)
-    assert (diff > 1).sum().item() == diff.size(0) * (diff.size(0) - 1)  # 40*39 = 1560
+    assert (diff > 1.0).sum().item() == diff.size(0) * (diff.size(0) - 1)  # 40*39 = 1560
 
 
 

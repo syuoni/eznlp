@@ -38,24 +38,29 @@ def _is_punctuation(char):
     return False
 
 
+# Some abbreviations that are assumed without prefix space
+_ABBREV = {"'m", "'re", "'s", "'", "''", "'ll", "'ve", "'d"}
+
 def _subtokenize_word(word: str, tokenizer: transformers.PreTrainedTokenizer): 
     if isinstance(tokenizer, transformers.BertTokenizer):
         return tokenizer.tokenize(word)
     
     elif isinstance(tokenizer, transformers.RobertaTokenizer):
-        # Assume no space before punctuations
-        if len(word) == 1 and _is_punctuation(word):
+        # All punctuations are assumed without prefix space
+        if (len(word) == 1 and _is_punctuation(word)) or word.lower() in _ABBREV:
             return tokenizer.tokenize(word, add_prefix_space=False)
         else:
             return tokenizer.tokenize(word, add_prefix_space=True)
     
     elif isinstance(tokenizer, transformers.AlbertTokenizer):
         sub_tokens = tokenizer.tokenize(word)
-        if len(word) == 1 and _is_punctuation(word) and len(sub_tokens) == 1: 
-            assert sub_tokens[0][0] == "▁"
-            sub_tokens[0] = sub_tokens[0][1:]
-        elif len(sub_tokens) > 0 and sub_tokens[0] == "▁":
-            sub_tokens = sub_tokens[1:]
+        if len(word) == 1 or word.lower() in _ABBREV:
+            if len(sub_tokens) == 1:
+                assert sub_tokens[0][0] == "▁"
+                sub_tokens[0] = sub_tokens[0][1:]
+            elif len(sub_tokens) >= 2:
+                assert sub_tokens[0] == "▁"
+                sub_tokens = sub_tokens[1:]
         return sub_tokens
     
     else:
