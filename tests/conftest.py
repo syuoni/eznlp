@@ -145,6 +145,10 @@ def bert_with_tokenizer():
             transformers.BertTokenizer.from_pretrained(BERT_PATH))
 
 @pytest.fixture
+def bert_tokenizer():
+    return transformers.BertTokenizer.from_pretrained(BERT_PATH)
+
+@pytest.fixture
 def roberta_with_tokenizer():
     """The GPT-2/RoBERTa tokenizer expects a space before all the words. 
     RoBERTa does not use `token_type_ids` in pretraining; Check that `roberta.config.type_vocab_size` is 1.
@@ -156,12 +160,19 @@ def roberta_with_tokenizer():
             transformers.RobertaTokenizer.from_pretrained(ROBERTA_PATH, add_prefix_space=True))
 
 @pytest.fixture
+def roberta_tokenizer():
+    return transformers.RobertaTokenizer.from_pretrained(ROBERTA_PATH, add_prefix_space=True)
+
+@pytest.fixture
 def albert_with_tokenizer():
     """ALBERT by default uses dropout rate of 0. 
     """
     return (transformers.AlbertModel.from_pretrained(ALBERT_PATH), 
             transformers.AlbertTokenizer.from_pretrained(ALBERT_PATH))
 
+@pytest.fixture
+def albert_tokenizer():
+    return transformers.AlbertTokenizer.from_pretrained(ALBERT_PATH)
 
 @pytest.fixture(params=['bert', 'roberta', 'albert'])
 def bert_like_with_tokenizer(request, bert_with_tokenizer, roberta_with_tokenizer, albert_with_tokenizer):
@@ -172,6 +183,14 @@ def bert_like_with_tokenizer(request, bert_with_tokenizer, roberta_with_tokenize
     elif request.param == 'albert':
         return albert_with_tokenizer
 
+@pytest.fixture(params=['bert', 'roberta', 'albert'])
+def bert_like_tokenizer(request, bert_tokenizer, roberta_tokenizer, albert_tokenizer):
+    if request.param == 'bert':
+        return bert_tokenizer
+    elif request.param == 'roberta':
+        return roberta_tokenizer
+    elif request.param == 'albert':
+        return albert_tokenizer
 
 @pytest.fixture
 def flair_fw_lm():

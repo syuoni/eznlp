@@ -10,10 +10,18 @@ import transformers
 
 from eznlp.token import TokenSequence
 from eznlp.model import BertLikeConfig, BertLikePreProcessor, BertLikePostProcessor
-from eznlp.model.bert_like import _tokenized2nested
+from eznlp.model.bert_like import _is_punctuation, _subtokenize_word, _tokenized2nested
 from eznlp.training import count_params
 from eznlp.io import TabularIO
 
+
+
+def test_subtokenize_word(bert_like_tokenizer):
+    punctuations = [chr(i) for i in range(128) if _is_punctuation(chr(i))]
+    for p in punctuations:
+        sub_tokens = _subtokenize_word(p, bert_like_tokenizer)
+        assert len(sub_tokens) == 1
+        assert sub_tokens[0] == p
 
 
 @pytest.mark.parametrize("mix_layers", ['trainable', 'top'])
@@ -48,12 +56,7 @@ def test_paired_inputs_config(paired_inputs, bert_like_with_tokenizer):
     
     if paired_inputs:
         assert 'sub_tok_type_ids' in example
-        if isinstance(bert_like, transformers.AlbertModel):
-            # `AlbertTokenizer` may tokenize a single character into multiple subtokens
-            #  e.g., 's' -> ['▁', 's']
-            assert example['sub_tok_type_ids'].sum().item() >= 101
-        else:
-            assert example['sub_tok_type_ids'].sum().item() == 101
+        assert example['sub_tok_type_ids'].sum().item() == 101
     else:
         assert 'sub_tok_type_ids' not in example
 
@@ -70,9 +73,8 @@ def test_serialization(bert_with_tokenizer):
 
 
 class TestBertLikePreProcessor(object):
-    def test_truecase_for_data(self, bert_with_tokenizer):
-        bert, tokenizer = bert_with_tokenizer
-        preprocessor = BertLikePreProcessor(tokenizer, verbose=False)
+    def test_truecase_for_data(self, bert_tokenizer):
+        preprocessor = BertLikePreProcessor(bert_tokenizer, verbose=False)
         
         tokenized_raw_text = ['FULL', 'FEES', '1.875', 'REOFFER', '99.32', 'SPREAD', '+20', 'BP']
         tokens = TokenSequence.from_tokenized_text(tokenized_raw_text)
@@ -83,9 +85,8 @@ class TestBertLikePreProcessor(object):
         
     @pytest.mark.slow
     @pytest.mark.parametrize("mode", ["head+tail", "head-only", "tail-only"])
-    def test_truncate_for_data(self, mode, bert_with_tokenizer):
-        bert, tokenizer = bert_with_tokenizer
-        preprocessor = BertLikePreProcessor(tokenizer, verbose=False)
+    def test_truncate_for_data(self, mode, bert_tokenizer):
+        preprocessor = BertLikePreProcessor(bert_tokenizer, verbose=False)
         max_len = preprocessor.model_max_length - 2
         
         tabular_io = TabularIO(text_col_id=3, label_col_id=2, sep="\t\t", mapping={"<sssss>": "\n"}, encoding='utf-8', case_mode='lower')
@@ -94,7 +95,7 @@ class TestBertLikePreProcessor(object):
         assert max(len(data_entry['tokens']) for data_entry in data) > max_len
         
         data = preprocessor.truncate_for_data(data, mode)
-        sub_lens = [sum(len(word) for word in _tokenized2nested(data_entry['tokens'].raw_text, tokenizer)) for data_entry in data]
+        sub_lens = [sum(len(word) for word in _tokenized2nested(data_entry['tokens'].raw_text, bert_tokenizer)) for data_entry in data]
         sub_lens = pandas.Series(sub_lens)
         
         assert (sub_lens <= max_len).all()
@@ -103,9 +104,8 @@ class TestBertLikePreProcessor(object):
         
     @pytest.mark.parametrize("token_len", [1, 2, 5])
     @pytest.mark.parametrize("max_len", [50, 120])
-    def test_segment_sentences_for_data(self, bert_with_tokenizer, token_len, max_len):
-        bert, tokenizer = bert_with_tokenizer
-        preprocessor = BertLikePreProcessor(tokenizer, model_max_length=max_len+2, verbose=False)
+    def test_segment_sentences_for_data(self, bert_tokenizer, token_len, max_len):
+        preprocessor = BertLikePreProcessor(bert_tokenizer, model_max_length=max_len+2, verbose=False)
         
         tokens = TokenSequence.from_tokenized_text([c*token_len for c in random.choices(string.ascii_letters, k=100)])
         chunks = [('EntA', k*10, k*10+5) for k in range(10)]
@@ -124,9 +124,8 @@ class TestBertLikePreProcessor(object):
         assert chunks_retr == chunks
         
         
-    def test_subtokenize_for_data(self, bert_with_tokenizer):
-        bert, tokenizer = bert_with_tokenizer
-        preprocessor = BertLikePreProcessor(tokenizer, verbose=False)
+    def test_subtokenize_for_data(self, bert_tokenizer):
+        preprocessor = BertLikePreProcessor(bert_tokenizer, verbose=False)
         sub_prefix = preprocessor.tokenizer_sub_prefix
         
         tokens = TokenSequence.from_tokenized_text(["I", "like", 'it', 'sooooo', 'much!'])
@@ -141,9 +140,8 @@ class TestBertLikePreProcessor(object):
                 assert "".join(entry['tokens'].raw_text[ck[1]:ck[2]]).lower() == "".join(new_entry['tokens'].raw_text[new_ck[1]:new_ck[2]]).replace(sub_prefix, "").lower()
         
         
-    def test_subtokenize_for_data_with_label(self, bert_like_with_tokenizer, conll2003_demo):
-        bert_like, tokenizer = bert_like_with_tokenizer
-        preprocessor = BertLikePreProcessor(tokenizer, verbose=False)
+    def test_subtokenize_for_data_with_label(self, bert_like_tokenizer, conll2003_demo):
+        preprocessor = BertLikePreProcessor(bert_like_tokenizer, verbose=False)
         sub_prefix = preprocessor.tokenizer_sub_prefix
         
         conll2003_demo = conll2003_demo[1:]  # The fisrt sentence include "-DOCSTART-"
@@ -179,9 +177,8 @@ class TestBertLikePreProcessor(object):
 
 class TestBertLikePostProcessor(object):
     @pytest.mark.parametrize("model_max_length", [52, 102])
-    def test_restore_chunks_for_data(self, model_max_length, bert_like_with_tokenizer, conll2003_demo):
-        bert_like, tokenizer = bert_like_with_tokenizer
-        preprocessor = BertLikePreProcessor(tokenizer, model_max_length=model_max_length, verbose=False)
+    def test_restore_chunks_for_data(self, model_max_length, bert_like_tokenizer, conll2003_demo):
+        preprocessor = BertLikePreProcessor(bert_like_tokenizer, model_max_length=model_max_length, verbose=False)
         
         set_chunks_ori = [entry['chunks'] for entry in conll2003_demo]
         new_data = preprocessor.merge_sentences_for_data(conll2003_demo, doc_key=None)

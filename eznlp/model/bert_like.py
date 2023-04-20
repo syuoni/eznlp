@@ -2,6 +2,7 @@
 from typing import List
 from functools import cached_property
 import logging
+import unicodedata
 import re
 import tqdm
 import numpy
@@ -17,6 +18,64 @@ from ..config import Config
 from ..utils import assign_consecutive_to_buckets
 
 logger = logging.getLogger(__name__)
+
+
+def _is_punctuation(char):
+    """Checks whether `char` is a punctuation character.
+    
+    Copied from: transformers/tokenization_utils.py
+    """
+    cp = ord(char)
+    # We treat all non-letter/number ASCII as punctuation.
+    # Characters such as "^", "$", and "`" are not in the Unicode
+    # Punctuation class but we treat them as punctuation anyways, for
+    # consistency.
+    if (cp >= 33 and cp <= 47) or (cp >= 58 and cp <= 64) or (cp >= 91 and cp <= 96) or (cp >= 123 and cp <= 126):
+        return True
+    cat = unicodedata.category(char)
+    if cat.startswith("P"):
+        return True
+    return False
+
+
+def _subtokenize_word(word: str, tokenizer: transformers.PreTrainedTokenizer): 
+    if isinstance(tokenizer, transformers.BertTokenizer):
+        return tokenizer.tokenize(word)
+    
+    elif isinstance(tokenizer, transformers.RobertaTokenizer):
+        # Assume no space before punctuations
+        if len(word) == 1 and _is_punctuation(word):
+            return tokenizer.tokenize(word, add_prefix_space=False)
+        else:
+            return tokenizer.tokenize(word, add_prefix_space=True)
+    
+    elif isinstance(tokenizer, transformers.AlbertTokenizer):
+        sub_tokens = tokenizer.tokenize(word)
+        if len(word) == 1 and _is_punctuation(word) and len(sub_tokens) == 1: 
+            assert sub_tokens[0][0] == "▁"
+            sub_tokens[0] = sub_tokens[0][1:]
+        elif len(sub_tokens) > 0 and sub_tokens[0] == "▁":
+            sub_tokens = sub_tokens[1:]
+        return sub_tokens
+    
+    else:
+        raise ValueError(f"Invalid tokenizer {tokenizer}")
+
+
+def _tokenized2nested(tokenized_raw_text: List[str], tokenizer: transformers.PreTrainedTokenizer, max_num_from_word: int=5):
+    nested_sub_tokens = []
+    for word in tokenized_raw_text:
+        sub_tokens = _subtokenize_word(word, tokenizer)
+        if len(sub_tokens) == 0:
+            # The tokenizer returns an empty list if the input is a space-like string
+            sub_tokens = [tokenizer.unk_token]
+        elif len(sub_tokens) > max_num_from_word:
+            # The tokenizer may return a very long list if the input is a url
+            sub_tokens = sub_tokens[:max_num_from_word]
+        nested_sub_tokens.append(sub_tokens)
+    
+    return nested_sub_tokens
+
 
 
 class BertLikeConfig(Config):
@@ -252,23 +311,6 @@ class BertLikeEmbedder(torch.nn.Module):
             return (bert_hidden, all_bert_hidden)
         else:
             return bert_hidden
-
-
-
-def _tokenized2nested(tokenized_raw_text: List[str], tokenizer: transformers.PreTrainedTokenizer, max_num_from_word: int=5):
-    nested_sub_tokens = []
-    for word in tokenized_raw_text:
-        sub_tokens = tokenizer.tokenize(word)
-        if len(sub_tokens) == 0:
-            # The tokenizer returns an empty list if the input is a space-like string
-            sub_tokens = [tokenizer.unk_token]
-        elif len(sub_tokens) > max_num_from_word:
-            # The tokenizer may return a very long list if the input is a url
-            sub_tokens = sub_tokens[:max_num_from_word]
-        nested_sub_tokens.append(sub_tokens)
-    
-    return nested_sub_tokens
-
 
 
 
@@ -546,8 +588,12 @@ class BertLikePreProcessor(object):
         
     @cached_property
     def unk_ascii_characters(self):
-        return [chr(i) for i in range(128) if self.tokenizer.tokenize(chr(i)) in ([], [self.tokenizer.unk_token])]
-        
+        unk_chars = []
+        for i in range(128):
+            sub_tokens = _subtokenize_word(chr(i), self.tokenizer)
+            if sub_tokens in ([], [self.tokenizer.unk_token]):
+                unk_chars.append(chr(i))
+        return unk_chars
         
     def _merge_enchars(self, entry: dict, num_digits: int=3):
         tokens = entry['tokens']

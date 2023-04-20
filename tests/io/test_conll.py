@@ -39,7 +39,7 @@ class TestConllIO(object):
     @pytest.mark.parametrize("doc_level, merge_mode", [[False, None], 
                                                        [True, 'greedy'], 
                                                        [True, 'min_max_length']])
-    def test_conll2003(self, doc_level, merge_mode, bert_with_tokenizer):
+    def test_conll2003(self, doc_level, merge_mode, bert_tokenizer):
         self.io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', document_sep_starts=["-DOCSTART-"], additional_col_id2name={1: 'pos_tag'})
         train_data = self.io.read("data/conll2003/eng.train")
         dev_data   = self.io.read("data/conll2003/eng.testa")
@@ -53,8 +53,7 @@ class TestConllIO(object):
             assert len(dev_data) == 3_466 - 216
             assert len(test_data) == 3_684 - 231
         else:
-            bert, tokenizer = bert_with_tokenizer
-            preprocessor = BertLikePreProcessor(tokenizer, verbose=False)
+            preprocessor = BertLikePreProcessor(bert_tokenizer, verbose=False)
             train_data = preprocessor.merge_sentences_for_data(train_data, doc_key='doc_idx', mode=merge_mode)
             dev_data   = preprocessor.merge_sentences_for_data(dev_data,   doc_key='doc_idx', mode=merge_mode)
             test_data  = preprocessor.merge_sentences_for_data(test_data,  doc_key='doc_idx', mode=merge_mode)
@@ -94,7 +93,7 @@ class TestConllIO(object):
     @pytest.mark.parametrize("doc_level, merge_mode", [[False, None], 
                                                        [True, 'greedy'], 
                                                        [True, 'min_max_length']])
-    def test_ontonotesv5(self, doc_level, merge_mode, bert_with_tokenizer):
+    def test_ontonotesv5(self, doc_level, merge_mode, bert_tokenizer):
         self.io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end", "pt/"], document_sep_starts=["#begin"], encoding='utf-8')
         train_data = self.io.read("data/conll2012/train.english.v4_gold_conll")
         dev_data   = self.io.read("data/conll2012/dev.english.v4_gold_conll")
@@ -105,8 +104,7 @@ class TestConllIO(object):
             assert len(dev_data) == 8_528
             assert len(test_data) == 8_262
         else:
-            bert, tokenizer = bert_with_tokenizer
-            preprocessor = BertLikePreProcessor(tokenizer, verbose=False)
+            preprocessor = BertLikePreProcessor(bert_tokenizer, verbose=False)
             train_data = preprocessor.merge_sentences_for_data(train_data, doc_key='doc_idx', mode=merge_mode)
             dev_data   = preprocessor.merge_sentences_for_data(dev_data,   doc_key='doc_idx', mode=merge_mode)
             test_data  = preprocessor.merge_sentences_for_data(test_data,  doc_key='doc_idx', mode=merge_mode)
