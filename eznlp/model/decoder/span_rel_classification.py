@@ -15,7 +15,7 @@ from ...nn.functional import seq_lens2mask
 from ...nn.init import reinit_embedding_, reinit_layer_, reinit_vector_parameter_
 from ...metrics import precision_recall_f1_report
 from ...utils.chunk import chunk_pair_distance
-from ...utils.relation import INV_REL_PREFIX
+from ...utils.relation import INV_REL_PREFIX, detect_missing_symmetric
 from ..encoder import EncoderConfig
 from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
 from .boundaries import MAX_SIZE_ID_COV_RATE
@@ -86,6 +86,11 @@ class ChunkPairsDecoderMixin(DecoderMixinBase):
         
         relations = [(label, head, tail) for label, head, tail in relations if ((label, head[0], tail[0]) in self.existing_rht_labels 
                                                                                 and (self.existing_self_rel or head[1:] != tail[1:]))]
+        
+        if self.comp_sym_rel: 
+            missing_relations = detect_missing_symmetric(relations, self.sym_rel_labels)
+            relations.extend(missing_relations)
+        
         return relations
         
         
@@ -139,6 +144,7 @@ class SpanRelClassificationDecoderConfig(SingleDecoderConfigBase, ChunkPairsDeco
         self.l2_loss_weight = kwargs.pop('l2_loss_weight', 0)
         
         self.sym_rel_labels = kwargs.pop('sym_rel_labels', [])
+        self.comp_sym_rel = kwargs.pop('comp_sym_rel', False)
         self.use_inv_rel = kwargs.pop('use_inv_rel', False)
         self.none_label = kwargs.pop('none_label', '<none>')
         self.idx2label = kwargs.pop('idx2label', None)
@@ -226,6 +232,8 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
         self.neg_sampling_rate = config.neg_sampling_rate
         self.ck_loss_weight = config.ck_loss_weight
         self.l2_loss_weight = config.l2_loss_weight
+        self.sym_rel_labels = config.sym_rel_labels
+        self.comp_sym_rel = config.comp_sym_rel
         self.use_inv_rel = config.use_inv_rel
         self.none_label = config.none_label
         self.idx2label = config.idx2label

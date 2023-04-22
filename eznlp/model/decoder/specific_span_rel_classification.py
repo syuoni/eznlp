@@ -55,6 +55,7 @@ class SpecificSpanRelClsDecoderConfig(SingleDecoderConfigBase, ChunkPairsDecoder
         self.l2_loss_weight = kwargs.pop('l2_loss_weight', 0)
         
         self.sym_rel_labels = kwargs.pop('sym_rel_labels', [])
+        self.comp_sym_rel = kwargs.pop('comp_sym_rel', False)
         self.use_inv_rel = kwargs.pop('use_inv_rel', False)
         self.none_label = kwargs.pop('none_label', '<none>')
         self.idx2label = kwargs.pop('idx2label', None)
@@ -159,6 +160,8 @@ class SpecificSpanRelClsDecoder(DecoderBase, ChunkPairsDecoderMixin):
         self.neg_sampling_rate = config.neg_sampling_rate
         self.ck_loss_weight = config.ck_loss_weight
         self.l2_loss_weight = config.l2_loss_weight
+        self.sym_rel_labels = config.sym_rel_labels
+        self.comp_sym_rel = config.comp_sym_rel
         self.use_inv_rel = config.use_inv_rel
         self.none_label = config.none_label
         self.idx2label = config.idx2label
