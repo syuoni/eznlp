@@ -177,7 +177,7 @@ class TestBertLikePreProcessor(object):
 
 class TestBertLikePostProcessor(object):
     @pytest.mark.parametrize("model_max_length", [52, 102])
-    def test_restore_chunks_for_data(self, model_max_length, bert_like_tokenizer, conll2003_demo):
+    def test_conll2003(self, model_max_length, bert_like_tokenizer, conll2003_demo):
         preprocessor = BertLikePreProcessor(bert_like_tokenizer, model_max_length=model_max_length, verbose=False)
         
         set_chunks_ori = [entry['chunks'] for entry in conll2003_demo]
@@ -186,6 +186,50 @@ class TestBertLikePostProcessor(object):
         assert len(new_data) < 10
         
         postprocessor = BertLikePostProcessor(verbose=False)
-        set_chunks_restored = postprocessor.restore_chunks_for_data(new_data)
-        assert len(set_chunks_restored) == 10
+        restored_data = postprocessor.restore_for_data(new_data)
+        assert len(restored_data) == 10
+        
+        set_chunks_restored = [entry['chunks'] for entry in restored_data]
         assert set_chunks_restored == set_chunks_ori
+        
+        
+    def test_conll2004(self, bert_like_tokenizer, conll2004_demo):
+        preprocessor = BertLikePreProcessor(bert_like_tokenizer, model_max_length=102, verbose=False)
+        
+        set_chunks_ori = [entry['chunks'] for entry in conll2004_demo]
+        set_relations_ori = [entry['relations'] for entry in conll2004_demo]
+        new_data = preprocessor.merge_sentences_for_data(conll2004_demo, doc_key=None)
+        new_data = preprocessor.subtokenize_for_data(new_data)
+        assert len(new_data) < 10
+        
+        postprocessor = BertLikePostProcessor(verbose=False)
+        restored_data = postprocessor.restore_for_data(new_data)
+        assert len(restored_data) == 10
+        
+        set_chunks_restored = [entry['chunks'] for entry in restored_data]
+        assert set_chunks_restored == set_chunks_ori
+        set_relations_restored = [entry['relations'] for entry in restored_data]
+        assert set_relations_restored == set_relations_ori
+        
+        
+    def test_HwaMei(self, HwaMei_demo):
+        tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-chinese", do_lower_case=True)
+        preprocessor = BertLikePreProcessor(tokenizer, model_max_length=202, verbose=False)
+        
+        set_chunks_ori = [entry['chunks'] for entry in HwaMei_demo]
+        set_relations_ori = [entry['relations'] for entry in HwaMei_demo]
+        set_attributes_ori = [entry['attributes'] for entry in HwaMei_demo]
+        new_data = preprocessor.merge_sentences_for_data(HwaMei_demo, doc_key=None)
+        new_data = preprocessor.subtokenize_for_data(new_data)
+        assert len(new_data) < 7
+        
+        postprocessor = BertLikePostProcessor(verbose=False)
+        restored_data = postprocessor.restore_for_data(new_data)
+        assert len(restored_data) == 7
+        
+        set_chunks_restored = [entry['chunks'] for entry in restored_data]
+        assert set_chunks_restored == set_chunks_ori
+        set_relations_restored = [entry['relations'] for entry in restored_data]
+        assert set_relations_restored == set_relations_ori
+        set_attributes_restored = [entry['attributes'] for entry in restored_data]
+        assert set_attributes_restored == set_attributes_ori

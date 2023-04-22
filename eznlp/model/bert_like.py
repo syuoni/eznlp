@@ -559,7 +559,7 @@ class BertLikePreProcessor(object):
             ck_key = attr_key.replace('attributes', 'chunks')
             new_entry[attr_key] = [(label, (ck_label, ori2sub_idx[ck_start], ori2sub_idx[ck_end])) 
                                        for label, (ck_label, ck_start, ck_end) in entry[attr_key]]
-            assert all(chunk in new_entry[ck_key] for label, chunk in entry[attr_key])
+            assert all(chunk in new_entry[ck_key] for label, chunk in new_entry[attr_key])
         
         others = {k: v for k, v in entry.items() if k not in new_entry}
         new_entry.update(others)
@@ -654,7 +654,7 @@ class BertLikePreProcessor(object):
             ck_key = attr_key.replace('attributes', 'chunks')
             new_entry[attr_key] = [(label, (ck_label, ori2sub_idx[ck_start], ori2sub_idx[ck_end])) 
                                        for label, (ck_label, ck_start, ck_end) in entry[attr_key]]
-            assert all(chunk in new_entry[ck_key] for label, chunk in entry[attr_key])
+            assert all(chunk in new_entry[ck_key] for label, chunk in new_entry[attr_key])
         
         others = {k: v for k, v in entry.items() if k not in new_entry}
         new_entry.update(others)
@@ -794,29 +794,65 @@ class BertLikePostProcessor(object):
     def __init__(self, verbose: bool=True):
         self.verbose = verbose
         
-    def restore_chunks_for_data(self, data: List[dict]):
-        set_chunks = []
+    def restore_for_data(self, data: List[dict]):
+        """Restore `chunks`, `relations`, `attributes` that are pre-processed by `merge_sentences_for_data` and/or `subtokenize_for_data`. 
+        
+        Notes: Currently NOT supports `merge_enchars_for_data`. 
+        """
+        oori_data = []
         for entry in tqdm.tqdm(data, disable=not self.verbose, ncols=100, desc="Restoring chunks"):
             num_tokens = len(entry['tokens'])
             sub2ori_idx = entry.get('sub2ori_idx', [i for i in range(num_tokens+1)])
             ori2sub_idx = entry.get('ori2sub_idx', [i for i in range(num_tokens+1)])
             tok2sent_idx = entry.get('tok2sent_idx', [0 for _ in range(num_tokens)])
             
-            # Restore chunks at the document leval
-            ori_chunks = [(label, sub2ori_idx[start], sub2ori_idx[end]) for label, start, end in entry['chunks']]
+            # Restore start/end at the document leval
+            ori_entry = {}
+            for ck_key in (key for key in entry.keys() if key.startswith('chunks')):
+                ori_entry[ck_key] = [(label, sub2ori_idx[start], sub2ori_idx[end]) for label, start, end in entry[ck_key]]
             
-            # Restore chunks to the sentence level
+            for rel_key in (key for key in entry.keys() if key.startswith('relations')):
+                ck_key = rel_key.replace('relations', 'chunks')
+                ori_entry[rel_key] = [(label, (h_label, sub2ori_idx[h_start], sub2ori_idx[h_end]), (t_label, sub2ori_idx[t_start], sub2ori_idx[t_end])) 
+                                          for label, (h_label, h_start, h_end), (t_label, t_start, t_end) in entry[rel_key]]
+                assert all(head in ori_entry[ck_key] and tail in ori_entry[ck_key] for label, head, tail in ori_entry[rel_key])
+            
+            for attr_key in (key for key in entry.keys() if key.startswith('attributes')):
+                ck_key = attr_key.replace('attributes', 'chunks')
+                ori_entry[attr_key] = [(label, (ck_label, sub2ori_idx[ck_start], sub2ori_idx[ck_end])) 
+                                           for label, (ck_label, ck_start, ck_end) in entry[attr_key]]
+                assert all(chunk in ori_entry[ck_key] for label, chunk in ori_entry[attr_key])
+            
+            # Restore to the sentence level
             # Restore `tok2sent_idx` first, because `tok2sent_idx` has been changed to sub-token indexes in pre-processing
             tok2sent_idx = [tok2sent_idx[si] for si in ori2sub_idx[:-1]]
             sent_starts = [tok2sent_idx.index(sidx) for sidx in range(tok2sent_idx[-1]+1)]
-            doc_chunks = [[] for _ in range(tok2sent_idx[-1]+1)]
+            oori_doc = [{key: [] for key in ori_entry.keys()} for _ in range(tok2sent_idx[-1]+1)]
             
-            for label, start, end in ori_chunks:
-                sidx = tok2sent_idx[start]
-                assert tok2sent_idx[end-1] == sidx
-                curr_start = sent_starts[sidx]
-                doc_chunks[sidx].append((label, start-curr_start, end-curr_start))
+            for ck_key in (key for key in ori_entry.keys() if key.startswith('chunks')):
+                for label, start, end in ori_entry[ck_key]:
+                    sidx = tok2sent_idx[start]
+                    assert tok2sent_idx[end-1] == sidx
+                    curr_start = sent_starts[sidx]
+                    oori_doc[sidx][ck_key].append((label, start-curr_start, end-curr_start))
             
-            set_chunks.extend(doc_chunks)
+            for rel_key in (key for key in ori_entry.keys() if key.startswith('relations')):
+                ck_key = rel_key.replace('relations', 'chunks')
+                for label, (h_label, h_start, h_end), (t_label, t_start, t_end) in ori_entry[rel_key]:
+                    sidx = tok2sent_idx[h_start]
+                    assert tok2sent_idx[t_start] == sidx
+                    curr_start = sent_starts[sidx]
+                    oori_doc[sidx][rel_key].append((label, (h_label, h_start-curr_start, h_end-curr_start), (t_label, t_start-curr_start, t_end-curr_start)))
+                assert all(head in oori_entry[ck_key] and tail in oori_entry[ck_key] for oori_entry in oori_doc for label, head, tail in oori_entry[rel_key])
+            
+            for attr_key in (key for key in ori_entry.keys() if key.startswith('attributes')):
+                ck_key = attr_key.replace('attributes', 'chunks')
+                for label, (ck_label, ck_start, ck_end) in ori_entry[attr_key]:
+                    sidx = tok2sent_idx[ck_start]
+                    curr_start = sent_starts[sidx]
+                    oori_doc[sidx][attr_key].append((label, (ck_label, ck_start-curr_start, ck_end-curr_start)))
+                assert all(chunk in oori_entry[ck_key] for oori_entry in oori_doc for label, chunk in oori_entry[attr_key])
+            
+            oori_data.extend(oori_doc)
         
-        return set_chunks
+        return oori_data
