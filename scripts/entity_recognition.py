@@ -46,8 +46,8 @@ def parse_arguments(parser: argparse.ArgumentParser):
                             help="whether to remove nested entities in the train/dev splits")
     group_data.add_argument('--eval_inex', default=False, action='store_true', 
                             help="whether to evaluate internal/external-entity NER results")
-    group_data.add_argument('--save_preds', default=False, action='store_true', 
-                            help="whether to save predictions on the dev/test splits (e.g., in case without ground truth)")
+    group_data.add_argument('--no_save_preds', dest='save_preds', default=True, action='store_false', 
+                            help="whether to save predictions on the dev/test splits")
     
     group_decoder = parser.add_argument_group('decoder configurations')
     group_decoder.add_argument('--ck_decoder', type=str, default='sequence_tagging', 
@@ -488,16 +488,16 @@ if __name__ == '__main__':
         logger.info("Saving predictions on dev-set")
         set_chunks_pred = trainer.predict(dev_set, batch_size=args.batch_size)
         for entry, chunks_pred in zip(dev_data, set_chunks_pred): 
-            entry['chunks'] = chunks_pred
-        set_chunks_pred = postprocessor.restore_chunks_for_data(dev_data)
-        torch.save(set_chunks_pred, f"{save_path}/dev.chunks.pred.pth")
+            entry['chunks_pred'] = chunks_pred
+        dev_data_pred = postprocessor.restore_for_data(dev_data)
+        torch.save(dev_data_pred, f"{save_path}/dev.data.pred.pth")
         
         logger.info("Saving predictions on test-set")
         set_chunks_pred = trainer.predict(test_set, batch_size=args.batch_size)
         for entry, chunks_pred in zip(test_data, set_chunks_pred):
-            entry['chunks'] = chunks_pred
-        set_chunks_pred = postprocessor.restore_chunks_for_data(test_data)
-        torch.save(set_chunks_pred, f"{save_path}/test.chunks.pred.pth")
+            entry['chunks_pred'] = chunks_pred
+        test_data_pred = postprocessor.restore_for_data(test_data)
+        torch.save(test_data_pred, f"{save_path}/test.data.pred.pth")
     
     logger.info(" ".join(sys.argv))
     logger.info(pprint.pformat(args.__dict__))

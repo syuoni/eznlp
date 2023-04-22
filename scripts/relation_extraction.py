@@ -15,6 +15,7 @@ from eznlp.dataset import Dataset
 from eznlp.model import EncoderConfig
 from eznlp.model import SpanRelClassificationDecoderConfig, SpecificSpanRelClsDecoderConfig, UnfilteredSpecificSpanRelClsDecoderConfig, MaskedSpanRelClsDecoderConfig
 from eznlp.model import ExtractorConfig, SpecificSpanExtractorConfig, MaskedSpanExtractorConfig
+from eznlp.model import BertLikePostProcessor
 from eznlp.training import Trainer, count_params, evaluate_relation_extraction
 from eznlp.training.evaluation import _eval_ent
 from eznlp.utils.relation import detect_missing_symmetric
@@ -38,6 +39,8 @@ def parse_arguments(parser: argparse.ArgumentParser):
                             help="whether to pre-merge English characters in data")
     group_data.add_argument('--chunks_pred_path', type=str, default="", 
                             help="path to load predicted chunks for pipeline modeling/evaluation")
+    group_data.add_argument('--no_save_preds', dest='save_preds', default=True, action='store_false', 
+                            help="whether to save predictions on the dev/test splits")
     
     group_decoder = parser.add_argument_group('decoder configurations')
     group_decoder.add_argument('--rel_decoder', type=str, default='span_rel_classification', 
@@ -72,6 +75,8 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                help="weight for l2-regularization on affine-fusor")
     group_decoder.add_argument('--use_inv_rel', default=False, action='store_true', 
                                help="whether to use inverse relation for bidirectional prediction")
+    group_decoder.add_argument('--comp_sym_rel', default=False, action='store_true', 
+                               help="whether to complement symmetric relations")
     
     # Boundary selection (*)
     group_decoder.add_argument('--red_arch', type=str, default='FFN', 
@@ -123,6 +128,7 @@ def build_RE_config(args: argparse.Namespace):
                                                             agg_mode=args.agg_mode, 
                                                             ck_loss_weight=args.ck_loss_weight, 
                                                             l2_loss_weight=args.l2_loss_weight, 
+                                                            comp_sym_rel=args.comp_sym_rel, 
                                                             use_inv_rel=args.use_inv_rel, 
                                                             ss_epsilon=args.ss_epsilon, 
                                                             fl_gamma=args.fl_gamma, 
@@ -138,6 +144,7 @@ def build_RE_config(args: argparse.Namespace):
                                                          agg_mode=args.agg_mode, 
                                                          ck_loss_weight=args.ck_loss_weight, 
                                                          l2_loss_weight=args.l2_loss_weight, 
+                                                         comp_sym_rel=args.comp_sym_rel, 
                                                          use_inv_rel=args.use_inv_rel, 
                                                          ss_epsilon=args.ss_epsilon, 
                                                          fl_gamma=args.fl_gamma,
@@ -166,6 +173,7 @@ def build_RE_config(args: argparse.Namespace):
                                                        reduction=reduction_config, 
                                                        ck_loss_weight=args.ck_loss_weight, 
                                                        l2_loss_weight=args.l2_loss_weight, 
+                                                       comp_sym_rel=args.comp_sym_rel, 
                                                        use_inv_rel=args.use_inv_rel, 
                                                        ss_epsilon=args.ss_epsilon, 
                                                        fl_gamma=args.fl_gamma,
@@ -218,19 +226,21 @@ if __name__ == '__main__':
             entry['chunks_pred'] = entry['chunks']
         
         logger.info("Predicted chunks are provided, performing end-to-end evaluation")
-        set_chunks_pred = torch.load(f"{args.chunks_pred_path}/dev.chunks.pred.pth")
-        set_chunks_gold = [entry['chunks'] for entry in dev_data]
+        dev_data_pred = torch.load(f"{args.chunks_pred_path}/dev.data.pred.pth")
         logger.info("Evaluating predicted chunks on dev-set")
+        set_chunks_pred = [entry['chunks_pred'] for entry in dev_data_pred]
+        set_chunks_gold = [entry['chunks'] for entry in dev_data]
         _eval_ent(set_chunks_gold, set_chunks_pred)
-        for entry, chunks_pred in zip(dev_data, set_chunks_pred):
-            entry['chunks_pred'] = chunks_pred
+        for entry, entry_pred in zip(dev_data, dev_data_pred):
+            entry['chunks_pred'] = entry_pred['chunks_pred']
         
-        set_chunks_pred = torch.load(f"{args.chunks_pred_path}/test.chunks.pred.pth")
-        set_chunks_gold = [entry['chunks'] for entry in test_data]
+        test_data_pred = torch.load(f"{args.chunks_pred_path}/test.data.pred.pth")
         logger.info("Evaluating predicted chunks on test-set")
+        set_chunks_pred = [entry['chunks_pred'] for entry in test_data_pred]
+        set_chunks_gold = [entry['chunks'] for entry in test_data]
         _eval_ent(set_chunks_gold, set_chunks_pred)
-        for entry, chunks_pred in zip(test_data, set_chunks_pred):
-            entry['chunks_pred'] = chunks_pred
+        for entry, entry_pred in zip(test_data, test_data_pred):
+            entry['chunks_pred'] = entry_pred['chunks_pred']
         
     else:
         logger.warning("Predicted chunks are NOT provided, using gold chunks for evaluation")
@@ -247,7 +257,7 @@ if __name__ == '__main__':
     test_data  = [entry for entry in test_data  if len(entry['chunks'])+len(entry['chunks_pred']) > 0]
     
     # Add missing symmetric relations
-    if args.dataset.startswith('ace2004_rel_cv') or args.dataset in ('ace2005_rel', 'SciERC'): 
+    if args.comp_sym_rel and (args.dataset.startswith('ace2004_rel_cv') or args.dataset in ('ace2005_rel', 'SciERC')): 
         if args.dataset.startswith('ace'): 
             config.decoder.sym_rel_labels = ['PER-SOC']
         elif args.dataset == 'SciERC': 
@@ -304,6 +314,23 @@ if __name__ == '__main__':
     evaluate_relation_extraction(trainer, dev_set, batch_size=args.batch_size)
     logger.info("Evaluating on test-set")
     evaluate_relation_extraction(trainer, test_set, batch_size=args.batch_size)
+    
+    if args.save_preds:
+        postprocessor = BertLikePostProcessor(verbose=args.log_terminal)
+        
+        logger.info("Saving predictions on dev-set")
+        set_relations_pred = trainer.predict(dev_set, batch_size=args.batch_size)
+        for entry, relations_pred in zip(dev_data, set_relations_pred): 
+            entry['relations_pred'] = relations_pred
+        dev_data_pred = postprocessor.restore_for_data(dev_data)
+        torch.save(dev_data_pred, f"{save_path}/dev.data.pred.pth")
+        
+        logger.info("Saving predictions on test-set")
+        set_relations_pred = trainer.predict(test_set, batch_size=args.batch_size)
+        for entry, relations_pred in zip(test_data, set_relations_pred):
+            entry['relations_pred'] = relations_pred
+        test_data_pred = postprocessor.restore_for_data(test_data)
+        torch.save(test_data_pred, f"{save_path}/test.data.pred.pth")
     
     logger.info(" ".join(sys.argv))
     logger.info(pprint.pformat(args.__dict__))
