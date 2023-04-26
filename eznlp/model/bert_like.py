@@ -39,7 +39,7 @@ def _is_punctuation(char):
 
 
 # Some abbreviations that are assumed without prefix space
-_ABBREV = {"'m", "'re", "'s", "'", "''", "'ll", "'ve", "'d"}
+_ABBREV = {"'m", "'re", "'s", "'ll", "'ve", "'d", "'t", "n't", "'", "''"}
 
 def _subtokenize_word(word: str, tokenizer: transformers.PreTrainedTokenizer): 
     if isinstance(tokenizer, transformers.BertTokenizer):
@@ -800,7 +800,7 @@ class BertLikePostProcessor(object):
         Notes: Currently NOT supports `merge_enchars_for_data`. 
         """
         oori_data = []
-        for entry in tqdm.tqdm(data, disable=not self.verbose, ncols=100, desc="Restoring chunks"):
+        for entry in tqdm.tqdm(data, disable=not self.verbose, ncols=100, desc="Restoring"):
             num_tokens = len(entry['tokens'])
             sub2ori_idx = entry.get('sub2ori_idx', [i for i in range(num_tokens+1)])
             ori2sub_idx = entry.get('ori2sub_idx', [i for i in range(num_tokens+1)])
