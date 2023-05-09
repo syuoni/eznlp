@@ -11,8 +11,9 @@ import torch
 
 from eznlp import auto_device
 from eznlp.dataset import Dataset
-from eznlp.model import SpanRelClassificationDecoderConfig
-from eznlp.model import ExtractorConfig
+from eznlp.model import EncoderConfig
+from eznlp.model import SpanRelClassificationDecoderConfig, SpecificSpanRelClsDecoderConfig, SpecificSpanSparseRelClsDecoderConfig
+from eznlp.model import ExtractorConfig, SpecificSpanExtractorConfig
 from eznlp.training import Trainer, count_params, evaluate_relation_extraction
 
 from utils import add_base_arguments, parse_to_args
@@ -31,7 +32,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
     
     group_decoder = parser.add_argument_group('decoder configurations')
     group_decoder.add_argument('--rel_decoder', type=str, default='span_rel_classification', 
-                               help="relation decoding method", choices=['span_rel_classification'])
+                               help="relation decoding method", choices=['span_rel_classification', 'specific_span_rel', 'specific_span_sparse_rel'])
     
     # Loss
     group_decoder.add_argument('--fl_gamma', type=float, default=0.0, 
@@ -42,17 +43,34 @@ def parse_arguments(parser: argparse.ArgumentParser):
     # Span-based
     group_decoder.add_argument('--agg_mode', type=str, default='max_pooling', 
                                help="aggregating mode")
-    group_decoder.add_argument('--max_span_size', type=int, default=10, 
-                               help="maximum span size")
-    group_decoder.add_argument('--ck_size_emb_dim', type=int, default=25, 
+    group_decoder.add_argument('--max_size_id', type=int, default=9, 
+                               help="maximum span size ID")
+    group_decoder.add_argument('--size_emb_dim', type=int, default=25, 
                                help="span size embedding dim")
-    group_decoder.add_argument('--ck_label_emb_dim', type=int, default=25, 
+    group_decoder.add_argument('--label_emb_dim', type=int, default=25, 
                                help="chunk label embedding dim")
-    group_decoder.add_argument('--num_neg_relations', type=int, default=100, 
-                               help="number of sampling negative relations")
-    group_decoder.add_argument('--max_pair_distance', type=int, default=100, 
-                               help="maximum pair distance")
     
+    # Boundary selection (*)
+    group_decoder.add_argument('--affine_arch', type=str, default='FFN', 
+                               help="affine encoder architecture")
+    group_decoder.add_argument('--affine_dim', type=int, default=150, 
+                               help="affine encoder hidden dim")
+    group_decoder.add_argument('--affine_num_layers', type=int, default=1, 
+                               help="number of affine encoder layers")
+    group_decoder.add_argument('--neg_sampling_rate', type=float, default=1.0, 
+                               help="Negative sampling rate")
+    
+    # Specific span classification: Span-specific encoder (SSE)
+    group_decoder.add_argument('--sse_no_share_weights_ext', dest='sse_share_weights_ext', default=True, action='store_false', 
+                               help="whether to share weights between span-bert and bert encoders")
+    group_decoder.add_argument('--sse_no_share_weights_int', dest='sse_share_weights_int', default=True, action='store_false', 
+                               help="whether to share weights across span-bert encoders")
+    group_decoder.add_argument('--sse_init_agg_mode', type=str, default='max_pooling', 
+                               help="initial aggregating mode for span-bert enocder")
+    group_decoder.add_argument('--sse_num_layers', type=int, default=-1, 
+                               help="number of span-bert encoder layers (negative values are set to `None`)")
+    group_decoder.add_argument('--sse_max_span_size_cov_rate', type=float, default=0.995, 
+                               help="coverage rate of maximum span size")
     return parse_to_args(parser)
 
 
@@ -60,17 +78,39 @@ def parse_arguments(parser: argparse.ArgumentParser):
 def build_RE_config(args: argparse.Namespace):
     drop_rates = (0.0, 0.05, args.drop_rate) if args.use_locked_drop else (args.drop_rate, 0.0, 0.0)
     
-    decoder_config = SpanRelClassificationDecoderConfig(agg_mode=args.agg_mode, 
-                                                        fl_gamma=args.fl_gamma,
-                                                        sl_epsilon=args.sl_epsilon, 
-                                                        num_neg_relations=args.num_neg_relations, 
-                                                        max_span_size=args.max_span_size, 
-                                                        max_pair_distance=args.max_pair_distance, 
-                                                        ck_size_emb_dim=args.ck_size_emb_dim, 
-                                                        ck_label_emb_dim=args.ck_label_emb_dim, 
-                                                        in_drop_rates=drop_rates)
+    if args.rel_decoder == 'span_rel_classification':
+        decoder_config = SpanRelClassificationDecoderConfig(agg_mode=args.agg_mode, 
+                                                            fl_gamma=args.fl_gamma,
+                                                            sl_epsilon=args.sl_epsilon, 
+                                                            neg_sampling_rate=args.neg_sampling_rate, 
+                                                            max_size_id=args.max_size_id, 
+                                                            size_emb_dim=args.size_emb_dim, 
+                                                            label_emb_dim=args.label_emb_dim, 
+                                                            in_drop_rates=drop_rates)
+    elif args.rel_decoder == 'specific_span_rel':
+        decoder_config = SpecificSpanRelClsDecoderConfig(affine=EncoderConfig(arch=args.affine_arch, hid_dim=args.affine_dim, num_layers=args.affine_num_layers, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2), 
+                                                         fl_gamma=args.fl_gamma,
+                                                         sl_epsilon=args.sl_epsilon, 
+                                                         neg_sampling_rate=args.neg_sampling_rate, 
+                                                         max_span_size_cov_rate=args.sse_max_span_size_cov_rate, 
+                                                         size_emb_dim=args.size_emb_dim, 
+                                                         # hid_drop_rates=drop_rates, 
+                                                         )
+    elif args.rel_decoder == 'specific_span_sparse_rel':
+        decoder_config = SpecificSpanSparseRelClsDecoderConfig(affine=EncoderConfig(arch=args.affine_arch, hid_dim=args.affine_dim, num_layers=args.affine_num_layers, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2), 
+                                                               fl_gamma=args.fl_gamma,
+                                                               sl_epsilon=args.sl_epsilon, 
+                                                               neg_sampling_rate=args.neg_sampling_rate, 
+                                                               max_span_size_cov_rate=args.sse_max_span_size_cov_rate, 
+                                                               size_emb_dim=args.size_emb_dim, 
+                                                               label_emb_dim=args.label_emb_dim, 
+                                                               # hid_drop_rates=drop_rates, 
+                                                               )
     
-    return ExtractorConfig(**collect_IE_assembly_config(args), decoder=decoder_config)
+    if args.rel_decoder.startswith('specific_span'):
+        return SpecificSpanExtractorConfig(**collect_IE_assembly_config(args), decoder=decoder_config)
+    else:
+        return ExtractorConfig(**collect_IE_assembly_config(args), decoder=decoder_config)
 
 
 
@@ -112,6 +152,10 @@ if __name__ == '__main__':
     else:
         logger.info(f"Loading original data {args.dataset}...")
         train_data, dev_data, test_data = load_data(args)
+        for data in [train_data, dev_data, test_data]:
+            for entry in data:
+                entry['chunks_pred'] = entry['chunks']
+    
     args.language = dataset2language[args.dataset]
     config = build_RE_config(args)
     train_data, dev_data, test_data = process_IE_data(train_data, dev_data, test_data, args, config)

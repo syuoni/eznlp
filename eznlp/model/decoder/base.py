@@ -89,6 +89,10 @@ class DecoderBase(torch.nn.Module):
     def decode(self, batch: Batch, **states):
         raise NotImplementedError("Not Implemented `decode`")
         
+    # TODO: Loosely decoding
+    def loosely_decode(self, batch: Batch, **states):
+        return self.decode(batch, **states)
+        
     def _unsqueezed_decode(self, batch: Batch, **states):
         if self.num_metrics == 0:
             raise RuntimeError("`_unsqueezed` method does not applies if `num_metrics` is 0")

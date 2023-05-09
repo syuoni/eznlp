@@ -15,6 +15,7 @@ import allennlp.modules
 import transformers
 import flair
 
+from eznlp.token import Full2Half
 from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO, TextClsIO, KarpathyIO, BratIO, Src2TrgIO
 from eznlp.io import PostIO
 from eznlp.vectors import Vectors, GloVe
@@ -93,6 +94,10 @@ def add_base_arguments(parser: argparse.ArgumentParser):
                              help="bert-like architecture (None for w/o bert-like)")
     group_model.add_argument('--bert_drop_rate', type=float, default=0.2, 
                              help="dropout rate for BERT")
+    group_model.add_argument('--bert_freeze', default=False, action='store_true', 
+                             help="whether to freeze BERT weights")
+    group_model.add_argument('--bert_reinit', default=False, action='store_true', 
+                             help="whether to reinit BERT weights")
     group_model.add_argument('--use_interm2', default=False, action='store_true', 
                              help="whether to use intermediate2")
     return parser
@@ -119,6 +124,9 @@ dataset2language = {'conll2003': 'English',
                     'ace2004': 'English', 
                     'ace2005': 'English', 
                     'genia': 'English', 
+                    'genia_yu2020acl': 'English', 
+                    'kbp2017': 'English', 
+                    'nne': 'English', 
                     'conll2004': 'English', 
                     'SciERC': 'English', 
                     'ace2005_rel': 'English',
@@ -152,10 +160,7 @@ dataset2language.update({f'HwaMei_{s}': 'Chinese' for s in range(500, 1201, 100)
 
 def load_data(args: argparse.Namespace):
     if args.dataset == 'conll2003':
-        if args.doc_level:
-            io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', document_sep_starts=["-DOCSTART-"], document_level=True, case_mode='None', number_mode='Zeros')
-        else:
-            io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', case_mode='None', number_mode='Zeros')
+        io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', document_sep_starts=["-DOCSTART-"], case_mode='None', number_mode='Zeros')
         train_data = io.read("data/conll2003/eng.train")
         dev_data   = io.read("data/conll2003/eng.testa")
         test_data  = io.read("data/conll2003/eng.testb")
@@ -173,10 +178,7 @@ def load_data(args: argparse.Namespace):
         
         
     elif args.dataset == 'conll2012':
-        if args.doc_level:
-            io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end", "pt/"], document_sep_starts=["#begin"], document_level=True, encoding='utf-8', case_mode='None', number_mode='Zeros')
-        else:
-            io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end", "pt/"], document_sep_starts=["#begin"], encoding='utf-8', case_mode='None', number_mode='Zeros')
+        io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end", "pt/"], document_sep_starts=["#begin"], encoding='utf-8', case_mode='None', number_mode='Zeros')
         train_data = io.read("data/conll2012/train.english.v4_gold_conll")
         dev_data   = io.read("data/conll2012/dev.english.v4_gold_conll")
         test_data  = io.read("data/conll2012/test.english.v4_gold_conll")
@@ -206,13 +208,34 @@ def load_data(args: argparse.Namespace):
             logger.warning(f"Loading data with corruption rate of {args.corrupt_rate:.1f} \n"
                            f"Corruption Retrieval F1-score: {ave_scores['micro']['f1']*100:2.3f}%")
         
-    elif args.dataset == 'genia':
+    elif args.dataset.startswith('genia'):
         io = JsonIO(text_key='tokens', 
-                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', 
+                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', retain_keys=['doc_key', 'bibliomisc'], 
                     case_mode='None', number_mode='Zeros')
-        train_data = io.read("data/genia/term.train.json")
-        dev_data   = []
-        test_data  = io.read("data/genia/term.test.json")
+        if args.dataset == 'genia':
+            train_data = io.read("data/genia/term.train.json")
+            dev_data   = io.read("data/genia/term.dev.json")
+            test_data  = io.read("data/genia/term.test.json")
+        elif args.dataset == 'genia_yu2020acl':
+            train_data = io.read("data/genia-yu2020acl/train_dev.json")
+            dev_data   = []
+            test_data  = io.read("data/genia-yu2020acl/test.json")
+        
+    elif args.dataset == 'kbp2017':
+        io = JsonIO(text_key='tokens', 
+                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', retain_keys=['org_id'], 
+                    case_mode='None', number_mode='Zeros')
+        train_data = io.read("data/kbp2017-shen2022acl/kbp17_train_context.json")
+        dev_data   = io.read("data/kbp2017-shen2022acl/kbp17_dev_context.json")
+        test_data  = io.read("data/kbp2017-shen2022acl/kbp17_test_context.json")
+        
+    elif args.dataset == 'nne':
+        io = JsonIO(text_key='tokens', 
+                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', retain_keys=['org_id'], 
+                    case_mode='None', number_mode='Zeros')
+        train_data = io.read("data/nne-shen2022acl/nne_train_context.json")
+        dev_data   = io.read("data/nne-shen2022acl/nne_dev_context.json")
+        test_data  = io.read("data/nne-shen2022acl/nne_test_context.json")
         
     elif args.dataset == 'conll2004':
         io = JsonIO(text_key='tokens', 
@@ -289,6 +312,8 @@ def load_data(args: argparse.Namespace):
         
     elif args.dataset == 'ontonotesv4_zh':
         io = ConllIO(text_col_id=2, tag_col_id=3, scheme='OntoNotes', sentence_sep_starts=["#end"], document_sep_starts=["#begin"], encoding='utf-8', token_sep="", pad_token="")
+        # Translate full-width characters to half-width ones, including "！", "？"
+        # io = ConllIO(text_col_id=2, tag_col_id=3, scheme='OntoNotes', sentence_sep_starts=["#end"], document_sep_starts=["#begin"], encoding='utf-8', token_sep="", pad_token="", pre_text_normalizer=Full2Half.full2half)
         train_data = io.read("data/ontonotesv4/train.chinese.vz_gold_conll")
         dev_data   = io.read("data/ontonotesv4/dev.chinese.vz_gold_conll")
         test_data  = io.read("data/ontonotesv4/test.chinese.vz_gold_conll")
@@ -351,7 +376,7 @@ def load_data(args: argparse.Namespace):
         io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', chunk_text_key=None, 
                     attribute_key='attributes', attribute_type_key='type', attribute_chunk_key='entity', 
                     relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
-                    is_whole_piece=False, retain_meta=True, encoding='utf-8', token_sep="", pad_token="")
+                    is_whole_piece=False, retain_keys=['visit_id', 'split'], encoding='utf-8', token_sep="", pad_token="")
         train_data = io.read("data/HwaMei/v20211230/train.json")
         dev_data   = io.read("data/HwaMei/v20211230/dev.json")
         test_data  = io.read("data/HwaMei/v20211230/test.json")
@@ -488,6 +513,8 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
                 PATH = "assets/transformers/bert-base-cased" if cased else "assets/transformers/bert-base-uncased"
             elif 'large' in pretrained_str.lower():
                 PATH = "assets/transformers/bert-large-cased" if cased else "assets/transformers/bert-large-uncased"
+            # cased: do_lower_case=False
+            # uncased: do_lower_case=True
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.BertTokenizer.from_pretrained(PATH))
             
@@ -496,6 +523,7 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
                 PATH = "assets/transformers/roberta-base"
             elif 'large' in pretrained_str.lower():
                 PATH = "assets/transformers/roberta-large"
+            # cased: do_lower_case=False
             return (transformers.RobertaModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.RobertaTokenizer.from_pretrained(PATH, add_prefix_space=True))
             
@@ -503,6 +531,8 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
             size = re.search("x*(base|large)", pretrained_str.lower())
             if size is not None:
                 PATH = f"assets/transformers/albert-{size.group()}-v2"
+            # uncased: do_lower_case=True
+            # ALBERT by default uses dropout rate of 0
             return (transformers.AlbertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.AlbertTokenizer.from_pretrained(PATH))
             
@@ -517,7 +547,23 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
         elif pretrained_str.lower().startswith('scibert'):
             PATH = "assets/transformers/allenai/scibert_scivocab_cased" if cased else "assets/transformers/allenai/scibert_scivocab_uncased"
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
-                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512))
+                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=(not cased)))
+            
+        elif pretrained_str.lower().startswith('biobert'):
+            if 'base' in pretrained_str.lower():
+                PATH = "assets/transformers/dmis-lab/biobert-base-cased-v1.1"
+            elif 'large' in pretrained_str.lower():
+                PATH = "assets/transformers/dmis-lab/biobert-large-cased-v1.1"
+            return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
+                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=False))
+            
+        elif pretrained_str.lower().startswith('pubmedbert'):
+            if 'full' in pretrained_str.lower():
+                PATH = "assets/transformers/microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext"
+            else:
+                PATH = "assets/transformers/microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract"
+            return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
+                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=True))
             
     elif args.language.lower() == 'chinese':
         if pretrained_str.lower().startswith('bert'):

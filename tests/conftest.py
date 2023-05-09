@@ -137,6 +137,7 @@ def elmo():
 
 BERT_PATH = "assets/transformers/bert-base-cased"
 ROBERTA_PATH = "assets/transformers/roberta-base"
+ALBERT_PATH = "assets/transformers/albert-base-v2"
 
 @pytest.fixture
 def bert_with_tokenizer():
@@ -145,13 +146,22 @@ def bert_with_tokenizer():
 
 @pytest.fixture
 def roberta_with_tokenizer():
-    """
-    The GPT-2/RoBERTa tokenizer expects a space before all the words. 
+    """The GPT-2/RoBERTa tokenizer expects a space before all the words. 
+    RoBERTa does not use `token_type_ids` in pretraining; Check that `roberta.config.type_vocab_size` is 1.
+    
     https://github.com/huggingface/transformers/issues/1196
     https://github.com/pytorch/fairseq/blob/master/fairseq/models/roberta/hub_interface.py#L38-L56
     """
     return (transformers.RobertaModel.from_pretrained(ROBERTA_PATH), 
             transformers.RobertaTokenizer.from_pretrained(ROBERTA_PATH, add_prefix_space=True))
+
+@pytest.fixture
+def albert_with_tokenizer():
+    """ALBERT by default uses dropout rate of 0. 
+    """
+    return  (transformers.AlbertModel.from_pretrained(ALBERT_PATH), 
+             transformers.AlbertTokenizer.from_pretrained(ALBERT_PATH))
+
 
 @pytest.fixture(params=['bert', 'roberta'])
 def bert_like_with_tokenizer(request, bert_with_tokenizer, roberta_with_tokenizer):

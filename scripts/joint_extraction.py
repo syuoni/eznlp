@@ -56,24 +56,33 @@ def parse_arguments(parser: argparse.ArgumentParser):
     # Span-based
     group_decoder.add_argument('--agg_mode', type=str, default='max_pooling', 
                                help="aggregating mode")
-    group_decoder.add_argument('--num_neg_chunks', type=int, default=100, 
-                               help="number of sampling negative chunks")
     group_decoder.add_argument('--max_span_size', type=int, default=10, 
                                help="maximum span size")
-    group_decoder.add_argument('--ck_size_emb_dim', type=int, default=25, 
+    group_decoder.add_argument('--max_size_id', type=int, default=9, 
+                               help="maximum span size ID")
+    group_decoder.add_argument('--size_emb_dim', type=int, default=25, 
                                help="span size embedding dim")
-    group_decoder.add_argument('--ck_label_emb_dim', type=int, default=25, 
+    group_decoder.add_argument('--label_emb_dim', type=int, default=25, 
                                help="chunk label embedding dim")
-    group_decoder.add_argument('--num_neg_relations', type=int, default=100, 
-                               help="number of sampling negative relations")
-    group_decoder.add_argument('--max_pair_distance', type=int, default=100, 
-                               help="maximum pair distance")
     
     # Boundary selection
     group_decoder.add_argument('--no_biaffine', dest='use_biaffine', default=True, action='store_false', 
                                help="whether to use biaffine")
     group_decoder.add_argument('--affine_arch', type=str, default='FFN', 
                                help="affine encoder architecture")
+    group_decoder.add_argument('--affine_dim', type=int, default=150, 
+                               help="affine encoder hidden dim")
+    group_decoder.add_argument('--affine_num_layers', type=int, default=1, 
+                               help="number of affine encoder layers")
+    group_decoder.add_argument('--neg_sampling_rate', type=float, default=1.0, 
+                               help="Negative sampling rate")
+    group_decoder.add_argument('--neg_sampling_power_decay', type=float, default=0.0, 
+                               help="Negative sampling rate power decay parameter")
+    group_decoder.add_argument('--neg_sampling_surr_rate', type=float, default=0.0, 
+                               help="Extra negative sampling rate surrounding positive samples")
+    group_decoder.add_argument('--neg_sampling_surr_size', type=int, default=5, 
+                               help="Extra negative sampling rate surrounding size")
+    
     group_decoder.add_argument('--sb_epsilon', type=float, default=0.0, 
                                help="Boundary smoothing loss epsilon")
     return parse_to_args(parser)
@@ -93,25 +102,35 @@ def build_joint_config(args: argparse.Namespace):
         ck_decoder_config = SpanClassificationDecoderConfig(agg_mode=args.agg_mode, 
                                                             fl_gamma=args.fl_gamma,
                                                             sl_epsilon=args.sl_epsilon, 
-                                                            num_neg_chunks=args.num_neg_chunks, 
+                                                            neg_sampling_rate=args.neg_sampling_rate, 
+                                                            neg_sampling_power_decay=args.neg_sampling_power_decay, 
+                                                            neg_sampling_surr_rate=args.neg_sampling_surr_rate, 
+                                                            neg_sampling_surr_size=args.neg_sampling_surr_size, 
                                                             max_span_size=args.max_span_size, 
-                                                            size_emb_dim=args.ck_size_emb_dim, 
+                                                            size_emb_dim=args.size_emb_dim, 
                                                             in_drop_rates=drop_rates)
     elif args.ck_decoder == 'boundary_selection':
         ck_decoder_config = BoundarySelectionDecoderConfig(use_biaffine=args.use_biaffine, 
-                                                           affine=EncoderConfig(arch=args.affine_arch, hid_dim=150, num_layers=1, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2), 
+                                                           affine=EncoderConfig(arch=args.affine_arch, hid_dim=args.affine_dim, num_layers=args.affine_num_layers, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2), 
                                                            fl_gamma=args.fl_gamma,
                                                            sl_epsilon=args.sl_epsilon, 
+                                                           neg_sampling_rate=args.neg_sampling_rate, 
+                                                           neg_sampling_power_decay=args.neg_sampling_power_decay, 
+                                                           neg_sampling_surr_rate=args.neg_sampling_surr_rate, 
+                                                           neg_sampling_surr_size=args.neg_sampling_surr_size, 
                                                            sb_epsilon=args.sb_epsilon,
-                                                           hid_drop_rates=drop_rates)
+                                                           size_emb_dim=args.size_emb_dim, 
+                                                           #hid_drop_rates=drop_rates,
+                                                           )
     
     if args.attr_decoder == 'None':
         attr_decoder_config = None
     elif args.attr_decoder == 'span_attr_classification':
         attr_decoder_config = SpanAttrClassificationDecoderConfig(agg_mode=args.agg_mode, 
-                                                                  max_span_size=args.max_span_size, 
-                                                                  ck_size_emb_dim=args.ck_size_emb_dim, 
-                                                                  ck_label_emb_dim=args.ck_label_emb_dim, 
+                                                                  neg_sampling_rate=args.neg_sampling_rate, 
+                                                                  max_size_id=args.max_size_id, 
+                                                                  size_emb_dim=args.size_emb_dim, 
+                                                                  label_emb_dim=args.label_emb_dim, 
                                                                   in_drop_rates=drop_rates)
     
     if args.rel_decoder == 'None':
@@ -120,15 +139,14 @@ def build_joint_config(args: argparse.Namespace):
         rel_decoder_config = SpanRelClassificationDecoderConfig(agg_mode=args.agg_mode, 
                                                                 fl_gamma=args.fl_gamma,
                                                                 sl_epsilon=args.sl_epsilon, 
-                                                                num_neg_relations=args.num_neg_relations, 
-                                                                max_span_size=args.max_span_size, 
-                                                                max_pair_distance=args.max_pair_distance, 
-                                                                ck_size_emb_dim=args.ck_size_emb_dim, 
-                                                                ck_label_emb_dim=args.ck_label_emb_dim, 
+                                                                neg_sampling_rate=args.neg_sampling_rate, 
+                                                                max_size_id=args.max_size_id, 
+                                                                size_emb_dim=args.size_emb_dim, 
+                                                                label_emb_dim=args.label_emb_dim, 
                                                                 in_drop_rates=drop_rates)
     
     decoder_config = JointExtractionDecoderConfig(ck_decoder=ck_decoder_config, 
-                                                  attr_decoder = attr_decoder_config,
+                                                  attr_decoder=attr_decoder_config,
                                                   rel_decoder=rel_decoder_config)
     return ExtractorConfig(**collect_IE_assembly_config(args) , decoder=decoder_config)
 

@@ -2,8 +2,11 @@
 from collections import Counter
 import pytest
 import numpy
+import transformers
 
 from eznlp.io import ConllIO, PostIO
+from eznlp.model.bert_like import merge_sentences_for_bert_like, merge_enchars_for_bert_like
+
 
 
 class TestConllIO(object):
@@ -33,83 +36,70 @@ class TestConllIO(object):
         
         
         
-    def test_conll2003(self):
-        self.io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', additional_col_id2name={1: 'pos_tag'})
+    @pytest.mark.parametrize("doc_level", [False, True])
+    def test_conll2003(self, doc_level, bert_with_tokenizer):
+        self.io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', document_sep_starts=["-DOCSTART-"], additional_col_id2name={1: 'pos_tag'})
         train_data = self.io.read("data/conll2003/eng.train")
         dev_data   = self.io.read("data/conll2003/eng.testa")
         test_data  = self.io.read("data/conll2003/eng.testb")
-        
-        assert len(train_data) == 14_987
-        assert sum(len(ex['chunks']) for ex in train_data) == 23_499
-        assert sum(len(ex['tokens']) for ex in train_data) == 204_567
-        assert len(dev_data) == 3_466
-        assert sum(len(ex['chunks']) for ex in dev_data) == 5_942
-        assert sum(len(ex['tokens']) for ex in dev_data) == 51_578
-        assert len(test_data) == 3_684
-        assert sum(len(ex['chunks']) for ex in test_data) == 5_648
-        assert sum(len(ex['tokens']) for ex in test_data) == 46_666
         
         assert hasattr(train_data[0]['tokens'][0], 'pos_tag')
-        assert train_data[0]['tokens'][0].pos_tag == '-X-'
         
-        self._assert_flatten_consistency(test_data)
+        # There are 946/216/231 "-DOCSTART-" lines in the train/dev/test split 
+        if not doc_level:
+            assert len(train_data) == 14_987 - 946
+            assert len(dev_data) == 3_466 - 216
+            assert len(test_data) == 3_684 - 231
+        else:
+            bert, tokenizer = bert_with_tokenizer
+            train_data = merge_sentences_for_bert_like(train_data, tokenizer, doc_key='doc_idx', verbose=False)
+            dev_data   = merge_sentences_for_bert_like(dev_data,   tokenizer, doc_key='doc_idx', verbose=False)
+            test_data  = merge_sentences_for_bert_like(test_data,  tokenizer, doc_key='doc_idx', verbose=False)
+            assert len(train_data) == 1_075
+            assert len(dev_data) == 261
+            assert len(test_data) == 261
         
-
-    def test_conll2003_at_doc_level(self):
-        self.io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', document_sep_starts=["-DOCSTART-"], document_level=True)
-        train_data = self.io.read("data/conll2003/eng.train")
-        dev_data   = self.io.read("data/conll2003/eng.testa")
-        test_data  = self.io.read("data/conll2003/eng.testb")
-        
-        assert len(train_data) == 946
         assert sum(len(ex['chunks']) for ex in train_data) == 23_499
         assert sum(len(ex['tokens']) for ex in train_data) == 204_567 - 946
-        assert len(dev_data) == 216
         assert sum(len(ex['chunks']) for ex in dev_data) == 5_942
         assert sum(len(ex['tokens']) for ex in dev_data) == 51_578 - 216
-        assert len(test_data) == 231
         assert sum(len(ex['chunks']) for ex in test_data) == 5_648
         assert sum(len(ex['tokens']) for ex in test_data) == 46_666 - 231
         
         self._assert_flatten_consistency(test_data)
+        assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 10
         
-
-    @pytest.mark.slow
-    def test_ontonotesv5(self):
+        
+    @pytest.mark.parametrize("doc_level", [False, True])
+    def test_ontonotesv5(self, doc_level, bert_with_tokenizer):
         self.io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end", "pt/"], document_sep_starts=["#begin"], encoding='utf-8')
         train_data = self.io.read("data/conll2012/train.english.v4_gold_conll")
         dev_data   = self.io.read("data/conll2012/dev.english.v4_gold_conll")
         test_data  = self.io.read("data/conll2012/test.english.v4_gold_conll")
         
-        assert len(train_data) == 59_924
+        if not doc_level:
+            assert len(train_data) == 59_924
+            assert len(dev_data) == 8_528
+            assert len(test_data) == 8_262
+        else:
+            bert, tokenizer = bert_with_tokenizer
+            train_data = merge_sentences_for_bert_like(train_data, tokenizer, doc_key='doc_idx', verbose=False)
+            dev_data   = merge_sentences_for_bert_like(dev_data,   tokenizer, doc_key='doc_idx', verbose=False)
+            test_data  = merge_sentences_for_bert_like(test_data,  tokenizer, doc_key='doc_idx', verbose=False)
+            assert len(train_data) == 3_828
+            assert len(dev_data) == 517
+            assert len(test_data) == 522
+        
         assert sum(len(ex['chunks']) for ex in train_data) == 81_828
         assert sum(len(ex['tokens']) for ex in train_data) == 1_088_503
-        assert len(dev_data) == 8_528
         assert sum(len(ex['chunks']) for ex in dev_data) == 11_066
         assert sum(len(ex['tokens']) for ex in dev_data) == 147_724
-        assert len(test_data) == 8_262
         assert sum(len(ex['chunks']) for ex in test_data) == 11_257
         assert sum(len(ex['tokens']) for ex in test_data) == 152_728
         
-
-    @pytest.mark.slow
-    def test_ontonotesv5_at_doc_level(self):
-        self.io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end", "pt/"], document_sep_starts=["#begin"], document_level=True, encoding='utf-8')
-        train_data = self.io.read("data/conll2012/train.english.v4_gold_conll")
-        dev_data   = self.io.read("data/conll2012/dev.english.v4_gold_conll")
-        test_data  = self.io.read("data/conll2012/test.english.v4_gold_conll")
+        assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 28
         
-        assert len(train_data) == 2_483
-        assert sum(len(ex['chunks']) for ex in train_data) == 81_828
-        assert sum(len(ex['tokens']) for ex in train_data) == 1_088_503
-        assert len(dev_data) == 319
-        assert sum(len(ex['chunks']) for ex in dev_data) == 11_066
-        assert sum(len(ex['tokens']) for ex in dev_data) == 147_724
-        assert len(test_data) == 322
-        assert sum(len(ex['chunks']) for ex in test_data) == 11_257
-        assert sum(len(ex['tokens']) for ex in test_data) == 152_728
         
-
     @pytest.mark.slow
     def test_ontonotesv5_chinese(self):
         self.io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end"], document_sep_starts=["#begin"], encoding='utf-8')
@@ -129,7 +119,7 @@ class TestConllIO(object):
         
         self._assert_flatten_consistency(test_data)
         
-
+        
     @pytest.mark.slow
     def test_ontonotesv4_chinese(self):
         self.io = ConllIO(text_col_id=2, tag_col_id=3, scheme='OntoNotes', sentence_sep_starts=["#end"], document_sep_starts=["#begin"], encoding='utf-8')
@@ -148,7 +138,19 @@ class TestConllIO(object):
         assert sum(len(ex['tokens']) for ex in test_data) == 128_277
         
         self._assert_flatten_consistency(test_data)
-
+        
+        train_data = self.io.flatten_to_characters(train_data)
+        dev_data   = self.io.flatten_to_characters(dev_data)
+        test_data  = self.io.flatten_to_characters(test_data)
+        assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 38
+        
+        tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-chinese", do_lower_case=True)
+        train_data = merge_enchars_for_bert_like(train_data, tokenizer, verbose=False)
+        dev_data   = merge_enchars_for_bert_like(dev_data,   tokenizer, verbose=False)
+        test_data  = merge_enchars_for_bert_like(test_data,  tokenizer, verbose=False)
+        assert sum(any(isinstance(start, float) or isinstance(end, float) for _, start, end in ex['chunks']) for data in [train_data, dev_data, test_data] for ex in data) == 0
+        assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 38
+        
         
     @pytest.mark.slow
     def test_sighan2006(self):
@@ -162,6 +164,14 @@ class TestConllIO(object):
         assert len(test_data) == 4_365
         assert sum(len(ex['chunks']) for ex in test_data) == 6_181
         assert sum(len(ex['tokens']) for ex in test_data) == 172_601
+        
+        assert max(end-start for data in [train_data, test_data] for ex in data for _, start, end in ex['chunks']) == 35
+        
+        tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-chinese", do_lower_case=True)
+        train_data = merge_enchars_for_bert_like(train_data, tokenizer, verbose=False)
+        test_data  = merge_enchars_for_bert_like(test_data,  tokenizer, verbose=False)
+        assert sum(any(isinstance(start, float) or isinstance(end, float) for _, start, end in ex['chunks']) for data in [train_data, test_data] for ex in data) == 0
+        assert max(end-start for data in [train_data, test_data] for ex in data for _, start, end in ex['chunks']) == 35
         
         
     def test_resume_ner(self):
@@ -180,6 +190,15 @@ class TestConllIO(object):
         assert sum(len(ex['chunks']) for ex in test_data) == 1_630
         assert sum(len(ex['tokens']) for ex in test_data) == 15_100
         
+        assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 58
+        
+        tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-chinese", do_lower_case=True)
+        train_data = merge_enchars_for_bert_like(train_data, tokenizer, verbose=False)
+        dev_data   = merge_enchars_for_bert_like(dev_data,   tokenizer, verbose=False)
+        test_data  = merge_enchars_for_bert_like(test_data,  tokenizer, verbose=False)
+        assert sum(any(isinstance(start, float) or isinstance(end, float) for _, start, end in ex['chunks']) for data in [train_data, dev_data, test_data] for ex in data) == 0
+        assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 58
+        
         
     def test_weibo_ner(self):
         self.io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BIO2', encoding='utf-8')
@@ -197,6 +216,8 @@ class TestConllIO(object):
         assert sum(len(ex['chunks']) for ex in test_data) == 320
         assert sum(len(ex['tokens']) for ex in test_data) == 14_844
         
+        assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 14
+        
         
     def test_weibo_ner_2nd(self):
         self.io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BIO2', encoding='utf-8', pre_text_normalizer=lambda x: x[0])
@@ -213,6 +234,15 @@ class TestConllIO(object):
         assert len(test_data) == 270
         assert sum(len(ex['chunks']) for ex in test_data) == 418
         assert sum(len(ex['tokens']) for ex in test_data) == 14_842
+        
+        assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 11
+        
+        tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-chinese", do_lower_case=True)
+        train_data = merge_enchars_for_bert_like(train_data, tokenizer, verbose=False)
+        dev_data   = merge_enchars_for_bert_like(dev_data,   tokenizer, verbose=False)
+        test_data  = merge_enchars_for_bert_like(test_data,  tokenizer, verbose=False)
+        assert sum(any(isinstance(start, float) or isinstance(end, float) for _, start, end in ex['chunks']) for data in [train_data, dev_data, test_data] for ex in data) == 1
+        assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 11
         
         
     def test_clerd(self):

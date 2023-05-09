@@ -144,6 +144,7 @@ dmypy.json
 !/data/ace-lu2015emnlp/*.py
 !/data/ace-luan2019naacl/*.py
 !/data/GENIA/*.py
+!/data/genia-yu2020acl/*.py
 
 !/publications/
 /publications/*

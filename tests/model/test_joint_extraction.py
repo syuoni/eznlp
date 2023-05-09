@@ -3,10 +3,12 @@ import pytest
 import torch
 
 from eznlp.dataset import Dataset
-from eznlp.model import EncoderConfig, BertLikeConfig, ExtractorConfig
+from eznlp.model import EncoderConfig, BertLikeConfig, SpanBertLikeConfig
 from eznlp.model import SequenceTaggingDecoderConfig, BoundarySelectionDecoderConfig
 from eznlp.model import SpanClassificationDecoderConfig, SpanAttrClassificationDecoderConfig, SpanRelClassificationDecoderConfig
+from eznlp.model import SpecificSpanClsDecoderConfig, SpecificSpanRelClsDecoderConfig, SpecificSpanSparseRelClsDecoderConfig
 from eznlp.model import JointExtractionDecoderConfig
+from eznlp.model import ExtractorConfig, SpecificSpanExtractorConfig
 from eznlp.training import Trainer
 
 
@@ -51,7 +53,7 @@ class TestModel(object):
         self.model = self.config.instantiate().to(self.device)
         assert isinstance(self.config.name, str) and len(self.config.name) > 0
         
-
+        
     @pytest.mark.parametrize("ck_decoder", ['sequence_tagging', 'span_classification', 'boundary_selection'])
     @pytest.mark.parametrize("agg_mode", ['max_pooling'])
     def test_model(self, ck_decoder, agg_mode, conll2004_demo, device):
@@ -62,13 +64,12 @@ class TestModel(object):
         elif ck_decoder.lower() == 'boundary_selection':
             ck_decoder_config = BoundarySelectionDecoderConfig()
         self.config = ExtractorConfig(decoder=JointExtractionDecoderConfig(ck_decoder=ck_decoder_config, 
-                                                                           attr_decoder=None,
                                                                            rel_decoder=SpanRelClassificationDecoderConfig(agg_mode=agg_mode)))
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
-
-
+        
+        
     @pytest.mark.parametrize("ck_decoder", ['sequence_tagging', 'span_classification', 'boundary_selection'])
     @pytest.mark.parametrize("agg_mode", ['max_pooling'])
     def test_model_with_attributes(self, ck_decoder, agg_mode, HwaMei_demo, device):
@@ -91,7 +92,7 @@ class TestModel(object):
         self.config = ExtractorConfig(ohots=None, 
                                       bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert), 
                                       intermediate2=None, 
-                                      decoder=JointExtractionDecoderConfig(attr_decoder=None))
+                                      decoder=JointExtractionDecoderConfig())
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
@@ -102,6 +103,43 @@ class TestModel(object):
         self._setup_case(HwaMei_demo, device)
         
         data_wo_gold = [{'tokens': entry['tokens']} for entry in HwaMei_demo]
+        dataset_wo_gold = Dataset(data_wo_gold, self.config, training=False)
+        
+        trainer = Trainer(self.model, device=device)
+        assert all(len(set_tuples_pred) == len(data_wo_gold) for set_tuples_pred in trainer.predict(dataset_wo_gold))
+        
+        
+        
+    @pytest.mark.parametrize("use_sparse", [False, True])
+    def test_model_with_specific_span(self, use_sparse, conll2004_demo, bert_with_tokenizer, device):
+        bert, tokenizer = bert_with_tokenizer
+        if use_sparse:
+            rel_decoder_config = SpecificSpanSparseRelClsDecoderConfig(max_span_size=3)
+        else:
+            rel_decoder_config = SpecificSpanRelClsDecoderConfig(max_span_size=3)
+        
+        self.config = SpecificSpanExtractorConfig(decoder=JointExtractionDecoderConfig(ck_decoder=SpecificSpanClsDecoderConfig(max_span_size=3), rel_decoder=rel_decoder_config), 
+                                                  bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False, output_hidden_states=True), 
+                                                  span_bert_like=SpanBertLikeConfig(bert_like=bert, freeze=False, num_layers=3, share_weights_ext=True, share_weights_int=True))
+        self._setup_case(conll2004_demo, device)
+        self._assert_batch_consistency()
+        self._assert_trainable()
+        
+        
+    @pytest.mark.parametrize("use_sparse", [False, True])
+    def test_prediction_without_gold_for_specific_span(self, use_sparse, conll2004_demo, bert_with_tokenizer, device):
+        bert, tokenizer = bert_with_tokenizer
+        if use_sparse:
+            rel_decoder_config = SpecificSpanSparseRelClsDecoderConfig(max_span_size=3)
+        else:
+            rel_decoder_config = SpecificSpanRelClsDecoderConfig(max_span_size=3)
+        
+        self.config = SpecificSpanExtractorConfig(decoder=JointExtractionDecoderConfig(ck_decoder=SpecificSpanClsDecoderConfig(max_span_size=3), rel_decoder=rel_decoder_config), 
+                                                  bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False, output_hidden_states=True), 
+                                                  span_bert_like=SpanBertLikeConfig(bert_like=bert, freeze=False, num_layers=3, share_weights_ext=True, share_weights_int=True))
+        self._setup_case(conll2004_demo, device)
+        
+        data_wo_gold = [{'tokens': entry['tokens']} for entry in conll2004_demo]
         dataset_wo_gold = Dataset(data_wo_gold, self.config, training=False)
         
         trainer = Trainer(self.model, device=device)

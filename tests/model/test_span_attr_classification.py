@@ -3,7 +3,7 @@ import pytest
 import torch
 
 from eznlp.dataset import Dataset
-from eznlp.model import BertLikeConfig, SpanAttrClassificationDecoderConfig, JointExtractionDecoderConfig, ExtractorConfig
+from eznlp.model import BertLikeConfig, SpanAttrClassificationDecoderConfig, ExtractorConfig
 from eznlp.training import Trainer
 
 
@@ -41,6 +41,8 @@ class TestModel(object):
         
         
     def _setup_case(self, data, device):
+        for entry in data:
+            entry['chunks_pred'] = entry['chunks']
         self.device = device
         
         self.dataset = Dataset(data, self.config)
@@ -50,9 +52,9 @@ class TestModel(object):
         
         
     @pytest.mark.parametrize("agg_mode", ['max_pooling', 'multiplicative_attention'])
-    @pytest.mark.parametrize("ck_label_emb_dim", [25, 0])
-    def test_model(self, agg_mode, ck_label_emb_dim, HwaMei_demo, device):
-        self.config = ExtractorConfig(decoder=SpanAttrClassificationDecoderConfig(agg_mode=agg_mode, ck_label_emb_dim=ck_label_emb_dim))
+    @pytest.mark.parametrize("label_emb_dim", [25, 0])
+    def test_model(self, agg_mode, label_emb_dim, HwaMei_demo, device):
+        self.config = ExtractorConfig(decoder=SpanAttrClassificationDecoderConfig(agg_mode=agg_mode, label_emb_dim=label_emb_dim))
         self._setup_case(HwaMei_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
@@ -73,55 +75,9 @@ class TestModel(object):
         self._setup_case(HwaMei_demo, device)
         
         data_wo_gold = [{'tokens': entry['tokens'], 
-                         'chunks': entry['chunks']} for entry in HwaMei_demo]
+                         'chunks_pred': entry['chunks']} for entry in HwaMei_demo]
         dataset_wo_gold = Dataset(data_wo_gold, self.config, training=False)
         
         trainer = Trainer(self.model, device=device)
         set_attributes_pred = trainer.predict(dataset_wo_gold)
         assert len(set_attributes_pred) == len(data_wo_gold)
-
-
-
-@pytest.mark.parametrize("training", [True, False])
-@pytest.mark.parametrize("building", [True, False])
-def test_chunks_obj(EAR_data_demo, training, building):
-    entry = EAR_data_demo[0]
-    chunks, attributes = entry['chunks'], entry['attributes']
-    
-    if building:
-        config = ExtractorConfig(decoder=SpanAttrClassificationDecoderConfig())
-        attr_decoder_config = config.decoder
-    else:
-        config = ExtractorConfig(decoder=JointExtractionDecoderConfig(attr_decoder=SpanAttrClassificationDecoderConfig(), rel_decoder=None))
-        attr_decoder_config = config.decoder.attr_decoder
-    
-    dataset = Dataset(EAR_data_demo, config, training=training)
-    dataset.build_vocabs_and_dims()
-    
-    chunks_obj = dataset[0]['chunks_obj']
-    assert chunks_obj.attributes == attributes
-    
-    if building:
-        assert chunks_obj.chunks == chunks
-        assert chunks_obj.is_built
-    else:
-        assert chunks_obj.chunks == chunks if training else len(chunks_obj.chunks) == 0
-        assert not chunks_obj.is_built
-        chunks_pred = [('EntA', 0, 1), ('EntB', 1, 2), ('EntA', 2, 3)]
-        chunks_obj.inject_chunks(chunks_pred)
-        chunks_obj.build(attr_decoder_config)
-        assert len(chunks_obj.chunks) == len(chunks) + len(chunks_pred) if training else len(chunks_obj.chunks) == len(chunks_pred)
-        assert chunks_obj.is_built
-    
-    assert (chunks_obj.span_size_ids+1).tolist() == [e-s for l, s, e in chunks_obj.chunks]
-    assert chunks_obj.attr_label_ids.size(0) == len(chunks_obj.chunks)
-    
-    attributes_retr = []
-    for chunk, attr_label_ids in zip(chunks_obj.chunks, chunks_obj.attr_label_ids):
-        attr_labels = [attr_decoder_config.idx2attr_label[i] for i, l in enumerate(attr_label_ids.tolist()) if l > 0]
-        if attr_decoder_config.attr_none_label not in attr_labels:
-            attributes_retr.extend([(attr_label, chunk) for attr_label in attr_labels])
-    if training or building:
-        assert set(attributes_retr) == set(attributes)
-    else:
-        assert len(attributes_retr) == 0

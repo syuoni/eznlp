@@ -36,12 +36,16 @@ def parse_arguments(parser: argparse.ArgumentParser):
     # Span-based
     group_decoder.add_argument('--agg_mode', type=str, default='max_pooling', 
                                help="aggregating mode")
-    group_decoder.add_argument('--max_span_size', type=int, default=10, 
-                               help="maximum span size")
-    group_decoder.add_argument('--ck_size_emb_dim', type=int, default=25, 
+    group_decoder.add_argument('--max_size_id', type=int, default=9, 
+                               help="maximum span size ID")
+    group_decoder.add_argument('--size_emb_dim', type=int, default=25, 
                                help="span size embedding dim")
-    group_decoder.add_argument('--ck_label_emb_dim', type=int, default=25, 
+    group_decoder.add_argument('--label_emb_dim', type=int, default=25, 
                                help="chunk label embedding dim")
+    
+    # Boundary selection (*)
+    group_decoder.add_argument('--neg_sampling_rate', type=float, default=1.0, 
+                               help="Negative sampling rate")
     return parse_to_args(parser)
 
 
@@ -50,9 +54,10 @@ def build_AE_config(args: argparse.Namespace):
     drop_rates = (0.0, 0.05, args.drop_rate) if args.use_locked_drop else (args.drop_rate, 0.0, 0.0)
     
     decoder_config = SpanAttrClassificationDecoderConfig(agg_mode=args.agg_mode, 
-                                                         max_span_size=args.max_span_size, 
-                                                         ck_size_emb_dim=args.ck_size_emb_dim, 
-                                                         ck_label_emb_dim=args.ck_label_emb_dim, 
+                                                         neg_sampling_rate=args.neg_sampling_rate, 
+                                                         max_size_id=args.max_size_id, 
+                                                         size_emb_dim=args.size_emb_dim, 
+                                                         label_emb_dim=args.label_emb_dim, 
                                                          in_drop_rates=drop_rates)
     
     return ExtractorConfig(**collect_IE_assembly_config(args), decoder=decoder_config)
@@ -97,6 +102,10 @@ if __name__ == '__main__':
     else:
         logger.info(f"Loading original data {args.dataset}...")
         train_data, dev_data, test_data = load_data(args)
+        for data in [train_data, dev_data, test_data]:
+            for entry in data:
+                entry['chunks_pred'] = entry['chunks']
+    
     args.language = dataset2language[args.dataset]
     config = build_AE_config(args)
     train_data, dev_data, test_data = process_IE_data(train_data, dev_data, test_data, args, config)

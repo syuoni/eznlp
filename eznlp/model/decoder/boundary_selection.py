@@ -1,21 +1,26 @@
 # -*- coding: utf-8 -*-
-from typing import List, Tuple
+from typing import List
 from collections import Counter
 import logging
+import math
+import numpy
 import torch
 
-from ...wrapper import TargetWrapper, Batch
-from ...utils.chunk import detect_nested, filter_clashed_by_priority
+from ...wrapper import Batch
+from ...utils.chunk import detect_overlapping_level, filter_clashed_by_priority
 from ...nn.modules import CombinedDropout, SoftLabelCrossEntropyLoss
 from ...nn.init import reinit_embedding_, reinit_layer_
 from ...metrics import precision_recall_f1_report
 from ..encoder import EncoderConfig
 from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
+from .boundaries import Boundaries, MAX_SIZE_ID_COV_RATE, _spans_from_upper_triangular
 
 logger = logging.getLogger(__name__)
 
 
-class BoundarySelectionDecoderMixin(DecoderMixinBase):
+class BoundariesDecoderMixin(DecoderMixinBase):
+    """The standard `Mixin` for span-based entity recognition. 
+    """
     @property
     def idx2label(self):
         return self._idx2label
@@ -53,122 +58,25 @@ class BoundarySelectionDecoderMixin(DecoderMixinBase):
         return ave_scores['micro']['f1']
 
 
-def _spans_from_surrounding(span: Tuple[int], distance: int, num_tokens: int):
-    """Spans from the surrounding area of the given `span`.
-    """
-    for k in range(distance):
-        for start_offset, end_offset in [(-k, -distance+k), 
-                                         (-distance+k, k), 
-                                         (k, distance-k), 
-                                         (distance-k, -k)]:
-            start, end = span[0]+start_offset, span[1]+end_offset
-            if 0 <= start < end <= num_tokens:
-                yield (start, end)
 
-
-def _spans_from_upper_triangular(seq_len: int):
-    """Spans from the upper triangular area. 
-    """
-    for start in range(seq_len):
-        for end in range(start+1, seq_len+1):
-            yield (start, end)
-
-
-class Boundaries(TargetWrapper):
-    """A wrapper of boundaries with underlying chunks. 
-    
-    Parameters
-    ----------
-    data_entry: dict
-        {'tokens': TokenSequence, 
-         'chunks': List[tuple]}
-    """
-    def __init__(self, data_entry: dict, config: BoundarySelectionDecoderMixin, training: bool=True):
-        super().__init__(training)
-        
-        self.chunks = data_entry.get('chunks', None)
-        num_tokens = len(data_entry['tokens'])
-        
-        if training and config.neg_sampling_rate < 1:
-            non_mask = (torch.arange(num_tokens) - torch.arange(num_tokens).unsqueeze(-1) >= 0)
-            pos_non_mask = torch.zeros_like(non_mask)
-            for label, start, end in self.chunks:
-                pos_non_mask[start, end-1] = True
-            
-            neg_sampled = torch.empty_like(non_mask).bernoulli(p=config.neg_sampling_rate)
-            
-            if config.hard_neg_sampling_rate > config.neg_sampling_rate:
-                hard_neg_non_mask = torch.zeros_like(non_mask)
-                for label, start, end in self.chunks:
-                    for dist in range(1, config.hard_neg_sampling_size+1):
-                        for sur_start, sur_end in _spans_from_surrounding((start, end), dist, num_tokens):
-                            hard_neg_non_mask[sur_start, sur_end-1] = True
-                
-                if config.hard_neg_sampling_rate < 1:
-                    # Solve: 1 - (1 - p_{neg})(1 - p_{comp}) = p_{hard}
-                    # Get: p_{comp} = (p_{hard} - p_{neg}) / (1 - p_{neg})
-                    comp_sampling_rate = (config.hard_neg_sampling_rate - config.neg_sampling_rate) / (1 - config.neg_sampling_rate)
-                    comp_sampled = torch.empty_like(non_mask).bernoulli(p=comp_sampling_rate)
-                    neg_sampled = neg_sampled | (comp_sampled & hard_neg_non_mask)
-                else:
-                    neg_sampled = neg_sampled | hard_neg_non_mask
-            
-            self.non_mask = pos_non_mask | (neg_sampled & non_mask)
-        
-        if self.chunks is not None:
-            if config.sb_epsilon <= 0 and config.sl_epsilon <= 0:
-                # Cross entropy loss
-                self.boundary2label_id = torch.full((num_tokens, num_tokens), config.none_idx, dtype=torch.long)
-                for label, start, end in self.chunks:
-                    self.boundary2label_id[start, end-1] = config.label2idx[label]
-            else:
-                # Soft label loss for either boundary or label smoothing 
-                self.boundary2label_id = torch.zeros(num_tokens, num_tokens, config.voc_dim, dtype=torch.float)
-                for label, start, end in self.chunks:
-                    label_id = config.label2idx[label]
-                    self.boundary2label_id[start, end-1, label_id] += (1 - config.sb_epsilon)
-                    
-                    for dist in range(1, config.sb_size+1):
-                        eps_per_span = config.sb_epsilon / (config.sb_size * dist * 4)
-                        sur_spans = list(_spans_from_surrounding((start, end), dist, num_tokens))
-                        for sur_start, sur_end in sur_spans:
-                            self.boundary2label_id[sur_start, sur_end-1, label_id] += (eps_per_span*config.sb_adj_factor)
-                        # Absorb the probabilities assigned to illegal positions
-                        self.boundary2label_id[start, end-1, label_id] += eps_per_span * (dist * 4 - len(sur_spans))
-                
-                # In very rare cases (e.g., ACE 2005), multiple entities may have the same span but different types
-                overflow_indic = (self.boundary2label_id.sum(dim=-1) > 1)
-                if overflow_indic.any().item():
-                    self.boundary2label_id[overflow_indic] = torch.nn.functional.normalize(self.boundary2label_id[overflow_indic], p=1, dim=-1)
-                self.boundary2label_id[:, :, config.none_idx] = 1 - self.boundary2label_id.sum(dim=-1)
-                
-                if config.sl_epsilon > 0:
-                    # Do not smooth to `<none>` label
-                    pos_indic = (torch.arange(config.voc_dim) != config.none_idx)
-                    self.boundary2label_id[:, :, pos_indic] = (self.boundary2label_id[:, :, pos_indic] * (1-config.sl_epsilon) + 
-                                                               self.boundary2label_id[:, :, pos_indic].sum(dim=-1, keepdim=True)*config.sl_epsilon / (config.voc_dim-1))
-
-
-
-class BoundarySelectionDecoderConfig(SingleDecoderConfigBase, BoundarySelectionDecoderMixin):
+class BoundarySelectionDecoderConfig(SingleDecoderConfigBase, BoundariesDecoderMixin):
     def __init__(self, **kwargs):
         self.use_biaffine = kwargs.pop('use_biaffine', True)
         self.affine = kwargs.pop('affine', EncoderConfig(arch='FFN', hid_dim=150, num_layers=1, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2))
+        self.use_prod = kwargs.pop('use_prod', True)
         
         self.max_len = kwargs.pop('max_len', None)
-        self.max_span_size = kwargs.pop('max_span_size', 50)
         self.size_emb_dim = kwargs.pop('size_emb_dim', 25)
         self.hid_drop_rates = kwargs.pop('hid_drop_rates', (0.2, 0.0, 0.0))
         
         self.neg_sampling_rate = kwargs.pop('neg_sampling_rate', 1.0)
-        self.hard_neg_sampling_rate = kwargs.pop('hard_neg_sampling_rate', 1.0)
-        self.hard_neg_sampling_rate = max(self.hard_neg_sampling_rate, self.neg_sampling_rate)
-        self.hard_neg_sampling_size = kwargs.pop('hard_neg_sampling_size', 5)
+        self.neg_sampling_power_decay = kwargs.pop('neg_sampling_power_decay', 0.0)  # decay = 0.5, 1.0
+        self.neg_sampling_surr_rate = kwargs.pop('neg_sampling_surr_rate', 0.0)
+        self.neg_sampling_surr_size = kwargs.pop('neg_sampling_surr_size', 5)
         
         self.none_label = kwargs.pop('none_label', '<none>')
         self.idx2label = kwargs.pop('idx2label', None)
-        # Note: non-nested overlapping chunks are never allowed
-        self.allow_nested = kwargs.pop('allow_nested', None)
+        self.overlapping_level = kwargs.pop('overlapping_level', None)
         
         # Boundary smoothing epsilon
         self.sb_epsilon = kwargs.pop('sb_epsilon', 0.0)
@@ -213,11 +121,11 @@ class BoundarySelectionDecoderConfig(SingleDecoderConfigBase, BoundarySelectionD
         counter = Counter(label for data in partitions for entry in data for label, start, end in entry['chunks'])
         self.idx2label = [self.none_label] + list(counter.keys())
         
-        self.allow_nested = any(detect_nested(entry['chunks']) for data in partitions for entry in data)
-        if self.allow_nested:
-            logger.info("Nested chunks detected, nested chunks are allowed in decoding...")
-        else:
-            logger.info("No nested chunks detected, only flat chunks are allowed in decoding...")
+        self.overlapping_level = max(detect_overlapping_level(entry['chunks']) for data in partitions for entry in data)
+        logger.info(f"Overlapping level: {self.overlapping_level}")
+        
+        span_sizes = [end-start for data in partitions for entry in data for label, start, end in entry['chunks']]
+        self.max_size_id = math.ceil(numpy.quantile(span_sizes, MAX_SIZE_ID_COV_RATE)) - 1
         
         self.max_len = max(len(data_entry['tokens']) for data in partitions for data_entry in data)
         
@@ -228,12 +136,12 @@ class BoundarySelectionDecoderConfig(SingleDecoderConfigBase, BoundarySelectionD
 
 
 
-class BoundarySelectionDecoder(DecoderBase, BoundarySelectionDecoderMixin):
+class BoundarySelectionDecoder(DecoderBase, BoundariesDecoderMixin):
     def __init__(self, config: BoundarySelectionDecoderConfig):
         super().__init__()
         self.none_label = config.none_label
         self.idx2label = config.idx2label
-        self.allow_nested = config.allow_nested
+        self.overlapping_level = config.overlapping_level
         
         if config.use_biaffine:
             self.affine_start = config.affine.instantiate()
@@ -242,23 +150,24 @@ class BoundarySelectionDecoder(DecoderBase, BoundarySelectionDecoderMixin):
             self.affine = config.affine.instantiate()
         
         if config.size_emb_dim > 0:
-            self.size_embedding = torch.nn.Embedding(config.max_span_size, config.size_emb_dim)
+            self.size_embedding = torch.nn.Embedding(config.max_size_id+1, config.size_emb_dim)
             reinit_embedding_(self.size_embedding)
         
-        # Use buffer to accelerate computation
-        # Note: size_id = size - 1
         self.register_buffer('_span_size_ids', torch.arange(config.max_len) - torch.arange(config.max_len).unsqueeze(-1))
         # Create `_span_non_mask` before changing values of `_span_size_ids`
         self.register_buffer('_span_non_mask', self._span_size_ids >= 0)
         self._span_size_ids.masked_fill_(self._span_size_ids < 0, 0)
-        self._span_size_ids.masked_fill_(self._span_size_ids >= config.max_span_size, config.max_span_size-1)
+        self._span_size_ids.masked_fill_(self._span_size_ids > config.max_size_id, config.max_size_id)
         
         self.dropout = CombinedDropout(*config.hid_drop_rates)
         
-        self.U = torch.nn.Parameter(torch.empty(config.voc_dim, config.affine.out_dim, config.affine.out_dim))
+        if config.use_prod:
+            self.U = torch.nn.Parameter(torch.empty(config.voc_dim, config.affine.out_dim, config.affine.out_dim))
+            torch.nn.init.orthogonal_(self.U.data)
+        
         self.W = torch.nn.Parameter(torch.empty(config.voc_dim, config.affine.out_dim*2 + config.size_emb_dim))
         self.b = torch.nn.Parameter(torch.empty(config.voc_dim))
-        torch.nn.init.orthogonal_(self.U.data)
+        # TODO: Check the output std.dev. 
         torch.nn.init.orthogonal_(self.W.data)
         torch.nn.init.zeros_(self.b.data)
         
@@ -280,10 +189,15 @@ class BoundarySelectionDecoder(DecoderBase, BoundarySelectionDecoderMixin):
             affined_start = self.affine(full_hidden, batch.mask)
             affined_end = self.affine(full_hidden, batch.mask)
         
-        # affined_start: (batch, start_step, affine_dim) -> (batch, 1, start_step, affine_dim)
-        # affined_end: (batch, end_step, affine_dim) -> (batch, 1, affine_dim, end_step)
-        # scores1: (batch, 1, start_step, affine_dim) * (voc_dim, affine_dim, affine_dim) * (batch, 1, affine_dim, end_step) -> (batch, voc_dim, start_step, end_step)
-        scores1 = self.dropout(affined_start).unsqueeze(1).matmul(self.U).matmul(self.dropout(affined_end).permute(0, 2, 1).unsqueeze(1))
+        if hasattr(self, 'U'):
+            # affined_start: (batch, start_step, affine_dim) -> (batch, 1, start_step, affine_dim)
+            # affined_end: (batch, end_step, affine_dim) -> (batch, 1, affine_dim, end_step)
+            # scores1: (batch, 1, start_step, affine_dim) * (voc_dim, affine_dim, affine_dim) * (batch, 1, affine_dim, end_step) -> (batch, voc_dim, start_step, end_step)
+            scores1 = self.dropout(affined_start).unsqueeze(1).matmul(self.U).matmul(self.dropout(affined_end).permute(0, 2, 1).unsqueeze(1))
+            # scores: (batch, start_step, end_step, voc_dim)
+            scores = scores1.permute(0, 2, 3, 1)
+        else:
+            scores = 0
         
         # affined_cat: (batch, start_step, end_step, affine_dim*2)
         affined_cat = torch.cat([self.dropout(affined_start).unsqueeze(2).expand(-1, -1, affined_end.size(1), -1), 
@@ -298,7 +212,8 @@ class BoundarySelectionDecoder(DecoderBase, BoundarySelectionDecoderMixin):
         # scores2: (voc_dim, affine_dim*2 + emb_dim) * (batch, start_step, end_step, affine_dim*2 + emb_dim, 1) -> (batch, start_step, end_step, voc_dim, 1)
         scores2 = self.W.matmul(affined_cat.unsqueeze(-1))
         # scores: (batch, start_step, end_step, voc_dim)
-        return scores1.permute(0, 2, 3, 1) + scores2.squeeze(-1) + self.b
+        scores = scores + scores2.squeeze(-1)
+        return scores + self.b
         
         
     def forward(self, batch: Batch, full_hidden: torch.Tensor):
@@ -317,7 +232,7 @@ class BoundarySelectionDecoder(DecoderBase, BoundarySelectionDecoderMixin):
         batch_scores = self.compute_scores(batch, full_hidden)
         
         batch_chunks = []
-        for curr_scores, curr_len in zip(batch_scores, batch.seq_lens.cpu().tolist()):
+        for curr_scores, boundaries_obj, curr_len in zip(batch_scores, batch.boundaries_objs, batch.seq_lens.cpu().tolist()):
             curr_non_mask = self._get_span_non_mask(curr_len)
             
             confidences, label_ids = curr_scores[:curr_len, :curr_len][curr_non_mask].softmax(dim=-1).max(dim=-1)
@@ -326,9 +241,14 @@ class BoundarySelectionDecoder(DecoderBase, BoundarySelectionDecoderMixin):
             confidences = [conf for label, conf in zip(labels, confidences.cpu().tolist()) if label != self.none_label]
             assert len(confidences) == len(chunks)
             
+            if hasattr(boundaries_obj, 'sub2ori_idx'):
+                is_valid = [isinstance(boundaries_obj.sub2ori_idx[start], int) and isinstance(boundaries_obj.sub2ori_idx[end], int) for label, start, end in chunks]
+                confidences = [conf for conf, is_v in zip(confidences, is_valid) if is_v]
+                chunks = [ck for ck, is_v in zip(chunks, is_valid) if is_v]
+            
             # Sort chunks from high to low confidences
             chunks = [ck for _, ck in sorted(zip(confidences, chunks), reverse=True)]
-            chunks = filter_clashed_by_priority(chunks, allow_nested=self.allow_nested)
+            chunks = filter_clashed_by_priority(chunks, allow_level=self.overlapping_level)
             
             batch_chunks.append(chunks)
         return batch_chunks

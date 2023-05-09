@@ -6,38 +6,60 @@ from ..token import TokenSequence
 from . import find_ascending
 
 
-def is_overlapped(chunk1: tuple, chunk2: tuple):
+FLAT = 0       # Flat entities
+NESTED = 1     # Nested entities
+ARBITRARY = 2  # Arbitrarily overlapping entities
+
+
+def _is_overlapping(chunk1: tuple, chunk2: tuple):
+    # `NESTED` or `ARBITRARY`
     (_, s1, e1), (_, s2, e2) = chunk1, chunk2
     return (s1 < e2 and s2 < e1)
 
 
-def is_nested(chunk1: tuple, chunk2: tuple):
+def _is_ordered_nested(chunk1: tuple, chunk2: tuple):
+    # `chunk1` is nested in `chunk2`
+    (_, s1, e1), (_, s2, e2) = chunk1, chunk2
+    return (s2 <= s1 and e1 <= e2)
+
+
+def _is_nested(chunk1: tuple, chunk2: tuple):
+    # `NESTED`
     (_, s1, e1), (_, s2, e2) = chunk1, chunk2
     return (s1 <= s2 and e2 <= e1) or (s2 <= s1 and e1 <= e2)
 
 
-def is_clashed(chunk1: tuple, chunk2: tuple, allow_nested: bool=True):
-    if allow_nested:
-        return is_overlapped(chunk1, chunk2) and not is_nested(chunk1, chunk2)
+def _is_clashed(chunk1: tuple, chunk2: tuple, allow_level: int=NESTED):
+    if allow_level == FLAT:
+        return _is_overlapping(chunk1, chunk2)
+    elif allow_level == NESTED:
+        return _is_overlapping(chunk1, chunk2) and not _is_nested(chunk1, chunk2)
     else:
-        return is_overlapped(chunk1, chunk2)
+        return False
 
 
-def filter_clashed_by_priority(chunks: List[tuple], allow_nested: bool=True):
+def filter_clashed_by_priority(chunks: List[tuple], allow_level: int=NESTED):
     filtered_chunks = []
     for ck in chunks:
-        if all(not is_clashed(ck, ex_ck, allow_nested=allow_nested) for ex_ck in filtered_chunks):
+        if all(not _is_clashed(ck, ex_ck, allow_level=allow_level) for ex_ck in filtered_chunks):
             filtered_chunks.append(ck)
-            
     return filtered_chunks
 
 
-def detect_nested(chunks: List[tuple]):
+def detect_overlapping_level(chunks: List[tuple]):
+    level = FLAT
     for i, ck1 in enumerate(chunks):
         for ck2 in chunks[i+1:]:
-            if is_nested(ck1, ck2):
-                return True
-    return False
+            if _is_nested(ck1, ck2):
+                level = NESTED
+            elif _is_overlapping(ck1, ck2):
+                # Non-nested overlapping -> `ARBITRARY`
+                return ARBITRARY
+    return level
+
+
+def count_nested(chunks: List[tuple]):
+    return sum(any(ck1[1:] != ck2[1:] and _is_ordered_nested(ck1, ck2) for ck2 in chunks) for ck1 in chunks)
 
 
 def chunk_pair_distance(chunk1: tuple, chunk2: tuple, overlap_distance: int=-1):
@@ -48,6 +70,7 @@ def chunk_pair_distance(chunk1: tuple, chunk2: tuple, overlap_distance: int=-1):
         return s1 - e2
     else:
         return overlap_distance
+
 
 
 class TextChunksTranslator(object):

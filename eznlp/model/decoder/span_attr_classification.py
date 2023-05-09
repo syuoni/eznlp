@@ -2,19 +2,42 @@
 from typing import List
 from collections import Counter
 import logging
+import math
+import numpy
 import torch
 
-from ...wrapper import TargetWrapper, Batch
+from ...wrapper import Batch
 from ...nn.modules import SequencePooling, SequenceAttention, CombinedDropout
 from ...nn.functional import seq_lens2mask
 from ...nn.init import reinit_embedding_, reinit_layer_
 from ...metrics import precision_recall_f1_report
 from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
+from .boundaries import MAX_SIZE_ID_COV_RATE
+from .chunks import ChunkSingles
 
 logger = logging.getLogger(__name__)
 
 
-class SpanAttrClassificationDecoderMixin(DecoderMixinBase):
+class ChunkSinglesDecoderMixin(DecoderMixinBase):
+    """A `Mixin` for attribute extraction. 
+    """
+    @property
+    def idx2label(self):
+        return self._idx2label
+        
+    @idx2label.setter
+    def idx2label(self, idx2label: List[str]):
+        self._idx2label = idx2label
+        self.label2idx = {l: i for i, l in enumerate(idx2label)} if idx2label is not None else None
+        
+    @property
+    def voc_dim(self):
+        return len(self.label2idx)
+        
+    @property
+    def none_idx(self):
+        return self.label2idx[self.none_label]
+        
     @property
     def idx2ck_label(self):
         return self._idx2ck_label
@@ -25,15 +48,6 @@ class SpanAttrClassificationDecoderMixin(DecoderMixinBase):
         self.ck_label2idx = {l: i for i, l in enumerate(idx2ck_label)} if idx2ck_label is not None else None
         
     @property
-    def idx2attr_label(self):
-        return self._idx2attr_label
-        
-    @idx2attr_label.setter
-    def idx2attr_label(self, idx2attr_label: List[str]):
-        self._idx2attr_label = idx2attr_label
-        self.attr_label2idx = {l: i for i, l in enumerate(idx2attr_label)} if idx2attr_label is not None else None
-        
-    @property
     def ck_voc_dim(self):
         return len(self.ck_label2idx)
         
@@ -41,124 +55,40 @@ class SpanAttrClassificationDecoderMixin(DecoderMixinBase):
     def ck_none_idx(self):
         return self.ck_label2idx[self.ck_none_label]
         
-    @property
-    def attr_voc_dim(self):
-        return len(self.attr_label2idx)
-        
-    @property
-    def attr_none_idx(self):
-        return self.attr_label2idx[self.attr_none_label]
-        
-    def exemplify(self, data_entry: dict, training: bool=True, building: bool=True):
-        return {'chunks_obj': Chunks(data_entry, self, training=training, building=building)}
+    def exemplify(self, entry: dict, training: bool=True):
+        return {'cs_obj': ChunkSingles(entry, self, training=training)}
         
     def batchify(self, batch_examples: List[dict]):
-        return {'chunks_objs': [ex['chunks_obj'] for ex in batch_examples]}
+        return {'cs_objs': [ex['cs_obj'] for ex in batch_examples]}
         
     def retrieve(self, batch: Batch):
-        return [chunks_obj.attributes for chunks_obj in batch.chunks_objs]
+        return [cs_obj.attributes for cs_obj in batch.cs_objs]
         
     def evaluate(self, y_gold: List[List[tuple]], y_pred: List[List[tuple]]):
         scores, ave_scores = precision_recall_f1_report(y_gold, y_pred)
         return ave_scores['micro']['f1']
-        
-    def inject_chunks_and_build(self, batch: Batch, batch_chunks_pred: List[List[tuple]], device=None):
-        """This method is to be invoked outside, as the outside invoker is assumed not to know the structure of `batch`. 
-        """
-        for chunks_obj, chunks_pred in zip(batch.chunks_objs, batch_chunks_pred):
-            if not chunks_obj.is_built:
-                chunks_obj.inject_chunks(chunks_pred)
-                chunks_obj.build(self)
-                if device is not None:
-                    chunks_obj.to(device)
 
 
 
-class Chunks(TargetWrapper):
-    """A wrapper of chunks with underlying attributes. 
-    
-    Parameters
-    ----------
-    data_entry: dict
-        {'tokens': TokenSequence, 
-         'chunks': List[tuple], 
-         'attributes': List[tuple]}
-    
-    Notes
-    -----
-    (1) If `building` is `True`, `data_entry['chunks']` is assumed to be known for both training and evaluation (e.g., pipeline modeling).
-        In this case, the negative samples are generated from `data_entry['chunks']`. 
-    (2) If `building` is `False`, `data_entry['chunks']` is known for training but not for evaluation (e.g., joint modeling).
-        In this case, `inject_chunks` and `build` should be successively invoked, and the negative samples are generated from injected chunks. 
-    """
-    def __init__(self, data_entry: dict, config: SpanAttrClassificationDecoderMixin, training: bool=True, building: bool=True):
-        super().__init__(training)
-        
-        self.chunks = data_entry['chunks'] if training or building else []
-        self.attributes = data_entry.get('attributes', None)
-        
-        self.is_built = False
-        if building:
-            self.build(config)
-        
-        
-    def inject_chunks(self, chunks: List[tuple]):
-        """Inject chunks from outside, typically from on-the-fly decoding. 
-        
-        Notes
-        -----
-        In merged chunks, there may exist two chunks with same spans but different chunk-types. 
-        In this case, `ck_label_ids` is crucial as input. 
-        """
-        assert not self.is_built
-        # Do not use ```self.chunks = list(set(self.chunks + chunks))```,
-        # which may return non-deterministic order?
-        self.chunks = self.chunks + [ck for ck in chunks if ck not in self.chunks]
-        
-        
-    def build(self, config: SpanAttrClassificationDecoderMixin):
-        """Generate negative samples from `self.chunks` and build up tensors. 
-        """
-        assert not self.is_built
-        self.is_built = True
-        
-        if self.training:
-            assert all(ck in self.chunks for attr_label, ck in self.attributes)
-        
-        # span_size_ids / ck_label_ids: (num_chunks, )
-        # Note: size_id = size - 1
-        self.span_size_ids = torch.tensor([end-start-1 for ck_label, start, end in self.chunks], dtype=torch.long)
-        self.span_size_ids.masked_fill_(self.span_size_ids>=config.max_span_size, config.max_span_size-1)
-        self.ck_label_ids = torch.tensor([config.ck_label2idx[ck_label] for ck_label, start, end in self.chunks], dtype=torch.long)
-        
-        if self.attributes is not None:
-            chunk2idx = {ck: k for k, ck in enumerate(self.chunks)}
-            # Note: `torch.nn.BCEWithLogitsLoss` uses `float` tensor as target
-            self.attr_label_ids = torch.zeros(len(self.chunks), config.attr_voc_dim, dtype=torch.float)
-            for attr_label, chunk in self.attributes:
-                # Note: `chunk` does not appear in `self.chunks` only if in evaluation (i.e., gold chunks missing). 
-                # In this case, `attr_label_ids` is only for forward to loss, but not for backward. 
-                if chunk in chunk2idx:
-                    self.attr_label_ids[chunk2idx[chunk], config.attr_label2idx[attr_label]] = 1
-            self.attr_label_ids[:, 0] = (self.attr_label_ids == 0).all(dim=1)
-
-
-
-
-class SpanAttrClassificationDecoderConfig(SingleDecoderConfigBase, SpanAttrClassificationDecoderMixin):
+class SpanAttrClassificationDecoderConfig(SingleDecoderConfigBase, ChunkSinglesDecoderMixin):
     def __init__(self, **kwargs):
         self.in_drop_rates = kwargs.pop('in_drop_rates', (0.5, 0.0, 0.0))
         
-        self.max_span_size = kwargs.pop('max_span_size', 10)
-        self.ck_size_emb_dim = kwargs.pop('ck_size_emb_dim', 25)
-        self.ck_label_emb_dim = kwargs.pop('ck_label_emb_dim', 25)
+        self.size_emb_dim = kwargs.pop('size_emb_dim', 25)
+        self.label_emb_dim = kwargs.pop('label_emb_dim', 25)
+        
+        self.neg_sampling_rate = kwargs.pop('neg_sampling_rate', 1.0)
+        # self.neg_sampling_power_decay = kwargs.pop('neg_sampling_power_decay', 0.0)  # decay = 0.5, 1.0
+        # self.neg_sampling_surr_rate = kwargs.pop('neg_sampling_surr_rate', 0.0)
+        # self.neg_sampling_surr_size = kwargs.pop('neg_sampling_surr_size', 5)
         
         self.agg_mode = kwargs.pop('agg_mode', 'max_pooling')
         
+        self.none_label = kwargs.pop('none_label', '<none>')
+        self.idx2label = kwargs.pop('idx2label', None)
         self.ck_none_label = kwargs.pop('ck_none_label', '<none>')
         self.idx2ck_label = kwargs.pop('idx2ck_label', None)
-        self.attr_none_label = kwargs.pop('attr_none_label', '<none>')
-        self.idx2attr_label = kwargs.pop('idx2attr_label', None)
+        self.filter_by_labels = kwargs.pop('filter_by_labels', True)
         
         self.multihot = True
         self.confidence_threshold = kwargs.pop('confidence_threshold', 0.5)
@@ -174,75 +104,94 @@ class SpanAttrClassificationDecoderConfig(SingleDecoderConfigBase, SpanAttrClass
         return self._repr_non_config_attrs(repr_attr_dict)
         
     def build_vocab(self, *partitions):
-        ck_counter = Counter(label for data in partitions for entry in data for label, start, end in entry['chunks'])
-        self.idx2ck_label = [self.ck_none_label] + list(ck_counter.keys())
-        attr_counter = Counter(label for data in partitions for entry in data for label, chunk in entry['attributes'])
-        self.idx2attr_label = [self.attr_none_label] + list(attr_counter.keys())
-        legal_ck_counter = Counter(chunk[0] for data in partitions for entry in data for label, chunk in entry['attributes'])
-        self.legal_chunk_types = set(list(legal_ck_counter.keys()))
+        counter = Counter(label for data in partitions for entry in data for label, start, end in entry['chunks'])
+        self.idx2ck_label = [self.ck_none_label] + list(counter.keys())
+        
+        span_sizes = [end-start for data in partitions for entry in data for label, start, end in entry['chunks']]
+        self.max_size_id = math.ceil(numpy.quantile(span_sizes, MAX_SIZE_ID_COV_RATE)) - 1
+        
+        counter = Counter(label for data in partitions for entry in data for label, chunk in entry['attributes'])
+        self.idx2label = [self.none_label] + list(counter.keys())
+        
+        counter = Counter((label, chunk[0]) for data in partitions for entry in data for label, chunk in entry['attributes'])
+        self.existing_ac_labels = set(list(counter.keys()))
+        
         
     def instantiate(self):
         return SpanAttrClassificationDecoder(self)
 
 
 
-
-class SpanAttrClassificationDecoder(DecoderBase, SpanAttrClassificationDecoderMixin):
+class SpanAttrClassificationDecoder(DecoderBase, ChunkSinglesDecoderMixin):
     def __init__(self, config: SpanAttrClassificationDecoderConfig):
         super().__init__()
-        self.max_span_size = config.max_span_size
+        self.max_size_id = config.max_size_id
+        self.neg_sampling_rate = config.neg_sampling_rate
+        self.none_label = config.none_label
+        self.idx2label = config.idx2label
         self.ck_none_label = config.ck_none_label
         self.idx2ck_label = config.idx2ck_label
-        self.attr_none_label = config.attr_none_label
-        self.idx2attr_label = config.idx2attr_label
-        self.legal_chunk_types = config.legal_chunk_types
+        self.filter_by_labels = config.filter_by_labels
+        self.existing_ac_labels = config.existing_ac_labels
         
         if config.agg_mode.lower().endswith('_pooling'):
             self.aggregating = SequencePooling(mode=config.agg_mode.replace('_pooling', ''))
         elif config.agg_mode.lower().endswith('_attention'):
             self.aggregating = SequenceAttention(config.in_dim, scoring=config.agg_mode.replace('_attention', ''))
         
-        if config.ck_size_emb_dim > 0:
-            self.ck_size_embedding = torch.nn.Embedding(config.max_span_size, config.ck_size_emb_dim)
-            reinit_embedding_(self.ck_size_embedding)
-        if config.ck_label_emb_dim > 0:
-            self.ck_label_embedding = torch.nn.Embedding(config.ck_voc_dim, config.ck_label_emb_dim)
-            reinit_embedding_(self.ck_label_embedding)
+        if config.size_emb_dim > 0:
+            self.size_embedding = torch.nn.Embedding(config.max_size_id+1, config.size_emb_dim)
+            reinit_embedding_(self.size_embedding)
+        
+        if config.label_emb_dim > 0:
+            self.label_embedding = torch.nn.Embedding(config.ck_voc_dim, config.label_emb_dim)
+            reinit_embedding_(self.label_embedding)
         
         self.dropout = CombinedDropout(*config.in_drop_rates)
-        self.hid2logit = torch.nn.Linear(config.in_dim+config.ck_size_emb_dim+config.ck_label_emb_dim, config.attr_voc_dim)
+        self.hid2logit = torch.nn.Linear(config.in_dim+config.size_emb_dim+config.label_emb_dim, config.voc_dim)
         reinit_layer_(self.hid2logit, 'sigmoid')
         
         self.criterion = config.instantiate_criterion(reduction='sum')
         self.confidence_threshold = config.confidence_threshold
         
         
+    def assign_chunks_pred(self, batch: Batch, batch_chunks_pred: List[List[tuple]]):
+        """This method should be called on-the-fly for joint modeling. 
+        """
+        for cs_obj, chunks_pred in zip(batch.cs_objs, batch_chunks_pred):
+            if cs_obj.chunks_pred is None:
+                cs_obj.chunks_pred = chunks_pred
+                cs_obj.build(self)
+                cs_obj.to(self.hid2logit.weight.device)
+        
+        
     def get_logits(self, batch: Batch, full_hidden: torch.Tensor):
         # full_hidden: (batch, step, hid_dim)
         batch_logits = []
-        for k in range(full_hidden.size(0)):
-            if len(batch.chunks_objs[k].chunks) == 0:
+        for i, cs_obj in enumerate(batch.cs_objs):
+            num_chunks = len(cs_obj.chunks)
+            if num_chunks == 0:
+                # Empty row produces loss of 0, when `criterion` uses `reduction='sum'`
                 logits = torch.empty(0, self.hid2logit.out_features, device=full_hidden.device)
-                
             else:
-                # span_hidden: (num_spans, span_size, hid_dim) -> (num_spans, hid_dim)
-                span_hidden = [full_hidden[k, start:end] for ck_label, start, end in batch.chunks_objs[k].chunks]
+                # span_hidden: (num_chunks, span_size, hid_dim) -> (num_chunks, hid_dim)
+                span_hidden = [full_hidden[i, start:end] for label, start, end in cs_obj.chunks]
                 span_mask = seq_lens2mask(torch.tensor([h.size(0) for h in span_hidden], dtype=torch.long, device=full_hidden.device))
                 span_hidden = torch.nn.utils.rnn.pad_sequence(span_hidden, batch_first=True, padding_value=0.0)
                 span_hidden = self.aggregating(self.dropout(span_hidden), mask=span_mask)
                 
-                if hasattr(self, 'ck_size_embedding'):
-                    # ck_size_embedded: (num_spans, emb_dim)
-                    ck_size_embedded = self.ck_size_embedding(batch.chunks_objs[k].span_size_ids)
-                    span_hidden = torch.cat([span_hidden, self.dropout(ck_size_embedded)], dim=-1)
+                if hasattr(self, 'size_embedding'):
+                    # size_embedded: (num_chunks, emb_dim)
+                    size_embedded = self.size_embedding(cs_obj.span_size_ids)
+                    span_hidden = torch.cat([span_hidden, self.dropout(size_embedded)], dim=-1)
                 
-                if hasattr(self, 'ck_label_embedding'):
-                    # ck_label_embedded: (num_spans, emb_dim)
-                    ck_label_embedded = self.ck_label_embedding(batch.chunks_objs[k].ck_label_ids)
-                    span_hidden = torch.cat([span_hidden, self.dropout(ck_label_embedded)], dim=-1)
+                if hasattr(self, 'label_embedding'):
+                    # label_embedded: (num_chunks, emb_dim)
+                    label_embedded = self.label_embedding(cs_obj.ck_label_ids)
+                    span_hidden = torch.cat([span_hidden, self.dropout(label_embedded)], dim=-1)
                 
+                # logits: (num_chunks, logit_dim)
                 logits = self.hid2logit(span_hidden)
-            
             batch_logits.append(logits)
         
         return batch_logits
@@ -251,10 +200,17 @@ class SpanAttrClassificationDecoder(DecoderBase, SpanAttrClassificationDecoderMi
     def forward(self, batch: Batch, full_hidden: torch.Tensor):
         batch_logits = self.get_logits(batch, full_hidden)
         
-        losses = [self.criterion(batch_logits[k], batch.chunks_objs[k].attr_label_ids) 
-                      if len(batch.chunks_objs[k].chunks) > 0
-                      else torch.tensor(0.0, device=full_hidden.device)
-                      for k in range(full_hidden.size(0))]
+        losses = []
+        for logits, cs_obj in zip(batch_logits, batch.cs_objs):
+            if len(cs_obj.chunks) == 0:
+                loss = torch.tensor(0.0, device=full_hidden.device)
+            else:
+                label_ids = cs_obj.cs2label_id
+                if hasattr(cs_obj, 'non_mask'):
+                    non_mask = cs_obj.non_mask
+                    logits, label_ids = logits[non_mask], label_ids[non_mask]
+                loss = self.criterion(logits, label_ids)
+            losses.append(loss)
         return torch.stack(losses)
         
         
@@ -262,13 +218,16 @@ class SpanAttrClassificationDecoder(DecoderBase, SpanAttrClassificationDecoderMi
         batch_logits = self.get_logits(batch, full_hidden)
         
         batch_attributes = []
-        for k in range(full_hidden.size(0)):
-            attributes = []
-            if len(batch.chunks_objs[k].chunks) > 0:
-                for chunk, ck_sigmoids in zip(batch.chunks_objs[k].chunks, batch_logits[k].sigmoid()):
-                    attr_labels = [self.idx2attr_label[i] for i, s in enumerate(ck_sigmoids.cpu().tolist()) if s >= self.confidence_threshold]
-                    if self.attr_none_label not in attr_labels:
-                        attributes.extend([(attr_label, chunk) for attr_label in attr_labels])
+        for logits, cs_obj in zip(batch_logits, batch.cs_objs):
+            if len(cs_obj.chunks) == 0:
+                attributes = []
+            else:
+                confidences = logits.sigmoid()
+                attributes = []
+                for chunk, ck_confidences in zip(cs_obj.chunks, confidences):
+                    labels = [self.idx2label[i] for i, c in enumerate(ck_confidences.cpu().tolist()) if c >= self.confidence_threshold]
+                    if self.none_label not in labels:
+                        attributes.extend([(label, chunk) for label in labels])
+                attributes = [(label, chunk) for label, chunk in attributes if (not self.filter_by_labels or ((label, chunk[0]) in self.existing_ac_labels))]
             batch_attributes.append(attributes)
-        
         return batch_attributes

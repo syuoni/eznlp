@@ -92,6 +92,9 @@ If you find our code useful, please cite the following papers:
 ## Future Plans
 - [ ] Unify the data interchange format as a dict, i.e., `entry`
 - [ ] Reorganize `JsonIO`
+- [ ] File names: classification -> cls
+- [ ] `sub2ori_idx` for all information extraction decoders
+- [ ] Unify the filtering logics in chunk/relation/attribute decoders
 - [ ] Memory optimization for large dataset for training PLM
 - [ ] More relation extraction models
 - [ ] Multihot classification
