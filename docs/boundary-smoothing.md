@@ -1,20 +1,15 @@
 # Boundary Smoothing for Named Entity Recognition
-
 This page describes the materials and code for "Boundary Smoothing for Named Entity Recognition". 
 
 
 ## Setup
-### Installation from source
-```bash
-$ python setup.py sdist
-$ pip install dist/eznlp-<version>.tar.gz
-```
-The dependencies have been specified in `setup.py`. 
+### Installation
+Setup an environment and install the dependencies and `eznlp` according to [README](../README.md).
 
 
 ### Download and process datasets
 * English datasets
-    * CoNLL 2003
+    * CoNLL 2003.
     * OntoNotes 5: Download from https://catalog.ldc.upenn.edu/LDC2013T19; Process following Pradhan et al. (2013).
     * ACE 2004: Download from https://catalog.ldc.upenn.edu/LDC2005T09; Process following Lu and Roth (2015).
     * ACE 2005: Download from https://catalog.ldc.upenn.edu/LDC2006T06; Process following Lu and Roth (2015).
@@ -32,11 +27,17 @@ Download the pretrained language models by `transformers` and save to `assets/tr
 ```python
 import transformers
 
-for model_name in ["roberta-base", 
+model_name_list = ["bert-base-uncased", 
+                   "bert-base-cased", 
+                   "bert-large-uncased", 
+                   "bert-large-cased", 
+                   "roberta-base", 
                    "roberta-large", 
                    "hfl/chinese-bert-wwm-ext", 
                    "hfl/chinese-macbert-base", 
-                   "hfl/chinese-macbert-large"]:
+                   "hfl/chinese-macbert-large"]
+
+for model_name in model_name_list:
     tokenizer = transformers.AutoTokenizer.from_pretrained(model_name)
     tokenizer.save_pretrained(f"assets/transformers/{model_name}")
     model = transformers.AutoModelForPreTraining.from_pretrained(model_name)
@@ -51,6 +52,7 @@ For English datasets:
 $ python scripts/entity_recognition.py @scripts/options/with_bert.opt \
     --num_epochs 50 \
     --batch_size 48 \
+    --num_grad_acc_steps 1 \
     --dataset {conll2003 | conll2012 | ace2004 | ace2005} \
     --ck_decoder boundary_selection \
     --sb_epsilon {0.0 | 0.1 | 0.2 | 0.3} \
@@ -66,6 +68,7 @@ For Chinese datasets:
 $ python scripts/entity_recognition.py @scripts/options/with_bert.opt \
     --num_epochs 50 \
     --batch_size 48 \
+    --num_grad_acc_steps 1 \
     --dataset {ontonotesv4_zh | SIGHAN2006 | WeiboNER | ResumeNER} \
     --ck_decoder boundary_selection \
     --sb_epsilon {0.0 | 0.1 | 0.2 | 0.3} \

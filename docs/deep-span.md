@@ -1,24 +1,10 @@
 # Deep Span Representations for Named Entity Recognition
-
 This page describes the materials and code for "Deep Span Representations for Named Entity Recognition". 
-
-This software is for REVIEW USE ONLY. Please DO NOT DISTRIBUTE. 
 
 
 ## Setup
-### Install dependencies
-```bash
-$ conda install numpy=1.18.5 pandas=1.0.5 xlrd=1.2.0 matplotlib=3.2.2 
-$ conda install pytorch=1.7.1 torchvision=0.8.2 torchtext=0.8.1 {cpuonly|cudatoolkit=10.2} -c pytorch 
-$ pip install -r requirements.txt 
-```
-
-### Install `eznlp`
-* From source (suggested)
-```bash
-$ python setup.py sdist
-$ pip install dist/eznlp-<version>.tar.gz --no-deps
-```
+### Installation
+Setup an environment and install the dependencies and `eznlp` according to [README](../README.md).
 
 
 ### Download and process datasets
@@ -41,7 +27,17 @@ Download the pretrained language models by `transformers` and save to `assets/tr
 ```python
 import transformers
 
-for model_name in ["roberta-base", "hfl/chinese-macbert-base"]:
+model_name_list = ["bert-base-uncased", 
+                   "bert-base-cased", 
+                   "bert-large-uncased", 
+                   "bert-large-cased", 
+                   "roberta-base", 
+                   "roberta-large", 
+                   "hfl/chinese-bert-wwm-ext", 
+                   "hfl/chinese-macbert-base", 
+                   "hfl/chinese-macbert-large"]
+
+for model_name in model_name_list:
     tokenizer = transformers.AutoTokenizer.from_pretrained(model_name)
     tokenizer.save_pretrained(f"assets/transformers/{model_name}")
     model = transformers.AutoModelForPreTraining.from_pretrained(model_name)
@@ -61,6 +57,7 @@ $ python scripts/entity_recognition.py @scripts/options/with_bert.opt \
     --lr 2e-3 \
     --finetune_lr 2e-5 \
     --batch_size 48 \
+    --num_grad_acc_steps 1 \
     --ck_decoder specific_span \
     --affine_dim 300 \
     --sb_epsilon 0.1 \
@@ -76,7 +73,6 @@ $ python scripts/entity_recognition.py @scripts/options/with_bert.opt \
 For Chinese datasets:
 
 ```bash
-
 $ python scripts/entity_recognition.py @scripts/options/with_bert.opt \
     --dataset {WeiboNER | ResumeNER} \
     --pre_merge_enchars \
@@ -84,6 +80,7 @@ $ python scripts/entity_recognition.py @scripts/options/with_bert.opt \
     --lr 2e-3 \
     --finetune_lr 2e-5 \
     --batch_size 48 \
+    --num_grad_acc_steps 1 \
     --ck_decoder specific_span \
     --affine_dim 300 \
     --sb_epsilon 0.1 \

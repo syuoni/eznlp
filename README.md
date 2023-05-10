@@ -6,20 +6,24 @@ Overparameterized neural networks are lazy (Chizat et al., 2019), so we design s
 
 * Text Classification ([Experimental Results](docs/text-classification.pdf))
 * Named Entity Recognition ([Experimental Results](docs/entity-recognition.pdf))
-    * Sequence Tagging
-    * Span Classification
-    * Boundary Selection
 * Relation Extraction ([Experimental Results](docs/relation-extraction.pdf))
 * Attribute Extraction
 * Machine Translation
 * Image Captioning
 
 This repository also maintains the code of our papers: 
-* Check this [link](docs/boundary-smoothing.md) for "Boundary Smoothing for Named Entity Recognition" accepted to ACL 2022 main conference. 
+* Check this [link](docs/deep-span.md) for "Deep Span Representations for Named Entity Recognition" accepted to Findings of ACL 2023. 
+* Check this [link](docs/boundary-smoothing.md) for "Boundary Smoothing for Named Entity Recognition" in ACL 2022. 
 * Check this [link](publications/framework/scheme.pdf) for the annotation scheme described in "A Unified Framework of Medical Information Annotation and Extraction for Chinese Clinical Text". 
 
 
 ## Installation
+### Create an environment
+```bash
+$ conda create --name eznlp python=3.8
+$ conda activate eznlp
+```
+
 ### Install dependencies
 ```bash
 $ conda install numpy=1.18.5 pandas=1.0.5 xlrd=1.2.0 matplotlib=3.2.2 
@@ -28,7 +32,7 @@ $ pip install -r requirements.txt
 ```
 
 ### Install `eznlp`
-* From source (suggested)
+* From source (recommended)
 ```bash
 $ python setup.py sdist
 $ pip install dist/eznlp-<version>.tar.gz --no-deps
@@ -66,6 +70,15 @@ $ python scripts/attribute_extraction.py --dataset <dataset> [options]
 If you find our code useful, please cite the following papers: 
 
 ```
+@article{zhu2022deep-span,
+  title={Deep Span Representations for Named Entity Recognition},
+  author={Zhu, Enwei and Liu, Yiyang and Li, Jinpeng},
+  journal={arXiv preprint arXiv:2210.04182},
+  year={2022}
+}
+```
+
+```
 @inproceedings{zhu2022boundary,
   title={Boundary Smoothing for Named Entity Recognition},
   author={Zhu, Enwei and Li, Jinpeng},
@@ -89,20 +102,5 @@ If you find our code useful, please cite the following papers:
 ```
 
 
-## Future Plans
-- [ ] Unify the data interchange format as a dict, i.e., `entry`
-- [ ] Reorganize `JsonIO`
-- [ ] File names: classification -> cls
-- [ ] `sub2ori_idx` for all information extraction decoders
-- [ ] Unify the filtering logics in chunk/relation/attribute decoders
-- [ ] Memory optimization for large dataset for training PLM
-- [ ] More relation extraction models
-- [ ] Multihot classification
-- [ ] Unify the aggregation interface of pooling and attention
-- [ ] Radical-level features
-- [ ] Data augmentation
-- [ ] Loss increases in later training phases -> LR finder?
-
-
 ## References
-* Chizat, L., Oyallon, E., and Bach, F. (2019). On lazy training in differentiable programming. *NeurIPS 2019*, 2937–2947. 
+* Chizat, L., Oyallon, E., and Bach, F. On lazy training in differentiable programming. In *NeurIPS 2019*. 
