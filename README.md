@@ -4,9 +4,9 @@ Overparameterized neural networks are lazy (Chizat et al., 2019), so we design s
 
 `eznlp` is a `PyTorch`-based package for neural natural language processing, currently supporting the following tasks:
 
-* Text Classification ([Experimental Results](docs/text-classification.pdf))
-* Named Entity Recognition ([Experimental Results](docs/entity-recognition.pdf))
-* Relation Extraction ([Experimental Results](docs/relation-extraction.pdf))
+* Text Classification ([Experimental Results](docs/text-classification.md))
+* Named Entity Recognition ([Experimental Results](docs/entity-recognition.md))
+* Relation Extraction ([Experimental Results](docs/relation-extraction.md))
 * Attribute Extraction
 * Machine Translation
 * Image Captioning
