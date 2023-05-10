@@ -1,27 +1,29 @@
-## Named Entity Recognition (English)
-Configurations of our implementation:
-* Tagging scheme: BIOES
-* Word embeddings are initialized with GloVe
-* `From-scratch` models of `sequence tagging`
-    * Optimizer: SGD (lr=0.1)
-    * Batch size: 32
+## Named Entity Recognition
+
+The experimental results reported here are informal. Please check our published papers for formal results. 
+
+
+### English Datasets
+
+Settings:
+* Models w/o PLMs
+    * Optimizer: SGD (lr=0.1) | Adadelta (lr=1.0)
+    * Batch size: 32 | 64
     * Number of epochs: 100
-* `From-scratch` models of `span classification`
-    * Optimizer: Adadelta (lr=1.0)
-    * Batch size: 64
-    * Number of epochs: 100
-* `Fine-tuining` models
+    * Word embeddings are initialized with GloVe
+* Models w/ PLMs
     * Optimizer: AdamW (lr=1e-3/2e-3, ft_lr=1e-5)
     * Batch size: 48
     * Number of epochs: 50
     * Scheduler: Learning rate warmup at the first 20% steps followed by linear decay
-    * BERT/RoBERTa models are loaded with dropout rate of 0.2
-    * BERT-uncased models inputs are converted to "truecase"
-    
+    * PLMs are loaded with dropout rate of 0.2
+* Sequence tagging scheme: BIOES
+
+
 ♦ use both training and development splits for training ([Biaffine](https://github.com/juntaoy/biaffine-ner/issues/16#issuecomment-716492521)).  
 ♣️ use document-level (cross-sentence) context.  
 
-### CoNLL 2003 
+#### CoNLL 2003 
 | Model | Paper | Reported F1 | Our Imp. F1 | Notes |
 |:-----:|:-----:|:-----------:|:-----------:|:-----:|
 | CharLSTM + LSTM + CRF       | Lample et al. (2016)  | 90.94         | 91.28 | num_layers=1 |
@@ -73,7 +75,7 @@ Configurations of our implementation:
 | Biaffine (with RoBERTa-base + LSTM) | -                | -          | 92.77 | 
 | Biaffine (with RoBERTa-large)       | -                | -          | 93.26 |
 
-### OntoNotes v5 
+#### OntoNotes v5 
 | Model | Paper | Reported F1 | Our Imp. F1 | Notes |
 |:-----:|:-----:|:-----------:|:-----------:|:-----:|
 | CharLSTM + LSTM + CRF       | Lample et al. (2016)    | -            | 87.68 | num_layers=2 |
@@ -91,23 +93,23 @@ Configurations of our implementation:
 
 
 
-## Named Entity Recognition (Chinese)
-Configurations of our implementation:
-* Character-based
-* Tagging scheme: BIOES
-* `From-scratch` models
+### Chinese Datasets
+
+Settings:
+* Models w/o PLMs
     * Optimizer: AdamW (lr=1e-3)
     * Batch size: 32
     * Number of epochs: 100
-* `Fine-tuining` models
+* Models w/ PLMs
     * Optimizer: AdamW (lr=1e-3/2e-3, ft_lr=1e-5)
     * Batch size: 48
     * Number of epochs: 50
     * Scheduler: Learning rate warmup at the first 20% steps followed by linear decay
-    * BERT models are loaded with dropout rate of 0.2
-    * BERT refers to BERT-wwm (Cui et al., 2019)
+    * PLMs are loaded with dropout rate of 0.2
+* Sequence tagging scheme: BIOES
 
-### MSRA (SIGHAN 2006) 
+
+#### MSRA (SIGHAN 2006) 
 * All experiments use testing split as development split ([SoftLexicon](https://github.com/v-mipeng/LexiconAugmentedNER/issues/3#issuecomment-634563407)). 
 
 | Model | Paper | Reported F1 | Our Imp. F1 | Notes |
@@ -126,7 +128,7 @@ Configurations of our implementation:
 | MacBERT-base + CRF          | Cui et al. (2020)     | -     | 95.72 |
 | MacBERT-base + LSTM + CRF   | Cui et al. (2020)     | -     | 96.13 |
 
-### WeiboNER v2 
+#### WeiboNER v2 
 | Model | Paper | Reported F1 | Our Imp. F1 | Notes |
 |:-----:|:-----:|:-----------:|:-----------:|:-----:|
 | LSTM + CRF                  | Zhang and Yang (2018) | 52.77 | 50.19 | num_layers=2 |
@@ -145,7 +147,7 @@ Configurations of our implementation:
 | MacBERT-large + CRF         | Cui et al. (2020)     | -     | 70.01 |
 | MacBERT-large + LSTM + CRF  | Cui et al. (2020)     | -     | 70.24 |
 
-### ResumeNER 
+#### ResumeNER 
 | Model | Paper | Reported F1 | Our Imp. F1 | Notes |
 |:-----:|:-----:|:-----------:|:-----------:|:-----:|
 | LSTM + CRF                  | Zhang and Yang (2018) | 93.48 | 94.93 | num_layers=2 |
@@ -164,7 +166,7 @@ Configurations of our implementation:
 | MacBERT-large + CRF         | Cui et al. (2020)     | -     | 95.60 |
 | MacBERT-large + LSTM + CRF  | Cui et al. (2020)     | -     | 95.63 |
 
-### OntoNotes v4 
+#### OntoNotes v4 
 * Data split following Che et al. (2013) and Zhang and Yang (2018).
 
 | Model | Paper | Reported F1 | Our Imp. F1 | Notes |
@@ -183,7 +185,7 @@ Configurations of our implementation:
 | MacBERT-base + CRF          | Cui et al. (2020)     | -     | 82.04 |
 | MacBERT-base + LSTM + CRF   | Cui et al. (2020)     | -     | 82.31 |
 
-### OntoNotes v5 
+#### OntoNotes v5 
 | Model | Paper | Reported F1 | Our Imp. F1 | Notes |
 |:-----:|:-----:|:-----------:|:-----------:|:-----:|
 | LSTM + CRF                  |                   | -     | 73.30 | num_layers=2 |
@@ -193,7 +195,7 @@ Configurations of our implementation:
 | BERT + CRF                  |                   | -     | 80.34 |
 | BERT + LSTM + CRF           |                   | -     | 80.31 |
 
-### Yidu S4K (CCKS 2019)
+#### Yidu S4K (CCKS 2019)
 | Model | Paper | Reported F1 | Our Imp. F1 | Notes |
 |:-----:|:-----:|:-----------:|:-----------:|:-----:|
 | LSTM + CRF                  |                                                | -     | 80.43 | num_layers=2 |
@@ -203,7 +205,7 @@ Configurations of our implementation:
 | BERT + LSTM + CRF           |                                                | -     | 82.94 |
 
 
-## References
+### References
 * Che, W., Wang, M., Manning, C. D., and Liu, T. (2013). Named Entity Recognition with Bilingual Constraints. *NAACL-HLT 2013*.
 * Lample, G., Ballesteros, M., Subramanian, S., Kawakami, K., and Dyer, C. (2016). Neural Architectures for Named Entity Recognition. *NAACL-HLT 2016*.
 * Ma, X., and Hovy, E. (2016). End-to-end Sequence Labeling via Bi-directional LSTM-CNNs-CRF. *ACL 2016*.

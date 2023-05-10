@@ -1,18 +1,24 @@
-## Text Classification (English)
-Configurations of our implementation:
-* Word embeddings are initialized with GloVe
-* `From-scratch` models
+## Text Classification
+
+The experimental results reported here are informal. Please check our published papers for formal results. 
+
+
+### English Datasets
+
+Settings:
+* Models w/o PLMs
     * Optimizer: Adadelta (lr=0.5)
     * Batch size: 64
     * Number of epochs: 50
-* `Fine-tuining` models
+    * Word embeddings are initialized with GloVe
+* Models w/ PLMs
     * Optimizer: AdamW (lr=1e-3/2e-3, ft_lr=1e-5)
     * Batch size: 32
     * Number of epochs: 10
     * Scheduler: Learning rate warmup at the first 20% steps followed by linear decay
-    * BERT/RoBERTa models are loaded with dropout rate of 0.2
+    * PLMs are loaded with dropout rate of 0.2
 
-### IMDb
+#### IMDb
 | Model | Paper | Reported Acc. | Our Imp. Acc. | Notes |
 |:-----:|:-----:|:-------------:|:-------------:|:-----:|
 | LSTM + MaxPooling        | -                    | -     | 91.58 | num_layers=1 |
@@ -20,7 +26,7 @@ Configurations of our implementation:
 | BERT-base + Attention    | Sun et al. (2019)    | 94.60 | 94.37 |
 | RoBERTa-base + Attention | -                    | -     | 95.78 |
 
-### Yelp Full
+#### Yelp Full
 | Model | Paper | Reported Acc. | Our Imp. Acc. | Notes |
 |:-----:|:-----:|:-------------:|:-------------:|:-----:|
 | LSTM + MaxPooling        | Zhang et al. (2015)  | 58.17 | 65.97 | num_layers=2 |
@@ -28,7 +34,7 @@ Configurations of our implementation:
 | BERT-base + Attention    | Sun et al. (2019)    | 69.94 | 70.27 |
 | RoBERTa-base + Attention | -                    | -     | 71.55 |
 
-### Yelp 2013 (with User and Product IDs)
+#### Yelp 2013 (with User and Product IDs)
 | Model | Paper | Reported Acc. | Our Imp. Acc. | Notes |
 |:-----:|:-----:|:-------------:|:-------------:|:-----:|
 | LSTM + MaxPooling        | Chen et al. (2016)   | 62.7  | 64.96 | num_layers=2 |
@@ -37,23 +43,22 @@ Configurations of our implementation:
 | RoBERTa-base + Attention | -                    | -     | 70.80 |
 
 
-## Text Classification (Chinese)
-Configurations of our implementation:
-* Word-based (tokenized by `jieba`)
-* Word embeddings are initialized by random or with Tencent embeddings (Song et al., 2018)
-* `From-scratch` models
+### Chinese Datasets
+
+Settings:
+* Models w/o PLMs
     * Optimizer: Adadelta (lr=1.0)
     * Batch size: 64
     * Number of epochs: 50
-* `Fine-tuining` models
+    * Word embeddings are initialized by random or with Tencent embeddings (Song et al., 2018)
+* Models w/ PLMs
     * Optimizer: AdamW (lr=1e-3/2e-3, ft_lr=2e-5)
     * Batch size: 32
     * Number of epochs: 10
     * Scheduler: Learning rate warmup at the first 20% steps followed by linear decay
-    * BERT/RoBERTa models are loaded with dropout rate of 0.2
-    * BERT/RoBERTa refers to BERT/RoBERTa-wwm (Cui et al., 2019)
+    * PLMs are loaded with dropout rate of 0.2
 
-### ChnSentiCorp
+#### ChnSentiCorp
 | Model | Paper | Reported Acc. | Our Imp. Acc. | Notes |
 |:-----:|:-----:|:-------------:|:-------------:|:-----:|
 | Multi-Channel CNN                      | Liu et al. (2018) | 92.08 |       |
@@ -64,7 +69,7 @@ Configurations of our implementation:
 | BERT-base + Attention                  | Cui et al. (2019) | 95.3  | 95.83 |
 | RoBERTa-base + Attention               | Cui et al. (2019) | 95.8  | 95.08 |
 
-### THUCNews-10
+#### THUCNews-10
 | Model | Paper | Reported Acc. | Our Imp. Acc. | Notes |
 |:-----:|:-----:|:-------------:|:-------------:|:-----:|
 | LSTM + MaxPooling                      | -                 |       | 97.66 | num_layers=2 |
@@ -75,7 +80,7 @@ Configurations of our implementation:
 | RoBERTa-base + Attention               | Cui et al. (2019) | 97.8  | 98.98 |
 
 
-## References
+### References
 * Zhang, X., Zhao, J., and LeCun, Y. (2015). Character-level Convolutional Networks for Text Classification. *NIPS 2015*.
 * Chen, H., Sun, M., Tu, C., Lin, Y., and Liu, Z. (2016). Neural Sentiment Classification with User and Product Attention. *EMNLP 2016*.
 * McCann, B., Bradbury, J., Xiong, C., and Socher, R. (2017). Learned in Translation: Contextualized Word Vectors. *NIPS 2017*. 

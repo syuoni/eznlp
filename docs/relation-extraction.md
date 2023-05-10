@@ -1,21 +1,28 @@
-## Relation Extraction (English)
-Configurations of our implementation:
-* Word embeddings are initialized with GloVe
-* `From-scratch` models
+## Relation Extraction
+
+The experimental results reported here are informal. Please check our published papers for formal results. 
+
+
+### English Datasets
+
+Settings:
+* Models w/o PLMs
     * Optimizer: Adadelta (lr=1.0)
     * Batch size: 64
     * Number of epochs: 100
-* `Fine-tuining` models
+    * Word embeddings are initialized with GloVe
+* Models w/ PLMs
     * Optimizer: AdamW (lr=1e-3/2e-3, ft_lr=1e-4)
     * Batch size: 48
     * Number of epochs: 50
     * Scheduler: Learning rate warmup at the first 20% steps followed by linear decay
-    * BERT/RoBERTa models are loaded with dropout rate of 0.2
+    * PLMs are loaded with dropout rate of 0.2
+
 
 ♦ use both training and development splits for training ([SpERT](https://github.com/lavis-nlp/spert/issues/2#issuecomment-559775207)).  
 ♠️ do not consider entity type correctness when evaluating relation extraction.  
 
-### CoNLL 2004 
+#### CoNLL 2004 
 | Model | Paper | Reported F1 | Our Imp. F1 (Pipeline) | Our Imp. F1 (Joint) | Notes |
 |:-----:|:-----:|:-----------:|:---------------------:|:-------------------:|:-----:|
 | SpERT (with CharLSTM + LSTM)| -                     | -               |  -            | 86.57 / 66.01 | num_layers=2 |
@@ -24,7 +31,7 @@ Configurations of our implementation:
 | SpERT (with RoBERTa-base)        | -                | -               | 90.30 / 72.18 | 90.18 / 72.64 | 
 | SpERT (with RoBERTa-base + LSTM) | -                | -               | 90.10 / 73.46 | 89.17 / 75.03 | 
 
-### SciERC
+#### SciERC
 | Model | Paper | Reported F1 | Our Imp. F1 (Joint) | Notes |
 |:-----:|:-----:|:-----------:|:-------------------:|:-----:|
 | SpERT (with CharLSTM + LSTM)| -                     | -                | 59.63 / 23.04 (34.25<sup>♠️</sup>) | num_layers=2 |
@@ -34,7 +41,7 @@ Configurations of our implementation:
 | SpERT (with RoBERTa-base + LSTM) | -                | -                | 68.89 / 34.65 (47.52<sup>♠️</sup>) | 
 
 
-## References
+### References
 * Bekoulis, G., Deleu, J., Demeester, T., and Develder, C. (2018). Joint Entity Recognition and Relation Extraction as a Multi-head Selection Problem. *Expert Systems with Applications*, 114: 34-45.
 * Devlin, J., Chang, M. W., Lee, K., and Toutanova, K. (2018). BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding. *NAACL-HLT 2019*.
 * Liu, Y., Ott, M., Goyal, N., Du, J., Joshi, M., Chen, D., ... and Stoyanov, V. (2019). RoBERTa: A Robustly Optimized BERT Pretraining Approach. arXiv preprint arXiv:1907.11692. 
