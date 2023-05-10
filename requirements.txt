@@ -8,3 +8,4 @@ hanziconv==0.3.2
 spacy==2.3.2
 jieba==0.42.1
 pytorch-crf==0.7.2
+packaging==20.4
