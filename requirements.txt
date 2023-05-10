@@ -6,6 +6,8 @@ nltk==3.5
 truecase==0.0.12
 hanziconv==0.3.2
 spacy==2.3.2
+en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-2.3.1/en_core_web_sm-2.3.1.tar.gz
+de_core_news_sm @ https://github.com/explosion/spacy-models/releases/download/de_core_news_sm-2.3.0/de_core_news_sm-2.3.0.tar.gz
 jieba==0.42.1
 pytorch-crf==0.7.2
 packaging==20.4
