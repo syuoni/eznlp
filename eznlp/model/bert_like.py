@@ -371,7 +371,7 @@ class BertLikePreProcessor(object):
                     tok.raw_text = new_raw_text
                 num_truecased += 1
         
-        logger.info(f"Truecased sequences: {num_truecased} ({num_truecased/len(data)*100:.2f}%)")
+        logger.info(f"Truecased sequences: {num_truecased} ({num_truecased/len(data)*100 if len(data) else 0:.2f}%)")
         return data
         
         
@@ -453,7 +453,7 @@ class BertLikePreProcessor(object):
                         entry['paired_tokens'] = self._truncate(p_tokens, p_sub_tok_seq_lens, max_len-max_len1, mode=mode)
                     num_truncated += 1
         
-        logger.info(f"Truncated sequences: {num_truncated} ({num_truncated/len(data)*100:.2f}%)")
+        logger.info(f"Truncated sequences: {num_truncated} ({num_truncated/len(data)*100 if len(data) else 0:.2f}%)")
         return data
         
         
@@ -524,7 +524,7 @@ class BertLikePreProcessor(object):
             
             new_data.extend(new_entries)
         
-        logger.info(f"Segmented sequences: {num_segmented} ({num_segmented/len(data)*100:.2f}%)")
+        logger.info(f"Segmented sequences: {num_segmented} ({num_segmented/len(data)*100 if len(data) else 0:.2f}%)")
         logger.info(f"Conflict chunks: {num_conflict}")
         return new_data
         
@@ -576,7 +576,7 @@ class BertLikePreProcessor(object):
             new_data.append(new_entry)
         
         num_subtokenized = sum(len(entry['sub2ori_idx'])!=len(entry['ori2sub_idx']) for entry in new_data)
-        logger.info(f"Sub-tokenized sequences: {num_subtokenized} ({num_subtokenized/len(data)*100:.2f}%)")
+        logger.info(f"Sub-tokenized sequences: {num_subtokenized} ({num_subtokenized/len(data)*100 if len(data) else 0:.2f}%)")
         return new_data
         
         
@@ -675,7 +675,7 @@ class BertLikePreProcessor(object):
             new_data.append(new_entry)
         
         num_merged = sum(len(entry['sub2ori_idx'])!=len(entry['ori2sub_idx']) for entry in new_data)
-        logger.info(f"Merged sequences: {num_merged} ({num_merged/len(data)*100:.2f}%)")
+        logger.info(f"Merged sequences: {num_merged} ({num_merged/len(data)*100 if len(data) else 0:.2f}%)")
         num_float_boundaries = sum(isinstance(start, float) or isinstance(end, float) for entry in new_data for label, start, end in entry['chunks'])
         logger.info(f"Non-integer chunks: {num_float_boundaries}")
         return new_data
