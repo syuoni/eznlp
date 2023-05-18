@@ -37,8 +37,10 @@ def parse_arguments(parser: argparse.ArgumentParser):
                             help="whether to pre-subtokenize words in data")
     group_data.add_argument('--pre_merge_enchars', default=False, action='store_true', 
                             help="whether to pre-merge English characters in data")
-    group_data.add_argument('--chunks_pred_path', type=str, default="", 
-                            help="path to load predicted chunks for pipeline modeling/evaluation")
+    group_data.add_argument('--train_chunks_pred_path', type=str, default="", 
+                            help="path to load predicted (jackknifed) chunks for train split")
+    group_data.add_argument('--test_chunks_pred_path', type=str, default="", 
+                            help="path to load predicted chunks for dev/test splits")
     group_data.add_argument('--no_save_preds', dest='save_preds', default=True, action='store_false', 
                             help="whether to save predictions on the dev/test splits")
     
@@ -221,12 +223,28 @@ if __name__ == '__main__':
     
     train_data, dev_data, test_data = load_data(args)
     args.language = dataset2language[args.dataset]
-    if len(args.chunks_pred_path) > 0:
+    
+    if args.train_with_dev:
+        train_data = train_data + dev_data
+        dev_data   = []
+    
+    if len(args.train_chunks_pred_path) > 0:
+        logger.info("Jackknifed chunks are provided, using merged chunks for training")
+        train_data_pred = torch.load(f"{args.train_chunks_pred_path}/train.data.pred.pth")
+        logger.info("Evaluating jackknifed chunks on train-set")
+        set_chunks_pred = [entry['chunks_pred'] for entry in train_data_pred]
+        set_chunks_gold = [entry['chunks'] for entry in train_data]
+        _eval_ent(set_chunks_gold, set_chunks_pred)
+        for entry, entry_pred in zip(train_data, train_data_pred):
+            entry['chunks_pred'] = entry_pred['chunks_pred']
+    else:
+        logger.info("Jackknifed chunks are unavailable, using gold chunks for training")
         for entry in train_data:
             entry['chunks_pred'] = entry['chunks']
-        
+    
+    if len(args.test_chunks_pred_path) > 0:
         logger.info("Predicted chunks are provided, performing end-to-end evaluation")
-        dev_data_pred = torch.load(f"{args.chunks_pred_path}/dev.data.pred.pth")
+        dev_data_pred = torch.load(f"{args.test_chunks_pred_path}/dev.data.pred.pth")
         logger.info("Evaluating predicted chunks on dev-set")
         set_chunks_pred = [entry['chunks_pred'] for entry in dev_data_pred]
         set_chunks_gold = [entry['chunks'] for entry in dev_data]
@@ -234,7 +252,7 @@ if __name__ == '__main__':
         for entry, entry_pred in zip(dev_data, dev_data_pred):
             entry['chunks_pred'] = entry_pred['chunks_pred']
         
-        test_data_pred = torch.load(f"{args.chunks_pred_path}/test.data.pred.pth")
+        test_data_pred = torch.load(f"{args.test_chunks_pred_path}/test.data.pred.pth")
         logger.info("Evaluating predicted chunks on test-set")
         set_chunks_pred = [entry['chunks_pred'] for entry in test_data_pred]
         set_chunks_gold = [entry['chunks'] for entry in test_data]
@@ -243,10 +261,9 @@ if __name__ == '__main__':
             entry['chunks_pred'] = entry_pred['chunks_pred']
         
     else:
-        logger.warning("Predicted chunks are NOT provided, using gold chunks for evaluation")
-        for data in [train_data, dev_data, test_data]:
-            for entry in data:
-                entry['chunks_pred'] = entry['chunks']
+        logger.warning("Predicted chunks are unavailable, using gold chunks for evaluation")
+        for entry in dev_data+test_data:
+            entry['chunks_pred'] = entry['chunks']
     
     config = build_RE_config(args)
     train_data, dev_data, test_data = process_IE_data(train_data, dev_data, test_data, args, config)
@@ -257,7 +274,7 @@ if __name__ == '__main__':
     test_data  = [entry for entry in test_data  if len(entry['chunks'])+len(entry['chunks_pred']) > 0]
     
     # Add missing symmetric relations
-    if args.comp_sym_rel and (args.dataset.startswith('ace2004_rel_cv') or args.dataset in ('ace2005_rel', 'SciERC')): 
+    if args.dataset.startswith('ace2004_rel_cv') or args.dataset in ('ace2005_rel', 'SciERC'): 
         if args.dataset.startswith('ace'): 
             config.decoder.sym_rel_labels = ['PER-SOC']
         elif args.dataset == 'SciERC': 
@@ -272,24 +289,14 @@ if __name__ == '__main__':
             logger.info("Adding missing symmetric relations: " + " | ".join(f"{label}: {c}" for label, c in counter.items()))
     
     
-    if not args.train_with_dev:
-        train_set = Dataset(train_data, config, training=True)
-        train_set.build_vocabs_and_dims(dev_data, test_data)
-        dev_set   = Dataset(dev_data,  train_set.config, training=False)
-        test_set  = Dataset(test_data, train_set.config, training=False)
-        
-        train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
-        dev_loader   = torch.utils.data.DataLoader(dev_set,   batch_size=args.batch_size, shuffle=False, collate_fn=dev_set.collate)
-    else:
-        train_set = Dataset(train_data + dev_data, config, training=True)
-        train_set.build_vocabs_and_dims(test_data)
-        dev_set   = Dataset([],        train_set.config, training=False)
-        test_set  = Dataset(test_data, train_set.config, training=False)
-        
-        train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
-        dev_loader   = None
-    
+    train_set = Dataset(train_data, config, training=True)
+    train_set.build_vocabs_and_dims(dev_data, test_data)
+    dev_set   = Dataset(dev_data,  train_set.config, training=False)
+    test_set  = Dataset(test_data, train_set.config, training=False)
     logger.info(train_set.summary)
+    
+    train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
+    dev_loader   = torch.utils.data.DataLoader(dev_set,   batch_size=args.batch_size, shuffle=False, collate_fn=dev_set.collate) if len(dev_data) > 0 else None
     
     logger.info(header_format("Building", sep='-'))
     model = config.instantiate().to(device)

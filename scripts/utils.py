@@ -286,7 +286,6 @@ def load_data(args: argparse.Namespace):
         train_data = io.read(f"data/ADE/ade_split_{k}_train.json")
         dev_data   = []
         test_data  = io.read(f"data/ADE/ade_split_{k}_test.json")
-        args.train_with_dev = True
         
     elif args.dataset.startswith('ace2004_rel_cv'):
         io = JsonIO(relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
@@ -295,7 +294,6 @@ def load_data(args: argparse.Namespace):
         train_data = io.read(f"data/ace-luan2019naacl/ace04/cv{k}.train.json")
         dev_data   = []
         test_data  = io.read(f"data/ace-luan2019naacl/ace04/cv{k}.test.json")
-        args.train_with_dev = True
         
     elif args.dataset == 'ace2005_rel':
         io = JsonIO(relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 

@@ -46,6 +46,8 @@ def parse_arguments(parser: argparse.ArgumentParser):
                             help="whether to remove nested entities in the train/dev splits")
     group_data.add_argument('--eval_inex', default=False, action='store_true', 
                             help="whether to evaluate internal/external-entity NER results")
+    group_data.add_argument('--jackknife', type=int, default=-1, 
+                            help="the 5-fold index of jackknifing")
     group_data.add_argument('--no_save_preds', dest='save_preds', default=True, action='store_false', 
                             help="whether to save predictions on the dev/test splits")
     
@@ -299,7 +301,7 @@ def process_IE_data(train_data, dev_data, test_data, args, config):
         
         if getattr(args, 'pre_truecase', False):
             assert not getattr(config.bert_like.tokenizer, 'do_lower_case', False)
-            train_data = preprocessor.truecase_for_data(train_data, )
+            train_data = preprocessor.truecase_for_data(train_data)
             dev_data   = preprocessor.truecase_for_data(dev_data)
             test_data  = preprocessor.truecase_for_data(test_data)
         
@@ -406,29 +408,37 @@ if __name__ == '__main__':
     
     train_data, dev_data, test_data = load_data(args)
     args.language = dataset2language[args.dataset]
+    
+    if args.train_with_dev:
+        train_data = train_data + dev_data
+        dev_data   = []
+    
+    if args.jackknife >= 0:
+        import sklearn.model_selection
+        doc_key = 'doc_key'
+        doc_keys = numpy.unique([entry[doc_key] for entry in train_data])  # Sorted order
+        kf = sklearn.model_selection.KFold(5, shuffle=True, random_state=args.seed)
+        _, test_indexes = list(kf.split(doc_keys))[args.jackknife]
+        test_keys = set(doc_keys[i] for i in test_indexes)
+        test_data  = [entry for entry in train_data if entry[doc_key] in test_keys]
+        train_data = [entry for entry in train_data if entry[doc_key] not in test_keys]
+    
     config = build_ER_config(args)
     train_data, dev_data, test_data = process_IE_data(train_data, dev_data, test_data, args, config)
     
-    if not args.train_with_dev:
-        train_set = Dataset(train_data, config, training=True)
-        train_set.build_vocabs_and_dims(dev_data, test_data)
-        dev_set   = Dataset(dev_data,  train_set.config, training=False)
-        test_set  = Dataset(test_data, train_set.config, training=False)
-        
-        train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
-        dev_loader   = torch.utils.data.DataLoader(dev_set,   batch_size=args.batch_size, shuffle=False, collate_fn=dev_set.collate)
-    else:
-        train_set = Dataset(train_data + dev_data, config, training=True)
-        train_set.build_vocabs_and_dims(test_data)
-        dev_set   = Dataset([],        train_set.config, training=False)
-        test_set  = Dataset(test_data, train_set.config, training=False)
-        
-        train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
-        dev_loader   = None
-    
+    train_set = Dataset(train_data, config, training=True)
+    train_set.build_vocabs_and_dims(dev_data, test_data)
+    dev_set   = Dataset(dev_data,  train_set.config, training=False)
+    test_set  = Dataset(test_data, train_set.config, training=False)
     logger.info(train_set.summary)
     
+    train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
+    dev_loader   = torch.utils.data.DataLoader(dev_set,   batch_size=args.batch_size, shuffle=False, collate_fn=dev_set.collate) if len(dev_data) > 0 else None
+    
     logger.info(header_format("Building", sep='-'))
+    if args.dataset.startswith('ace2004_rel_cv'):
+        config.decoder.overlapping_level = FLAT
+    
     if args.remove_nested:
         config.decoder.overlapping_level = FLAT
         config.decoder.chunk_priority = args.inex_chunk_priority_training
@@ -457,11 +467,6 @@ if __name__ == '__main__':
     logger.info(header_format("Evaluating", sep='-'))
     model = torch.load(f"{save_path}/{config.name}.pth", map_location=device)
     trainer = Trainer(model, device=device)
-    
-    if args.train_with_dev:
-        # Restore the original splits
-        train_set = Dataset(train_data, train_set.config, training=False)
-        dev_set   = Dataset(dev_data,   train_set.config, training=False)
     
     if args.remove_nested:
         logger.info("Adding back nested entities...")
