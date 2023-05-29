@@ -290,7 +290,7 @@ if __name__ == '__main__':
     
     
     train_set = Dataset(train_data, config, training=True)
-    train_set.build_vocabs_and_dims(dev_data, test_data)
+    train_set.build_vocabs_and_dims(dev_data)
     dev_set   = Dataset(dev_data,  train_set.config, training=False)
     test_set  = Dataset(test_data, train_set.config, training=False)
     logger.info(train_set.summary)

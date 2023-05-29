@@ -305,9 +305,9 @@ def process_IE_data(train_data, dev_data, test_data, args, config):
             dev_data   = preprocessor.truecase_for_data(dev_data)
             test_data  = preprocessor.truecase_for_data(test_data)
         
-        if (args.doc_level and (args.dataset in ('conll2003', 'conll2003nff', 'conll2012', 'genia', 'genia_yu2020acl', 'kbp2017', 'SciERC') 
-                             or args.dataset.startswith(('ace2004_rel', 'ace2005_rel')))):
-            if args.dataset.startswith('conll'):
+        if (args.doc_level and (args.dataset in ('conll2003', 'conll2003nff', 'conll2012', 'genia', 'genia_yu2020acl', 'kbp2017', 'conll2004', 'SciERC') 
+                             or args.dataset.startswith(('ace2004_rel', 'ace2005_rel', 'ADE')))):
+            if args.dataset.startswith('conll2003'):
                 doc_key = 'doc_idx'
             elif args.dataset.startswith('genia'):
                 doc_key = 'doc_key'
@@ -315,6 +315,8 @@ def process_IE_data(train_data, dev_data, test_data, args, config):
                 doc_key = 'org_id'
             elif args.dataset.startswith(('ace2004_rel', 'ace2005_rel', 'SciERC')):
                 doc_key = 'doc_key'
+            elif args.dataset.startswith(('conll2004', 'ADE')):
+                doc_key = None
             
             train_data = preprocessor.merge_sentences_for_data(train_data, doc_key=doc_key)
             dev_data   = preprocessor.merge_sentences_for_data(dev_data,   doc_key=doc_key)
@@ -427,7 +429,7 @@ if __name__ == '__main__':
     train_data, dev_data, test_data = process_IE_data(train_data, dev_data, test_data, args, config)
     
     train_set = Dataset(train_data, config, training=True)
-    train_set.build_vocabs_and_dims(dev_data, test_data)
+    train_set.build_vocabs_and_dims(dev_data)
     dev_set   = Dataset(dev_data,  train_set.config, training=False)
     test_set  = Dataset(test_data, train_set.config, training=False)
     logger.info(train_set.summary)
