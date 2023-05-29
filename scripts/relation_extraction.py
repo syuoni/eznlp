@@ -299,6 +299,10 @@ if __name__ == '__main__':
     dev_loader   = torch.utils.data.DataLoader(dev_set,   batch_size=args.batch_size, shuffle=False, collate_fn=dev_set.collate) if len(dev_data) > 0 else None
     
     logger.info(header_format("Building", sep='-'))
+    if args.dataset.startswith('ace2004_rel_cv'):
+        # A relation with exceptionally long distance exists in ACE 2004
+        config.decoder.max_cp_dist = 35
+    
     model = config.instantiate().to(device)
     count_params(model)
     

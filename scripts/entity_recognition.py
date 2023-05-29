@@ -439,6 +439,7 @@ if __name__ == '__main__':
     
     logger.info(header_format("Building", sep='-'))
     if args.dataset.startswith('ace2004_rel_cv'):
+        # Very few nested entities exist in ACE 2004
         config.decoder.overlapping_level = FLAT
     
     if args.remove_nested:
