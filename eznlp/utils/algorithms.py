@@ -85,5 +85,6 @@ def assign_consecutive_to_buckets(values: List[int], num_buckets: int):
             curr_sum = x
             buckets[k] += 1
     
+    assert all(b > 0 for b in buckets)
     assert sum(buckets) == len(values)
     return buckets

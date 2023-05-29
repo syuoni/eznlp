@@ -698,9 +698,10 @@ class BertLikePreProcessor(object):
                 buckets.append(1)
         
         # Minimize the maximum length of merged sequences
-        if mode.lower() == 'min_max_length':
+        if mode.lower() == 'min_max_length' and max(doc_sub_lens) <= max_len:
             buckets = assign_consecutive_to_buckets(doc_sub_lens, len(buckets))
         
+        assert all(b > 0 for b in buckets)
         assert sum(buckets) == len(doc)
         
         new_doc = []
@@ -767,11 +768,14 @@ class BertLikePreProcessor(object):
         if doc_key is None:
             logger.warning(f"Specifying `doc_key=None` will regard all sentences as a document")
         
+        max_len = self.model_max_length - 2
         new_data = []
         doc, doc_sub_lens = [], []
+        num_overlong = 0
         for entry in tqdm.tqdm(data, disable=not self.verbose, ncols=100, desc="Merging sentences"):
             tokens = entry['tokens']
             num_sub_tokens = sum(len(tok) for tok in _tokenized2nested(tokens.raw_text, self.tokenizer))
+            num_overlong += (num_sub_tokens > max_len)
             
             if (doc_key is None or len(doc) == 0 or entry[doc_key] == doc[0][doc_key]):
                 doc.append(entry)
@@ -786,6 +790,8 @@ class BertLikePreProcessor(object):
             new_doc = self._merge_sentences_for_doc(doc, doc_sub_lens, mode=mode)
             new_data.extend(new_doc)
         
+        if num_overlong > 0:
+            logger.warning(f"Overlong sentences: {num_overlong}")
         return new_data
 
 
