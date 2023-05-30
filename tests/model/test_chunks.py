@@ -8,7 +8,8 @@ from eznlp.utils.relation import detect_inverse
 @pytest.mark.parametrize("training", [True, False])
 @pytest.mark.parametrize("pipeline", [True, False])
 @pytest.mark.parametrize("use_inv_rel", [False, True])
-def test_chunk_pairs_obj(training, pipeline, use_inv_rel, EAR_data_demo):
+@pytest.mark.parametrize("check_rht_labels", [False, True])
+def test_chunk_pairs_obj(training, pipeline, use_inv_rel, check_rht_labels, EAR_data_demo):
     if pipeline:
         for entry in EAR_data_demo:
             entry['chunks_pred'] = []
@@ -16,7 +17,7 @@ def test_chunk_pairs_obj(training, pipeline, use_inv_rel, EAR_data_demo):
     entry = EAR_data_demo[0]
     chunks, relations = entry['chunks'], entry['relations']
     
-    config = SpanRelClassificationDecoderConfig(sym_rel_labels=['RelB'], use_inv_rel=use_inv_rel)
+    config = SpanRelClassificationDecoderConfig(sym_rel_labels=['RelB'], use_inv_rel=use_inv_rel, check_rht_labels=check_rht_labels)
     config.build_vocab(EAR_data_demo)
     cp_obj = config.exemplify(entry, training=training)['cp_obj']
     
@@ -28,17 +29,17 @@ def test_chunk_pairs_obj(training, pipeline, use_inv_rel, EAR_data_demo):
         assert cp_obj.non_mask.size() == (num_chunks, num_chunks)
         assert cp_obj.cp2label_id.size() == (num_chunks, num_chunks)
         if not use_inv_rel:
-            assert len(list(config.enumerate_chunk_pairs(cp_obj, return_valid_only=True))) == 4
-            assert cp_obj.non_mask.sum() == 4
-            assert cp_obj.cp2label_id.sum() == sum(config.label2idx[label] for label, *_ in relations)
+            assert len(list(config.enumerate_chunk_pairs(cp_obj, return_valid_only=True))) == 4 if check_rht_labels else 10
+            assert cp_obj.non_mask.sum().item() == 4 if check_rht_labels else 10
+            assert cp_obj.cp2label_id.sum().item() == sum(config.label2idx[label] for label, *_ in relations)
             assert all(cp_obj.cp2label_id[cp_obj.chunks.index(head), cp_obj.chunks.index(tail)] == config.label2idx[label] 
                         for label, head, tail in relations)
         else:
-            assert len(list(config.enumerate_chunk_pairs(cp_obj, return_valid_only=True))) == 6
-            assert cp_obj.non_mask.sum() == 6
+            assert len(list(config.enumerate_chunk_pairs(cp_obj, return_valid_only=True))) == 6 if check_rht_labels else 20
+            assert cp_obj.non_mask.sum().item() == 6 if check_rht_labels else 20
             inverse_relations = detect_inverse(relations)
             assert len(inverse_relations) == 2
-            assert cp_obj.cp2label_id.sum() == sum(config.label2idx[label] for label, *_ in relations+inverse_relations)
+            assert cp_obj.cp2label_id.sum().item() == sum(config.label2idx[label] for label, *_ in relations+inverse_relations)
             assert all(cp_obj.cp2label_id[cp_obj.chunks.index(head), cp_obj.chunks.index(tail)] == config.label2idx[label] 
                         for label, head, tail in relations+inverse_relations)
         
@@ -89,7 +90,7 @@ def test_chunk_singles_obj(training, pipeline, EAR_data_demo):
     if pipeline and training:
         assert cs_obj.chunks == chunks
         assert cs_obj.cs2label_id.size() == (num_chunks, config.voc_dim)
-        assert cs_obj.cs2label_id[:, 1:].sum() == len(attributes)
+        assert cs_obj.cs2label_id[:, 1:].sum().item() == len(attributes)
         assert (cs_obj.cs2label_id.sum(dim=0) >= 1).all().item()
         assert all(cs_obj.cs2label_id[cs_obj.chunks.index(chunk), config.label2idx[label]] == 1 for label, chunk in attributes)
         

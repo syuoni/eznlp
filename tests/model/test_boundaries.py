@@ -128,7 +128,7 @@ def test_diag_boundaries_pair_obj(training, EAR_data_demo):
     assert dbp_obj.relations == relations
     assert dbp_obj.dbp2label_id.size() == (num_spans, num_spans)
     
-    assert dbp_obj.dbp2label_id.sum() == sum(config.label2idx[label] for label, *_ in relations)
+    assert dbp_obj.dbp2label_id.sum().item() == sum(config.label2idx[label] for label, *_ in relations)
     assert all(dbp_obj.dbp2label_id[_span2diagonal(h_start, h_end, num_tokens), _span2diagonal(t_start, t_end, num_tokens)] == config.label2idx[label] 
                    for label, (_, h_start, h_end), (_, t_start, t_end) in relations)
     

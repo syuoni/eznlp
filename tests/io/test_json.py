@@ -131,7 +131,6 @@ class TestJsonIO(object):
         
         
     def test_ace2004_rel(self):
-        # TODO: document-level?
         io = JsonIO(relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail')
         train_data = io.read("data/ace-luan2019naacl/ace04/cv0.train.json")
         test_data  = io.read("data/ace-luan2019naacl/ace04/cv0.test.json")
@@ -146,7 +145,6 @@ class TestJsonIO(object):
         
         
     def test_ace2005_rel(self):
-        # TODO: document-level?
         io = JsonIO(relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail')
         train_data = io.read("data/ace-luan2019naacl/ace05/train.json")
         dev_data   = io.read("data/ace-luan2019naacl/ace05/dev.json")
