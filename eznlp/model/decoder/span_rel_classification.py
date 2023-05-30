@@ -84,7 +84,7 @@ class ChunkPairsDecoderMixin(DecoderMixinBase):
                 if (rel := (label.replace(INV_REL_PREFIX, ''), tail, head)) not in relations:
                     relations.append(rel)
         
-        relations = [(label, head, tail) for label, head, tail in relations if ((label, head[0], tail[0]) in self.existing_rht_labels 
+        relations = [(label, head, tail) for label, head, tail in relations if ((not self.check_rht_labels or (label, head[0], tail[0]) in self.existing_rht_labels)
                                                                                 and (self.existing_self_rel or head[1:] != tail[1:]))]
         
         if self.comp_sym_rel: 
@@ -103,12 +103,13 @@ class ChunkPairsDecoderMixin(DecoderMixinBase):
                 is_valid = False
             if (not self.existing_self_rel and head[1:] == tail[1:]):
                 is_valid = False
-            if self.use_inv_rel: 
-                if (head[0], tail[0]) not in self.existing_ht_labels and (tail[0], head[0]) not in self.existing_ht_labels:
-                    is_valid = False
-            else:
-                if (head[0], tail[0]) not in self.existing_ht_labels:
-                    is_valid = False
+            if self.check_rht_labels:
+                if self.use_inv_rel: 
+                    if (head[0], tail[0]) not in self.existing_ht_labels and (tail[0], head[0]) not in self.existing_ht_labels:
+                        is_valid = False
+                else:
+                    if (head[0], tail[0]) not in self.existing_ht_labels:
+                        is_valid = False
             
             if return_valid_only: 
                 if is_valid:
@@ -146,6 +147,7 @@ class SpanRelClassificationDecoderConfig(SingleDecoderConfigBase, ChunkPairsDeco
         self.sym_rel_labels = kwargs.pop('sym_rel_labels', [])
         self.comp_sym_rel = kwargs.pop('comp_sym_rel', False)
         self.use_inv_rel = kwargs.pop('use_inv_rel', False)
+        self.check_rht_labels = kwargs.pop('check_rht_labels', False)
         self.none_label = kwargs.pop('none_label', '<none>')
         self.idx2label = kwargs.pop('idx2label', None)
         self.ck_none_label = kwargs.pop('ck_none_label', '<none>')
@@ -235,6 +237,7 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
         self.sym_rel_labels = config.sym_rel_labels
         self.comp_sym_rel = config.comp_sym_rel
         self.use_inv_rel = config.use_inv_rel
+        self.check_rht_labels = config.check_rht_labels
         self.none_label = config.none_label
         self.idx2label = config.idx2label
         self.ck_none_label = config.ck_none_label
