@@ -79,6 +79,8 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                help="whether to use inverse relation for bidirectional prediction")
     group_decoder.add_argument('--comp_sym_rel', default=False, action='store_true', 
                                help="whether to complement symmetric relations")
+    group_decoder.add_argument('--check_rht_labels', default=False, action='store_true', 
+                               help="whether to check the combination of triplet labels")
     
     # Boundary selection (*)
     group_decoder.add_argument('--red_arch', type=str, default='FFN', 
@@ -132,6 +134,7 @@ def build_RE_config(args: argparse.Namespace):
                                                             l2_loss_weight=args.l2_loss_weight, 
                                                             comp_sym_rel=args.comp_sym_rel, 
                                                             use_inv_rel=args.use_inv_rel, 
+                                                            check_rht_labels=args.check_rht_labels, 
                                                             ss_epsilon=args.ss_epsilon, 
                                                             fl_gamma=args.fl_gamma, 
                                                             sl_epsilon=args.sl_epsilon, 
@@ -148,6 +151,7 @@ def build_RE_config(args: argparse.Namespace):
                                                          l2_loss_weight=args.l2_loss_weight, 
                                                          comp_sym_rel=args.comp_sym_rel, 
                                                          use_inv_rel=args.use_inv_rel, 
+                                                         check_rht_labels=args.check_rht_labels, 
                                                          ss_epsilon=args.ss_epsilon, 
                                                          fl_gamma=args.fl_gamma,
                                                          sl_epsilon=args.sl_epsilon, 
@@ -177,6 +181,7 @@ def build_RE_config(args: argparse.Namespace):
                                                        l2_loss_weight=args.l2_loss_weight, 
                                                        comp_sym_rel=args.comp_sym_rel, 
                                                        use_inv_rel=args.use_inv_rel, 
+                                                       check_rht_labels=args.check_rht_labels, 
                                                        ss_epsilon=args.ss_epsilon, 
                                                        fl_gamma=args.fl_gamma,
                                                        sl_epsilon=args.sl_epsilon, 

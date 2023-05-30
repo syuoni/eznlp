@@ -4,6 +4,7 @@ import sys
 import argparse
 import datetime
 import pdb
+import glob
 import logging
 import pprint
 import numpy
@@ -187,6 +188,11 @@ def collect_IE_assembly_config(args: argparse.Namespace):
         bert_like, tokenizer = load_pretrained(args.bert_arch, args)
         if args.bert_reinit:
             reinit_bert_like_(bert_like)
+        if args.bert_load_from_ck:
+            ck_model_file_path = glob.glob(f"{args.test_chunks_pred_path}/*-config.pth")[0].replace("-config", "")
+            ck_model = torch.load(ck_model_file_path)
+            bert_like = ck_model.bert_like.bert_like
+        
         bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert_like, arch=args.bert_arch, from_subtokenized=args.pre_subtokenize, freeze=args.bert_freeze)
         
         if getattr(args, 'ck_decoder', '').startswith('specific_span') or getattr(args, 'rel_decoder', '').startswith('specific_span'):
