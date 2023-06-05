@@ -102,8 +102,6 @@ def add_base_arguments(parser: argparse.ArgumentParser):
                              help="whether to freeze BERT weights")
     group_model.add_argument('--bert_reinit', default=False, action='store_true', 
                              help="whether to reinit BERT weights")
-    group_model.add_argument('--bert_load_from_ck', default=False, action='store_true', 
-                             help="whether to load BERT weights from `test_chunks_pred_path`")
     group_model.add_argument('--use_interm2', default=False, action='store_true', 
                              help="whether to use intermediate2")
     return parser

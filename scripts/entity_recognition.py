@@ -4,7 +4,6 @@ import sys
 import argparse
 import datetime
 import pdb
-import glob
 import logging
 import pprint
 import numpy
@@ -188,11 +187,6 @@ def collect_IE_assembly_config(args: argparse.Namespace):
         bert_like, tokenizer = load_pretrained(args.bert_arch, args)
         if args.bert_reinit:
             reinit_bert_like_(bert_like)
-        if args.bert_load_from_ck:
-            ck_model_file_path = glob.glob(f"{args.test_chunks_pred_path}/*-config.pth")[0].replace("-config", "")
-            ck_model = torch.load(ck_model_file_path)
-            bert_like = ck_model.bert_like.bert_like
-        
         bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert_like, arch=args.bert_arch, from_subtokenized=args.pre_subtokenize, freeze=args.bert_freeze)
         
         if getattr(args, 'ck_decoder', '').startswith('specific_span') or getattr(args, 'rel_decoder', '').startswith('specific_span'):
@@ -435,6 +429,10 @@ if __name__ == '__main__':
     train_data, dev_data, test_data = process_IE_data(train_data, dev_data, test_data, args, config)
     
     train_set = Dataset(train_data, config, training=True)
+    # You may also include `test_data` here.
+    # In particular, when using static word embeddings (e.g., GloVe), this can include some words appearing in `test_data`, but missing in `train_data` and `dev_data`.
+    # This will not result in information leak, because these word embeddings will remain unchanged during the whole training phase. 
+    # In general, `build_vocabs_and_dims` only collects meta information, which can alternatively be hard-coded. 
     train_set.build_vocabs_and_dims(dev_data)
     dev_set   = Dataset(dev_data,  train_set.config, training=False)
     test_set  = Dataset(test_data, train_set.config, training=False)
@@ -445,7 +443,7 @@ if __name__ == '__main__':
     
     logger.info(header_format("Building", sep='-'))
     if args.dataset.startswith('ace2004_rel_cv'):
-        # Very few nested entities exist in ACE 2004
+        # A very few nested entities exist in ACE 2004
         config.decoder.overlapping_level = FLAT
     
     if args.remove_nested:

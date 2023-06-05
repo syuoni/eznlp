@@ -5,8 +5,10 @@ import sys
 import argparse
 import datetime
 import pdb
+import glob
 import logging
 import pprint
+import copy
 import numpy
 import torch
 
@@ -43,6 +45,10 @@ def parse_arguments(parser: argparse.ArgumentParser):
                             help="path to load predicted chunks for dev/test splits")
     group_data.add_argument('--no_save_preds', dest='save_preds', default=True, action='store_false', 
                             help="whether to save predictions on the dev/test splits")
+    
+    group_model = parser.add_argument_group('additional model configurations')
+    group_model.add_argument('--bert_load_from_ck_path', type=str, default="", 
+                             help="path to load BERT weights from a trained ER model")
     
     group_decoder = parser.add_argument_group('decoder configurations')
     group_decoder.add_argument('--rel_decoder', type=str, default='span_rel_classification', 
@@ -308,7 +314,27 @@ if __name__ == '__main__':
         # A relation with exceptionally long distance exists in ACE 2004
         config.decoder.max_cp_dist = 35
     
-    model = config.instantiate().to(device)
+    if len(args.bert_load_from_ck_path) > 0:
+        if args.bert_load_from_ck_path == 'test_chunks_pred_path':
+            args.bert_load_from_ck_path = args.test_chunks_pred_path
+        
+        # Load the BERT weights from the ER model
+        ck_model_file_path = glob.glob(f"{args.bert_load_from_ck_path}/*-config.pth")[0].replace("-config", "")
+        ck_model = torch.load(ck_model_file_path, map_location='cpu')
+        bert_like = copy.deepcopy(ck_model.bert_like.bert_like)
+        config.bert_like.bert_like = bert_like
+        config.masked_span_bert_like.bert_like = bert_like
+        model = config.instantiate()
+        
+        # Load some other weights from the ER model
+        assert type(model.masked_span_bert_like.init_aggregating) == type(ck_model.span_bert_like.init_aggregating)
+        model.masked_span_bert_like.init_aggregating = copy.deepcopy(ck_model.span_bert_like.init_aggregating)
+        assert model.masked_span_bert_like.size_embedding.num_embeddings == ck_model.span_bert_like.size_embedding.num_embeddings
+        model.masked_span_bert_like.size_embedding = copy.deepcopy(ck_model.span_bert_like.size_embedding)
+        model.to(device)
+    else:
+        model = config.instantiate().to(device)
+    
     count_params(model)
     
     logger.info(header_format("Training", sep='-'))
