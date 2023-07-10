@@ -12,9 +12,9 @@ Overparameterized neural networks are lazy (Chizat et al., 2019), so we design s
 * Image Captioning
 
 This repository also maintains the code of our papers: 
-* Check this [link](docs/deep-span.md) for "Deep Span Representations for Named Entity Recognition" accepted to Findings of ACL 2023. 
-* Check this [link](docs/boundary-smoothing.md) for "Boundary Smoothing for Named Entity Recognition" in ACL 2022. 
-* Check this [link](publications/framework/scheme.pdf) for the annotation scheme described in "A Unified Framework of Medical Information Annotation and Extraction for Chinese Clinical Text". 
+* Check this [link](docs/deep-span.md) for "Deep Span Representations for Named Entity Recognition" accepted to *Findings of ACL 2023*. 
+* Check this [link](docs/boundary-smoothing.md) for "Boundary Smoothing for Named Entity Recognition" in *ACL 2022*. 
+* Check the [annotation scheme](publications/framework/scheme.pdf) and [HwaMei-500](publications/framework/HwaMei-500.md) dataset described in "A Unified Framework of Medical Information Annotation and Extraction for Chinese Clinical Text" on *Artificial Intelligence in Medicine*. 
 
 
 ## Installation
@@ -93,11 +93,14 @@ If you find our code useful, please cite the following papers:
 ```
 
 ```
-@article{zhu2021framework,
-  title={A Unified Framework of Medical Information Annotation and Extraction for {C}hinese Clinical Text},
-  author={Zhu, Enwei and Sheng, Qilin and Yang, Huanwan and Li, Jinpeng},
-  journal={arXiv preprint arXiv:2203.03823},
-  year={2021}
+@article{zhu2023framework,
+  title={A unified framework of medical information annotation and extraction for {C}hinese clinical text},
+  author={Zhu, Enwei and Sheng, Qilin and Yang, Huanwan and Liu, Yiyang and Cai, Ting and Li, Jinpeng},
+  journal={Artificial Intelligence in Medicine},
+  volume={142},
+  pages={102573},
+  year={2023},
+  publisher={Elsevier}
 }
 ```
 
