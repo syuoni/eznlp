@@ -70,11 +70,17 @@ $ python scripts/attribute_extraction.py --dataset <dataset> [options]
 If you find our code useful, please cite the following papers: 
 
 ```
-@article{zhu2022deep-span,
+@inproceedings{zhu2023deep,
   title={Deep Span Representations for Named Entity Recognition},
   author={Zhu, Enwei and Liu, Yiyang and Li, Jinpeng},
-  journal={arXiv preprint arXiv:2210.04182},
-  year={2022}
+  booktitle={Findings of the Association for Computational Linguistics: ACL 2023},
+  month={jul},
+  year={2023},
+  address={Toronto, Canada},
+  publisher={Association for Computational Linguistics},
+  url={https://aclanthology.org/2023.findings-acl.672},
+  doi={10.18653/v1/2023.findings-acl.672},
+  pages={10565--10582}
 }
 ```
 
@@ -88,6 +94,7 @@ If you find our code useful, please cite the following papers:
   address={Dublin, Ireland},
   publisher={Association for Computational Linguistics},
   url={https://aclanthology.org/2022.acl-long.490},
+  doi={10.18653/v1/2022.acl-long.490},
   pages={7096--7108}
 }
 ```
