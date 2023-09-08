@@ -2,6 +2,7 @@
 import logging
 import nltk
 
+from ..utils.chunk import detect_nested
 from ..metrics import precision_recall_f1_report
 from ..dataset import Dataset
 from .trainer import Trainer
@@ -30,7 +31,34 @@ def _disp_prf(ave_scores: dict, task: str='ER'):
         logger.info(f"{task} | Macro {key_text}: {ave_scores['macro'][key]*100:2.3f}%")
 
 
-def evaluate_entity_recognition(trainer: Trainer, dataset: Dataset, batch_size: int=32, save_preds: bool=False):
+def _eval_ent(set_y_gold, set_y_pred, eval_inex: bool=False):
+    scores, ave_scores = precision_recall_f1_report(set_y_gold, set_y_pred)
+    _disp_prf(ave_scores, task='ER')
+    
+    if eval_inex:
+        set_y_pred_in  = [detect_nested(y_pred, y_gold) for y_gold, y_pred in zip(set_y_gold, set_y_pred)]
+        set_y_gold_in  = [detect_nested(y_gold, y_gold) for y_gold in set_y_gold]
+        scores, ave_scores = precision_recall_f1_report(set_y_gold_in, set_y_pred_in)
+        _disp_prf(ave_scores, task='ER-in')
+        
+        set_y_pred_ex = [list(set(y_pred) - set(y_pred_in)) for y_pred, y_pred_in in zip(set_y_pred, set_y_pred_in)]
+        set_y_gold_ex = [list(set(y_gold) - set(y_gold_in)) for y_gold, y_gold_in in zip(set_y_gold, set_y_gold_in)]
+        scores, ave_scores = precision_recall_f1_report(set_y_gold_ex, set_y_pred_ex)
+        _disp_prf(ave_scores, task='ER-ex')
+
+
+def evaluate_entity_recognition(trainer: Trainer, dataset: Dataset, batch_size: int=32, eval_inex: bool=False, pp_callback=None, save_preds: bool=False):
+    """Evaluation of entity recognition results. 
+    
+    Parameters
+    ----------
+    eval_inex: bool
+        Evaluate internal/external-entity results. 
+    pp_callback: None or Callable
+        Post-processing function applied to predicted results. 
+    save_preds: bool
+        Save the predicted results into `dataset.data`; it is typically used when ground truth is not available offline. 
+    """
     set_y_pred = trainer.predict(dataset, batch_size=batch_size)
     if save_preds:
         for ex, chunks_pred in zip(dataset.data, set_y_pred):
@@ -38,9 +66,11 @@ def evaluate_entity_recognition(trainer: Trainer, dataset: Dataset, batch_size: 
         logger.info("ER | Predictions saved")
     else:
         set_y_gold = [ex['chunks'] for ex in dataset.data]
-        scores, ave_scores = precision_recall_f1_report(set_y_gold, set_y_pred)
-        _disp_prf(ave_scores, task='ER')
-
+        _eval_ent(set_y_gold, set_y_pred, eval_inex=eval_inex)
+        if callable(pp_callback):
+            logger.info("Post-processing predictions...")
+            set_y_pred = [pp_callback(y_pred) for y_pred in set_y_pred]
+            _eval_ent(set_y_gold, set_y_pred, eval_inex=eval_inex)
 
 
 def _eval_attr(set_y_gold, set_y_pred):
@@ -105,8 +135,7 @@ def evaluate_joint_extraction(trainer: Trainer, dataset: Dataset, has_attr: bool
         logger.info("Joint | Predictions saved")
     else:
         set_chunks_gold = [ex['chunks'] for ex in dataset.data]
-        scores, ave_scores = precision_recall_f1_report(set_chunks_gold, set_chunks_pred)
-        _disp_prf(ave_scores, task='ER')
+        _eval_ent(set_chunks_gold, set_chunks_pred, eval_inex=False)
         if has_attr:
             set_attrs_gold = [ex['attributes'] for ex in dataset.data]
             _eval_attr(set_attrs_gold, set_attrs_pred)

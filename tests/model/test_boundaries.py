@@ -20,17 +20,17 @@ def test_boundaries_obj(sb_epsilon, sl_epsilon, EAR_data_demo):
     num_tokens, num_chunks = len(tokens), len(chunks)
     assert boundaries_obj.chunks == chunks
     if sb_epsilon == 0 and sl_epsilon == 0:
-        assert all(boundaries_obj.boundary2label_id[start, end-1] == config.label2idx[label] for label, start, end in chunks)
-        labels_retr = [config.idx2label[i] for i in boundaries_obj.boundary2label_id[torch.arange(num_tokens) >= torch.arange(num_tokens).unsqueeze(-1)].tolist()]
+        assert all(boundaries_obj.label_ids[start, end-1] == config.label2idx[label] for label, start, end in chunks)
+        labels_retr = [config.idx2label[i] for i in boundaries_obj.label_ids[torch.arange(num_tokens) >= torch.arange(num_tokens).unsqueeze(-1)].tolist()]
     else:
-        assert all(boundaries_obj.boundary2label_id[start, end-1].argmax() == config.label2idx[label] for label, start, end in chunks)
-        labels_retr = [config.idx2label[i] for i in boundaries_obj.boundary2label_id[torch.arange(num_tokens) >= torch.arange(num_tokens).unsqueeze(-1)].argmax(dim=-1).tolist()]
+        assert all(boundaries_obj.label_ids[start, end-1].argmax() == config.label2idx[label] for label, start, end in chunks)
+        labels_retr = [config.idx2label[i] for i in boundaries_obj.label_ids[torch.arange(num_tokens) >= torch.arange(num_tokens).unsqueeze(-1)].argmax(dim=-1).tolist()]
         
-        assert (boundaries_obj.boundary2label_id.sum(dim=-1) - 1).abs().max().item() < 1e-6
+        assert (boundaries_obj.label_ids.sum(dim=-1) - 1).abs().max().item() < 1e-6
         if sb_epsilon == 0:
-            assert (boundaries_obj.boundary2label_id[:, :, config.none_idx] < 1).sum().item() == num_chunks
+            assert (boundaries_obj.label_ids[:, :, config.none_idx] < 1).sum().item() == num_chunks
         else:
-            assert (boundaries_obj.boundary2label_id[:, :, config.none_idx] < 1).sum().item() > num_chunks
+            assert (boundaries_obj.label_ids[:, :, config.none_idx] < 1).sum().item() > num_chunks
     
     chunks_retr = [(label, start, end) for label, (start, end) in zip(labels_retr, _spans_from_upper_triangular(num_tokens)) if label != config.none_label]
     assert set(chunks_retr) == set(chunks)
@@ -54,51 +54,61 @@ def test_boundaries_obj_for_boundary_smoothing(sb_epsilon, sb_size):
     
     num_tokens, num_chunks = len(entry['tokens']), len(entry['chunks'])
     span_sizes = torch.arange(num_tokens) - torch.arange(num_tokens).unsqueeze(-1) + 1
-    assert (boundaries_obj.boundary2label_id.sum(dim=-1) - 1).abs().max().item() < 1e-6
-    assert (boundaries_obj.boundary2label_id[:, :, 1:].sum() - num_chunks).abs().max().item() < 1e-6
-    assert (boundaries_obj.boundary2label_id[span_sizes<=0] - torch.tensor([1.0, 0.0, 0.0])).abs().max().item() < 1e-6
+    assert (boundaries_obj.label_ids.sum(dim=-1) - 1).abs().max().item() < 1e-6
+    assert (boundaries_obj.label_ids[:, :, 1:].sum() - num_chunks).abs().max().item() < 1e-6
+    assert (boundaries_obj.label_ids[span_sizes<=0] - torch.tensor([1.0, 0.0, 0.0])).abs().max().item() < 1e-6
     
     if sb_size == 1:
-        assert (boundaries_obj.boundary2label_id[0, 0] - torch.tensor([(1/4)*sb_epsilon, 1-(1/4)*sb_epsilon, 0.0])).abs().max().item() < 1e-6
-        assert (boundaries_obj.boundary2label_id[0, 3] - torch.tensor([(1/2)*sb_epsilon, 1-(3/4)*sb_epsilon, (1/4)*sb_epsilon])).abs().max().item() < 1e-6
-        assert (boundaries_obj.boundary2label_id[0, 4] - torch.tensor([(1/2)*sb_epsilon, (1/4)*sb_epsilon, 1-(3/4)*sb_epsilon])).abs().max().item() < 1e-6
-        assert (boundaries_obj.boundary2label_id[3, 4] - torch.tensor([(3/4)*sb_epsilon, 1-(3/4)*sb_epsilon, 0.0])).abs().max().item() < 1e-6
-        assert (boundaries_obj.boundary2label_id[4, 4] - torch.tensor([(1/4)*sb_epsilon, 1-(1/4)*sb_epsilon, 0.0])).abs().max().item() < 1e-6
+        assert (boundaries_obj.label_ids[0, 0] - torch.tensor([(1/4)*sb_epsilon, 1-(1/4)*sb_epsilon, 0.0])).abs().max().item() < 1e-6
+        assert (boundaries_obj.label_ids[0, 3] - torch.tensor([(1/2)*sb_epsilon, 1-(3/4)*sb_epsilon, (1/4)*sb_epsilon])).abs().max().item() < 1e-6
+        assert (boundaries_obj.label_ids[0, 4] - torch.tensor([(1/2)*sb_epsilon, (1/4)*sb_epsilon, 1-(3/4)*sb_epsilon])).abs().max().item() < 1e-6
+        assert (boundaries_obj.label_ids[3, 4] - torch.tensor([(3/4)*sb_epsilon, 1-(3/4)*sb_epsilon, 0.0])).abs().max().item() < 1e-6
+        assert (boundaries_obj.label_ids[4, 4] - torch.tensor([(1/4)*sb_epsilon, 1-(1/4)*sb_epsilon, 0.0])).abs().max().item() < 1e-6
     elif sb_size == 2:
-        assert (boundaries_obj.boundary2label_id[0, 0] - torch.tensor([(1/4)*sb_epsilon, 1-(1/4)*sb_epsilon, 0.0])).abs().max().item() < 1e-6
-        assert (boundaries_obj.boundary2label_id[0, 3] - torch.tensor([(9/16)*sb_epsilon, 1-(11/16)*sb_epsilon, (1/8)*sb_epsilon])).abs().max().item() < 1e-6
-        assert (boundaries_obj.boundary2label_id[0, 4] - torch.tensor([(1/2)*sb_epsilon, (1/8)*sb_epsilon, 1-(5/8)*sb_epsilon])).abs().max().item() < 1e-6
-        assert (boundaries_obj.boundary2label_id[3, 4] - torch.tensor([(5/8)*sb_epsilon, 1-(5/8)*sb_epsilon, 0.0])).abs().max().item() < 1e-6
-        assert (boundaries_obj.boundary2label_id[4, 4] - torch.tensor([(3/8)*sb_epsilon, 1-(3/8)*sb_epsilon, 0.0])).abs().max().item() < 1e-6
+        assert (boundaries_obj.label_ids[0, 0] - torch.tensor([(1/4)*sb_epsilon, 1-(1/4)*sb_epsilon, 0.0])).abs().max().item() < 1e-6
+        assert (boundaries_obj.label_ids[0, 3] - torch.tensor([(9/16)*sb_epsilon, 1-(11/16)*sb_epsilon, (1/8)*sb_epsilon])).abs().max().item() < 1e-6
+        assert (boundaries_obj.label_ids[0, 4] - torch.tensor([(1/2)*sb_epsilon, (1/8)*sb_epsilon, 1-(5/8)*sb_epsilon])).abs().max().item() < 1e-6
+        assert (boundaries_obj.label_ids[3, 4] - torch.tensor([(5/8)*sb_epsilon, 1-(5/8)*sb_epsilon, 0.0])).abs().max().item() < 1e-6
+        assert (boundaries_obj.label_ids[4, 4] - torch.tensor([(3/8)*sb_epsilon, 1-(3/8)*sb_epsilon, 0.0])).abs().max().item() < 1e-6
     elif sb_size == 3:
-        assert (boundaries_obj.boundary2label_id[0, 0] - torch.tensor([(7/36)*sb_epsilon, 1-(7/36)*sb_epsilon, 0.0])).abs().max().item() < 1e-6
-        assert (boundaries_obj.boundary2label_id[0, 3] - torch.tensor([(37/72)*sb_epsilon, 1-(43/72)*sb_epsilon, (1/12)*sb_epsilon])).abs().max().item() < 1e-6
-        assert (boundaries_obj.boundary2label_id[0, 4] - torch.tensor([(4/9)*sb_epsilon, (1/9)*sb_epsilon, 1-(5/9)*sb_epsilon])).abs().max().item() < 1e-6
-        assert (boundaries_obj.boundary2label_id[3, 4] - torch.tensor([(19/36)*sb_epsilon, 1-(5/9)*sb_epsilon, (1/36)*sb_epsilon])).abs().max().item() < 1e-6
-        assert (boundaries_obj.boundary2label_id[4, 4] - torch.tensor([(1/3)*sb_epsilon, 1-(1/3)*sb_epsilon, 0.0])).abs().max().item() < 1e-6
+        assert (boundaries_obj.label_ids[0, 0] - torch.tensor([(7/36)*sb_epsilon, 1-(7/36)*sb_epsilon, 0.0])).abs().max().item() < 1e-6
+        assert (boundaries_obj.label_ids[0, 3] - torch.tensor([(37/72)*sb_epsilon, 1-(43/72)*sb_epsilon, (1/12)*sb_epsilon])).abs().max().item() < 1e-6
+        assert (boundaries_obj.label_ids[0, 4] - torch.tensor([(4/9)*sb_epsilon, (1/9)*sb_epsilon, 1-(5/9)*sb_epsilon])).abs().max().item() < 1e-6
+        assert (boundaries_obj.label_ids[3, 4] - torch.tensor([(19/36)*sb_epsilon, 1-(5/9)*sb_epsilon, (1/36)*sb_epsilon])).abs().max().item() < 1e-6
+        assert (boundaries_obj.label_ids[4, 4] - torch.tensor([(1/3)*sb_epsilon, 1-(1/3)*sb_epsilon, 0.0])).abs().max().item() < 1e-6
 
 
 
 @pytest.mark.parametrize("neg_sampling_rate", [1.0, 0.5, 0.0])
 @pytest.mark.parametrize("neg_sampling_surr_rate", [0.0, 0.5, 1.0])
+@pytest.mark.parametrize("nested_sampling_rate", [1.0, 0.5, 0.0])
 @pytest.mark.parametrize("training", [True, False])
-def test_boundaries_obj_for_neg_sampling(neg_sampling_rate, neg_sampling_surr_rate, training):
+def test_boundaries_obj_for_neg_sampling(neg_sampling_rate, neg_sampling_surr_rate, nested_sampling_rate, training):
     entry = {'tokens': list("abcdefhijk"), 
              'chunks': [('EntA', 0, 1), ('EntA', 0, 4), ('EntB', 0, 5), ('EntA', 3, 5), ('EntA', 4, 5)]}
     config = BoundarySelectionDecoderConfig(neg_sampling_rate=neg_sampling_rate, 
                                             neg_sampling_surr_rate=neg_sampling_surr_rate, 
+                                            nested_sampling_rate=nested_sampling_rate, 
                                             neg_sampling_surr_size=3)
     config.build_vocab([entry])
     boundaries_obj = config.exemplify(entry, training=training)['boundaries_obj']
     
-    if (not training) or (neg_sampling_rate == 1):
+    if (not training) or (neg_sampling_rate == 1 and nested_sampling_rate == 1):
         assert not hasattr(boundaries_obj, 'non_mask')
-    elif neg_sampling_rate ==0 and neg_sampling_surr_rate == 0:
-        assert boundaries_obj.non_mask.sum().item() == 5
-    elif neg_sampling_rate ==0 and neg_sampling_surr_rate == 1:
-        assert boundaries_obj.non_mask.sum().item() == 30
     else:
-        assert abs(boundaries_obj.non_mask.sum().item() - (5 + 50*neg_sampling_rate + 25*(1-neg_sampling_rate)*neg_sampling_surr_rate)) < 10
+        # Positive: 5
+        # Surrounding: 25
+        # Nested: 10
+        # Surrounding & Nested: 10
+        # Others: 25
+        num_non_mask = (5 + 
+                        10 * (neg_sampling_rate + (1-neg_sampling_rate)*neg_sampling_surr_rate) * nested_sampling_rate + 
+                        15 * (neg_sampling_rate + (1-neg_sampling_rate)*neg_sampling_surr_rate) + 
+                        25 * neg_sampling_rate)
+        if all(r in (0, 1) for r in [neg_sampling_rate, neg_sampling_surr_rate, nested_sampling_rate]):
+            assert boundaries_obj.non_mask.sum().item() == num_non_mask
+        else:
+            assert abs(boundaries_obj.non_mask.sum().item() - num_non_mask) < 10
 
 
 

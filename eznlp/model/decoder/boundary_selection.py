@@ -73,10 +73,12 @@ class BoundarySelectionDecoderConfig(SingleDecoderConfigBase, BoundariesDecoderM
         self.neg_sampling_power_decay = kwargs.pop('neg_sampling_power_decay', 0.0)  # decay = 0.5, 1.0
         self.neg_sampling_surr_rate = kwargs.pop('neg_sampling_surr_rate', 0.0)
         self.neg_sampling_surr_size = kwargs.pop('neg_sampling_surr_size', 5)
+        self.nested_sampling_rate = kwargs.pop('nested_sampling_rate', 1.0)
         
         self.none_label = kwargs.pop('none_label', '<none>')
         self.idx2label = kwargs.pop('idx2label', None)
         self.overlapping_level = kwargs.pop('overlapping_level', None)
+        self.chunk_priority = kwargs.pop('chunk_priority', 'confidence')
         
         # Boundary smoothing epsilon
         self.sb_epsilon = kwargs.pop('sb_epsilon', 0.0)
@@ -142,6 +144,7 @@ class BoundarySelectionDecoder(DecoderBase, BoundariesDecoderMixin):
         self.none_label = config.none_label
         self.idx2label = config.idx2label
         self.overlapping_level = config.overlapping_level
+        self.chunk_priority = config.chunk_priority
         
         if config.use_biaffine:
             self.affine_start = config.affine.instantiate()
@@ -223,7 +226,7 @@ class BoundarySelectionDecoder(DecoderBase, BoundariesDecoderMixin):
         for curr_scores, boundaries_obj, curr_len in zip(batch_scores, batch.boundaries_objs, batch.seq_lens.cpu().tolist()):
             curr_non_mask = getattr(boundaries_obj, 'non_mask', self._get_span_non_mask(curr_len))
             
-            loss = self.criterion(curr_scores[:curr_len, :curr_len][curr_non_mask], boundaries_obj.boundary2label_id[curr_non_mask])
+            loss = self.criterion(curr_scores[:curr_len, :curr_len][curr_non_mask], boundaries_obj.label_ids[curr_non_mask])
             losses.append(loss)
         return torch.stack(losses)
         
@@ -246,8 +249,12 @@ class BoundarySelectionDecoder(DecoderBase, BoundariesDecoderMixin):
                 confidences = [conf for conf, is_v in zip(confidences, is_valid) if is_v]
                 chunks = [ck for ck, is_v in zip(chunks, is_valid) if is_v]
             
-            # Sort chunks from high to low confidences
-            chunks = [ck for _, ck in sorted(zip(confidences, chunks), reverse=True)]
+            if self.chunk_priority.lower().startswith('len'):
+                # Sort chunks by lengths: long -> short 
+                chunks = sorted(chunks, key=lambda ck: ck[2]-ck[1], reverse=True)
+            else:
+                # Sort chunks by confidences: high -> low 
+                chunks = [ck for _, ck in sorted(zip(confidences, chunks), reverse=True)]
             chunks = filter_clashed_by_priority(chunks, allow_level=self.overlapping_level)
             
             batch_chunks.append(chunks)

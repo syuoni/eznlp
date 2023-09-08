@@ -3,7 +3,7 @@ from collections import Counter
 import jieba
 import pytest
 
-from eznlp.io import BratIO, PostIO
+from eznlp.io import ConllIO, BratIO, PostIO
 
 
 class TestBratIO(object):
@@ -89,3 +89,17 @@ def test_read_write_consistency(has_ins_space):
     gold_chunk_anns = [line.split("\t", 1)[1] for line in gold_ann_lines if line.startswith('T')]
     retr_chunk_anns = [line.split("\t", 1)[1] for line in retr_ann_lines if line.startswith('T')]
     assert sorted(retr_chunk_anns) == sorted(gold_chunk_anns)
+
+
+
+def test_read_write_consistency_conll2003():
+    conll_io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', document_sep_starts=["-DOCSTART-"])
+    data = conll_io.read("data/conll2003/demo.eng.train")
+    
+    brat_io = BratIO(tokenize_callback='space', max_len=None, 
+                     token_sep=" ", line_sep="\r\n", sentence_seps=[], phrase_seps=[], 
+                     encoding='utf-8')
+    brat_io.write(data, "data/conll2003/demo.eng.train.brat.txt")
+    
+    reloaded = brat_io.read("data/conll2003/demo.eng.train.brat.txt")
+    assert reloaded == [{'tokens': ex['tokens'], 'chunks': ex['chunks']} for ex in data]

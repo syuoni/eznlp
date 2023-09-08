@@ -165,20 +165,25 @@ def _execute_pos_proj(x: torch.FloatTensor, pos_proj: torch.BoolTensor, agg_mode
 
 
 def _reduce_losses(losses: torch.Tensor, sample_weight: torch.Tensor=None, reduction: str='none'):
-    if reduction.lower() == 'sum':
+    if reduction.lower() == 'none':
+        return losses
+    elif losses.size(0) == 0:
+        return torch.tensor(0.0, device=losses.device)
+    elif reduction.lower() == 'sum':
         return losses.sum()
     elif reduction.lower() == 'mean' and sample_weight is None:
         return losses.mean()
     elif reduction.lower() == 'mean' and sample_weight is not None:
         return losses.sum() / sample_weight.sum()
     else:
-        return losses
+        raise RuntimeError(f"Invalid loss reduction: {losses}")
 
 
 def _check_soft_target(x: torch.Tensor):
     assert x.dim() == 2
-    assert (x >= 0).all().item()
-    assert (x.sum(dim=-1) - 1).abs().max().item() < 1e-6
+    if x.size(0) > 0:
+        assert (x >= 0).all().item()
+        assert (x.sum(dim=-1) - 1).abs().max().item() < 1e-6
 
 
 def soft_label_cross_entropy(logits: torch.Tensor, soft_target: torch.Tensor, weight: torch.Tensor=None, reduction: str='none'):
@@ -275,3 +280,35 @@ def focal_loss(logits: torch.Tensor, target: torch.LongTensor,
     
     losses = losses * sample_weight
     return _reduce_losses(losses, sample_weight=sample_weight, reduction=reduction)
+
+
+
+def multi_rbf_kernels(x: torch.Tensor, num_kernels: int=5, multiplier: float=2.0, sigma: float=None):
+    """A combination of multiple radial basis function (RBF) kernels with different bandwidths. 
+    
+    $$ k(x1, x2) = \exp \left(-\frac{\Vert x1 - x2 \Vert^2}{2 \sigma^2} \right) $$
+    
+    Parameters
+    ----------
+    x : torch.Tensor (num_samples, hid_dim)
+        Each row is a representation vector. 
+    
+    References
+    ----------
+    [1] Long et al. Learning Transferable Features with Deep Adaptation Networks. ICML 2015. 
+    [2] https://github.com/jindongwang/transferlearning/blob/master/code/distance/mmd_pytorch.py 
+    [3] https://github.com/ZongxianLee/MMD_Loss.Pytorch 
+    """
+    if x.size(0) == 0:
+        return torch.empty(0, 0, device=x.device)
+    
+    # l2_dist: (num, num)
+    l2_dist = ((x.unsqueeze(1) - x.unsqueeze(0))**2).sum(dim=-1)
+    
+    if sigma is None:
+        # The diagonal values are all zero
+        sigma = l2_dist.detach().sum().item() / (x.size(0) * (x.size(0)-1)) 
+    
+    sigma_list = [sigma * multiplier**(i-num_kernels//2) for i in range(num_kernels)]
+    # kernels: (num, num)
+    return sum((-l2_dist / s).exp() for s in sigma_list)

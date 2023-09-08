@@ -1,0 +1,23 @@
+T1	ORG 0 2	EU
+T2	MISC 11 17	German
+T3	MISC 34 41	British
+T4	PER 50 65	Peter Blackburn
+T5	LOC 67 75	BRUSSELS
+T6	ORG 92 111	European Commission
+T7	MISC 147 153	German
+T8	MISC 182 189	British
+T9	LOC 277 284	Germany
+T10	ORG 310 324	European Union
+T11	PER 349 365	Werner Zwingmann
+T12	LOC 441 448	Britain
+T13	ORG 585 595	Commission
+T14	PER 615 635	Nikolaus van der Pas
+T15	ORG 775 789	European Union
+T16	ORG 826 828	EU
+T17	PER 847 861	Franz Fischler
+T18	PER 1019 1027	Fischler
+T19	MISC 1037 1044	EU-wide
+T20	LOC 1073 1080	Britain
+T21	LOC 1085 1091	France
+T22	MISC 1146 1178	Bovine Spongiform Encephalopathy
+T23	MISC 1181 1184	BSE

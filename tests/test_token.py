@@ -193,6 +193,13 @@ class TestTokenSequence(object):
         assert [e-s for s, e in zip(tokens.start, tokens.end)] == [len(tok) for tok in tokens.token_list]
         
         
+    @pytest.mark.parametrize("raw_text", ["I like it soooo much.", "我非常喜欢它。"])
+    @pytest.mark.parametrize("token_sep", [" ", ""])
+    def test_raw_text(self, raw_text, token_sep):
+        tokens = TokenSequence.from_raw_text(raw_text, tokenize_callback=(None if raw_text.isascii() else 'char'), token_sep=token_sep)
+        assert tokens.to_raw_text() == raw_text
+        
+        
     def test_ngrams(self):
         token_list = [Token(tok, case_mode='Lower', number_mode='Marks') for tok in "This is a -3.14 demo .".split()]
         tokens = TokenSequence(token_list)

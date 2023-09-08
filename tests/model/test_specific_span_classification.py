@@ -111,10 +111,21 @@ class TestModel(object):
         self._assert_trainable()
         
         
+    @pytest.mark.parametrize("inex_mkmmd_lambda", [0.0, 0.5, 1.0])
+    def test_model_with_inex_mkmmd(self, inex_mkmmd_lambda, conll2004_demo, bert_with_tokenizer, device):
+        bert, tokenizer = bert_with_tokenizer
+        self.config = SpecificSpanExtractorConfig(decoder=SpecificSpanClsDecoderConfig(inex_mkmmd_lambda=inex_mkmmd_lambda, nested_sampling_rate=0.0, max_span_size=3), 
+                                                  bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, output_hidden_states=True), 
+                                                  span_bert_like=SpanBertLikeConfig(bert_like=bert, num_layers=2))
+        self._setup_case(conll2004_demo, device)
+        self._assert_batch_consistency()
+        self._assert_trainable()
+        
+        
     def test_prediction_without_gold(self, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
-        self.config = SpecificSpanExtractorConfig(bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False, output_hidden_states=True), 
-                                                  span_bert_like=SpanBertLikeConfig(bert_like=bert), 
+        self.config = SpecificSpanExtractorConfig(bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, output_hidden_states=True), 
+                                                  span_bert_like=SpanBertLikeConfig(bert_like=bert, num_layers=2), 
                                                   intermediate2=None)
         self._setup_case(conll2004_demo, device)
         

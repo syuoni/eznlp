@@ -300,6 +300,7 @@ class TokenSequence(object):
         self.token_sep = token_sep
         self.pad_token = pad_token
         self.none_token = none_token
+        assert len(self.token_sep) <= 1
         
     def __getattr__(self, name):
         # NOTE: `__attr__` method is only invoked if the attribute wasn't found the usual ways, so 
@@ -355,9 +356,9 @@ class TokenSequence(object):
         if sep_width is None:
             sep_width = len(self.token_sep)
         
-        token_lens = numpy.array([len(tok) for tok in self.token_list])
-        self.end = numpy.cumsum(token_lens + sep_width) - sep_width
-        self.start = self.end - token_lens
+        token_lens = [len(tok) for tok in self.token_list]
+        self.start = [0] + numpy.cumsum(numpy.array(token_lens) + sep_width).tolist()[:-1]
+        self.end = [s+l for s, l in zip(self.start, token_lens)]
         
         
     def _assert_for_softwords(self, tokenize_callback):
@@ -465,7 +466,11 @@ class TokenSequence(object):
         tokenized_text: List[str]
             A list of tokenized text. 
         """
-        token_list = [Token(tok_text, **kwargs) for tok_text in tokenized_text]
+        token_lens = [len(tok) for tok in tokenized_text]
+        token_starts = [0] + numpy.cumsum(numpy.array(token_lens) + len(token_sep)).tolist()[:-1]
+        token_ends = [s+l for s, l in zip(token_starts, token_lens)]
+        
+        token_list = [Token(tok_text, start=s, end=e, **kwargs) for tok_text, s, e in zip(tokenized_text, token_starts, token_ends)]
         tokens = cls(token_list, token_sep=token_sep, pad_token=pad_token, none_token=none_token)
         tokens.attach_additional_tags(additional_tags=additional_tags, additional_tok2tags=additional_tok2tags)
         return tokens
@@ -486,7 +491,11 @@ class TokenSequence(object):
             (3) spacy.language.Language, jieba.Tokenizer.cut, jieba.Tokenizer.tokenize: split text by given tokenize method. 
         """
         if tokenize_callback is None or (isinstance(tokenize_callback, str) and tokenize_callback.lower().startswith('space')):
-            token_list = [Token(tok_text, **kwargs) for tok_text in raw_text.split()]
+            # token_list = [Token(tok_text, **kwargs) for tok_text in raw_text.split()]
+            space_spans = [space.span() for space in re.finditer("\s+", raw_text)]
+            token_spans = [(s, e) for s, e in zip([0] + [s[1] for s in space_spans], 
+                                                  [s[0] for s in space_spans] + [len(raw_text)]) if s<e]
+            token_list = [Token(raw_text[s:e], start=s, end=e, **kwargs) for s, e in token_spans]
         elif isinstance(tokenize_callback, str) and tokenize_callback.lower().startswith('char'):
             token_list = [Token(tok_text, start=k, end=k+1, **kwargs) for k, tok_text in enumerate(raw_text)]
         elif isinstance(tokenize_callback, spacy.language.Language):
@@ -504,6 +513,17 @@ class TokenSequence(object):
         tokens = cls(token_list, token_sep=token_sep, pad_token=pad_token, none_token=none_token)
         tokens.attach_additional_tags(additional_tok2tags=additional_tok2tags)
         return tokens
+        
+        
+    def to_raw_text(self):
+        """Convert `TokenSequence` to raw text. 
+        """
+        if hasattr(self, 'start') and hasattr(self, 'end'):
+            token_sep = " " if len(self.token_sep) == 0 else self.token_sep
+            spaces = [token_sep*(e-s) for s, e in zip([0] + self.end[:-1], self.start)]
+            return "".join(t for space_token in zip(spaces, self.raw_text) for t in space_token)
+        else:
+            return self.token_sep.join(self.raw_text)
 
 
 

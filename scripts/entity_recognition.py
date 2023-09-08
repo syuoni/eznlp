@@ -11,6 +11,7 @@ import torch
 
 from eznlp import auto_device
 from eznlp.token import LexiconTokenizer
+from eznlp.utils.chunk import FLAT, NESTED, detect_nested, _is_ordered_nested
 from eznlp.nn.init import reinit_bert_like_
 from eznlp.dataset import Dataset
 from eznlp.config import ConfigDict
@@ -41,6 +42,10 @@ def parse_arguments(parser: argparse.ArgumentParser):
                             help="whether to pre-merge English characters in data")
     group_data.add_argument('--corrupt_rate', type=float, default=0.0, 
                             help="boundary corrupt rate")
+    group_data.add_argument('--remove_nested', default=False, action='store_true', 
+                            help="whether to remove nested entities in the train/dev splits")
+    group_data.add_argument('--eval_inex', default=False, action='store_true', 
+                            help="whether to evaluate internal/external-entity NER results")
     group_data.add_argument('--save_preds', default=False, action='store_true', 
                             help="whether to save predictions on the test split (typically in case without ground truth)")
     group_data.add_argument('--pipeline', default=False, action='store_true', 
@@ -68,6 +73,12 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                help="maximum span size")
     group_decoder.add_argument('--size_emb_dim', type=int, default=25, 
                                help="span size embedding dim")
+    group_decoder.add_argument('--inex_mkmmd_lambda', type=float, default=0.0, 
+                               help="weight of internal/external-entity MK-MMD loss")
+    group_decoder.add_argument('--inex_chunk_priority_training', type=str, default='confidence', 
+                               help="chunk priority in the training phase")
+    group_decoder.add_argument('--inex_chunk_priority_testing', type=str, default='confidence', 
+                               help="chunk priority in the testing phase")
     
     # Boundary selection
     group_decoder.add_argument('--no_biaffine', dest='use_biaffine', default=True, action='store_false', 
@@ -88,6 +99,8 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                help="Extra negative sampling rate surrounding positive samples")
     group_decoder.add_argument('--neg_sampling_surr_size', type=int, default=5, 
                                help="Extra negative sampling rate surrounding size")
+    group_decoder.add_argument('--nested_sampling_rate', type=float, default=1.0, 
+                               help="Sampling rate for spans nested in positive samples")
     
     group_decoder.add_argument('--sb_epsilon', type=float, default=0.0, 
                                help="Boundary smoothing loss epsilon")
@@ -219,11 +232,13 @@ def build_ER_config(args: argparse.Namespace):
                                                          neg_sampling_power_decay=args.neg_sampling_power_decay, 
                                                          neg_sampling_surr_rate=args.neg_sampling_surr_rate, 
                                                          neg_sampling_surr_size=args.neg_sampling_surr_size, 
+                                                         nested_sampling_rate=args.nested_sampling_rate, 
                                                          sb_epsilon=args.sb_epsilon, 
                                                          sb_size=args.sb_size, 
                                                          sb_adj_factor=args.sb_adj_factor, 
                                                          max_span_size=args.max_span_size, 
                                                          size_emb_dim=args.size_emb_dim, 
+                                                         inex_mkmmd_lambda=args.inex_mkmmd_lambda, 
                                                          in_drop_rates=drop_rates)
     elif args.ck_decoder == 'boundary_selection':
         decoder_config = BoundarySelectionDecoderConfig(use_biaffine=args.use_biaffine, 
@@ -235,6 +250,7 @@ def build_ER_config(args: argparse.Namespace):
                                                         neg_sampling_power_decay=args.neg_sampling_power_decay, 
                                                         neg_sampling_surr_rate=args.neg_sampling_surr_rate, 
                                                         neg_sampling_surr_size=args.neg_sampling_surr_size, 
+                                                        nested_sampling_rate=args.nested_sampling_rate, 
                                                         sb_epsilon=args.sb_epsilon, 
                                                         sb_size=args.sb_size,
                                                         sb_adj_factor=args.sb_adj_factor, 
@@ -249,12 +265,14 @@ def build_ER_config(args: argparse.Namespace):
                                                       neg_sampling_power_decay=args.neg_sampling_power_decay, 
                                                       neg_sampling_surr_rate=args.neg_sampling_surr_rate, 
                                                       neg_sampling_surr_size=args.neg_sampling_surr_size, 
+                                                      nested_sampling_rate=args.nested_sampling_rate, 
                                                       sb_epsilon=args.sb_epsilon, 
                                                       sb_size=args.sb_size,
                                                       sb_adj_factor=args.sb_adj_factor, 
                                                       max_span_size_cov_rate=args.sse_max_span_size_cov_rate, 
                                                       max_span_size=(args.sse_max_span_size if args.sse_max_span_size>0 else None), 
                                                       size_emb_dim=args.size_emb_dim, 
+                                                      inex_mkmmd_lambda=args.inex_mkmmd_lambda, 
                                                       # hid_drop_rates=drop_rates, 
                                                       )
     
@@ -272,7 +290,7 @@ def process_IE_data(train_data, dev_data, test_data, args, config):
         dev_data   = truecase_for_bert_like(dev_data,   verbose=args.log_terminal)
         test_data  = truecase_for_bert_like(test_data,  verbose=args.log_terminal)
     
-    if (config.bert_like is not None and args.dataset in ('conll2003', 'conll2012', 'genia', 'genia_yu2020acl', 'kbp2017') and args.doc_level):
+    if (config.bert_like is not None and args.dataset in ('conll2003', 'conll2003nff', 'conll2012', 'genia', 'genia_yu2020acl', 'kbp2017') and args.doc_level):
         if args.dataset.startswith('conll'):
             doc_key = 'doc_idx'
         elif args.dataset.startswith('genia'):
@@ -315,7 +333,30 @@ def process_IE_data(train_data, dev_data, test_data, args, config):
                 entry['tokens'].build_softwords(tokenizer.tokenize)
                 entry['tokens'].build_softlexicons(tokenizer.tokenize)
     
+    if args.remove_nested:
+        logger.info("Removing nested entities...")
+        for data in [train_data, dev_data, test_data]:
+            for entry in data:
+                entry['chunks_nested'] = detect_nested(entry['chunks'])
+                entry['chunks'] = list(set(entry['chunks']) - set(entry['chunks_nested']))
+    
     return train_data, dev_data, test_data
+
+
+
+def conll2003nff_post_process(chunks):
+    processed = []
+    for ck1 in chunks:
+        if ck1[0] == 'ORG' and any(_is_ordered_nested(ck1, ck2) and (ck1 != ck2) for ck2 in chunks):
+            processed.append(('LOC', *ck1[1:]))
+        elif ck1[0] == 'PER' and any((ck2[0] == 'PER') and _is_ordered_nested(ck1, ck2) and (ck1 != ck2) for ck2 in chunks):
+            continue
+        else:
+            processed.append(ck1)
+    return processed
+
+
+dataset2pp_callback = {"conll2003nff": conll2003nff_post_process}
 
 
 if __name__ == '__main__':
@@ -374,6 +415,10 @@ if __name__ == '__main__':
     logger.info(train_set.summary)
     
     logger.info(header_format("Building", sep='-'))
+    if args.remove_nested:
+        config.decoder.overlapping_level = FLAT
+        config.decoder.chunk_priority = args.inex_chunk_priority_training
+    
     model = config.instantiate().to(device)
     count_params(model)
     
@@ -399,10 +444,25 @@ if __name__ == '__main__':
     model = torch.load(f"{save_path}/{config.name}.pth", map_location=device)
     trainer = Trainer(model, device=device)
     
+    if args.remove_nested:
+        logger.info("Adding back nested entities...")
+        config.decoder.overlapping_level = NESTED
+        model.decoder.overlapping_level = NESTED
+        config.decoder.chunk_priority = args.inex_chunk_priority_testing
+        model.decoder.chunk_priority = args.inex_chunk_priority_testing
+        
+        for data in [dev_data, test_data]:
+            for entry in data:
+                entry['chunks'] = entry['chunks'] + entry['chunks_nested']
+                del entry['chunks_nested']
+        dev_set   = Dataset(dev_data,  train_set.config, training=False)
+        test_set  = Dataset(test_data, train_set.config, training=False)
+    
     logger.info("Evaluating on dev-set")
-    evaluate_entity_recognition(trainer, dev_set, batch_size=args.batch_size)
+    evaluate_entity_recognition(trainer, dev_set,  batch_size=args.batch_size, eval_inex=args.eval_inex)
     logger.info("Evaluating on test-set")
-    evaluate_entity_recognition(trainer, test_set, batch_size=args.batch_size, save_preds=args.save_preds)
+    evaluate_entity_recognition(trainer, test_set, batch_size=args.batch_size, eval_inex=args.eval_inex, 
+                                pp_callback=dataset2pp_callback.get(args.dataset, None), save_preds=args.save_preds)
     if args.save_preds:
         torch.save(test_data, f"{save_path}/test-data-with-preds.pth")
     
@@ -415,7 +475,7 @@ if __name__ == '__main__':
         
         for dataset, data in zip([train_set, dev_set, test_set], [train_data, dev_data, test_data]):
             set_chunks_pred = trainer.predict(dataset, batch_size=args.batch_size)
-            for ex, chunks_pred in zip(data, dataset):
+            for ex, chunks_pred in zip(data, set_chunks_pred):
                 ex['chunks_pred'] = chunks_pred
         
         torch.save((train_data, dev_data, test_data), f"{save_path}/data-for-pipeline.pth")
