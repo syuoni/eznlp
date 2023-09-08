@@ -244,11 +244,11 @@ def load_data(args: argparse.Namespace):
         
     elif args.dataset == 'nne':
         io = JsonIO(text_key='tokens', 
-                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', retain_keys=['org_id'], 
+                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', 
                     case_mode='None', number_mode='Zeros')
-        train_data = io.read("data/nne-shen2022acl/nne_train_context.json")
-        dev_data   = io.read("data/nne-shen2022acl/nne_dev_context.json")
-        test_data  = io.read("data/nne-shen2022acl/nne_test_context.json")
+        train_data = io.read("data/nne-ringland2019acl/train.json")
+        dev_data   = io.read("data/nne-ringland2019acl/dev.json")
+        test_data  = io.read("data/nne-ringland2019acl/test.json")
         
     elif args.dataset == 'conll2004':
         io = JsonIO(text_key='tokens', 

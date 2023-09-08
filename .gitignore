@@ -146,9 +146,15 @@ dmypy.json
 !/data/SciERC/*.py
 !/data/GENIA/*.py
 !/data/genia-yu2020acl/*.py
+!/data/nne-ringland2019acl/*.py
 
 !/publications/
 /publications/*
-!publications/framework/scheme.pdf
+!/publications/*/
+/publications/*/*
+!/publications/framework/scheme.pdf
+!/publications/framework/HwaMei-500.md
+!/publications/boundary-smoothing/slides.pdf
+!/publications/boundary-smoothing/poster.pdf
 
 /test_script.py

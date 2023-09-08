@@ -1,5 +1,5 @@
-# Deep Span Representations for Named Entity Recognition
-This page describes the materials and code for "Deep Span Representations for Named Entity Recognition". 
+# Boundary Smoothing for Named Entity Recognition
+This page describes the materials and code for "Boundary Smoothing for Named Entity Recognition". 
 
 
 ## Setup
@@ -9,14 +9,14 @@ Setup an environment and install the dependencies and `eznlp` according to [READ
 
 ### Download and process datasets
 * English datasets
-    * ACE 2004: Download from https://catalog.ldc.upenn.edu/LDC2005T09; Process following Lu and Roth (2015).
-    * ACE 2005: Download from https://catalog.ldc.upenn.edu/LDC2006T06; Process following Lu and Roth (2015).
-    * GENIA: Download from http://www.geniaproject.org/genia-corpus; Process following Lu and Roth (2015).
-    * KBP 2017: Download from https://catalog.ldc.upenn.edu/LDC2017D55; Process following Lin et al. (2019) and Shen et al. (2022).
     * CoNLL 2003.
     * OntoNotes 5: Download from https://catalog.ldc.upenn.edu/LDC2013T19; Process following Pradhan et al. (2013).
+    * ACE 2004: Download from https://catalog.ldc.upenn.edu/LDC2005T09; Process following Lu and Roth (2015).
+    * ACE 2005: Download from https://catalog.ldc.upenn.edu/LDC2006T06; Process following Lu and Roth (2015).
 
 * Chinese datasets
+    * OntoNotes 4: Download from https://catalog.ldc.upenn.edu/LDC2011T03; Process following Che et al. (2013).
+    * MSRA: Download from https://github.com/v-mipeng/LexiconAugmentedNER.
     * Weibo NER: Download from https://github.com/hltcoe/golden-horse.
     * Resume NER: Download from https://github.com/jiesutd/LatticeLSTM.
 
@@ -50,23 +50,15 @@ For English datasets:
 
 ```bash
 $ python scripts/entity_recognition.py @scripts/options/with_bert.opt \
-    --dataset {ace2004 | ace2005 | genia | kbp2017 | conll2003 | conll2012} \
-    --doc_level \
-    --pre_subtokenize \
     --num_epochs 50 \
-    --lr 2e-3 \
-    --finetune_lr 2e-5 \
     --batch_size 48 \
     --num_grad_acc_steps 1 \
-    --ck_decoder specific_span \
-    --affine_dim 300 \
-    --sb_epsilon 0.1 \
-    --sse_no_share_weights_ext \
-    --sse_no_share_interm2 \
-    --sse_max_span_size {10 | 15 | 20 | 25} \
-    --bert_arch RoBERTa_base \
+    --dataset {conll2003 | conll2012 | ace2004 | ace2005} \
+    --ck_decoder boundary_selection \
+    --sb_epsilon {0.0 | 0.1 | 0.2 | 0.3} \
+    --sb_size {1 | 2} \
+    --bert_arch {RoBERTa_base | RoBERTa_large | BERT_base | BERT_large} \
     --use_interm2 \
-    --hid_dim 400 \
     [options]
 ```
 
@@ -74,22 +66,15 @@ For Chinese datasets:
 
 ```bash
 $ python scripts/entity_recognition.py @scripts/options/with_bert.opt \
-    --dataset {WeiboNER | ResumeNER} \
-    --pre_merge_enchars \
     --num_epochs 50 \
-    --lr 2e-3 \
-    --finetune_lr 2e-5 \
     --batch_size 48 \
     --num_grad_acc_steps 1 \
-    --ck_decoder specific_span \
-    --affine_dim 300 \
-    --sb_epsilon 0.1 \
-    --sse_no_share_weights_ext \
-    --sse_no_share_interm2 \
-    --sse_max_span_size {10 | 15 | 20 | 25} \
-    --bert_arch MacBERT_base \
+    --dataset {ontonotesv4_zh | SIGHAN2006 | WeiboNER | ResumeNER} \
+    --ck_decoder boundary_selection \
+    --sb_epsilon {0.0 | 0.1 | 0.2 | 0.3} \
+    --sb_size {1 | 2} \
+    --bert_arch {BERT_base_wwm | MacBERT_base | MacBERT_large} \
     --use_interm2 \
-    --hid_dim 400 \
     [options]
 ```
 
