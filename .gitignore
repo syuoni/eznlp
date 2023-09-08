@@ -145,6 +145,7 @@ dmypy.json
 !/data/ace-luan2019naacl/*.py
 !/data/GENIA/*.py
 !/data/genia-yu2020acl/*.py
+!/data/nne-ringland2019acl/*.py
 
 !/publications/
 /publications/*
