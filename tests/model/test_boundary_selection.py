@@ -52,16 +52,19 @@ class TestModel(object):
         
     @pytest.mark.parametrize("red_arch", ['FFN', 'LSTM'])
     @pytest.mark.parametrize("size_emb_dim", [25, 0])
-    @pytest.mark.parametrize("fl_gamma, sl_epsilon, sb_epsilon, sb_size", [(0.0, 0.0, 0.0, 1), 
-                                                                           (2.0, 0.0, 0.0, 1), 
-                                                                           (0.0, 0.1, 0.0, 1), 
-                                                                           (0.0, 0.0, 0.1, 1), 
-                                                                           (0.0, 0.0, 0.1, 2), 
-                                                                           (0.0, 0.0, 0.1, 3), 
-                                                                           (0.0, 0.1, 0.1, 1)])
-    def test_model(self, red_arch, size_emb_dim, fl_gamma, sl_epsilon, sb_epsilon, sb_size, conll2004_demo, device):
+    @pytest.mark.parametrize("fl_gamma, sl_epsilon, sb_epsilon, sb_size, multilabel", 
+                             [(0.0, 0.0, 0.0, 1, False), 
+                              (2.0, 0.0, 0.0, 1, False), 
+                              (0.0, 0.1, 0.0, 1, False), 
+                              (0.0, 0.0, 0.1, 1, False), 
+                              (0.0, 0.0, 0.1, 2, False), 
+                              (0.0, 0.0, 0.1, 3, False), 
+                              (0.0, 0.1, 0.1, 1, False), 
+                              (0.0, 0.0, 0.0, 1, True)])
+    def test_model(self, red_arch, size_emb_dim, fl_gamma, sl_epsilon, sb_epsilon, sb_size, multilabel, conll2004_demo, device):
         self.config = ExtractorConfig(decoder=BoundarySelectionDecoderConfig(reduction=EncoderConfig(arch=red_arch), 
                                                                              size_emb_dim=size_emb_dim, 
+                                                                             multilabel=multilabel, 
                                                                              fl_gamma=fl_gamma, sl_epsilon=sl_epsilon, sb_epsilon=sb_epsilon, sb_size=sb_size))
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()

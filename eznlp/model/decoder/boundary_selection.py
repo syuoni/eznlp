@@ -131,7 +131,10 @@ class BoundarySelectionDecoderConfig(SingleDecoderConfigBase, BoundariesDecoderM
             return super().criterion
         
     def instantiate_criterion(self, **kwargs):
-        if self.criterion.lower().startswith(('sb', 'sl')):
+        if self.multilabel:
+            # `BCEWithLogitsLoss` allows the target to be any continuous value in [0, 1]
+            return torch.nn.BCEWithLogitsLoss(**kwargs)
+        elif self.criterion.lower().startswith(('sb', 'sl')):
             # For boundary/label smoothing, the `Boundaries` object has been accordingly changed; 
             # hence, do not use `SmoothLabelCrossEntropyLoss`
             return SoftLabelCrossEntropyLoss(**kwargs)
@@ -161,6 +164,8 @@ class BoundarySelectionDecoderConfig(SingleDecoderConfigBase, BoundariesDecoderM
 class BoundarySelectionDecoder(DecoderBase, BoundariesDecoderMixin):
     def __init__(self, config: BoundarySelectionDecoderConfig):
         super().__init__()
+        self.multilabel = config.multilabel
+        self.confidence_threshold = config.confidence_threshold
         self.none_label = config.none_label
         self.idx2label = config.idx2label
         self.overlapping_level = config.overlapping_level
@@ -245,12 +250,22 @@ class BoundarySelectionDecoder(DecoderBase, BoundariesDecoderMixin):
         for curr_scores, boundaries_obj, curr_len in zip(batch_scores, batch.boundaries_objs, batch.seq_lens.cpu().tolist()):
             curr_non_mask = self._get_span_non_mask(curr_len)
             
-            confidences, label_ids = curr_scores[:curr_len, :curr_len][curr_non_mask].softmax(dim=-1).max(dim=-1)
-            labels = [self.idx2label[i] for i in label_ids.cpu().tolist()]
-            chunks = [(label, start, end) for label, (start, end) in zip(labels, _spans_from_upper_triangular(curr_len)) if label != self.none_label]
-            confidences = [conf for label, conf in zip(labels, confidences.cpu().tolist()) if label != self.none_label]
-            assert len(confidences) == len(chunks)
+            if not self.multilabel:
+                confidences, label_ids = curr_scores[:curr_len, :curr_len][curr_non_mask].softmax(dim=-1).max(dim=-1)
+                labels = [self.idx2label[i] for i in label_ids.cpu().tolist()]
+                chunks = [(label, start, end) for label, (start, end) in zip(labels, _spans_from_upper_triangular(curr_len)) if label != self.none_label]
+                confidences = [conf for label, conf in zip(labels, confidences.cpu().tolist()) if label != self.none_label]
+            else:
+                all_confidences = curr_scores[:curr_len, :curr_len][curr_non_mask].sigmoid()
+                chunks, confidences = [], []
+                for span_confidences, (start, end) in zip(all_confidences.cpu().tolist(), _spans_from_upper_triangular(curr_len)):
+                    labels = [self.idx2label[i] for i, conf in enumerate(span_confidences) if conf >= self.confidence_threshold]
+                    span_confidences = [conf for conf in span_confidences if conf >= self.confidence_threshold]
+                    if self.none_label not in labels:
+                        chunks.extend([(label, start, end) for label in labels])
+                        confidences.extend(span_confidences)
             
+            assert len(confidences) == len(chunks)
             chunks = self._filter(chunks, confidences, boundaries_obj)
             batch_chunks.append(chunks)
         return batch_chunks

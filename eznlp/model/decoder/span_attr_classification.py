@@ -90,9 +90,8 @@ class SpanAttrClassificationDecoderConfig(SingleDecoderConfigBase, ChunkSinglesD
         self.idx2ck_label = kwargs.pop('idx2ck_label', None)
         self.filter_by_labels = kwargs.pop('filter_by_labels', True)
         
-        self.multihot = True
-        self.confidence_threshold = kwargs.pop('confidence_threshold', 0.5)
         super().__init__(**kwargs)
+        self.multilabel = True
         
         
     @property

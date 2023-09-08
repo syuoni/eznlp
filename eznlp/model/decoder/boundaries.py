@@ -160,7 +160,7 @@ class Boundaries(TargetWrapper):
                 self.non_mask[start, start] = True
         
         if self.chunks is not None:
-            if config.sb_epsilon <= 0 and config.sl_epsilon <= 0:
+            if (not config.multilabel) and config.sb_epsilon <= 0 and config.sl_epsilon <= 0:
                 # Cross entropy loss for non-smoothing
                 self.label_ids = torch.full((self.num_tokens, self.num_tokens), config.none_idx, dtype=torch.long)
                 for label, start, end in self.chunks:
@@ -180,11 +180,15 @@ class Boundaries(TargetWrapper):
                         # Absorb the probabilities assigned to illegal positions
                         self.label_ids[start, end-1, label_id] += eps_per_span * (dist * 4 - len(sur_spans))
                 
-                # In very rare cases of some datasets (e.g., ACE 2005), multiple entities may have the same span but different types
-                overflow_indic = (self.label_ids.sum(dim=-1) > 1)
-                if overflow_indic.any().item():
-                    self.label_ids[overflow_indic] = torch.nn.functional.normalize(self.label_ids[overflow_indic], p=1, dim=-1)
-                self.label_ids[:, :, config.none_idx] = 1 - self.label_ids.sum(dim=-1)
+                self.label_ids.clamp_(max=1)
+                if not config.multilabel:
+                    # In very rare cases of some datasets (e.g., ACE 2005), multiple entities may have the same span but different types
+                    overflow_indic = (self.label_ids.sum(dim=-1) > 1)
+                    if overflow_indic.any().item():
+                        self.label_ids[overflow_indic] = torch.nn.functional.normalize(self.label_ids[overflow_indic], p=1, dim=-1)
+                    self.label_ids[:, :, config.none_idx] = 1 - self.label_ids.sum(dim=-1)
+                else:
+                    self.label_ids[:, :, config.none_idx] = 1 - self.label_ids.sum(dim=-1).clamp(max=1)
                 
                 if config.sl_epsilon > 0:
                     # Do not smooth to `<none>` label

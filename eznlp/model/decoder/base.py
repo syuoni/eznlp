@@ -47,6 +47,9 @@ class SingleDecoderConfigBase(Config):
     def __init__(self, **kwargs):
         self.in_dim = kwargs.pop('in_dim', None)
         
+        # whether to allow multi-label prediction
+        self.multilabel = kwargs.pop('multilabel', False)
+        self.confidence_threshold = kwargs.pop('confidence_threshold', 0.5)
         # focal loss `gamma`: 0 fallback to cross entropy
         self.fl_gamma = kwargs.pop('fl_gamma', 0.0) 
         # label smoothing `epsilon`: 0 fallback to cross entropy
@@ -55,9 +58,8 @@ class SingleDecoderConfigBase(Config):
         
     @property
     def criterion(self):
-        if getattr(self, 'multihot', False):
+        if self.multilabel:
             return "BCE"
-        
         elif self.fl_gamma > 0:
             return f"FL({self.fl_gamma:.2f})"
         elif self.sl_epsilon > 0:
