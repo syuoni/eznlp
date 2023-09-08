@@ -126,6 +126,11 @@ class TestJsonIO(object):
         assert len(test_data) == 3_762
         assert sum(len(ex['chunks']) for ex in test_data) == 21_196
         
+        # Multiple entities may have the same span but different types
+        assert sum([len(ex['chunks']) - len(set((s, e) for _, s, e in ex['chunks'])) for ex in train_data]) == 16_996
+        assert sum([len(ex['chunks']) - len(set((s, e) for _, s, e in ex['chunks'])) for ex in dev_data]) == 801
+        assert sum([len(ex['chunks']) - len(set((s, e) for _, s, e in ex['chunks'])) for ex in test_data]) == 1612
+        
         assert max(end-start for ex in train_data+dev_data+test_data for _, start, end in ex['chunks']) == 16
         
         
