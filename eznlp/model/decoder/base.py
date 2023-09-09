@@ -49,7 +49,7 @@ class SingleDecoderConfigBase(Config):
         
         # whether to allow multi-label prediction
         self.multilabel = kwargs.pop('multilabel', False)
-        self.confidence_threshold = kwargs.pop('confidence_threshold', 0.5)
+        self.conf_thresh = kwargs.pop('conf_thresh', 0.5)
         # focal loss `gamma`: 0 fallback to cross entropy
         self.fl_gamma = kwargs.pop('fl_gamma', 0.0) 
         # label smoothing `epsilon`: 0 fallback to cross entropy

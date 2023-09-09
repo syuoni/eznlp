@@ -165,7 +165,7 @@ class BoundarySelectionDecoder(DecoderBase, BoundariesDecoderMixin):
     def __init__(self, config: BoundarySelectionDecoderConfig):
         super().__init__()
         self.multilabel = config.multilabel
-        self.confidence_threshold = config.confidence_threshold
+        self.conf_thresh = config.conf_thresh
         self.none_label = config.none_label
         self.idx2label = config.idx2label
         self.overlapping_level = config.overlapping_level
@@ -257,13 +257,22 @@ class BoundarySelectionDecoder(DecoderBase, BoundariesDecoderMixin):
                 confidences = [conf for label, conf in zip(labels, confidences.cpu().tolist()) if label != self.none_label]
             else:
                 all_confidences = curr_scores[:curr_len, :curr_len][curr_non_mask].sigmoid()
-                chunks, confidences = [], []
-                for span_confidences, (start, end) in zip(all_confidences.cpu().tolist(), _spans_from_upper_triangular(curr_len)):
-                    labels = [self.idx2label[i] for i, conf in enumerate(span_confidences) if conf >= self.confidence_threshold]
-                    span_confidences = [conf for conf in span_confidences if conf >= self.confidence_threshold]
-                    if self.none_label not in labels:
-                        chunks.extend([(label, start, end) for label in labels])
-                        confidences.extend(span_confidences)
+                # Zero-out all spans according to <none> labels
+                all_confidences[all_confidences[:,self.none_idx] > (1-self.conf_thresh)] = 0
+                # Zero-out <none> labels for all spans
+                all_confidences[:,self.none_idx] = 0
+                all_spans = list(_spans_from_upper_triangular(curr_len))
+                assert all_confidences.size(0) == len(all_spans)
+                
+                all_confidences_list = all_confidences.cpu().tolist()
+                pos_entries = torch.nonzero(all_confidences > self.conf_thresh).cpu().tolist()
+                # In the early training stage, the chunk-decoder may produce too many predicted chunks
+                MAX_NUM_CHUNKS = 500
+                if len(pos_entries) > MAX_NUM_CHUNKS:
+                    pos_entries = pos_entries[:MAX_NUM_CHUNKS]
+                
+                chunks = [(self.idx2label[i], *all_spans[sidx]) for sidx, i in pos_entries]
+                confidences = [all_confidences_list[sidx][i] for sidx, i in pos_entries]
             
             assert len(confidences) == len(chunks)
             chunks = self._filter(chunks, confidences, boundaries_obj)
