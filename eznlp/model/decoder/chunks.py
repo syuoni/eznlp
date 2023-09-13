@@ -239,3 +239,6 @@ class ChunkSingles(TargetWrapper):
                 
                 # Assign `<none>` label
                 self.cs2label_id[:, config.none_idx] = (self.cs2label_id == 0).all(dim=1)
+                
+                # One-hot labels for BCE loss
+                self.ck_label_ids_gold = torch.nn.functional.one_hot(self.ck_label_ids_gold, num_classes=config.ck_voc_dim).float()
