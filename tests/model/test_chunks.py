@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 import pytest
+import copy
+import torch
 
 from eznlp.model import SpanRelClassificationDecoderConfig, SpanAttrClassificationDecoderConfig
 from eznlp.utils.relation import detect_inverse
@@ -81,6 +83,7 @@ def test_chunk_singles_obj(training, pipeline, EAR_data_demo):
     chunks, attributes = entry['chunks'], entry['attributes']
     
     config = SpanAttrClassificationDecoderConfig()
+    assert config.multilabel
     config.build_vocab(EAR_data_demo)
     cs_obj = config.exemplify(entry, training=training)['cs_obj']
     
@@ -94,11 +97,11 @@ def test_chunk_singles_obj(training, pipeline, EAR_data_demo):
         assert (cs_obj.cs2label_id.sum(dim=0) >= 1).all().item()
         assert all(cs_obj.cs2label_id[cs_obj.chunks.index(chunk), config.label2idx[label]] == 1 for label, chunk in attributes)
         
-        attributes_retr = []
-        for chunk, ck_confidences in zip(cs_obj.chunks, cs_obj.cs2label_id):
-            labels_retr = [config.idx2label[i] for i, c in enumerate(ck_confidences.tolist()) if c >= config.confidence_threshold]
-            if config.none_label not in labels_retr:
-                attributes_retr.extend([(label, chunk) for label in labels_retr])
+        all_confidences = copy.deepcopy(cs_obj.cs2label_id)
+        all_confidences[all_confidences[:,config.none_idx] > (1-config.conf_thresh)] = 0
+        all_confidences[:,config.none_idx] = 0
+        pos_entries = torch.nonzero(all_confidences > config.conf_thresh).cpu().tolist()
+        attributes_retr = [(config.idx2label[i], cs_obj.chunks[cidx]) for cidx, i in pos_entries]
         assert set(attributes_retr) == set(attributes)
         
     elif pipeline and not training:

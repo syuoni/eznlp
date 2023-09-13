@@ -215,18 +215,27 @@ class ChunkSingles(TargetWrapper):
             self.non_mask = non_mask_rate.bernoulli().bool() 
         
         if self.attributes is not None:
-            # `torch.nn.BCEWithLogitsLoss` uses float tensor as target
-            self.cs2label_id = torch.zeros(num_chunks, config.voc_dim, dtype=torch.float)
-            for label, chunk in self.attributes:
-                if chunk in self.chunk2idx:
-                    k = self.chunk2idx[chunk]
-                    self.cs2label_id[k, config.label2idx[label]] = 1
-                else:
-                    # `head`/`tail` may not appear in `chunks` in case of:
-                    # (1) in the evaluation phase where `chunks_gold` are not allowed to access. 
-                    # In this case, `cp2label_id` is only for forwarding to a "fake" loss, but not for backwarding. 
-                    # (2) `head`/`tail` is filtered out because of exceeding `max_span_size`.
-                    assert (not self.training) or (chunk[2]-chunk[1] > self.max_span_size)
-            
-            # Assign `<none>` label
-            self.cs2label_id[:, config.none_idx] = (self.cs2label_id == 0).all(dim=1)
+            if not config.multilabel:
+                self.cs2label_id = torch.full((num_chunks, ), config.none_idx, dtype=torch.long)
+                for label, chunk in self.attributes:
+                    if chunk in self.chunk2idx:
+                        k = self.chunk2idx[chunk]
+                        self.cs2label_id[k] = config.label2idx[label]
+                    else:
+                        assert (not self.training) or (chunk[2]-chunk[1] > self.max_span_size)
+            else:
+                # `torch.nn.BCEWithLogitsLoss` uses float tensor as target
+                self.cs2label_id = torch.zeros(num_chunks, config.voc_dim, dtype=torch.float)
+                for label, chunk in self.attributes:
+                    if chunk in self.chunk2idx:
+                        k = self.chunk2idx[chunk]
+                        self.cs2label_id[k, config.label2idx[label]] = 1
+                    else:
+                        # `head`/`tail` may not appear in `chunks` in case of:
+                        # (1) in the evaluation phase where `chunks_gold` are not allowed to access. 
+                        # In this case, `cp2label_id` is only for forwarding to a "fake" loss, but not for backwarding. 
+                        # (2) `head`/`tail` is filtered out because of exceeding `max_span_size`.
+                        assert (not self.training) or (chunk[2]-chunk[1] > self.max_span_size)
+                
+                # Assign `<none>` label
+                self.cs2label_id[:, config.none_idx] = (self.cs2label_id == 0).all(dim=1)

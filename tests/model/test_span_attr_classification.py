@@ -53,8 +53,9 @@ class TestModel(object):
         
     @pytest.mark.parametrize("agg_mode", ['max_pooling', 'multiplicative_attention'])
     @pytest.mark.parametrize("label_emb_dim", [25, 0])
-    def test_model(self, agg_mode, label_emb_dim, HwaMei_demo, device):
-        self.config = ExtractorConfig(decoder=SpanAttrClassificationDecoderConfig(agg_mode=agg_mode, label_emb_dim=label_emb_dim))
+    @pytest.mark.parametrize("multilabel", [True, False])
+    def test_model(self, agg_mode, label_emb_dim, multilabel, HwaMei_demo, device):
+        self.config = ExtractorConfig(decoder=SpanAttrClassificationDecoderConfig(agg_mode=agg_mode, label_emb_dim=label_emb_dim, multilabel=multilabel))
         self._setup_case(HwaMei_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()

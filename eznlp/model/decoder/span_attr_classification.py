@@ -90,8 +90,9 @@ class SpanAttrClassificationDecoderConfig(SingleDecoderConfigBase, ChunkSinglesD
         self.idx2ck_label = kwargs.pop('idx2ck_label', None)
         self.filter_by_labels = kwargs.pop('filter_by_labels', True)
         
+        # change the default as multi-label classification
+        kwargs['multilabel'] = kwargs.pop('multilabel', True)
         super().__init__(**kwargs)
-        self.multilabel = True
         
         
     @property
@@ -126,6 +127,8 @@ class SpanAttrClassificationDecoder(DecoderBase, ChunkSinglesDecoderMixin):
         super().__init__()
         self.max_size_id = config.max_size_id
         self.neg_sampling_rate = config.neg_sampling_rate
+        self.multilabel = config.multilabel
+        self.conf_thresh = config.conf_thresh
         self.none_label = config.none_label
         self.idx2label = config.idx2label
         self.ck_none_label = config.ck_none_label
@@ -151,7 +154,6 @@ class SpanAttrClassificationDecoder(DecoderBase, ChunkSinglesDecoderMixin):
         reinit_layer_(self.hid2logit, 'sigmoid')
         
         self.criterion = config.instantiate_criterion(reduction='sum')
-        self.confidence_threshold = config.confidence_threshold
         
         
     def assign_chunks_pred(self, batch: Batch, batch_chunks_pred: List[List[tuple]]):
@@ -219,14 +221,27 @@ class SpanAttrClassificationDecoder(DecoderBase, ChunkSinglesDecoderMixin):
         batch_attributes = []
         for logits, cs_obj in zip(batch_logits, batch.cs_objs):
             if len(cs_obj.chunks) == 0:
-                attributes = []
+                attributes, confidences = [], []
+            elif not self.multilabel:
+                confidences, label_ids = logits.softmax(dim=-1).max(dim=-1)
+                labels = [self.idx2label[i] for i in label_ids.cpu().tolist()]
+                attributes = [(label, chunk) for label, chunk in zip(labels, cs_obj.chunks) if label != self.none_label]
+                confidences = [conf for label, conf in zip(labels, confidences.cpu().tolist()) if label != self.none_label]
             else:
-                confidences = logits.sigmoid()
-                attributes = []
-                for chunk, ck_confidences in zip(cs_obj.chunks, confidences):
-                    labels = [self.idx2label[i] for i, c in enumerate(ck_confidences.cpu().tolist()) if c >= self.confidence_threshold]
-                    if self.none_label not in labels:
-                        attributes.extend([(label, chunk) for label in labels])
-                attributes = [(label, chunk) for label, chunk in attributes if (not self.filter_by_labels or ((label, chunk[0]) in self.existing_ac_labels))]
+                all_confidences = logits.sigmoid()
+                # Zero-out all entities according to <none> labels
+                all_confidences[all_confidences[:,self.none_idx] > (1-self.conf_thresh)] = 0
+                # Zero-out <none> labels for all entities
+                all_confidences[:,self.none_idx] = 0
+                assert all_confidences.size(0) == len(cs_obj.chunks)
+                
+                all_confidences_list = all_confidences.cpu().tolist()
+                pos_entries = torch.nonzero(all_confidences > self.conf_thresh).cpu().tolist()
+                
+                attributes = [(self.idx2label[i], cs_obj.chunks[cidx]) for cidx, i in pos_entries]
+                confidences = [all_confidences_list[cidx][i] for cidx, i in pos_entries]
+            
+            assert len(confidences) == len(attributes)
+            attributes = [(label, chunk) for label, chunk in attributes if (not self.filter_by_labels or ((label, chunk[0]) in self.existing_ac_labels))]
             batch_attributes.append(attributes)
         return batch_attributes
