@@ -58,24 +58,27 @@ class SingleDecoderConfigBase(Config):
         
     @property
     def criterion(self):
-        if self.multilabel:
-            return "BCE"
-        elif self.fl_gamma > 0:
-            return f"FL({self.fl_gamma:.2f})"
+        if self.fl_gamma > 0:
+            crit_name = f"FL({self.fl_gamma:.2f})"
         elif self.sl_epsilon > 0:
-            return f"SL({self.sl_epsilon:.2f})"
+            crit_name = f"SL({self.sl_epsilon:.2f})"
         else:
-            return "CE"
+            crit_name = "CE"
+        return f"B{crit_name}" if self.multilabel else crit_name
         
     def instantiate_criterion(self, **kwargs):
-        if self.criterion.lower().startswith('bce'):
-            return torch.nn.BCEWithLogitsLoss(**kwargs)
-        elif self.criterion.lower().startswith('fl'):
-            return FocalLoss(gamma=self.fl_gamma, **kwargs)
-        elif self.criterion.lower().startswith('sl'):
-            return SmoothLabelCrossEntropyLoss(epsilon=self.sl_epsilon, **kwargs)
+        if self.criterion.lower().startswith('b'):
+            if self.criterion.lower().startswith('bce'):
+                return torch.nn.BCEWithLogitsLoss(**kwargs)
+            else:
+                raise ValueError(f"Not implemented criterion: {self.criterion}")
         else:
-            return torch.nn.CrossEntropyLoss(**kwargs)
+            if self.criterion.lower().startswith('fl'):
+                return FocalLoss(gamma=self.fl_gamma, **kwargs)
+            elif self.criterion.lower().startswith('sl'):
+                return SmoothLabelCrossEntropyLoss(epsilon=self.sl_epsilon, **kwargs)
+            else:
+                return torch.nn.CrossEntropyLoss(**kwargs)
 
 
 

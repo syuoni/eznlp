@@ -126,7 +126,8 @@ class BoundarySelectionDecoderConfig(SingleDecoderConfigBase, BoundariesDecoderM
     @property
     def criterion(self):
         if self.sb_epsilon > 0:
-            return f"SB({self.sb_epsilon:.2f}, {self.sb_size})"
+            crit_name = f"SB({self.sb_epsilon:.2f}, {self.sb_size})"
+            return f"B{crit_name}" if self.multilabel else crit_name
         else:
             return super().criterion
         
