@@ -145,9 +145,9 @@ class MaskedSpanBertLikeEncoder(torch.nn.Module):
     def forward(self, 
                 all_hidden_states: List[torch.Tensor], 
                 span_size_ids: torch.Tensor, 
-                cp_dist_ids: torch.Tensor, 
                 ck2tok_mask: torch.Tensor, 
-                ctx2tok_mask: torch.Tensor, 
+                cp_dist_ids: torch.Tensor=None, 
+                ctx2tok_mask: torch.Tensor=None, 
                 pair2tok_mask: torch.Tensor=None):
         # Remove the unused layers of hidden states
         all_hidden_states = all_hidden_states[-(self.num_layers+1):]
@@ -161,15 +161,16 @@ class MaskedSpanBertLikeEncoder(torch.nn.Module):
         span_query_outs = self._forward_aggregation(all_hidden_states, init_mask=ck2tok_mask, attention_mask=ck2tok_mask, init_embedded=span_init_embedded)
         all_last_query_states['span_query_state'] = span_query_outs['last_query_state']
         
-        if pair2tok_mask is None:
-            ctx_query_outs = self._forward_aggregation(all_hidden_states, init_mask=ck2tok_mask, attention_mask=ctx2tok_mask, init_embedded=span_init_embedded)
-        else:
-            ctx_init_embedded = None
-            if hasattr(self, 'dist_embedding'): 
-                # dist_embedded: (batch, num_pairs, hid_dim)
-                dist_embedded = self.dist_embedding(cp_dist_ids)
-                ctx_init_embedded = dist_embedded 
-            ctx_query_outs = self._forward_aggregation(all_hidden_states, init_mask=pair2tok_mask, attention_mask=ctx2tok_mask, init_embedded=ctx_init_embedded)
-        all_last_query_states['ctx_query_state'] = ctx_query_outs['last_query_state']
+        if ctx2tok_mask is not None:
+            if pair2tok_mask is None:
+                ctx_query_outs = self._forward_aggregation(all_hidden_states, init_mask=ck2tok_mask, attention_mask=ctx2tok_mask, init_embedded=span_init_embedded)
+            else:
+                ctx_init_embedded = None
+                if hasattr(self, 'dist_embedding'): 
+                    # dist_embedded: (batch, num_pairs, hid_dim)
+                    dist_embedded = self.dist_embedding(cp_dist_ids)
+                    ctx_init_embedded = dist_embedded 
+                ctx_query_outs = self._forward_aggregation(all_hidden_states, init_mask=pair2tok_mask, attention_mask=ctx2tok_mask, init_embedded=ctx_init_embedded)
+            all_last_query_states['ctx_query_state'] = ctx_query_outs['last_query_state']
         
         return all_last_query_states
