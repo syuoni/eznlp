@@ -36,8 +36,8 @@ class MaskedSpanExtractorConfig(ModelConfigBase):
     def build_vocabs_and_dims(self, *partitions):
         self.decoder.in_dim = self.bert_like.out_dim
         self.decoder.build_vocab(*partitions)
-        self.masked_span_bert_like.max_size_id = self.decoder.max_size_id
-        self.masked_span_bert_like.max_dist_id = getattr(self.decoder, 'max_dist_id', 0)
+        self.masked_span_bert_like.max_size_id = getattr(self.decoder, 'max_size_id', -1)
+        self.masked_span_bert_like.max_dist_id = getattr(self.decoder, 'max_dist_id', -1)
         
         
     def exemplify(self, entry: dict, training: bool=True):
