@@ -402,16 +402,18 @@ def load_data(args: argparse.Namespace):
                     attribute_key='attributes', attribute_type_key='type', attribute_chunk_key='entity', 
                     relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
                     is_whole_piece=False, retain_keys=['visit_id', 'split'], encoding='utf-8', token_sep="", pad_token="")
-        train_data = io.read("data/HwaMei/v20211230/train.json")
-        dev_data   = io.read("data/HwaMei/v20211230/dev.json")
-        test_data  = io.read("data/HwaMei/v20211230/test.json")
+        train_data = io.read("data/HwaMei/v20230329/train-deid.json")
+        dev_data   = io.read("data/HwaMei/v20230329/dev-deid.json")
+        test_data  = io.read("data/HwaMei/v20230329/test-deid.json")
         
         size = int(args.dataset.split('_')[-1])
         if size > 500:
-            with open("data/HwaMei/v20211230/splits.json", 'r', encoding='utf-8') as f:
-                splits = json.load(f)
-            ext_ids = (splits['reserve'] + splits['iaa'])[:size-500]
-            ext_data = io.read("data/HwaMei/v20211230/reserve.json") + io.read("data/HwaMei/v20211230/iaa.json")
+            ext_data = io.read("data/HwaMei/v20230329/reserve-deid.json") + io.read("data/HwaMei/v20230329/iaa-deid.json")
+            ext_ids = set()
+            for entry in ext_data:
+                ext_ids.add(entry['visit_id'])
+                if len(ext_ids) == size-500:
+                    break
             ext_data = [entry for entry in ext_data if entry['visit_id'] in ext_ids]
             train_data += ext_data
         assert len(set([entry['visit_id'] for entry in train_data])) == size - 200
@@ -419,12 +421,12 @@ def load_data(args: argparse.Namespace):
     elif (args.dataset.startswith('HwaMei') and 'Privacy' in args.dataset):
         io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', chunk_text_key=None, 
                     is_whole_piece=False, retain_keys=['visit_id', 'split'], encoding='utf-8', token_sep="", pad_token="")
-        train_data = io.read("data/HwaMei/v20221201/privacy-train.json")
-        dev_data   = io.read("data/HwaMei/v20221201/privacy-dev.json")
-        test_data  = io.read("data/HwaMei/v20221201/privacy-test.json")
+        train_data = io.read("data/HwaMei/v20230329/privacy-train-deid.json")
+        dev_data   = io.read("data/HwaMei/v20230329/privacy-dev-deid.json")
+        test_data  = io.read("data/HwaMei/v20230329/privacy-test-deid.json")
         
         if 'Shaoyang' in args.dataset:
-            test_data = io.read("data/HwaMei/v20230221/privacy-shaoyang-v1.json")
+            test_data = io.read("data/HwaMei/v20230329/privacy-shaoyang-v1.json")
         
         
     elif args.dataset == 'yelp2013':

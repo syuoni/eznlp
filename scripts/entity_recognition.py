@@ -55,6 +55,10 @@ def parse_arguments(parser: argparse.ArgumentParser):
     group_decoder.add_argument('--ck_decoder', type=str, default='sequence_tagging', 
                                help="chunk decoding method", choices=['sequence_tagging', 'span_classification', 'boundary_selection', 'specific_span'])
     # Loss
+    group_decoder.add_argument('--multilabel', default=False, action='store_true', 
+                               help="whether to multilabel predict")
+    group_decoder.add_argument('--conf_thresh', type=float, default=0.5, 
+                               help="confidence threshold")
     group_decoder.add_argument('--fl_gamma', type=float, default=0.0, 
                                help="focal Loss gamma")
     group_decoder.add_argument('--sl_epsilon', type=float, default=0.0, 
@@ -189,7 +193,9 @@ def collect_IE_assembly_config(args: argparse.Namespace):
             reinit_bert_like_(bert_like)
         bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert_like, arch=args.bert_arch, from_subtokenized=args.pre_subtokenize, freeze=args.bert_freeze)
         
-        if getattr(args, 'ck_decoder', '').startswith('specific_span') or getattr(args, 'rel_decoder', '').startswith('specific_span'):
+        if (getattr(args, 'ck_decoder', '').startswith('specific_span') or 
+            getattr(args, 'rel_decoder', '').startswith('specific_span') or 
+            getattr(args, 'attr_decoder', '').startswith('specific_span')):
             bert_like_config.output_hidden_states = True
             span_bert_like_config = SpanBertLikeConfig(bert_like=bert_like, arch=args.bert_arch, freeze=args.bert_freeze, 
                                                        num_layers=None if args.sse_num_layers < 0 else args.sse_num_layers, 
@@ -201,12 +207,14 @@ def collect_IE_assembly_config(args: argparse.Namespace):
         else:
             span_bert_like_config = None
         
-        if getattr(args, 'ck_decoder', '').startswith('masked_span') or getattr(args, 'rel_decoder', '').startswith('masked_span'):
+        if (getattr(args, 'ck_decoder', '').startswith('masked_span') or 
+            getattr(args, 'rel_decoder', '').startswith('masked_span') or 
+            getattr(args, 'attr_decoder', '').startswith('masked_span')):
             bert_like_config.output_hidden_states = True
             masked_span_bert_like_config = MaskedSpanBertLikeConfig(bert_like=bert_like, arch=args.bert_arch, freeze=args.bert_freeze, 
                                                                     num_layers=None if args.sse_num_layers < 0 else args.sse_num_layers, 
                                                                     use_init_size_emb=args.sse_use_init_size_emb, 
-                                                                    use_init_dist_emb=args.sse_use_init_dist_emb, 
+                                                                    use_init_dist_emb=getattr(args, 'sse_use_init_dist_emb', False), 
                                                                     share_weights_ext=args.sse_share_weights_ext, 
                                                                     share_weights_int=args.sse_share_weights_int, 
                                                                     init_agg_mode=args.sse_init_agg_mode, 
@@ -243,6 +251,8 @@ def build_ER_config(args: argparse.Namespace):
                                                       in_drop_rates=drop_rates)
     elif args.ck_decoder == 'span_classification':
         decoder_config = SpanClassificationDecoderConfig(agg_mode=args.agg_mode, 
+                                                         multilabel=args.multilabel, 
+                                                         conf_thresh=args.conf_thresh, 
                                                          fl_gamma=args.fl_gamma,
                                                          sl_epsilon=args.sl_epsilon, 
                                                          neg_sampling_rate=args.neg_sampling_rate, 
@@ -260,6 +270,8 @@ def build_ER_config(args: argparse.Namespace):
     elif args.ck_decoder == 'boundary_selection':
         reduction_config = EncoderConfig(arch=args.red_arch, hid_dim=args.red_dim, num_layers=args.red_num_layers, in_drop_rates=(0.0, 0.0, 0.0), hid_drop_rate=0.0)
         decoder_config = BoundarySelectionDecoderConfig(reduction=reduction_config, 
+                                                        multilabel=args.multilabel, 
+                                                        conf_thresh=args.conf_thresh, 
                                                         fl_gamma=args.fl_gamma,
                                                         sl_epsilon=args.sl_epsilon, 
                                                         neg_sampling_rate=args.neg_sampling_rate, 
@@ -272,7 +284,9 @@ def build_ER_config(args: argparse.Namespace):
                                                         sb_adj_factor=args.sb_adj_factor, 
                                                         size_emb_dim=args.size_emb_dim)
     elif args.ck_decoder == 'specific_span':
-        decoder_config = SpecificSpanClsDecoderConfig(fl_gamma=args.fl_gamma,
+        decoder_config = SpecificSpanClsDecoderConfig(multilabel=args.multilabel, 
+                                                      conf_thresh=args.conf_thresh, 
+                                                      fl_gamma=args.fl_gamma,
                                                       sl_epsilon=args.sl_epsilon, 
                                                       neg_sampling_rate=args.neg_sampling_rate, 
                                                       neg_sampling_power_decay=args.neg_sampling_power_decay, 
