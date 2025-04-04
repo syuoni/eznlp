@@ -17,22 +17,8 @@ repos:
     rev: 5.12.0
     hooks:
     -   id: isort
-        args: ["--settings-path", ".isort.cfg"]
 
 -   repo: https://github.com/psf/black
     rev: 23.3.0
     hooks:
     -   id: black
-
-# -   repo: https://github.com/pycqa/flake8
-#     rev: 6.0.0
-#     hooks:
-#     -   id: flake8
-#         additional_dependencies: [flake8-docstrings]
-
-# -   repo: https://github.com/pre-commit/mirrors-mypy
-#     rev: v1.3.0
-#     hooks:
-#     -   id: mypy
-#         additional_dependencies: [types-all]
-#         exclude: ^tests/
