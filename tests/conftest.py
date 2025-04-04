@@ -108,7 +108,7 @@ def EAR_data_demo():
                           "Those", "are", "an", "APPLE", "and", "some", "glass", "bottles", ".", 
                           "This", "is", "a", "very", "very", "very", "very", "very", "long", "entity", "?"]
     tokens = TokenSequence.from_tokenized_text(tokenized_raw_text)
-    chunks = [('EntA', 4, 5), ('EntA', 9, 10), ('EntB', 12, 14), ('EntC', 18, 25)]
+    chunks = [('EntA', 4, 5), ('EntB', 9, 10), ('EntB', 12, 14), ('EntC', 18, 25)]
     attributes = [('AttrA', chunks[0]), 
                   ('AttrB', chunks[1]), 
                   ('AttrA', chunks[2]), 
@@ -135,7 +135,7 @@ def elmo():
                                  num_output_representations=1)
 
 
-BERT_PATH = "assets/transformers/bert-base-cased"
+BERT_PATH = "assets/transformers/bert-base-uncased"
 ROBERTA_PATH = "assets/transformers/roberta-base"
 ALBERT_PATH = "assets/transformers/albert-base-v2"
 
@@ -143,6 +143,10 @@ ALBERT_PATH = "assets/transformers/albert-base-v2"
 def bert_with_tokenizer():
     return (transformers.BertModel.from_pretrained(BERT_PATH), 
             transformers.BertTokenizer.from_pretrained(BERT_PATH))
+
+@pytest.fixture
+def bert_tokenizer():
+    return transformers.BertTokenizer.from_pretrained(BERT_PATH)
 
 @pytest.fixture
 def roberta_with_tokenizer():
@@ -156,20 +160,37 @@ def roberta_with_tokenizer():
             transformers.RobertaTokenizer.from_pretrained(ROBERTA_PATH, add_prefix_space=True))
 
 @pytest.fixture
+def roberta_tokenizer():
+    return transformers.RobertaTokenizer.from_pretrained(ROBERTA_PATH, add_prefix_space=True)
+
+@pytest.fixture
 def albert_with_tokenizer():
     """ALBERT by default uses dropout rate of 0. 
     """
-    return  (transformers.AlbertModel.from_pretrained(ALBERT_PATH), 
-             transformers.AlbertTokenizer.from_pretrained(ALBERT_PATH))
+    return (transformers.AlbertModel.from_pretrained(ALBERT_PATH), 
+            transformers.AlbertTokenizer.from_pretrained(ALBERT_PATH))
 
+@pytest.fixture
+def albert_tokenizer():
+    return transformers.AlbertTokenizer.from_pretrained(ALBERT_PATH)
 
-@pytest.fixture(params=['bert', 'roberta'])
-def bert_like_with_tokenizer(request, bert_with_tokenizer, roberta_with_tokenizer):
+@pytest.fixture(params=['bert', 'roberta', 'albert'])
+def bert_like_with_tokenizer(request, bert_with_tokenizer, roberta_with_tokenizer, albert_with_tokenizer):
     if request.param == 'bert':
         return bert_with_tokenizer
     elif request.param == 'roberta':
         return roberta_with_tokenizer
+    elif request.param == 'albert':
+        return albert_with_tokenizer
 
+@pytest.fixture(params=['bert', 'roberta', 'albert'])
+def bert_like_tokenizer(request, bert_tokenizer, roberta_tokenizer, albert_tokenizer):
+    if request.param == 'bert':
+        return bert_tokenizer
+    elif request.param == 'roberta':
+        return roberta_tokenizer
+    elif request.param == 'albert':
+        return albert_tokenizer
 
 @pytest.fixture
 def flair_fw_lm():

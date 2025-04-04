@@ -151,7 +151,7 @@ def _execute_pos_proj(x: torch.FloatTensor, pos_proj: torch.BoolTensor, agg_mode
     for k in range(pos_proj.size(0)):
         curr_proj_values = []
         for curr_pos_proj in pos_proj[k]:
-            if curr_pos_proj.sum() == 0:
+            if curr_pos_proj.sum().item() == 0:
                 # Set non-covered positions as zeros
                 curr_proj_values.append(torch.zeros(x.size(-1)))
             elif agg_mode.lower() == 'max':

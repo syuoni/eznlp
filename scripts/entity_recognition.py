@@ -16,10 +16,10 @@ from eznlp.nn.init import reinit_bert_like_
 from eznlp.dataset import Dataset
 from eznlp.config import ConfigDict
 from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig, CharConfig, SoftLexiconConfig
-from eznlp.model import ELMoConfig, BertLikeConfig, SpanBertLikeConfig, FlairConfig
+from eznlp.model import ELMoConfig, BertLikeConfig, SpanBertLikeConfig, MaskedSpanBertLikeConfig, FlairConfig
 from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderConfig, BoundarySelectionDecoderConfig, SpecificSpanClsDecoderConfig
 from eznlp.model import ExtractorConfig, SpecificSpanExtractorConfig
-from eznlp.model.bert_like import truecase_for_bert_like, merge_sentences_for_bert_like, segment_uniformly_for_bert_like, subtokenize_for_bert_like, merge_enchars_for_bert_like
+from eznlp.model import BertLikePreProcessor, BertLikePostProcessor
 from eznlp.training import Trainer, count_params, evaluate_entity_recognition
 
 from utils import add_base_arguments, parse_to_args
@@ -46,19 +46,19 @@ def parse_arguments(parser: argparse.ArgumentParser):
                             help="whether to remove nested entities in the train/dev splits")
     group_data.add_argument('--eval_inex', default=False, action='store_true', 
                             help="whether to evaluate internal/external-entity NER results")
-    group_data.add_argument('--save_preds', default=False, action='store_true', 
-                            help="whether to save predictions on the test split (typically in case without ground truth)")
-    group_data.add_argument('--pipeline', default=False, action='store_true', 
-                            help="whether to save predictions on all splits for pipeline modeling")
+    group_data.add_argument('--jackknife', type=int, default=-1, 
+                            help="the 5-fold index of jackknifing")
+    group_data.add_argument('--no_save_preds', dest='save_preds', default=True, action='store_false', 
+                            help="whether to save predictions on the dev/test splits")
     
     group_decoder = parser.add_argument_group('decoder configurations')
     group_decoder.add_argument('--ck_decoder', type=str, default='sequence_tagging', 
                                help="chunk decoding method", choices=['sequence_tagging', 'span_classification', 'boundary_selection', 'specific_span'])
     # Loss
     group_decoder.add_argument('--fl_gamma', type=float, default=0.0, 
-                               help="Focal Loss gamma")
+                               help="focal Loss gamma")
     group_decoder.add_argument('--sl_epsilon', type=float, default=0.0, 
-                               help="Label smoothing loss epsilon")
+                               help="label smoothing loss epsilon")
     
     # Sequence tagging
     group_decoder.add_argument('--scheme', type=str, default='BIOES', 
@@ -81,33 +81,29 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                help="chunk priority in the testing phase")
     
     # Boundary selection
-    group_decoder.add_argument('--no_biaffine', dest='use_biaffine', default=True, action='store_false', 
-                               help="whether to use biaffine")
-    group_decoder.add_argument('--affine_arch', type=str, default='FFN', 
-                               help="affine encoder architecture")
-    group_decoder.add_argument('--no_biaffine_prod', dest='use_biaffine_prod', default=True, action='store_false', 
-                               help="whether to use the production term in biaffine")
-    group_decoder.add_argument('--affine_dim', type=int, default=150, 
-                               help="affine encoder hidden dim")
-    group_decoder.add_argument('--affine_num_layers', type=int, default=1, 
-                               help="number of affine encoder layers")
+    group_decoder.add_argument('--red_arch', type=str, default='FFN', 
+                               help="pre-affine dimension reduction architecture")
+    group_decoder.add_argument('--red_dim', type=int, default=150, 
+                               help="pre-affine dimension reduction hidden dim")
+    group_decoder.add_argument('--red_num_layers', type=int, default=1, 
+                               help="number of layers in pre-affine dimension reduction")
     group_decoder.add_argument('--neg_sampling_rate', type=float, default=1.0, 
-                               help="Negative sampling rate")
+                               help="negative sampling rate")
     group_decoder.add_argument('--neg_sampling_power_decay', type=float, default=0.0, 
-                               help="Negative sampling rate power decay parameter")
+                               help="negative sampling rate power decay parameter")
     group_decoder.add_argument('--neg_sampling_surr_rate', type=float, default=0.0, 
-                               help="Extra negative sampling rate surrounding positive samples")
+                               help="extra negative sampling rate surrounding positive samples")
     group_decoder.add_argument('--neg_sampling_surr_size', type=int, default=5, 
-                               help="Extra negative sampling rate surrounding size")
+                               help="extra negative sampling rate surrounding size")
     group_decoder.add_argument('--nested_sampling_rate', type=float, default=1.0, 
-                               help="Sampling rate for spans nested in positive samples")
+                               help="sampling rate for spans nested in positive samples")
     
     group_decoder.add_argument('--sb_epsilon', type=float, default=0.0, 
-                               help="Boundary smoothing loss epsilon")
+                               help="boundary smoothing loss epsilon")
     group_decoder.add_argument('--sb_size', type=int, default=1, 
-                               help="Boundary smoothing window size")
+                               help="boundary smoothing window size")
     group_decoder.add_argument('--sb_adj_factor', type=float, default=1.0, 
-                               help="Boundary smoothing probability adjust factor")
+                               help="boundary smoothing probability adjust factor")
     
     # Specific span classification: Span-specific encoder (SSE)
     group_decoder.add_argument('--sse_no_share_weights_ext', dest='sse_share_weights_ext', default=True, action='store_false', 
@@ -122,10 +118,14 @@ def parse_arguments(parser: argparse.ArgumentParser):
                                help="dropout rate before initial aggregating")
     group_decoder.add_argument('--sse_num_layers', type=int, default=-1, 
                                help="number of span-bert encoder layers (negative values are set to `None`)")
+    group_decoder.add_argument('--sse_min_span_size', type=int, default=2, 
+                               help="minimum span size", choices=[2, 1])
     group_decoder.add_argument('--sse_max_span_size_cov_rate', type=float, default=0.995, 
                                help="coverage rate of maximum span size")
     group_decoder.add_argument('--sse_max_span_size', type=int, default=-1, 
                                help="maximum span size (negative values are set to `None`)")
+    group_decoder.add_argument('--sse_use_init_size_emb', default=False, action='store_true', 
+                               help="whether to use initial span size embeddings")
     return parse_to_args(parser)
 
 
@@ -184,24 +184,40 @@ def collect_IE_assembly_config(args: argparse.Namespace):
         flair_fw_config, flair_bw_config = None, None
     
     if args.bert_arch.lower() != 'none':
-        # Cased tokenizer for NER task
-        bert_like, tokenizer = load_pretrained(args.bert_arch, args, cased=True)
+        bert_like, tokenizer = load_pretrained(args.bert_arch, args)
         if args.bert_reinit:
             reinit_bert_like_(bert_like)
         bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert_like, arch=args.bert_arch, from_subtokenized=args.pre_subtokenize, freeze=args.bert_freeze)
+        
         if getattr(args, 'ck_decoder', '').startswith('specific_span') or getattr(args, 'rel_decoder', '').startswith('specific_span'):
             bert_like_config.output_hidden_states = True
             span_bert_like_config = SpanBertLikeConfig(bert_like=bert_like, arch=args.bert_arch, freeze=args.bert_freeze, 
                                                        num_layers=None if args.sse_num_layers < 0 else args.sse_num_layers, 
+                                                       use_init_size_emb=args.sse_use_init_size_emb, 
                                                        share_weights_ext=args.sse_share_weights_ext, 
                                                        share_weights_int=args.sse_share_weights_int, 
                                                        init_agg_mode=args.sse_init_agg_mode, 
                                                        init_drop_rate=args.sse_init_drop_rate)
         else:
             span_bert_like_config = None
+        
+        if getattr(args, 'ck_decoder', '').startswith('masked_span') or getattr(args, 'rel_decoder', '').startswith('masked_span'):
+            bert_like_config.output_hidden_states = True
+            masked_span_bert_like_config = MaskedSpanBertLikeConfig(bert_like=bert_like, arch=args.bert_arch, freeze=args.bert_freeze, 
+                                                                    num_layers=None if args.sse_num_layers < 0 else args.sse_num_layers, 
+                                                                    use_init_size_emb=args.sse_use_init_size_emb, 
+                                                                    use_init_dist_emb=args.sse_use_init_dist_emb, 
+                                                                    share_weights_ext=args.sse_share_weights_ext, 
+                                                                    share_weights_int=args.sse_share_weights_int, 
+                                                                    init_agg_mode=args.sse_init_agg_mode, 
+                                                                    init_drop_rate=args.sse_init_drop_rate)
+        else:
+            masked_span_bert_like_config = None
+        
     else:
         bert_like_config = None
         span_bert_like_config = None
+        masked_span_bert_like_config = None
     
     return {'ohots': ohots_config, 
             'mhots': mhots_config, 
@@ -212,6 +228,7 @@ def collect_IE_assembly_config(args: argparse.Namespace):
             'flair_bw': flair_bw_config, 
             'bert_like': bert_like_config, 
             'span_bert_like': span_bert_like_config, 
+            'masked_span_bert_like': masked_span_bert_like_config, 
             'intermediate2': interm2_config}
 
 
@@ -241,9 +258,8 @@ def build_ER_config(args: argparse.Namespace):
                                                          inex_mkmmd_lambda=args.inex_mkmmd_lambda, 
                                                          in_drop_rates=drop_rates)
     elif args.ck_decoder == 'boundary_selection':
-        decoder_config = BoundarySelectionDecoderConfig(use_biaffine=args.use_biaffine, 
-                                                        affine=EncoderConfig(arch=args.affine_arch, hid_dim=args.affine_dim, num_layers=args.affine_num_layers, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2), 
-                                                        use_prod=args.use_biaffine_prod, 
+        reduction_config = EncoderConfig(arch=args.red_arch, hid_dim=args.red_dim, num_layers=args.red_num_layers, in_drop_rates=(0.0, 0.0, 0.0), hid_drop_rate=0.0)
+        decoder_config = BoundarySelectionDecoderConfig(reduction=reduction_config, 
                                                         fl_gamma=args.fl_gamma,
                                                         sl_epsilon=args.sl_epsilon, 
                                                         neg_sampling_rate=args.neg_sampling_rate, 
@@ -254,12 +270,9 @@ def build_ER_config(args: argparse.Namespace):
                                                         sb_epsilon=args.sb_epsilon, 
                                                         sb_size=args.sb_size,
                                                         sb_adj_factor=args.sb_adj_factor, 
-                                                        size_emb_dim=args.size_emb_dim, 
-                                                        # hid_drop_rates=drop_rates,
-                                                        )
+                                                        size_emb_dim=args.size_emb_dim)
     elif args.ck_decoder == 'specific_span':
-        decoder_config = SpecificSpanClsDecoderConfig(affine=EncoderConfig(arch=args.affine_arch, hid_dim=args.affine_dim, num_layers=args.affine_num_layers, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2), 
-                                                      fl_gamma=args.fl_gamma,
+        decoder_config = SpecificSpanClsDecoderConfig(fl_gamma=args.fl_gamma,
                                                       sl_epsilon=args.sl_epsilon, 
                                                       neg_sampling_rate=args.neg_sampling_rate, 
                                                       neg_sampling_power_decay=args.neg_sampling_power_decay, 
@@ -269,12 +282,12 @@ def build_ER_config(args: argparse.Namespace):
                                                       sb_epsilon=args.sb_epsilon, 
                                                       sb_size=args.sb_size,
                                                       sb_adj_factor=args.sb_adj_factor, 
+                                                      min_span_size=args.sse_min_span_size, 
                                                       max_span_size_cov_rate=args.sse_max_span_size_cov_rate, 
                                                       max_span_size=(args.sse_max_span_size if args.sse_max_span_size>0 else None), 
                                                       size_emb_dim=args.size_emb_dim, 
                                                       inex_mkmmd_lambda=args.inex_mkmmd_lambda, 
-                                                      # hid_drop_rates=drop_rates, 
-                                                      )
+                                                      in_drop_rates=drop_rates)
     
     if args.ck_decoder == 'specific_span':
         return SpecificSpanExtractorConfig(**collect_IE_assembly_config(args), share_interm2=args.sse_share_interm2, decoder=decoder_config)
@@ -283,44 +296,49 @@ def build_ER_config(args: argparse.Namespace):
 
 
 def process_IE_data(train_data, dev_data, test_data, args, config):
-    if args.pre_truecase:
-        assert config.bert_like is not None
-        assert not getattr(config.bert_like.tokenizer, 'do_lower_case', False)
-        train_data = truecase_for_bert_like(train_data, verbose=args.log_terminal)
-        dev_data   = truecase_for_bert_like(dev_data,   verbose=args.log_terminal)
-        test_data  = truecase_for_bert_like(test_data,  verbose=args.log_terminal)
-    
-    if (config.bert_like is not None and args.dataset in ('conll2003', 'conll2003nff', 'conll2012', 'genia', 'genia_yu2020acl', 'kbp2017') and args.doc_level):
-        if args.dataset.startswith('conll'):
-            doc_key = 'doc_idx'
-        elif args.dataset.startswith('genia'):
-            doc_key = 'doc_key'
-        elif args.dataset.startswith('kbp2017'):
-            doc_key = 'org_id'
+    if config.bert_like is not None: 
+        preprocessor = BertLikePreProcessor(config.bert_like.tokenizer, model_max_length=args.bert_max_length, verbose=args.log_terminal)
         
-        train_data = merge_sentences_for_bert_like(train_data, config.bert_like.tokenizer, doc_key=doc_key, verbose=args.log_terminal)
-        dev_data   = merge_sentences_for_bert_like(dev_data,   config.bert_like.tokenizer, doc_key=doc_key, verbose=args.log_terminal)
-        test_data  = merge_sentences_for_bert_like(test_data,  config.bert_like.tokenizer, doc_key=doc_key, verbose=args.log_terminal)
-    
-    if (config.bert_like is not None and args.dataset in ('SIGHAN2006', 'yidu_s4k', 'cmeee')):
-        train_data = segment_uniformly_for_bert_like(train_data, config.bert_like.tokenizer, update_raw_idx=True, verbose=args.log_terminal)
-        dev_data   = segment_uniformly_for_bert_like(dev_data,   config.bert_like.tokenizer, update_raw_idx=True, verbose=args.log_terminal)
-        test_data  = segment_uniformly_for_bert_like(test_data,  config.bert_like.tokenizer, update_raw_idx=True, verbose=args.log_terminal)
-    
-    if args.pre_subtokenize:
-        assert config.bert_like is not None
-        train_data = subtokenize_for_bert_like(train_data, config.bert_like.tokenizer, verbose=args.log_terminal)
-        dev_data   = subtokenize_for_bert_like(dev_data,   config.bert_like.tokenizer, verbose=args.log_terminal)
-        test_data  = subtokenize_for_bert_like(test_data,  config.bert_like.tokenizer, verbose=args.log_terminal)
-    
-    if args.pre_merge_enchars:
-        assert config.bert_like is not None
-        train_data = merge_enchars_for_bert_like(train_data, config.bert_like.tokenizer, verbose=args.log_terminal)
-        dev_data   = merge_enchars_for_bert_like(dev_data,   config.bert_like.tokenizer, verbose=args.log_terminal)
-        test_data  = merge_enchars_for_bert_like(test_data,  config.bert_like.tokenizer, verbose=args.log_terminal)
-        if args.dataset in ('WeiboNER', ):
-            for entry in train_data:
-                entry['chunks'] = [(label, round(start), round(end)) for label, start, end in entry['chunks']]
+        if getattr(args, 'pre_truecase', False):
+            assert not getattr(config.bert_like.tokenizer, 'do_lower_case', False)
+            train_data = preprocessor.truecase_for_data(train_data)
+            dev_data   = preprocessor.truecase_for_data(dev_data)
+            test_data  = preprocessor.truecase_for_data(test_data)
+        
+        if (args.doc_level and (args.dataset in ('conll2003', 'conll2003nff', 'conll2012', 'genia', 'genia_yu2020acl', 'kbp2017', 'conll2004', 'SciERC') 
+                             or args.dataset.startswith(('ace2004_rel', 'ace2005_rel', 'ADE')))):
+            if args.dataset.startswith('conll2003'):
+                doc_key = 'doc_idx'
+            elif args.dataset.startswith('genia'):
+                doc_key = 'doc_key'
+            elif args.dataset.startswith('kbp2017'):
+                doc_key = 'org_id'
+            elif args.dataset.startswith(('ace2004_rel', 'ace2005_rel', 'SciERC')):
+                doc_key = 'doc_key'
+            elif args.dataset.startswith(('conll2004', 'ADE')):
+                doc_key = None
+            
+            train_data = preprocessor.merge_sentences_for_data(train_data, doc_key=doc_key)
+            dev_data   = preprocessor.merge_sentences_for_data(dev_data,   doc_key=doc_key)
+            test_data  = preprocessor.merge_sentences_for_data(test_data,  doc_key=doc_key)
+        
+        if args.dataset in ('SIGHAN2006', 'yidu_s4k', 'cmeee'):
+            train_data = preprocessor.segment_sentences_for_data(train_data, update_raw_idx=True)
+            dev_data   = preprocessor.segment_sentences_for_data(dev_data,   update_raw_idx=True)
+            test_data  = preprocessor.segment_sentences_for_data(test_data,  update_raw_idx=True)
+        
+        if args.pre_subtokenize:
+            train_data = preprocessor.subtokenize_for_data(train_data)
+            dev_data   = preprocessor.subtokenize_for_data(dev_data)
+            test_data  = preprocessor.subtokenize_for_data(test_data)
+        
+        if args.pre_merge_enchars:
+            train_data = preprocessor.merge_enchars_for_data(train_data)
+            dev_data   = preprocessor.merge_enchars_for_data(dev_data)
+            test_data  = preprocessor.merge_enchars_for_data(test_data)
+            if args.dataset in ('WeiboNER', ):
+                for entry in train_data:
+                    entry['chunks'] = [(label, round(start), round(end)) for label, start, end in entry['chunks']]
     
     if args.use_softword or args.use_softlexicon:
         if config.nested_ohots is not None and 'softlexicon' in config.nested_ohots.keys():
@@ -333,7 +351,7 @@ def process_IE_data(train_data, dev_data, test_data, args, config):
                 entry['tokens'].build_softwords(tokenizer.tokenize)
                 entry['tokens'].build_softlexicons(tokenizer.tokenize)
     
-    if args.remove_nested:
+    if getattr(args, 'remove_nested', False):
         logger.info("Removing nested entities...")
         for data in [train_data, dev_data, test_data]:
             for entry in data:
@@ -392,29 +410,42 @@ if __name__ == '__main__':
     
     train_data, dev_data, test_data = load_data(args)
     args.language = dataset2language[args.dataset]
+    
+    if args.train_with_dev:
+        train_data = train_data + dev_data
+        dev_data   = []
+    
+    if args.jackknife >= 0:
+        import sklearn.model_selection
+        doc_key = 'doc_key'
+        doc_keys = numpy.unique([entry[doc_key] for entry in train_data])  # Sorted order
+        kf = sklearn.model_selection.KFold(5, shuffle=True, random_state=args.seed)
+        _, test_indexes = list(kf.split(doc_keys))[args.jackknife]
+        test_keys = set(doc_keys[i] for i in test_indexes)
+        test_data  = [entry for entry in train_data if entry[doc_key] in test_keys]
+        train_data = [entry for entry in train_data if entry[doc_key] not in test_keys]
+    
     config = build_ER_config(args)
     train_data, dev_data, test_data = process_IE_data(train_data, dev_data, test_data, args, config)
     
-    if not args.train_with_dev:
-        train_set = Dataset(train_data, config, training=True)
-        train_set.build_vocabs_and_dims(dev_data, test_data)
-        dev_set   = Dataset(dev_data,  train_set.config, training=False)
-        test_set  = Dataset(test_data, train_set.config, training=False)
-        
-        train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
-        dev_loader   = torch.utils.data.DataLoader(dev_set,   batch_size=args.batch_size, shuffle=False, collate_fn=dev_set.collate)
-    else:
-        train_set = Dataset(train_data + dev_data, config, training=True)
-        train_set.build_vocabs_and_dims(test_data)
-        dev_set   = Dataset([],        train_set.config, training=False)
-        test_set  = Dataset(test_data, train_set.config, training=False)
-        
-        train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
-        dev_loader   = None
-    
+    train_set = Dataset(train_data, config, training=True)
+    # You may also include `test_data` here.
+    # In particular, when using static word embeddings (e.g., GloVe), this can include some words appearing in `test_data`, but missing in `train_data` and `dev_data`.
+    # This will not result in information leak, because these word embeddings will remain unchanged during the whole training phase. 
+    # In general, `build_vocabs_and_dims` only collects meta information, which can alternatively be hard-coded. 
+    train_set.build_vocabs_and_dims(dev_data)
+    dev_set   = Dataset(dev_data,  train_set.config, training=False)
+    test_set  = Dataset(test_data, train_set.config, training=False)
     logger.info(train_set.summary)
     
+    train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
+    dev_loader   = torch.utils.data.DataLoader(dev_set,   batch_size=args.batch_size, shuffle=False, collate_fn=dev_set.collate) if len(dev_data) > 0 else None
+    
     logger.info(header_format("Building", sep='-'))
+    if args.dataset.startswith('ace2004_rel_cv'):
+        # A very few nested entities exist in ACE 2004
+        config.decoder.overlapping_level = FLAT
+    
     if args.remove_nested:
         config.decoder.overlapping_level = FLAT
         config.decoder.chunk_priority = args.inex_chunk_priority_training
@@ -461,24 +492,24 @@ if __name__ == '__main__':
     logger.info("Evaluating on dev-set")
     evaluate_entity_recognition(trainer, dev_set,  batch_size=args.batch_size, eval_inex=args.eval_inex)
     logger.info("Evaluating on test-set")
-    evaluate_entity_recognition(trainer, test_set, batch_size=args.batch_size, eval_inex=args.eval_inex, 
-                                pp_callback=dataset2pp_callback.get(args.dataset, None), save_preds=args.save_preds)
-    if args.save_preds:
-        torch.save(test_data, f"{save_path}/test-data-with-preds.pth")
+    evaluate_entity_recognition(trainer, test_set, batch_size=args.batch_size, eval_inex=args.eval_inex, pp_callback=dataset2pp_callback.get(args.dataset, None))
     
-    if args.pipeline:
-        # Replace gold chunks with predicted chunks for pipeline
-        if args.train_with_dev:
-            # Retrieve the original splits
-            train_set = Dataset(train_data, train_set.config, training=True)
-            dev_set   = Dataset(dev_data,   train_set.config, training=False)
+    if args.save_preds:
+        postprocessor = BertLikePostProcessor(verbose=args.log_terminal)
         
-        for dataset, data in zip([train_set, dev_set, test_set], [train_data, dev_data, test_data]):
-            set_chunks_pred = trainer.predict(dataset, batch_size=args.batch_size)
-            for ex, chunks_pred in zip(data, set_chunks_pred):
-                ex['chunks_pred'] = chunks_pred
+        logger.info("Saving predictions on dev-set")
+        set_chunks_pred = trainer.predict(dev_set, batch_size=args.batch_size)
+        for entry, chunks_pred in zip(dev_data, set_chunks_pred): 
+            entry['chunks_pred'] = chunks_pred
+        dev_data_pred = postprocessor.restore_for_data(dev_data)
+        torch.save(dev_data_pred, f"{save_path}/dev.data.pred.pth")
         
-        torch.save((train_data, dev_data, test_data), f"{save_path}/data-for-pipeline.pth")
+        logger.info("Saving predictions on test-set")
+        set_chunks_pred = trainer.predict(test_set, batch_size=args.batch_size)
+        for entry, chunks_pred in zip(test_data, set_chunks_pred):
+            entry['chunks_pred'] = chunks_pred
+        test_data_pred = postprocessor.restore_for_data(test_data)
+        torch.save(test_data_pred, f"{save_path}/test.data.pred.pth")
     
     logger.info(" ".join(sys.argv))
     logger.info(pprint.pformat(args.__dict__))

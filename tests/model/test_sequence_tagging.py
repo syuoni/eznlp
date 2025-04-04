@@ -129,10 +129,10 @@ class TestModel(object):
         self._assert_trainable()
         
     @pytest.mark.parametrize("freeze", [False, True])
-    def test_model_with_bert_like(self, freeze, bert_like_with_tokenizer, conll2003_demo, device):
-        bert_like, tokenizer = bert_like_with_tokenizer
+    def test_model_with_bert_like(self, freeze, bert_with_tokenizer, conll2003_demo, device):
+        bert, tokenizer = bert_with_tokenizer
         self.config = ExtractorConfig('sequence_tagging', ohots=None, 
-                                      bert_like=BertLikeConfig(bert_like=bert_like, tokenizer=tokenizer, freeze=freeze))
+                                      bert_like=BertLikeConfig(bert_like=bert, tokenizer=tokenizer, freeze=freeze))
         self._setup_case(conll2003_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()

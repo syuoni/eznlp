@@ -9,17 +9,19 @@ import torch
 import transformers
 
 from eznlp.token import TokenSequence
-from eznlp.model import BertLikeConfig
-from eznlp.model.bert_like import (truecase_for_bert_like, 
-                                   truncate_for_bert_like, 
-                                   segment_uniformly_for_bert_like, 
-                                   subtokenize_for_bert_like, 
-                                   merge_enchars_for_bert_like, 
-                                   _tokenized2nested, 
-                                   _tokenizer2sub_prefix)
+from eznlp.model import BertLikeConfig, BertLikePreProcessor, BertLikePostProcessor
+from eznlp.model.bert_like import _is_punctuation, _subtokenize_word, _tokenized2nested
 from eznlp.training import count_params
 from eznlp.io import TabularIO
 
+
+
+def test_subtokenize_word(bert_like_tokenizer):
+    punctuations = [chr(i) for i in range(128) if _is_punctuation(chr(i))]
+    for p in punctuations:
+        sub_tokens = _subtokenize_word(p, bert_like_tokenizer)
+        assert len(sub_tokens) == 1
+        assert sub_tokens[0] == p
 
 
 @pytest.mark.parametrize("mix_layers", ['trainable', 'top'])
@@ -70,104 +72,164 @@ def test_serialization(bert_with_tokenizer):
 
 
 
-def test_truecase_for_bert_like():
-    tokenized_raw_text = ['FULL', 'FEES', '1.875', 'REOFFER', '99.32', 'SPREAD', '+20', 'BP']
-    tokens = TokenSequence.from_tokenized_text(tokenized_raw_text)
-    data = [{'tokens': tokens}]
-    new_data = truecase_for_bert_like(data, verbose=False)
-    assert new_data[0]['tokens'].raw_text == ['Full', 'fees', '1.875', 'Reoffer', '99.32', 'spread', '+20', 'BP']
+class TestBertLikePreProcessor(object):
+    def test_truecase_for_data(self, bert_tokenizer):
+        preprocessor = BertLikePreProcessor(bert_tokenizer, verbose=False)
+        
+        tokenized_raw_text = ['FULL', 'FEES', '1.875', 'REOFFER', '99.32', 'SPREAD', '+20', 'BP']
+        tokens = TokenSequence.from_tokenized_text(tokenized_raw_text)
+        data = [{'tokens': tokens}]
+        new_data = preprocessor.truecase_for_data(data)
+        assert new_data[0]['tokens'].raw_text == ['Full', 'fees', '1.875', 'Reoffer', '99.32', 'spread', '+20', 'BP']
+        
+        
+    @pytest.mark.slow
+    @pytest.mark.parametrize("mode", ["head+tail", "head-only", "tail-only"])
+    def test_truncate_for_data(self, mode, bert_tokenizer):
+        preprocessor = BertLikePreProcessor(bert_tokenizer, verbose=False)
+        max_len = preprocessor.model_max_length - 2
+        
+        tabular_io = TabularIO(text_col_id=3, label_col_id=2, sep="\t\t", mapping={"<sssss>": "\n"}, encoding='utf-8', case_mode='lower')
+        data = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.test.ss")
+        data = [data_entry for data_entry in data if len(data_entry['tokens']) >= max_len-10]
+        assert max(len(data_entry['tokens']) for data_entry in data) > max_len
+        
+        data = preprocessor.truncate_for_data(data, mode)
+        sub_lens = [sum(len(word) for word in _tokenized2nested(data_entry['tokens'].raw_text, bert_tokenizer)) for data_entry in data]
+        sub_lens = pandas.Series(sub_lens)
+        
+        assert (sub_lens <= max_len).all()
+        assert (sub_lens == max_len).sum() >= (len(sub_lens) / 2)
+        
+        
+    @pytest.mark.parametrize("token_len", [1, 2, 5])
+    @pytest.mark.parametrize("max_len", [50, 120])
+    def test_segment_sentences_for_data(self, bert_tokenizer, token_len, max_len):
+        preprocessor = BertLikePreProcessor(bert_tokenizer, model_max_length=max_len+2, verbose=False)
+        
+        tokens = TokenSequence.from_tokenized_text([c*token_len for c in random.choices(string.ascii_letters, k=100)])
+        chunks = [('EntA', k*10, k*10+5) for k in range(10)]
+        data = [{'tokens': tokens, 'chunks': chunks}]
+        new_data = preprocessor.segment_sentences_for_data(data)
+        
+        assert all(len(entry['tokens']) <= max_len for entry in new_data)
+        assert all(0 <= start and end <= len(entry['tokens']) for entry in new_data for label, start, end in entry['chunks'])
+        
+        chunk_texts = [tokens[start:end].raw_text for label, start, end in chunks]
+        chunk_texts_retr = [entry['tokens'][start:end].raw_text for entry in new_data for label, start, end in entry['chunks']]
+        assert chunk_texts_retr == chunk_texts
+        
+        span_starts = [0] + numpy.cumsum([len(entry['tokens']) for entry in new_data]).tolist()
+        chunks_retr = [(label, span_start+start, span_start+end) for entry, span_start in zip(new_data, span_starts) for label, start, end in entry['chunks']]
+        assert chunks_retr == chunks
+        
+        
+    def test_subtokenize_for_data(self, bert_tokenizer):
+        preprocessor = BertLikePreProcessor(bert_tokenizer, verbose=False)
+        sub_prefix = preprocessor.tokenizer_sub_prefix
+        
+        tokens = TokenSequence.from_tokenized_text(["I", "like", 'it', 'sooooo', 'much!'])
+        chunks = [('EntA', start, end) for start in range(len(tokens)) for end in range(start+1, len(tokens)+1)]
+        data = [{'tokens': tokens, 'chunks': chunks}]
+        new_data = preprocessor.subtokenize_for_data(data)
+        
+        assert new_data[0]['sub2ori_idx'] == [0, 1, 2, 3, 3.333, 3.667, 4, 4.5, 5]
+        assert new_data[0]['ori2sub_idx'] == [0, 1, 2, 3, 6, 8]
+        for entry, new_entry in zip(data, new_data):
+            for ck, new_ck in zip(entry['chunks'], new_entry['chunks']):
+                assert "".join(entry['tokens'].raw_text[ck[1]:ck[2]]).lower() == "".join(new_entry['tokens'].raw_text[new_ck[1]:new_ck[2]]).replace(sub_prefix, "").lower()
+        
+        
+    def test_subtokenize_for_data_with_label(self, bert_like_tokenizer, conll2003_demo):
+        preprocessor = BertLikePreProcessor(bert_like_tokenizer, verbose=False)
+        sub_prefix = preprocessor.tokenizer_sub_prefix
+        
+        conll2003_demo = conll2003_demo[1:]  # The fisrt sentence include "-DOCSTART-"
+        for entry in conll2003_demo:
+            entry['chunks'] = [('EntA', start, end) for start in range(len(entry['tokens'])) for end in range(start+1, len(entry['tokens'])+1)]
+        new_data = preprocessor.subtokenize_for_data(conll2003_demo)
+        
+        for entry, new_entry in zip(conll2003_demo, new_data):
+            for ck, new_ck in zip(entry['chunks'], new_entry['chunks']):
+                assert ("".join(entry['tokens'].raw_text[ck[1]:ck[2]]).lower() == 
+                        "".join(new_entry['tokens'].raw_text[new_ck[1]:new_ck[2]]).replace(sub_prefix, "").lower())
+        
+        
+    def test_merge_enchars_for_data(self):
+        tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-chinese", do_lower_case=True)
+        preprocessor = BertLikePreProcessor(tokenizer, verbose=False)
+        sub_prefix = preprocessor.tokenizer_sub_prefix
+        
+        tokens = TokenSequence.from_tokenized_text(["我", "l", "i", "k", "e", "i", "t", "非", "常", "！"])
+        chunks = [('EntA', start, end) for start in range(len(tokens)) for end in range(start+1, len(tokens)+1)]
+        data = [{'tokens': tokens, 'chunks': chunks}]
+        new_data = preprocessor.merge_enchars_for_data(data)
+        
+        assert new_data[0]['ori2sub_idx'] == [0, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5, 6]
+        assert new_data[0]['sub2ori_idx'] == [0, 1, 5, 7, 8, 9, 10]
+        for entry, new_entry in zip(data, new_data):
+            for ck, new_ck in zip(entry['chunks'], new_entry['chunks']):
+                if isinstance(new_ck[1], float) or isinstance(new_ck[2], float):
+                    continue
+                assert "".join(entry['tokens'].raw_text[ck[1]:ck[2]]).lower() == "".join(new_entry['tokens'].raw_text[new_ck[1]:new_ck[2]]).replace(sub_prefix, "").lower()
 
 
 
-@pytest.mark.slow
-@pytest.mark.parametrize("mode", ["head+tail", "head-only", "tail-only"])
-def test_truncate_for_bert_like(mode, bert_with_tokenizer):
-    bert, tokenizer = bert_with_tokenizer
-    max_len = tokenizer.model_max_length - 2
-    
-    tabular_io = TabularIO(text_col_id=3, label_col_id=2, sep="\t\t", mapping={"<sssss>": "\n"}, encoding='utf-8', case_mode='lower')
-    data = tabular_io.read("data/Tang2015/yelp-2013-seg-20-20.test.ss")
-    data = [data_entry for data_entry in data if len(data_entry['tokens']) >= max_len-10]
-    assert max(len(data_entry['tokens']) for data_entry in data) > max_len
-    
-    data = truncate_for_bert_like(data, tokenizer, mode)
-    sub_lens = [sum(len(word) for word in _tokenized2nested(data_entry['tokens'].raw_text, tokenizer)) for data_entry in data]
-    sub_lens = pandas.Series(sub_lens)
-    
-    assert (sub_lens <= max_len).all()
-    assert (sub_lens == max_len).sum() >= (len(sub_lens) / 2)
-
-
-
-@pytest.mark.parametrize("token_len", [1, 2, 5])
-@pytest.mark.parametrize("max_len", [50, 120])
-def test_segment_uniformly_for_bert_like(bert_with_tokenizer, token_len, max_len):
-    bert, tokenizer = bert_with_tokenizer
-    tokenizer.model_max_length = max_len + 2
-    
-    tokens = TokenSequence.from_tokenized_text([c*token_len for c in random.choices(string.ascii_letters, k=100)])
-    chunks = [('EntA', k*10, k*10+5) for k in range(10)]
-    data = [{'tokens': tokens, 'chunks': chunks}]
-    new_data = segment_uniformly_for_bert_like(data, tokenizer, verbose=False)
-    
-    assert all(len(entry['tokens']) <= max_len for entry in new_data)
-    assert all(0 <= start and end <= len(entry['tokens']) for entry in new_data for label, start, end in entry['chunks'])
-    
-    chunk_texts = [tokens[start:end].raw_text for label, start, end in chunks]
-    chunk_texts_retr = [entry['tokens'][start:end].raw_text for entry in new_data for label, start, end in entry['chunks']]
-    assert chunk_texts_retr == chunk_texts
-    
-    span_starts = [0] + numpy.cumsum([len(entry['tokens']) for entry in new_data]).tolist()
-    chunks_retr = [(label, span_start+start, span_start+end) for entry, span_start in zip(new_data, span_starts) for label, start, end in entry['chunks']]
-    assert chunks_retr == chunks
-
-
-
-def test_subtokenize_for_bert_like(bert_with_tokenizer):
-    bert, tokenizer = bert_with_tokenizer
-    sub_prefix = _tokenizer2sub_prefix(tokenizer)
-    
-    tokens = TokenSequence.from_tokenized_text(["I", "like", 'it', 'sooooo', 'much!'])
-    chunks = [('EntA', start, end) for start in range(len(tokens)) for end in range(start+1, len(tokens)+1)]
-    data = [{'tokens': tokens, 'chunks': chunks}]
-    new_data = subtokenize_for_bert_like(data, tokenizer, verbose=False)
-    
-    assert new_data[0]['sub2ori_idx'] == [0, 1, 2, 3, 3.333, 3.667, 4, 4.5, 5]
-    assert new_data[0]['ori2sub_idx'] == [0, 1, 2, 3, 6, 8]
-    for entry, new_entry in zip(data, new_data):
-        for ck, new_ck in zip(entry['chunks'], new_entry['chunks']):
-            assert "".join(entry['tokens'].raw_text[ck[1]:ck[2]]).lower() == "".join(new_entry['tokens'].raw_text[new_ck[1]:new_ck[2]]).replace(sub_prefix, "").lower()
-
-
-def test_subtokenize_for_bert_like_with_data(bert_like_with_tokenizer, conll2003_demo):
-    bert_like, tokenizer = bert_like_with_tokenizer
-    sub_prefix = _tokenizer2sub_prefix(tokenizer)
-    
-    conll2003_demo = conll2003_demo[1:]  # The fisrt sentence include "-DOCSTART-"
-    for entry in conll2003_demo:
-        entry['chunks'] = [('EntA', start, end) for start in range(len(entry['tokens'])) for end in range(start+1, len(entry['tokens'])+1)]
-    new_data = subtokenize_for_bert_like(conll2003_demo, tokenizer, verbose=False)
-    
-    for entry, new_entry in zip(conll2003_demo, new_data):
-        for ck, new_ck in zip(entry['chunks'], new_entry['chunks']):
-            assert ("".join(entry['tokens'].raw_text[ck[1]:ck[2]]).lower() == 
-                    "".join(new_entry['tokens'].raw_text[new_ck[1]:new_ck[2]]).replace(sub_prefix, "").lower())
-
-
-
-def test_merge_enchars_for_bert_like():
-    tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-chinese", do_lower_case=True)
-    sub_prefix = _tokenizer2sub_prefix(tokenizer)
-    
-    tokens = TokenSequence.from_tokenized_text(["我", "l", "i", "k", "e", "i", "t", "非", "常", "！"])
-    chunks = [('EntA', start, end) for start in range(len(tokens)) for end in range(start+1, len(tokens)+1)]
-    data = [{'tokens': tokens, 'chunks': chunks}]
-    new_data = merge_enchars_for_bert_like(data, tokenizer, verbose=False)
-    
-    assert new_data[0]['ori2sub_idx'] == [0, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5, 6]
-    assert new_data[0]['sub2ori_idx'] == [0, 1, 5, 7, 8, 9, 10]
-    for entry, new_entry in zip(data, new_data):
-        for ck, new_ck in zip(entry['chunks'], new_entry['chunks']):
-            if isinstance(new_ck[1], float) or isinstance(new_ck[2], float):
-                continue
-            assert "".join(entry['tokens'].raw_text[ck[1]:ck[2]]).lower() == "".join(new_entry['tokens'].raw_text[new_ck[1]:new_ck[2]]).replace(sub_prefix, "").lower()
+class TestBertLikePostProcessor(object):
+    @pytest.mark.parametrize("model_max_length", [52, 102])
+    def test_conll2003(self, model_max_length, bert_like_tokenizer, conll2003_demo):
+        preprocessor = BertLikePreProcessor(bert_like_tokenizer, model_max_length=model_max_length, verbose=False)
+        
+        set_chunks_ori = [entry['chunks'] for entry in conll2003_demo]
+        new_data = preprocessor.merge_sentences_for_data(conll2003_demo, doc_key=None)
+        new_data = preprocessor.subtokenize_for_data(new_data)
+        assert len(new_data) < 10
+        
+        postprocessor = BertLikePostProcessor(verbose=False)
+        restored_data = postprocessor.restore_for_data(new_data)
+        assert len(restored_data) == 10
+        
+        set_chunks_restored = [entry['chunks'] for entry in restored_data]
+        assert set_chunks_restored == set_chunks_ori
+        
+        
+    def test_conll2004(self, bert_like_tokenizer, conll2004_demo):
+        preprocessor = BertLikePreProcessor(bert_like_tokenizer, model_max_length=102, verbose=False)
+        
+        set_chunks_ori = [entry['chunks'] for entry in conll2004_demo]
+        set_relations_ori = [entry['relations'] for entry in conll2004_demo]
+        new_data = preprocessor.merge_sentences_for_data(conll2004_demo, doc_key=None)
+        new_data = preprocessor.subtokenize_for_data(new_data)
+        assert len(new_data) < 10
+        
+        postprocessor = BertLikePostProcessor(verbose=False)
+        restored_data = postprocessor.restore_for_data(new_data)
+        assert len(restored_data) == 10
+        
+        set_chunks_restored = [entry['chunks'] for entry in restored_data]
+        assert set_chunks_restored == set_chunks_ori
+        set_relations_restored = [entry['relations'] for entry in restored_data]
+        assert set_relations_restored == set_relations_ori
+        
+        
+    def test_HwaMei(self, HwaMei_demo):
+        tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-chinese", do_lower_case=True)
+        preprocessor = BertLikePreProcessor(tokenizer, model_max_length=202, verbose=False)
+        
+        set_chunks_ori = [entry['chunks'] for entry in HwaMei_demo]
+        set_relations_ori = [entry['relations'] for entry in HwaMei_demo]
+        set_attributes_ori = [entry['attributes'] for entry in HwaMei_demo]
+        new_data = preprocessor.merge_sentences_for_data(HwaMei_demo, doc_key=None)
+        new_data = preprocessor.subtokenize_for_data(new_data)
+        assert len(new_data) < 7
+        
+        postprocessor = BertLikePostProcessor(verbose=False)
+        restored_data = postprocessor.restore_for_data(new_data)
+        assert len(restored_data) == 7
+        
+        set_chunks_restored = [entry['chunks'] for entry in restored_data]
+        assert set_chunks_restored == set_chunks_ori
+        set_relations_restored = [entry['relations'] for entry in restored_data]
+        assert set_relations_restored == set_relations_ori
+        set_attributes_restored = [entry['attributes'] for entry in restored_data]
+        assert set_attributes_restored == set_attributes_ori

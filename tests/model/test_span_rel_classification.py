@@ -3,7 +3,7 @@ import pytest
 import torch
 
 from eznlp.dataset import Dataset
-from eznlp.model import BertLikeConfig, SpanRelClassificationDecoderConfig, ExtractorConfig
+from eznlp.model import EncoderConfig, BertLikeConfig, SpanRelClassificationDecoderConfig, ExtractorConfig
 from eznlp.training import Trainer
 
 
@@ -51,11 +51,17 @@ class TestModel(object):
         assert isinstance(self.config.name, str) and len(self.config.name) > 0
         
         
-    @pytest.mark.parametrize("agg_mode", ['max_pooling', 'multiplicative_attention'])
-    @pytest.mark.parametrize("label_emb_dim", [25, 0])
-    @pytest.mark.parametrize("fl_gamma", [0.0, 2.0])
-    def test_model(self, agg_mode, label_emb_dim, fl_gamma, conll2004_demo, device):
-        self.config = ExtractorConfig(decoder=SpanRelClassificationDecoderConfig(agg_mode=agg_mode, label_emb_dim=label_emb_dim, fl_gamma=fl_gamma))
+    @pytest.mark.parametrize("use_context", [True, False])
+    @pytest.mark.parametrize("fusing_mode, red_dim", [('concat', 100), 
+                                                      ('concat', 0), 
+                                                      ('affine', 100)])
+    @pytest.mark.parametrize("ss_epsilon", [0.0, 0.1])
+    @pytest.mark.parametrize("ck_loss_weight", [0, 0.5])
+    @pytest.mark.parametrize("use_inv_rel", [False, True])
+    def test_model(self, use_context, fusing_mode, red_dim, ss_epsilon, ck_loss_weight, use_inv_rel, conll2004_demo, device):
+        self.config = ExtractorConfig(decoder=SpanRelClassificationDecoderConfig(use_context=use_context, fusing_mode=fusing_mode, 
+                                                                                 reduction=EncoderConfig(arch='FFN', hid_dim=red_dim, num_layers=1, in_drop_rates=(0.0, 0.0, 0.0), hid_drop_rate=0.0), 
+                                                                                 ss_epsilon=ss_epsilon, ck_loss_weight=ck_loss_weight, use_inv_rel=use_inv_rel))
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()

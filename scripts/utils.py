@@ -73,7 +73,7 @@ def add_base_arguments(parser: argparse.ArgumentParser):
     group_model.add_argument('--use_softlexicon', default=False, action='store_true', 
                              help="whether to use softlexicon")
     
-    group_model.add_argument('--enc_arch', type=str, default='LSTM', choices=['LSTM', 'GRU', 'Conv', 'Gehring', 'Transformer'], 
+    group_model.add_argument('--enc_arch', type=str, default='LSTM', choices=['FFN', 'LSTM', 'GRU', 'Conv', 'Gehring', 'Transformer'], 
                              help="token-level encoder architecture")
     group_model.add_argument('--hid_dim', type=int, default=200, 
                              help="hidden dim")
@@ -92,6 +92,10 @@ def add_base_arguments(parser: argparse.ArgumentParser):
                              help="whether to use Flair")
     group_model.add_argument('--bert_arch', type=str, default='None', 
                              help="bert-like architecture (None for w/o bert-like)")
+    group_model.add_argument('--bert_cased', default=False, action='store_true', 
+                             help="whether to use the cased (case-sensitive) version") 
+    group_model.add_argument('--bert_max_length', type=int, default=512, 
+                             help="maximum length of subtokenized tokens")
     group_model.add_argument('--bert_drop_rate', type=float, default=0.2, 
                              help="dropout rate for BERT")
     group_model.add_argument('--bert_freeze', default=False, action='store_true', 
@@ -130,6 +134,7 @@ dataset2language = {'conll2003': 'English',
                     'nne': 'English', 
                     'conll2004': 'English', 
                     'SciERC': 'English', 
+                    'SciERC-eberts2020ecai': 'English', 
                     'ace2005_rel': 'English',
                     'ResumeNER': 'Chinese', 
                     'WeiboNER': 'Chinese', 
@@ -158,6 +163,7 @@ dataset2language = {'conll2003': 'English',
 dataset2language.update({f'ADE_cv{k}': 'English' for k in range(10)})
 dataset2language.update({f'ace2004_rel_cv{k}': 'English' for k in range(5)})
 dataset2language.update({f'HwaMei_{s}': 'Chinese' for s in range(500, 1201, 100)})
+dataset2language.update({'HwaMei_Privacy': 'Chinese', 'HwaMei_Privacy_Shaoyang': 'Chinese'})
 
 def load_data(args: argparse.Namespace):
     if args.dataset.startswith('conll2003'):
@@ -248,19 +254,28 @@ def load_data(args: argparse.Namespace):
         io = JsonIO(text_key='tokens', 
                     chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', 
                     relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
-                    case_mode='None', number_mode='Zeros')
+                    retain_keys=['orig_id'], case_mode='None', number_mode='Zeros')
         train_data = io.read("data/conll2004/conll04_train.json")
         dev_data   = io.read("data/conll2004/conll04_dev.json")
         test_data  = io.read("data/conll2004/conll04_test.json")
         
-    elif args.dataset == 'SciERC':
+    elif args.dataset == 'SciERC': 
         io = JsonIO(text_key='tokens', 
                     chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', 
                     relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
-                    case_mode='None', number_mode='Zeros')
-        train_data = io.read("data/SciERC/scierc_train.json")
-        dev_data   = io.read("data/SciERC/scierc_dev.json")
-        test_data  = io.read("data/SciERC/scierc_test.json")
+                    retain_keys=['doc_key'], encoding='utf-8', case_mode='None', number_mode='Zeros')
+        train_data = io.read("data/SciERC/train.json")
+        dev_data   = io.read("data/SciERC/dev.json")
+        test_data  = io.read("data/SciERC/test.json")
+        
+    elif args.dataset == 'SciERC-eberts2020ecai':
+        io = JsonIO(text_key='tokens', 
+                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', 
+                    relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
+                    retain_keys=['orig_id'], case_mode='None', number_mode='Zeros')
+        train_data = io.read("data/SciERC-eberts2020ecai/scierc_train.json")
+        dev_data   = io.read("data/SciERC-eberts2020ecai/scierc_dev.json")
+        test_data  = io.read("data/SciERC-eberts2020ecai/scierc_test.json")
         
     elif args.dataset.startswith('ADE_cv'):
         io = JsonIO(text_key='tokens', 
@@ -271,23 +286,26 @@ def load_data(args: argparse.Namespace):
         train_data = io.read(f"data/ADE/ade_split_{k}_train.json")
         dev_data   = []
         test_data  = io.read(f"data/ADE/ade_split_{k}_test.json")
-        args.train_with_dev = True
         
     elif args.dataset.startswith('ace2004_rel_cv'):
         io = JsonIO(relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
-                    case_mode='None', number_mode='Zeros')
+                    retain_keys=['doc_key'], case_mode='None', number_mode='Zeros')
         k = int(args.dataset.replace('ace2004_rel_cv', ''))
         train_data = io.read(f"data/ace-luan2019naacl/ace04/cv{k}.train.json")
         dev_data   = []
         test_data  = io.read(f"data/ace-luan2019naacl/ace04/cv{k}.test.json")
-        args.train_with_dev = True
         
     elif args.dataset == 'ace2005_rel':
         io = JsonIO(relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
-                    case_mode='None', number_mode='Zeros')
+                    retain_keys=['doc_key'], case_mode='None', number_mode='Zeros')
         train_data = io.read("data/ace-luan2019naacl/ace05/train.json")
         dev_data   = io.read("data/ace-luan2019naacl/ace05/dev.json")
         test_data  = io.read("data/ace-luan2019naacl/ace05/test.json")
+        
+        set_chunks_false = {866: [('PER', 22, 23), ('PER', 24, 25), ('PER', 28, 29)]}
+        for idx, chunks_false in set_chunks_false.items():
+            train_data[idx]['chunks'] = [ck for ck in train_data[idx]['chunks'] if not (ck in chunks_false)]
+            train_data[idx]['relations'] = [rel for rel in train_data[idx]['relations'] if not (rel[1] in chunks_false or rel[2] in chunks_false)]
         
     elif args.dataset == 'ResumeNER':
         conll_io = ConllIO(text_col_id=0, tag_col_id=1, scheme='BMES', encoding='utf-8', token_sep="", pad_token="")
@@ -379,7 +397,7 @@ def load_data(args: argparse.Namespace):
         test_data  = post_io.map(test_data, **kwargs)
         
         
-    elif args.dataset.startswith('HwaMei'):
+    elif (args.dataset.startswith('HwaMei') and 'Privacy' not in args.dataset):
         io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', chunk_text_key=None, 
                     attribute_key='attributes', attribute_type_key='type', attribute_chunk_key='entity', 
                     relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
@@ -397,6 +415,16 @@ def load_data(args: argparse.Namespace):
             ext_data = [entry for entry in ext_data if entry['visit_id'] in ext_ids]
             train_data += ext_data
         assert len(set([entry['visit_id'] for entry in train_data])) == size - 200
+        
+    elif (args.dataset.startswith('HwaMei') and 'Privacy' in args.dataset):
+        io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', chunk_text_key=None, 
+                    is_whole_piece=False, retain_keys=['visit_id', 'split'], encoding='utf-8', token_sep="", pad_token="")
+        train_data = io.read("data/HwaMei/v20221201/privacy-train.json")
+        dev_data   = io.read("data/HwaMei/v20221201/privacy-dev.json")
+        test_data  = io.read("data/HwaMei/v20221201/privacy-test.json")
+        
+        if 'Shaoyang' in args.dataset:
+            test_data = io.read("data/HwaMei/v20230221/privacy-shaoyang-v1.json")
         
         
     elif args.dataset == 'yelp2013':
@@ -502,7 +530,7 @@ def load_data(args: argparse.Namespace):
 
 
 
-def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
+def load_pretrained(pretrained_str, args: argparse.Namespace):
     if pretrained_str.lower() == 'elmo':
         return allennlp.modules.Elmo(options_file="assets/allennlp/elmo_2x4096_512_2048cnn_2xhighway_options.json", 
                                      weight_file="assets/allennlp/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5", 
@@ -515,13 +543,13 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
     elif args.language.lower() == 'english':
         if pretrained_str.lower().startswith('bert'):
             if 'wwm' in pretrained_str.lower():
-                PATH = "assets/transformers/bert-large-cased-whole-word-masking" if cased else "assets/transformers/bert-large-uncased-whole-word-masking"
+                PATH = "assets/transformers/bert-large-cased-whole-word-masking" if args.bert_cased else "assets/transformers/bert-large-uncased-whole-word-masking"
             elif 'base' in pretrained_str.lower():
-                PATH = "assets/transformers/bert-base-cased" if cased else "assets/transformers/bert-base-uncased"
+                PATH = "assets/transformers/bert-base-cased" if args.bert_cased else "assets/transformers/bert-base-uncased"
             elif 'large' in pretrained_str.lower():
-                PATH = "assets/transformers/bert-large-cased" if cased else "assets/transformers/bert-large-uncased"
-            # cased: do_lower_case=False
-            # uncased: do_lower_case=True
+                PATH = "assets/transformers/bert-large-cased" if args.bert_cased else "assets/transformers/bert-large-uncased"
+            # "cased" means case-sensitive; hence, do_lower_case=False
+            # "uncased" means case-unsensitive; hence, do_lower_case=True
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.BertTokenizer.from_pretrained(PATH))
             
@@ -530,7 +558,6 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
                 PATH = "assets/transformers/roberta-base"
             elif 'large' in pretrained_str.lower():
                 PATH = "assets/transformers/roberta-large"
-            # cased: do_lower_case=False
             return (transformers.RobertaModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.RobertaTokenizer.from_pretrained(PATH, add_prefix_space=True))
             
@@ -545,7 +572,6 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
             size = re.search("x*(base|large)", pretrained_str.lower())
             if size is not None:
                 PATH = f"assets/transformers/albert-{size.group()}-v2"
-            # uncased: do_lower_case=True
             # ALBERT by default uses dropout rate of 0
             return (transformers.AlbertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
                     transformers.AlbertTokenizer.from_pretrained(PATH))
@@ -559,9 +585,9 @@ def load_pretrained(pretrained_str, args: argparse.Namespace, cased=False):
                     transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=False))
             
         elif pretrained_str.lower().startswith('scibert'):
-            PATH = "assets/transformers/allenai/scibert_scivocab_cased" if cased else "assets/transformers/allenai/scibert_scivocab_uncased"
+            PATH = "assets/transformers/allenai/scibert_scivocab_cased" if args.bert_cased else "assets/transformers/allenai/scibert_scivocab_uncased"
             return (transformers.BertModel.from_pretrained(PATH, hidden_dropout_prob=args.bert_drop_rate, attention_probs_dropout_prob=args.bert_drop_rate), 
-                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=(not cased)))
+                    transformers.BertTokenizer.from_pretrained(PATH, model_max_length=512, do_lower_case=(not args.bert_cased)))
             
         elif pretrained_str.lower().startswith('biobert'):
             if 'base' in pretrained_str.lower():

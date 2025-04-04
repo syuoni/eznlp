@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from typing import List
 from collections import Counter
-import itertools
 import logging
 import copy
 import math
@@ -9,119 +8,29 @@ import numpy
 import torch
 
 from ...wrapper import Batch
-from ...nn.modules import SequencePooling, SequenceAttention, CombinedDropout
+from ...nn.modules import CombinedDropout
 from ...nn.modules import SoftLabelCrossEntropyLoss, BiAffineFusor, TriAffineFusor
-from ...nn.functional import seq_lens2mask
 from ...nn.init import reinit_embedding_, reinit_layer_, reinit_vector_parameter_
-from ...metrics import precision_recall_f1_report
 from ...utils.chunk import chunk_pair_distance
-from ...utils.relation import INV_REL_PREFIX, detect_missing_symmetric
+from ...utils.relation import INV_REL_PREFIX
 from ..encoder import EncoderConfig
-from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
+from .base import SingleDecoderConfigBase, DecoderBase
 from .boundaries import MAX_SIZE_ID_COV_RATE
-from .chunks import ChunkPairs, MAX_DIST_ID_COV_RATE, MAX_CP_DIST_TOL
+from .chunks import ChunkPairs, MAX_DIST_ID_COV_RATE
+from .span_rel_classification import ChunkPairsDecoderMixin
 
 logger = logging.getLogger(__name__)
 
 
-class ChunkPairsDecoderMixin(DecoderMixinBase):
-    """A `Mixin` for relation extraction. 
-    """
-    @property
-    def idx2label(self):
-        return self._idx2label
-        
-    @idx2label.setter
-    def idx2label(self, idx2label: List[str]):
-        self._idx2label = idx2label
-        self.label2idx = {l: i for i, l in enumerate(idx2label)} if idx2label is not None else None
-        
-    @property
-    def voc_dim(self):
-        return len(self.label2idx)
-        
-    @property
-    def none_idx(self):
-        return self.label2idx[self.none_label]
-        
-    @property
-    def idx2ck_label(self):
-        return self._idx2ck_label
-        
-    @idx2ck_label.setter
-    def idx2ck_label(self, idx2ck_label: List[str]):
-        self._idx2ck_label = idx2ck_label
-        self.ck_label2idx = {l: i for i, l in enumerate(idx2ck_label)} if idx2ck_label is not None else None
-        
-    @property
-    def ck_voc_dim(self):
-        return len(self.ck_label2idx)
-        
-    @property
-    def ck_none_idx(self):
-        return self.ck_label2idx[self.ck_none_label]
-        
-    def exemplify(self, entry: dict, training: bool=True):
-        return {'cp_obj': ChunkPairs(entry, self, training=training)}
-        
-    def batchify(self, batch_examples: List[dict]):
-        return {'cp_objs': [ex['cp_obj'] for ex in batch_examples]}
-        
-    def retrieve(self, batch: Batch):
-        return [cp_obj.relations for cp_obj in batch.cp_objs]
-        
-    def evaluate(self, y_gold: List[List[tuple]], y_pred: List[List[tuple]]):
-        scores, ave_scores = precision_recall_f1_report(y_gold, y_pred)
-        return ave_scores['micro']['f1']
-        
-        
-    def _filter(self, relations: List[tuple]):
-        # `existing_rht_labels` do not include inverse relation types, so process inverse relations first
-        if self.use_inv_rel: 
-            inv_relations = [(label, head, tail) for label, head, tail in relations if label.startswith(INV_REL_PREFIX)]
-            relations = [(label, head, tail) for label, head, tail in relations if not label.startswith(INV_REL_PREFIX)]
-            for label, head, tail in inv_relations:
-                if (rel := (label.replace(INV_REL_PREFIX, ''), tail, head)) not in relations:
-                    relations.append(rel)
-        
-        relations = [(label, head, tail) for label, head, tail in relations if ((not self.check_rht_labels or (label, head[0], tail[0]) in self.existing_rht_labels)
-                                                                                and (self.existing_self_rel or head[1:] != tail[1:]))]
-        
-        if self.comp_sym_rel: 
-            missing_relations = detect_missing_symmetric(relations, self.sym_rel_labels)
-            relations.extend(missing_relations)
-        
-        return relations
-        
-        
-    def enumerate_chunk_pairs(self, cp_obj, return_valid_only: bool=False):
-        for head, tail in itertools.product(cp_obj.chunks, cp_obj.chunks): 
-            is_valid = True
-            if hasattr(cp_obj, 'tok2sent_idx') and (cp_obj.tok2sent_idx[head[1]] != cp_obj.tok2sent_idx[tail[1]]): 
-                is_valid = False
-            if chunk_pair_distance(head, tail) > self.max_cp_dist + MAX_CP_DIST_TOL: 
-                is_valid = False
-            if (not self.existing_self_rel and head[1:] == tail[1:]):
-                is_valid = False
-            if self.check_rht_labels:
-                if self.use_inv_rel: 
-                    if (head[0], tail[0]) not in self.existing_ht_labels and (tail[0], head[0]) not in self.existing_ht_labels:
-                        is_valid = False
-                else:
-                    if (head[0], tail[0]) not in self.existing_ht_labels:
-                        is_valid = False
-            
-            if return_valid_only: 
-                if is_valid:
-                    yield head, tail
-            else: 
-                yield head, tail, is_valid
-
-
-
-class SpanRelClassificationDecoderConfig(SingleDecoderConfigBase, ChunkPairsDecoderMixin):
+class MaskedSpanRelClsDecoderConfig(SingleDecoderConfigBase, ChunkPairsDecoderMixin):
     def __init__(self, **kwargs):
         self.use_context = kwargs.pop('use_context', True)
+        self.context_mode = kwargs.pop('context_mode', 'pair_specific')
+        assert not (self.use_context and self.context_mode.lower().count('none'))
+        # If `context_mode` is non-paired, `context_ext_win` should be strictly positive
+        self.context_ext_win = kwargs.pop('context_ext_win', 0)
+        self.context_exc_ck = kwargs.pop('context_exc_ck', True)
+        
         self.size_emb_dim = kwargs.pop('size_emb_dim', 0)
         self.label_emb_dim = kwargs.pop('label_emb_dim', 0)
         self.fusing_mode = kwargs.pop('fusing_mode', 'concat')
@@ -136,11 +45,7 @@ class SpanRelClassificationDecoderConfig(SingleDecoderConfigBase, ChunkPairsDeco
         self.hid_drop_rates = kwargs.pop('hid_drop_rates', (0.2, 0.0, 0.0))
         
         self.neg_sampling_rate = kwargs.pop('neg_sampling_rate', 1.0)
-        # self.neg_sampling_power_decay = kwargs.pop('neg_sampling_power_decay', 0.0)  # decay = 0.5, 1.0
-        # self.neg_sampling_surr_rate = kwargs.pop('neg_sampling_surr_rate', 0.0)
-        # self.neg_sampling_surr_size = kwargs.pop('neg_sampling_surr_size', 5)
         
-        self.agg_mode = kwargs.pop('agg_mode', 'max_pooling')
         self.ck_loss_weight = kwargs.pop('ck_loss_weight', 0)
         self.l2_loss_weight = kwargs.pop('l2_loss_weight', 0)
         
@@ -160,15 +65,18 @@ class SpanRelClassificationDecoderConfig(SingleDecoderConfigBase, ChunkPairsDeco
         
     @property
     def name(self):
-        return self._name_sep.join([self.agg_mode, self.fusing_mode, self.criterion])
+        return self._name_sep.join([self.fusing_mode, self.criterion])
         
     def __repr__(self):
-        repr_attr_dict = {key: getattr(self, key) for key in ['in_dim', 'in_drop_rates', 'hid_drop_rates', 'agg_mode', 'fusing_mode', 'criterion']}
+        repr_attr_dict = {key: getattr(self, key) for key in ['in_dim', 'in_drop_rates', 'hid_drop_rates', 'fusing_mode', 'criterion']}
         return self._repr_non_config_attrs(repr_attr_dict)
         
     @property
-    def num_hidden(self):
-        return 3 if self.use_context else 2
+    def num_hidden(self): 
+        if self.use_context:
+            return 3 if self.context_mode.lower().count('pair') else 4
+        else:
+            return 2
         
     @property
     def in_dim(self): 
@@ -220,15 +128,94 @@ class SpanRelClassificationDecoderConfig(SingleDecoderConfigBase, ChunkPairsDeco
         self.max_cp_dist = max(cp_distances)
         
         
+    def exemplify(self, entry: dict, training: bool=True):
+        example = super().exemplify(entry, training)
+        
+        # Attention mask for each example
+        cp_obj = example['cp_obj']
+        num_tokens, num_chunks = cp_obj.num_tokens, len(cp_obj.chunks)
+        example['masked_span_bert_like'] = {'span_size_ids': cp_obj.span_size_ids, 
+                                            'cp_dist_ids': cp_obj.cp_dist_ids}
+        
+        ck2tok_mask = torch.ones(num_chunks, num_tokens, dtype=torch.bool)
+        for i, (label, start, end) in enumerate(cp_obj.chunks):
+            for j in range(start, end):
+                ck2tok_mask[i, j] = False
+        example['masked_span_bert_like'].update({'ck2tok_mask': ck2tok_mask})
+        
+        if self.context_mode.lower().count('pair'):
+            chunk_pairs = list(self.enumerate_chunk_pairs(cp_obj, return_valid_only=True))
+            num_pairs = len(chunk_pairs)
+            pair2tok_mask = torch.ones(num_pairs, num_tokens, dtype=torch.bool)
+            for i, ((_, h_start, h_end), (_, t_start, t_end)) in enumerate(chunk_pairs): 
+                for j in range(h_start, h_end):
+                    pair2tok_mask[i, j] = False
+                for j in range(t_start, t_end):
+                    pair2tok_mask[i, j] = False
+            
+            ctx2tok_mask = torch.ones(num_pairs, num_tokens, dtype=torch.bool)
+            for i, ((_, h_start, h_end), (_, t_start, t_end)) in enumerate(chunk_pairs): 
+                c_start = max(min(h_start, t_start) - self.context_ext_win, 0)
+                c_end = min(max(h_end, t_end) + self.context_ext_win, num_tokens)
+                for j in range(c_start, c_end): 
+                    # Context does not excluding chunk ranges, or `j` not in chunk ranges
+                    if (not self.context_exc_ck) or pair2tok_mask[i, j].item(): 
+                        ctx2tok_mask[i, j] = False
+            
+            example['masked_span_bert_like'].update({'pair2tok_mask': pair2tok_mask, 
+                                                     'ctx2tok_mask': ctx2tok_mask})
+            
+        else: 
+            ctx2tok_mask = torch.ones(num_chunks, num_tokens, dtype=torch.bool)
+            for i, (_, start, end) in enumerate(cp_obj.chunks): 
+                c_start = max(start - self.context_ext_win, 0)
+                c_end = min(end + self.context_ext_win, num_tokens)
+                for j in range(c_start, c_end): 
+                    if (not self.context_exc_ck) or ck2tok_mask[i, j].item(): 
+                        ctx2tok_mask[i, j] = False
+            
+            example['masked_span_bert_like'].update({'ctx2tok_mask': ctx2tok_mask})
+        
+        return example
+        
+        
+    def batchify(self, batch_examples: List[dict], batch_sub_mask: torch.Tensor):
+        batch = super().batchify(batch_examples)
+        
+        # Batchify chunk-to-token attention mask
+        # Remove `[CLS]` and `[SEP]` 
+        batch_sub_mask = batch_sub_mask[:, 2:]
+        batch['masked_span_bert_like'] = {}
+        for tensor_name in batch_examples[0]['masked_span_bert_like'].keys(): 
+            if tensor_name.endswith('_mask'): 
+                max_num_items = max(ex['masked_span_bert_like'][tensor_name].size(0) for ex in batch_examples)
+                batch_item2tok_mask = batch_sub_mask.unsqueeze(1).repeat(1, max_num_items, 1)
+                
+                for i, ex in enumerate(batch_examples): 
+                    item2tok_mask = ex['masked_span_bert_like'][tensor_name]
+                    num_items, num_tokens = item2tok_mask.size()
+                    batch_item2tok_mask[i, :num_items, :num_tokens].logical_or_(item2tok_mask)
+                
+                batch['masked_span_bert_like'].update({tensor_name: batch_item2tok_mask})
+                
+            elif tensor_name.endswith('_ids'):
+                batch_ids = [ex['masked_span_bert_like'][tensor_name] for ex in batch_examples]
+                batch_ids = torch.nn.utils.rnn.pad_sequence(batch_ids, batch_first=True, padding_value=0)
+                batch['masked_span_bert_like'].update({tensor_name: batch_ids})
+        
+        return batch
+        
+        
     def instantiate(self):
-        return SpanRelClassificationDecoder(self)
+        return MaskedSpanRelClsDecoder(self)
 
 
 
-class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
-    def __init__(self, config: SpanRelClassificationDecoderConfig):
+class MaskedSpanRelClsDecoder(DecoderBase, ChunkPairsDecoderMixin):
+    def __init__(self, config: MaskedSpanRelClsDecoderConfig):
         super().__init__()
         self.use_context = config.use_context
+        self.context_mode = config.context_mode
         self.fusing_mode = config.fusing_mode
         self.max_size_id = config.max_size_id
         self.neg_sampling_rate = config.neg_sampling_rate
@@ -248,11 +235,6 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
         self.existing_self_rel = config.existing_self_rel
         self.max_cp_dist = config.max_cp_dist
         self.max_dist_id = config.max_dist_id
-        
-        if config.agg_mode.lower().endswith('_pooling'):
-            self.aggregating = SequencePooling(mode=config.agg_mode.replace('_pooling', ''))
-        elif config.agg_mode.lower().endswith('_attention'):
-            self.aggregating = SequenceAttention(config.in_dim, scoring=config.agg_mode.replace('_attention', ''))
         
         if config.use_context: 
             # Trainable context vector for overlapping chunk pairs
@@ -284,7 +266,12 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
             self.reduction_head = config.reduction.instantiate()
             self.reduction_tail = config.reduction.instantiate()
             if config.use_context: 
-                self.reduction_ctx = config.reduction_ctx.instantiate()
+                if self.context_mode.lower().count('pair'):
+                    self.reduction_ctx = config.reduction_ctx.instantiate()
+                else:
+                    self.reduction_hctx = config.reduction_ctx.instantiate()
+                    self.reduction_tctx = config.reduction_ctx.instantiate()
+                    self.ctx_fusor = BiAffineFusor(config.reduction.out_dim, config.reduction.out_dim)
                 self.hid2logit = TriAffineFusor(config.reduction.out_dim, config.voc_dim)
             else:
                 self.hid2logit = BiAffineFusor(config.reduction.out_dim, config.voc_dim)
@@ -296,70 +283,63 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
         self.criterion = config.instantiate_criterion(reduction='sum')
         
         
-    def assign_chunks_pred(self, batch: Batch, batch_chunks_pred: List[List[tuple]]):
-        """This method should be called on-the-fly for joint modeling. 
-        """
-        for cp_obj, chunks_pred in zip(batch.cp_objs, batch_chunks_pred):
-            if cp_obj.chunks_pred is None:
-                cp_obj.chunks_pred = chunks_pred
-                cp_obj.build(self)
-                if self.fusing_mode.startswith('concat'):
-                    cp_obj.to(self.hid2logit.weight.device)
-                elif self.fusing_mode.lower().startswith('affine'):
-                    cp_obj.to(self.hid2logit.U.device)
-        
-        
-    def _collect_shallow_contexts(self, full_hidden: torch.Tensor, i: int, cp_obj: ChunkPairs): 
-        # contexts: (num_chunks^2, ctx_span_size, hid_dim) -> (num_chunks^2, hid_dim) -> (num_chunks, num_chunks, hid_dim)
+    def _collect_pair_specific_contexts(self, ctx_query_hidden: torch.Tensor, i: int, cp_obj: ChunkPairs):
+        # contexts: (num_chunks^2, hid_dim) -> (num_chunks, num_chunks, hid_dim)
         contexts = []
+        valid_pair_idx = 0
         for (_, h_start, h_end), (_, t_start, t_end), is_valid in self.enumerate_chunk_pairs(cp_obj): 
             if not is_valid: 
-                contexts.append(self.none_context.unsqueeze(0))
-            elif h_end < t_start:
-                contexts.append(full_hidden[i, h_end:t_start])
-            elif t_end < h_start:
-                contexts.append(full_hidden[i, t_end:h_start])
+                contexts.append(self.none_context)
             else:
-                contexts.append(self.zero_context.unsqueeze(0))
-        ctx_mask = seq_lens2mask(torch.tensor([c.size(0) for c in contexts], dtype=torch.long, device=full_hidden.device))
-        contexts = torch.nn.utils.rnn.pad_sequence(contexts, batch_first=True, padding_value=0.0)
-        contexts = self.aggregating(self.in_dropout(contexts), mask=ctx_mask)
+                contexts.append(ctx_query_hidden[i, valid_pair_idx])
+                valid_pair_idx += 1
+        contexts = self.in_dropout(torch.stack(contexts))
         contexts = contexts.view(len(cp_obj.chunks), len(cp_obj.chunks), -1)
-        return contexts 
+        return contexts
         
         
-    def get_logits(self, batch: Batch, full_hidden: torch.Tensor):
+    def get_logits(self, batch: Batch, full_hidden: torch.Tensor, span_query_hidden: torch.Tensor, ctx_query_hidden: torch.Tensor):
         # full_hidden: (batch, step, hid_dim)
+        # span_query_hidden/ctx_query_hidden: (batch, num_chunks, hid_dim)
         batch_logits = []
         for i, cp_obj in enumerate(batch.cp_objs):
             if not cp_obj.has_valid_cp: 
                 logits = None
             else:
-                # span_hidden: (num_chunks, span_size, hid_dim) -> (num_chunks, hid_dim)
-                span_hidden = [full_hidden[i, start:end] for label, start, end in cp_obj.chunks]
-                span_mask = seq_lens2mask(torch.tensor([h.size(0) for h in span_hidden], dtype=torch.long, device=full_hidden.device))
-                span_hidden = torch.nn.utils.rnn.pad_sequence(span_hidden, batch_first=True, padding_value=0.0)
-                span_hidden = self.aggregating(self.in_dropout(span_hidden), mask=span_mask)
+                # span_hidden: (num_chunks, hid_dim)
+                span_hidden = span_query_hidden[i, :len(cp_obj.chunks)]
                 
                 if hasattr(self, 'size_embedding'):
                     # size_embedded: (num_chunks, emb_dim)
                     size_embedded = self.size_embedding(cp_obj.span_size_ids)
-                    span_hidden = torch.cat([span_hidden, self.in_dropout(size_embedded)], dim=-1)
+                    span_hidden = torch.cat([span_hidden, size_embedded], dim=-1)
                 
                 if hasattr(self, 'label_embedding'):
                     # label_embedded: (num_chunks, emb_dim)
                     label_embedded = self.label_embedding(cp_obj.ck_label_ids)
-                    span_hidden = torch.cat([span_hidden, self.in_dropout(label_embedded)], dim=-1)
+                    span_hidden = torch.cat([span_hidden, label_embedded], dim=-1)
                 
-                head_hidden = span_hidden.unsqueeze(1).expand(-1, len(cp_obj.chunks), -1)
-                tail_hidden = span_hidden.unsqueeze(0).expand(len(cp_obj.chunks), -1, -1)
+                head_hidden = self.in_dropout(span_hidden).unsqueeze(1).expand(-1, len(cp_obj.chunks), -1)
+                tail_hidden = self.in_dropout(span_hidden).unsqueeze(0).expand(len(cp_obj.chunks), -1, -1)
+                
+                if self.use_context:
+                    if self.context_mode.lower().count('pair'):
+                        # contexts: (num_chunks, num_chunks, hid_dim)
+                        contexts = self._collect_pair_specific_contexts(ctx_query_hidden, i, cp_obj)
+                    else: 
+                        # ctx_hidden: (num_chunks, hid_dim) -> (num_chunks, num_chunks, hid_dim)
+                        ctx_hidden = ctx_query_hidden[i, :len(cp_obj.chunks)]
+                        h_contexts = self.in_dropout(ctx_hidden).unsqueeze(1).expand(-1, len(cp_obj.chunks), -1)
+                        t_contexts = self.in_dropout(ctx_hidden).unsqueeze(0).expand(len(cp_obj.chunks), -1, -1)
                 
                 if self.fusing_mode.startswith('concat'):
-                    # hidden_cat: (num_chunks, num_chunks, hid_dim*3)
+                    # hidden_cat: (num_chunks, num_chunks, hid_dim*4)
                     hidden_cat = torch.cat([head_hidden, tail_hidden], dim=-1)
                     if self.use_context: 
-                        contexts = self._collect_shallow_contexts(full_hidden, i, cp_obj)
-                        hidden_cat = torch.cat([hidden_cat, contexts], dim=-1)
+                        if self.context_mode.lower().count('pair'):
+                            hidden_cat = torch.cat([hidden_cat, contexts], dim=-1)
+                        else: 
+                            hidden_cat = torch.cat([hidden_cat, h_contexts, t_contexts], dim=-1)
                     if hasattr(self, 'reduction_cat'):
                         reduced_cat = self.reduction_cat(hidden_cat)
                         logits = self.hid2logit(self.hid_dropout(reduced_cat))
@@ -370,9 +350,13 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
                 elif self.fusing_mode.lower().startswith('affine'):
                     reduced_head = self.reduction_head(head_hidden)
                     reduced_tail = self.reduction_tail(tail_hidden)
-                    if self.use_context:
-                        contexts = self._collect_shallow_contexts(full_hidden, i, cp_obj)
-                        reduced_ctx = self.reduction_ctx(contexts)
+                    if self.use_context: 
+                        if self.context_mode.lower().count('pair'):
+                            reduced_ctx = self.reduction_ctx(contexts)
+                        else:
+                            reduced_hctx = self.reduction_hctx(h_contexts)
+                            reduced_tctx = self.reduction_tctx(t_contexts)
+                            reduced_ctx = self.ctx_fusor(self.hid_dropout(reduced_hctx), self.hid_dropout(reduced_tctx))
                         logits = self.hid2logit(self.hid_dropout(reduced_head), self.hid_dropout(reduced_tail), self.hid_dropout(reduced_ctx))
                     else:
                         logits = self.hid2logit(self.hid_dropout(reduced_head), self.hid_dropout(reduced_tail))
@@ -386,8 +370,8 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
         return batch_logits
         
         
-    def forward(self, batch: Batch, full_hidden: torch.Tensor):
-        batch_logits = self.get_logits(batch, full_hidden)
+    def forward(self, batch: Batch, full_hidden: torch.Tensor, span_query_hidden: torch.Tensor, ctx_query_hidden: torch.Tensor):
+        batch_logits = self.get_logits(batch, full_hidden, span_query_hidden, ctx_query_hidden)
         
         losses = []
         for logits, cp_obj in zip(batch_logits, batch.cp_objs):
@@ -408,8 +392,8 @@ class SpanRelClassificationDecoder(DecoderBase, ChunkPairsDecoderMixin):
         return torch.stack(losses)
         
         
-    def decode(self, batch: Batch, full_hidden: torch.Tensor):
-        batch_logits = self.get_logits(batch, full_hidden)
+    def decode(self, batch: Batch, full_hidden: torch.Tensor, span_query_hidden: torch.Tensor, ctx_query_hidden: torch.Tensor):
+        batch_logits = self.get_logits(batch, full_hidden, span_query_hidden, ctx_query_hidden)
         
         batch_relations = []
         for logits, cp_obj in zip(batch_logits, batch.cp_objs):

@@ -5,8 +5,7 @@ import numpy
 import transformers
 
 from eznlp.io import ConllIO, PostIO
-from eznlp.model.bert_like import merge_sentences_for_bert_like, merge_enchars_for_bert_like
-
+from eznlp.model import BertLikePreProcessor
 
 
 class TestConllIO(object):
@@ -37,8 +36,10 @@ class TestConllIO(object):
         
         
         
-    @pytest.mark.parametrize("doc_level", [False, True])
-    def test_conll2003(self, doc_level, bert_with_tokenizer):
+    @pytest.mark.parametrize("doc_level, merge_mode", [[False, None], 
+                                                       [True, 'greedy'], 
+                                                       [True, 'min_max_length']])
+    def test_conll2003(self, doc_level, merge_mode, bert_tokenizer):
         self.io = ConllIO(text_col_id=0, tag_col_id=3, scheme='BIO1', document_sep_starts=["-DOCSTART-"], additional_col_id2name={1: 'pos_tag'})
         train_data = self.io.read("data/conll2003/eng.train")
         dev_data   = self.io.read("data/conll2003/eng.testa")
@@ -52,13 +53,13 @@ class TestConllIO(object):
             assert len(dev_data) == 3_466 - 216
             assert len(test_data) == 3_684 - 231
         else:
-            bert, tokenizer = bert_with_tokenizer
-            train_data = merge_sentences_for_bert_like(train_data, tokenizer, doc_key='doc_idx', verbose=False)
-            dev_data   = merge_sentences_for_bert_like(dev_data,   tokenizer, doc_key='doc_idx', verbose=False)
-            test_data  = merge_sentences_for_bert_like(test_data,  tokenizer, doc_key='doc_idx', verbose=False)
-            assert len(train_data) == 1_075
-            assert len(dev_data) == 261
-            assert len(test_data) == 261
+            preprocessor = BertLikePreProcessor(bert_tokenizer, verbose=False)
+            train_data = preprocessor.merge_sentences_for_data(train_data, doc_key='doc_idx', mode=merge_mode)
+            dev_data   = preprocessor.merge_sentences_for_data(dev_data,   doc_key='doc_idx', mode=merge_mode)
+            test_data  = preprocessor.merge_sentences_for_data(test_data,  doc_key='doc_idx', mode=merge_mode)
+            assert len(train_data) == 1_055
+            assert len(dev_data) == 256
+            assert len(test_data) == 251
         
         assert sum(len(ex['chunks']) for ex in train_data) == 23_499
         assert sum(len(ex['tokens']) for ex in train_data) == 204_567 - 946
@@ -89,8 +90,10 @@ class TestConllIO(object):
         assert sum(len(ex['tokens']) for ex in test_data) == 46_666 - 231
         
         
-    @pytest.mark.parametrize("doc_level", [False, True])
-    def test_ontonotesv5(self, doc_level, bert_with_tokenizer):
+    @pytest.mark.parametrize("doc_level, merge_mode", [[False, None], 
+                                                       [True, 'greedy'], 
+                                                       [True, 'min_max_length']])
+    def test_ontonotesv5(self, doc_level, merge_mode, bert_tokenizer):
         self.io = ConllIO(text_col_id=3, tag_col_id=10, scheme='OntoNotes', sentence_sep_starts=["#end", "pt/"], document_sep_starts=["#begin"], encoding='utf-8')
         train_data = self.io.read("data/conll2012/train.english.v4_gold_conll")
         dev_data   = self.io.read("data/conll2012/dev.english.v4_gold_conll")
@@ -101,13 +104,13 @@ class TestConllIO(object):
             assert len(dev_data) == 8_528
             assert len(test_data) == 8_262
         else:
-            bert, tokenizer = bert_with_tokenizer
-            train_data = merge_sentences_for_bert_like(train_data, tokenizer, doc_key='doc_idx', verbose=False)
-            dev_data   = merge_sentences_for_bert_like(dev_data,   tokenizer, doc_key='doc_idx', verbose=False)
-            test_data  = merge_sentences_for_bert_like(test_data,  tokenizer, doc_key='doc_idx', verbose=False)
-            assert len(train_data) == 3_828
-            assert len(dev_data) == 517
-            assert len(test_data) == 522
+            preprocessor = BertLikePreProcessor(bert_tokenizer, verbose=False)
+            train_data = preprocessor.merge_sentences_for_data(train_data, doc_key='doc_idx', mode=merge_mode)
+            dev_data   = preprocessor.merge_sentences_for_data(dev_data,   doc_key='doc_idx', mode=merge_mode)
+            test_data  = preprocessor.merge_sentences_for_data(test_data,  doc_key='doc_idx', mode=merge_mode)
+            assert len(train_data) == 3_781
+            assert len(dev_data) == 509
+            assert len(test_data) == 510
         
         assert sum(len(ex['chunks']) for ex in train_data) == 81_828
         assert sum(len(ex['tokens']) for ex in train_data) == 1_088_503
@@ -164,9 +167,10 @@ class TestConllIO(object):
         assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 38
         
         tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-chinese", do_lower_case=True)
-        train_data = merge_enchars_for_bert_like(train_data, tokenizer, verbose=False)
-        dev_data   = merge_enchars_for_bert_like(dev_data,   tokenizer, verbose=False)
-        test_data  = merge_enchars_for_bert_like(test_data,  tokenizer, verbose=False)
+        preprocessor = BertLikePreProcessor(tokenizer, verbose=False)
+        train_data = preprocessor.merge_enchars_for_data(train_data)
+        dev_data   = preprocessor.merge_enchars_for_data(dev_data)
+        test_data  = preprocessor.merge_enchars_for_data(test_data)
         assert sum(any(isinstance(start, float) or isinstance(end, float) for _, start, end in ex['chunks']) for data in [train_data, dev_data, test_data] for ex in data) == 0
         assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 38
         
@@ -187,8 +191,9 @@ class TestConllIO(object):
         assert max(end-start for data in [train_data, test_data] for ex in data for _, start, end in ex['chunks']) == 35
         
         tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-chinese", do_lower_case=True)
-        train_data = merge_enchars_for_bert_like(train_data, tokenizer, verbose=False)
-        test_data  = merge_enchars_for_bert_like(test_data,  tokenizer, verbose=False)
+        preprocessor = BertLikePreProcessor(tokenizer, verbose=False)
+        train_data = preprocessor.merge_enchars_for_data(train_data)
+        test_data  = preprocessor.merge_enchars_for_data(test_data)
         assert sum(any(isinstance(start, float) or isinstance(end, float) for _, start, end in ex['chunks']) for data in [train_data, test_data] for ex in data) == 0
         assert max(end-start for data in [train_data, test_data] for ex in data for _, start, end in ex['chunks']) == 35
         
@@ -212,9 +217,10 @@ class TestConllIO(object):
         assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 58
         
         tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-chinese", do_lower_case=True)
-        train_data = merge_enchars_for_bert_like(train_data, tokenizer, verbose=False)
-        dev_data   = merge_enchars_for_bert_like(dev_data,   tokenizer, verbose=False)
-        test_data  = merge_enchars_for_bert_like(test_data,  tokenizer, verbose=False)
+        preprocessor = BertLikePreProcessor(tokenizer, verbose=False)
+        train_data = preprocessor.merge_enchars_for_data(train_data)
+        dev_data   = preprocessor.merge_enchars_for_data(dev_data)
+        test_data  = preprocessor.merge_enchars_for_data(test_data)
         assert sum(any(isinstance(start, float) or isinstance(end, float) for _, start, end in ex['chunks']) for data in [train_data, dev_data, test_data] for ex in data) == 0
         assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 58
         
@@ -257,9 +263,10 @@ class TestConllIO(object):
         assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 11
         
         tokenizer = transformers.BertTokenizer.from_pretrained("assets/transformers/bert-base-chinese", do_lower_case=True)
-        train_data = merge_enchars_for_bert_like(train_data, tokenizer, verbose=False)
-        dev_data   = merge_enchars_for_bert_like(dev_data,   tokenizer, verbose=False)
-        test_data  = merge_enchars_for_bert_like(test_data,  tokenizer, verbose=False)
+        preprocessor = BertLikePreProcessor(tokenizer, verbose=False)
+        train_data = preprocessor.merge_enchars_for_data(train_data)
+        dev_data   = preprocessor.merge_enchars_for_data(dev_data)
+        test_data  = preprocessor.merge_enchars_for_data(test_data)
         assert sum(any(isinstance(start, float) or isinstance(end, float) for _, start, end in ex['chunks']) for data in [train_data, dev_data, test_data] for ex in data) == 1
         assert max(end-start for data in [train_data, dev_data, test_data] for ex in data for _, start, end in ex['chunks']) == 11
         

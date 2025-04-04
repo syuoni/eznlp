@@ -21,14 +21,14 @@ logger = logging.getLogger(__name__)
 
 class SpecificSpanClsDecoderConfig(SingleDecoderConfigBase, BoundariesDecoderMixin):
     def __init__(self, **kwargs):
-        self.affine = kwargs.pop('affine', EncoderConfig(arch='FFN', hid_dim=300, num_layers=1, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2))
-        
+        self.min_span_size = kwargs.pop('min_span_size', 2)
+        assert self.min_span_size in (1, 2)
         self.max_span_size_ceiling = kwargs.pop('max_span_size_ceiling', 20)
         self.max_span_size_cov_rate = kwargs.pop('max_span_size_cov_rate', 0.995)
         self.max_span_size = kwargs.pop('max_span_size', None)
         self.max_len = kwargs.pop('max_len', None)
         self.size_emb_dim = kwargs.pop('size_emb_dim', 25)
-        self.hid_drop_rates = kwargs.pop('hid_drop_rates', (0.2, 0.0, 0.0))
+        self.in_drop_rates = kwargs.pop('in_drop_rates', (0.2, 0.0, 0.0))
         
         self.neg_sampling_rate = kwargs.pop('neg_sampling_rate', 1.0)
         self.neg_sampling_power_decay = kwargs.pop('neg_sampling_power_decay', 0.0)  # decay = 0.5, 1.0
@@ -55,20 +55,11 @@ class SpecificSpanClsDecoderConfig(SingleDecoderConfigBase, BoundariesDecoderMix
         
     @property
     def name(self):
-        return self._name_sep.join([self.affine.arch, self.criterion])
+        return self.criterion
         
     def __repr__(self):
-        repr_attr_dict = {key: getattr(self, key) for key in ['in_dim', 'hid_drop_rates', 'criterion']}
+        repr_attr_dict = {key: getattr(self, key) for key in ['in_dim', 'in_drop_rates', 'criterion']}
         return self._repr_non_config_attrs(repr_attr_dict)
-        
-    @property
-    def in_dim(self):
-        return self.affine.in_dim - self.size_emb_dim
-        
-    @in_dim.setter
-    def in_dim(self, dim: int):
-        if dim is not None:
-            self.affine.in_dim = dim + self.size_emb_dim
         
     @property
     def criterion(self):
@@ -122,6 +113,7 @@ class SpecificSpanClsDecoderConfig(SingleDecoderConfigBase, BoundariesDecoderMix
 class SpecificSpanClsDecoder(DecoderBase, BoundariesDecoderMixin):
     def __init__(self, config: SpecificSpanClsDecoderConfig):
         super().__init__()
+        self.min_span_size = config.min_span_size
         self.max_span_size = config.max_span_size
         self.none_label = config.none_label
         self.idx2label = config.idx2label
@@ -129,21 +121,19 @@ class SpecificSpanClsDecoder(DecoderBase, BoundariesDecoderMixin):
         self.chunk_priority = config.chunk_priority
         self.inex_mkmmd_lambda = config.inex_mkmmd_lambda
         
-        self.affine = config.affine.instantiate()
-        
         if config.size_emb_dim > 0:
             self.size_embedding = torch.nn.Embedding(config.max_size_id+1, config.size_emb_dim)
             reinit_embedding_(self.size_embedding)
-        
-        self.register_buffer('_span_size_ids', torch.arange(config.max_len) - torch.arange(config.max_len).unsqueeze(-1))
-        self._span_size_ids.masked_fill_(self._span_size_ids < 0, 0)
-        self._span_size_ids.masked_fill_(self._span_size_ids > config.max_size_id, config.max_size_id)
+            
+            self.register_buffer('_span_size_ids', torch.arange(config.max_len) - torch.arange(config.max_len).unsqueeze(-1))
+            self._span_size_ids.masked_fill_(self._span_size_ids < 0, 0)
+            self._span_size_ids.masked_fill_(self._span_size_ids > config.max_size_id, config.max_size_id)
         
         if config.inex_mkmmd_lambda > 0:
             self.inex_mkmmd = MultiKernelMaxMeanDiscrepancyLoss(config.inex_mkmmd_num_kernels, config.inex_mkmmd_multiplier)
         
-        self.dropout = CombinedDropout(*config.hid_drop_rates)
-        self.hid2logit = torch.nn.Linear(config.affine.out_dim, config.voc_dim)
+        self.dropout = CombinedDropout(*config.in_drop_rates)
+        self.hid2logit = torch.nn.Linear(config.in_dim+config.size_emb_dim, config.voc_dim)
         reinit_layer_(self.hid2logit, 'sigmoid')
         
         self.criterion = config.instantiate_criterion(reduction='sum')
@@ -157,7 +147,10 @@ class SpecificSpanClsDecoder(DecoderBase, BoundariesDecoderMixin):
     def get_logits(self, batch: Batch, full_hidden: torch.Tensor, all_query_hidden: Dict[int, torch.Tensor], return_states: bool=False):
         # full_hidden: (batch, step, hid_dim)
         # query_hidden: (batch, step-k+1, hid_dim)
-        all_hidden = [full_hidden] + list(all_query_hidden.values())
+        if self.min_span_size == 1: 
+            all_hidden = list(all_query_hidden.values())
+        else:
+            all_hidden = [full_hidden] + list(all_query_hidden.values())
         
         batch_logits, batch_states = [], []
         for i, curr_len in enumerate(batch.seq_lens.cpu().tolist()):
@@ -169,13 +162,10 @@ class SpecificSpanClsDecoder(DecoderBase, BoundariesDecoderMixin):
                 size_embedded = self.size_embedding(self._get_diagonal_span_size_ids(curr_len))
                 span_hidden = torch.cat([span_hidden, size_embedded], dim=-1)
             
-            # No mask input needed here
-            affined = self.affine(span_hidden)
-            
             # (num_spans, logit_dim)
-            logits = self.hid2logit(self.dropout(affined))
+            logits = self.hid2logit(self.dropout(span_hidden))
             batch_logits.append(logits)
-            batch_states.append({'span_hidden': affined})
+            batch_states.append({'span_hidden': span_hidden})
         
         if return_states:
             return batch_logits, batch_states
@@ -219,18 +209,6 @@ class SpecificSpanClsDecoder(DecoderBase, BoundariesDecoderMixin):
             confidences = [conf for label, conf in zip(labels, confidences.cpu().tolist()) if label != self.none_label]
             assert len(confidences) == len(chunks)
             
-            if hasattr(boundaries_obj, 'sub2ori_idx'):
-                is_valid = [isinstance(boundaries_obj.sub2ori_idx[start], int) and isinstance(boundaries_obj.sub2ori_idx[end], int) for label, start, end in chunks]
-                confidences = [conf for conf, is_v in zip(confidences, is_valid) if is_v]
-                chunks = [ck for ck, is_v in zip(chunks, is_valid) if is_v]
-            
-            if self.chunk_priority.lower().startswith('len'):
-                # Sort chunks by lengths: long -> short 
-                chunks = sorted(chunks, key=lambda ck: ck[2]-ck[1], reverse=True)
-            else:
-                # Sort chunks by confidences: high -> low 
-                chunks = [ck for _, ck in sorted(zip(confidences, chunks), reverse=True)]
-            chunks = filter_clashed_by_priority(chunks, allow_level=self.overlapping_level)
-            
+            chunks = self._filter(chunks, confidences, boundaries_obj)
             batch_chunks.append(chunks)
         return batch_chunks

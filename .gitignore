@@ -143,6 +143,7 @@ dmypy.json
 !/data/ontonotesv4/*.py
 !/data/ace-lu2015emnlp/*.py
 !/data/ace-luan2019naacl/*.py
+!/data/SciERC/*.py
 !/data/GENIA/*.py
 !/data/genia-yu2020acl/*.py
 !/data/nne-ringland2019acl/*.py

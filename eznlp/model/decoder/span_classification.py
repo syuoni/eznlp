@@ -134,10 +134,10 @@ class SpanClassificationDecoder(DecoderBase, BoundariesDecoderMixin):
         if config.size_emb_dim > 0:
             self.size_embedding = torch.nn.Embedding(config.max_size_id+1, config.size_emb_dim)
             reinit_embedding_(self.size_embedding)
-        
-        self.register_buffer('_span_size_ids', torch.arange(config.max_len) - torch.arange(config.max_len).unsqueeze(-1))
-        self._span_size_ids.masked_fill_(self._span_size_ids < 0, 0)
-        self._span_size_ids.masked_fill_(self._span_size_ids > config.max_size_id, config.max_size_id)
+            
+            self.register_buffer('_span_size_ids', torch.arange(config.max_len) - torch.arange(config.max_len).unsqueeze(-1))
+            self._span_size_ids.masked_fill_(self._span_size_ids < 0, 0)
+            self._span_size_ids.masked_fill_(self._span_size_ids > config.max_size_id, config.max_size_id)
         
         if config.inex_mkmmd_lambda > 0:
             self.inex_mkmmd = MultiKernelMaxMeanDiscrepancyLoss(config.inex_mkmmd_num_kernels, config.inex_mkmmd_multiplier)
@@ -215,18 +215,6 @@ class SpanClassificationDecoder(DecoderBase, BoundariesDecoderMixin):
             confidences = [conf for label, conf in zip(labels, confidences.cpu().tolist()) if label != self.none_label]
             assert len(confidences) == len(chunks)
             
-            if hasattr(boundaries_obj, 'sub2ori_idx'):
-                is_valid = [isinstance(boundaries_obj.sub2ori_idx[start], int) and isinstance(boundaries_obj.sub2ori_idx[end], int) for label, start, end in chunks]
-                confidences = [conf for conf, is_v in zip(confidences, is_valid) if is_v]
-                chunks = [ck for ck, is_v in zip(chunks, is_valid) if is_v]
-            
-            if self.chunk_priority.lower().startswith('len'):
-                # Sort chunks by lengths: long -> short 
-                chunks = sorted(chunks, key=lambda ck: ck[2]-ck[1], reverse=True)
-            else:
-                # Sort chunks by confidences: high -> low 
-                chunks = [ck for _, ck in sorted(zip(confidences, chunks), reverse=True)]
-            chunks = filter_clashed_by_priority(chunks, allow_level=self.overlapping_level)
-            
+            chunks = self._filter(chunks, confidences, boundaries_obj)
             batch_chunks.append(chunks)
         return batch_chunks

@@ -135,8 +135,17 @@ def count_params(model_or_params: Union[torch.nn.Module, torch.nn.Parameter, Lis
 
 
 def auto_device(min_memory: int=2048):
-    """
-    https://stackoverflow.com/questions/59567226/how-to-programmatically-determine-available-gpu-memory-with-tensorflow
+    """Return the cuda device with the most free memory, if available; otherwise return the `cpu` device. 
+    
+    If torch's device order is inconsistent with that by nvidia-smi, use the following command before running the whole process: 
+    ```bash
+    $ export CUDA_DEVICE_ORDER=PCI_BUS_ID
+    ```
+    
+    References
+    ----------
+    [1] https://stackoverflow.com/questions/59567226/how-to-programmatically-determine-available-gpu-memory-with-tensorflow
+    [2] https://discuss.pytorch.org/t/gpu-devices-nvidia-smi-and-cuda-get-device-name-output-appear-inconsistent/13150
     """
     logger.info("Automatically allocating device...")
     

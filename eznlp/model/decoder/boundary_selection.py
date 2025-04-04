@@ -56,17 +56,37 @@ class BoundariesDecoderMixin(DecoderMixinBase):
         """
         scores, ave_scores = precision_recall_f1_report(y_gold, y_pred)
         return ave_scores['micro']['f1']
+        
+        
+    def _filter(self, chunks: List[tuple], confidences: List[float], boundaries_obj):
+        if hasattr(boundaries_obj, 'sub2ori_idx'):
+            is_valid = [isinstance(boundaries_obj.sub2ori_idx[start], int) and isinstance(boundaries_obj.sub2ori_idx[end], int) for label, start, end in chunks]
+            confidences = [conf for conf, is_v in zip(confidences, is_valid) if is_v]
+            chunks = [ck for ck, is_v in zip(chunks, is_valid) if is_v]
+        
+        if hasattr(boundaries_obj, 'tok2sent_idx'):
+            is_valid = [boundaries_obj.tok2sent_idx[start] == boundaries_obj.tok2sent_idx[end-1] for label, start, end in chunks]
+            confidences = [conf for conf, is_v in zip(confidences, is_valid) if is_v]
+            chunks = [ck for ck, is_v in zip(chunks, is_valid) if is_v]
+        
+        if self.chunk_priority.lower().startswith('len'):
+            # Sort chunks by lengths: long -> short 
+            chunks = sorted(chunks, key=lambda ck: ck[2]-ck[1], reverse=True)
+        else:
+            # Sort chunks by confidences: high -> low 
+            chunks = [ck for _, ck in sorted(zip(confidences, chunks), reverse=True)]
+        chunks = filter_clashed_by_priority(chunks, allow_level=self.overlapping_level)
+        return chunks
 
 
 
 class BoundarySelectionDecoderConfig(SingleDecoderConfigBase, BoundariesDecoderMixin):
     def __init__(self, **kwargs):
-        self.use_biaffine = kwargs.pop('use_biaffine', True)
-        self.affine = kwargs.pop('affine', EncoderConfig(arch='FFN', hid_dim=150, num_layers=1, in_drop_rates=(0.4, 0.0, 0.0), hid_drop_rate=0.2))
-        self.use_prod = kwargs.pop('use_prod', True)
+        self.reduction = kwargs.pop('reduction', EncoderConfig(arch='FFN', hid_dim=150, num_layers=1, in_drop_rates=(0.0, 0.0, 0.0), hid_drop_rate=0.0))
         
         self.max_len = kwargs.pop('max_len', None)
         self.size_emb_dim = kwargs.pop('size_emb_dim', 25)
+        self.in_drop_rates = kwargs.pop('in_drop_rates', (0.4, 0.0, 0.0))
         self.hid_drop_rates = kwargs.pop('hid_drop_rates', (0.2, 0.0, 0.0))
         
         self.neg_sampling_rate = kwargs.pop('neg_sampling_rate', 1.0)
@@ -89,19 +109,19 @@ class BoundarySelectionDecoderConfig(SingleDecoderConfigBase, BoundariesDecoderM
         
     @property
     def name(self):
-        return self._name_sep.join([self.affine.arch, self.criterion])
+        return self._name_sep.join([self.reduction.arch, self.criterion])
         
     def __repr__(self):
-        repr_attr_dict = {key: getattr(self, key) for key in ['in_dim', 'hid_drop_rates', 'criterion']}
+        repr_attr_dict = {key: getattr(self, key) for key in ['in_dim', 'in_drop_rates', 'hid_drop_rates', 'criterion']}
         return self._repr_non_config_attrs(repr_attr_dict)
         
     @property
     def in_dim(self):
-        return self.affine.in_dim
+        return self.reduction.in_dim
         
     @in_dim.setter
     def in_dim(self, dim: int):
-        self.affine.in_dim = dim
+        self.reduction.in_dim = dim
         
     @property
     def criterion(self):
@@ -146,11 +166,8 @@ class BoundarySelectionDecoder(DecoderBase, BoundariesDecoderMixin):
         self.overlapping_level = config.overlapping_level
         self.chunk_priority = config.chunk_priority
         
-        if config.use_biaffine:
-            self.affine_start = config.affine.instantiate()
-            self.affine_end = config.affine.instantiate()
-        else:
-            self.affine = config.affine.instantiate()
+        self.reduction_start = config.reduction.instantiate()
+        self.reduction_end = config.reduction.instantiate()
         
         if config.size_emb_dim > 0:
             self.size_embedding = torch.nn.Embedding(config.max_size_id+1, config.size_emb_dim)
@@ -162,15 +179,13 @@ class BoundarySelectionDecoder(DecoderBase, BoundariesDecoderMixin):
         self._span_size_ids.masked_fill_(self._span_size_ids < 0, 0)
         self._span_size_ids.masked_fill_(self._span_size_ids > config.max_size_id, config.max_size_id)
         
-        self.dropout = CombinedDropout(*config.hid_drop_rates)
+        self.in_dropout = CombinedDropout(*config.in_drop_rates)
+        self.hid_dropout = CombinedDropout(*config.hid_drop_rates)
         
-        if config.use_prod:
-            self.U = torch.nn.Parameter(torch.empty(config.voc_dim, config.affine.out_dim, config.affine.out_dim))
-            torch.nn.init.orthogonal_(self.U.data)
-        
-        self.W = torch.nn.Parameter(torch.empty(config.voc_dim, config.affine.out_dim*2 + config.size_emb_dim))
+        self.U = torch.nn.Parameter(torch.empty(config.voc_dim, config.reduction.out_dim, config.reduction.out_dim))
+        self.W = torch.nn.Parameter(torch.empty(config.voc_dim, config.reduction.out_dim*2 + config.size_emb_dim))
         self.b = torch.nn.Parameter(torch.empty(config.voc_dim))
-        # TODO: Check the output std.dev. 
+        torch.nn.init.orthogonal_(self.U.data)
         torch.nn.init.orthogonal_(self.W.data)
         torch.nn.init.zeros_(self.b.data)
         
@@ -185,37 +200,29 @@ class BoundarySelectionDecoder(DecoderBase, BoundariesDecoderMixin):
         
         
     def compute_scores(self, batch: Batch, full_hidden: torch.Tensor):
-        if hasattr(self, 'affine_start'):
-            affined_start = self.affine_start(full_hidden, batch.mask)
-            affined_end = self.affine_end(full_hidden, batch.mask)
-        else:
-            affined_start = self.affine(full_hidden, batch.mask)
-            affined_end = self.affine(full_hidden, batch.mask)
+        reduced_start = self.reduction_start(self.in_dropout(full_hidden), batch.mask)
+        reduced_end = self.reduction_end(self.in_dropout(full_hidden), batch.mask)
         
-        if hasattr(self, 'U'):
-            # affined_start: (batch, start_step, affine_dim) -> (batch, 1, start_step, affine_dim)
-            # affined_end: (batch, end_step, affine_dim) -> (batch, 1, affine_dim, end_step)
-            # scores1: (batch, 1, start_step, affine_dim) * (voc_dim, affine_dim, affine_dim) * (batch, 1, affine_dim, end_step) -> (batch, voc_dim, start_step, end_step)
-            scores1 = self.dropout(affined_start).unsqueeze(1).matmul(self.U).matmul(self.dropout(affined_end).permute(0, 2, 1).unsqueeze(1))
-            # scores: (batch, start_step, end_step, voc_dim)
-            scores = scores1.permute(0, 2, 3, 1)
-        else:
-            scores = 0
+        # reduced_start: (batch, start_step, red_dim) -> (batch, 1, start_step, red_dim)
+        # reduced_end: (batch, end_step, red_dim) -> (batch, 1, red_dim, end_step)
+        # scores1: (batch, 1, start_step, red_dim) * (voc_dim, red_dim, red_dim) * (batch, 1, red_dim, end_step) -> (batch, voc_dim, start_step, end_step)
+        scores1 = self.hid_dropout(reduced_start).unsqueeze(1).matmul(self.U).matmul(self.hid_dropout(reduced_end).permute(0, 2, 1).unsqueeze(1))
         
-        # affined_cat: (batch, start_step, end_step, affine_dim*2)
-        affined_cat = torch.cat([self.dropout(affined_start).unsqueeze(2).expand(-1, -1, affined_end.size(1), -1), 
-                                 self.dropout(affined_end).unsqueeze(1).expand(-1, affined_start.size(1), -1, -1)], dim=-1)
+        # reduced_cat: (batch, start_step, end_step, red_dim*2)
+        reduced_cat = torch.cat([self.hid_dropout(reduced_start).unsqueeze(2).expand(-1, -1, reduced_end.size(1), -1), 
+                                 self.hid_dropout(reduced_end).unsqueeze(1).expand(-1, reduced_start.size(1), -1, -1)], dim=-1)
         
         if hasattr(self, 'size_embedding'):
             # size_embedded: (start_step, end_step, emb_dim)
             size_embedded = self.size_embedding(self._get_span_size_ids(full_hidden.size(1)))
-            # affined_cat: (batch, start_step, end_step, affine_dim*2 + emb_dim)
-            affined_cat = torch.cat([affined_cat, self.dropout(size_embedded).unsqueeze(0).expand(full_hidden.size(0), -1, -1, -1)], dim=-1)
+            # reduced_cat: (batch, start_step, end_step, red_dim*2 + emb_dim)
+            reduced_cat = torch.cat([reduced_cat, self.hid_dropout(size_embedded).unsqueeze(0).expand(full_hidden.size(0), -1, -1, -1)], dim=-1)
         
-        # scores2: (voc_dim, affine_dim*2 + emb_dim) * (batch, start_step, end_step, affine_dim*2 + emb_dim, 1) -> (batch, start_step, end_step, voc_dim, 1)
-        scores2 = self.W.matmul(affined_cat.unsqueeze(-1))
+        # scores2: (voc_dim, red_dim*2 + emb_dim) * (batch, start_step, end_step, red_dim*2 + emb_dim, 1) -> (batch, start_step, end_step, voc_dim, 1)
+        scores2 = self.W.matmul(reduced_cat.unsqueeze(-1))
+        
         # scores: (batch, start_step, end_step, voc_dim)
-        scores = scores + scores2.squeeze(-1)
+        scores = scores1.permute(0, 2, 3, 1) + scores2.squeeze(-1)
         return scores + self.b
         
         
@@ -244,18 +251,6 @@ class BoundarySelectionDecoder(DecoderBase, BoundariesDecoderMixin):
             confidences = [conf for label, conf in zip(labels, confidences.cpu().tolist()) if label != self.none_label]
             assert len(confidences) == len(chunks)
             
-            if hasattr(boundaries_obj, 'sub2ori_idx'):
-                is_valid = [isinstance(boundaries_obj.sub2ori_idx[start], int) and isinstance(boundaries_obj.sub2ori_idx[end], int) for label, start, end in chunks]
-                confidences = [conf for conf, is_v in zip(confidences, is_valid) if is_v]
-                chunks = [ck for ck, is_v in zip(chunks, is_valid) if is_v]
-            
-            if self.chunk_priority.lower().startswith('len'):
-                # Sort chunks by lengths: long -> short 
-                chunks = sorted(chunks, key=lambda ck: ck[2]-ck[1], reverse=True)
-            else:
-                # Sort chunks by confidences: high -> low 
-                chunks = [ck for _, ck in sorted(zip(confidences, chunks), reverse=True)]
-            chunks = filter_clashed_by_priority(chunks, allow_level=self.overlapping_level)
-            
+            chunks = self._filter(chunks, confidences, boundaries_obj)
             batch_chunks.append(chunks)
         return batch_chunks

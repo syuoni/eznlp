@@ -9,7 +9,7 @@ from ..encoder import EncoderConfig
 from ..decoder import (SingleDecoderConfigBase, 
                        SpecificSpanClsDecoderConfig, 
                        SpecificSpanRelClsDecoderConfig, 
-                       SpecificSpanSparseRelClsDecoderConfig, 
+                       UnfilteredSpecificSpanRelClsDecoderConfig, 
                        JointExtractionDecoderConfig)
 from .base import ModelConfigBase, ModelBase
 
@@ -32,8 +32,8 @@ class SpecificSpanExtractorConfig(ModelConfigBase):
                 self.decoder = SpecificSpanClsDecoderConfig()
             elif decoder.lower().startswith('specific_span_rel'):
                 self.decoder = SpecificSpanRelClsDecoderConfig()
-            elif decoder.lower().startswith('specific_span_sparse_rel'):
-                self.decoder = SpecificSpanSparseRelClsDecoderConfig()
+            elif decoder.lower().startswith('unfiltered_specific_span_rel'):
+                self.decoder = UnfilteredSpecificSpanRelClsDecoderConfig()
             elif decoder.lower().startswith('joint_extraction'):
                 self.decoder = JointExtractionDecoderConfig(ck_decoder='specific_span_cls', rel_decoder='specific_span_rel_cls')
             else:
@@ -53,7 +53,7 @@ class SpecificSpanExtractorConfig(ModelConfigBase):
         elif self.span_bert_like.share_weights_int:
             return self.intermediate2
         else:
-            return ConfigList([self.intermediate2 for k in range(2, self.span_bert_like.max_span_size+1)])
+            return ConfigList([self.intermediate2 for k in range(self.span_bert_like.min_span_size, self.span_bert_like.max_span_size+1)])
         
         
     def build_vocabs_and_dims(self, *partitions):
@@ -64,7 +64,9 @@ class SpecificSpanExtractorConfig(ModelConfigBase):
             self.decoder.in_dim = self.bert_like.out_dim
         
         self.decoder.build_vocab(*partitions)
+        self.span_bert_like.min_span_size = self.decoder.min_span_size
         self.span_bert_like.max_span_size = self.decoder.max_span_size
+        self.span_bert_like.max_size_id = self.decoder.max_size_id
         
         
     def exemplify(self, entry: dict, training: bool=True):
@@ -123,7 +125,7 @@ class SpecificSpanExtractor(ModelBase):
                 elif not isinstance(self.span_intermediate2, torch.nn.ModuleList):
                     new_all_last_query_states[k] = self.span_intermediate2(query_hidden, curr_mask)
                 else:
-                    new_all_last_query_states[k] = self.span_intermediate2[k-2](query_hidden, curr_mask)
+                    new_all_last_query_states[k] = self.span_intermediate2[k-self.span_bert_like.min_span_size](query_hidden, curr_mask)
             all_last_query_states = new_all_last_query_states
         
         return {'full_hidden': bert_hidden, 'all_query_hidden': all_last_query_states}

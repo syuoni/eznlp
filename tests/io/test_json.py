@@ -151,7 +151,6 @@ class TestJsonIO(object):
         
         
     def test_ace2004_rel(self):
-        # TODO: document-level?
         io = JsonIO(relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail')
         train_data = io.read("data/ace-luan2019naacl/ace04/cv0.train.json")
         test_data  = io.read("data/ace-luan2019naacl/ace04/cv0.test.json")
@@ -166,7 +165,6 @@ class TestJsonIO(object):
         
         
     def test_ace2005_rel(self):
-        # TODO: document-level?
         io = JsonIO(relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail')
         train_data = io.read("data/ace-luan2019naacl/ace05/train.json")
         dev_data   = io.read("data/ace-luan2019naacl/ace05/dev.json")
@@ -220,10 +218,11 @@ class TestJsonIO(object):
                          relation_key='relations', 
                          relation_type_key='type', 
                          relation_head_key='head', 
-                         relation_tail_key='tail')
-        train_data = json_io.read("data/SciERC/scierc_train.json")
-        dev_data   = json_io.read("data/SciERC/scierc_dev.json")
-        test_data  = json_io.read("data/SciERC/scierc_test.json")
+                         relation_tail_key='tail', 
+                         encoding='utf-8')
+        train_data = json_io.read("data/SciERC/train.json")
+        dev_data   = json_io.read("data/SciERC/dev.json")
+        test_data  = json_io.read("data/SciERC/test.json")
         
         assert len(train_data) == 1_861
         assert sum(len(ex['chunks']) for ex in train_data) == 5_598
@@ -237,6 +236,25 @@ class TestJsonIO(object):
         
         assert max(detect_overlapping_level(ex['chunks']) for ex in train_data+dev_data+test_data) == NESTED
         assert all(filter_clashed_by_priority(ex['chunks'], allow_level=NESTED) == ex['chunks'] for ex in train_data+dev_data+test_data)
+        
+        
+    def test_SciERC_eberts2020ecai(self):
+        json_io = JsonIO(text_key='tokens', 
+                         chunk_key='entities', 
+                         chunk_type_key='type', 
+                         chunk_start_key='start', 
+                         chunk_end_key='end', 
+                         relation_key='relations', 
+                         relation_type_key='type', 
+                         relation_head_key='head', 
+                         relation_tail_key='tail')
+        train_data = json_io.read("data/SciERC-eberts2020ecai/scierc_train.json")
+        dev_data   = json_io.read("data/SciERC-eberts2020ecai/scierc_dev.json")
+        test_data  = json_io.read("data/SciERC-eberts2020ecai/scierc_test.json")
+        
+        assert len(train_data) == 1_861
+        assert len(dev_data) == 275
+        assert len(test_data) == 551
         
         
     def test_ADE(self):

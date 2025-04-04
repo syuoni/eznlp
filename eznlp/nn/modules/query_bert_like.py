@@ -106,6 +106,78 @@ class QueryBertLikeLayer(torch.nn.Module):
 
 
 
+class QueryAlbertSelfAttention(QueryBertLikeSelfAttention):
+    def __init__(self, origin: transformers.models.albert.modeling_albert.AlbertAttention, share_weights: bool=False):
+        torch.nn.Module.__init__(self)
+        self.num_attention_heads = origin.num_attention_heads
+        self.attention_head_size = origin.attention_head_size
+        self.all_head_size = origin.all_head_size
+        
+        if share_weights:
+            self.query = origin.query
+            self.key = origin.key
+            self.value = origin.value
+            self.dropout = origin.attention_dropout
+        else:
+            self.query = copy.deepcopy(origin.query)
+            self.key = copy.deepcopy(origin.key)
+            self.value = copy.deepcopy(origin.value)
+            self.dropout = copy.deepcopy(origin.attention_dropout)
+
+
+class AlbertSelfOutput(transformers.models.bert.modeling_bert.BertOutput):
+    def __init__(self, origin: transformers.models.albert.modeling_albert.AlbertAttention, share_weights: bool=False):
+        torch.nn.Module.__init__(self)
+        if share_weights: 
+            self.dense = origin.dense
+            self.LayerNorm = origin.LayerNorm
+            self.dropout = origin.output_dropout
+        else:
+            self.dense = copy.deepcopy(origin.dense)
+            self.LayerNorm = copy.deepcopy(origin.LayerNorm)
+            self.dropout = copy.deepcopy(origin.output_dropout)
+
+
+class QueryAlbertAttention(QueryBertLikeAttention):
+    def __init__(self, origin: transformers.models.albert.modeling_albert.AlbertAttention, share_weights: bool=False):
+        torch.nn.Module.__init__(self)
+        self.self = QueryAlbertSelfAttention(origin, share_weights=share_weights)
+        self.output = AlbertSelfOutput(origin, share_weights=share_weights)
+
+
+class AlbertIntermediate(transformers.models.bert.modeling_bert.BertIntermediate):
+    def __init__(self, origin: transformers.models.albert.modeling_albert.AlbertLayer, share_weights: bool=False):
+        torch.nn.Module.__init__(self)
+        if share_weights:
+            self.dense = origin.ffn
+            self.intermediate_act_fn = origin.activation
+        else:
+            self.dense = copy.deepcopy(origin.ffn)
+            self.intermediate_act_fn = copy.deepcopy(origin.activation)
+
+
+class AlbertOutput(transformers.models.bert.modeling_bert.BertOutput):
+    def __init__(self, origin: transformers.models.albert.modeling_albert.AlbertLayer, share_weights: bool=False):
+        torch.nn.Module.__init__(self)
+        if share_weights:
+            self.dense = origin.ffn_output
+            self.LayerNorm = origin.full_layer_layer_norm
+            self.dropout = origin.dropout
+        else:
+            self.dense = copy.deepcopy(origin.ffn_output)
+            self.LayerNorm = copy.deepcopy(origin.full_layer_layer_norm)
+            self.dropout = copy.deepcopy(origin.dropout)
+
+
+class QueryAlbertLayer(QueryBertLikeLayer):
+    def __init__(self, origin: transformers.models.albert.modeling_albert.AlbertLayer, share_weights: bool=False):
+        torch.nn.Module.__init__(self)
+        self.attention = QueryAlbertAttention(origin.attention, share_weights=share_weights)
+        self.intermediate = AlbertIntermediate(origin, share_weights=share_weights)
+        self.output = AlbertOutput(origin, share_weights=share_weights)
+
+
+
 class QueryBertLikeEncoder(torch.nn.Module):
     """A module of architecture corresponding to `BertEncoder`, where the `query_states` are different from `hidden_states`. 
     Typically, the `hidden_states` are pre-calculated by a `BertModel`. 
@@ -117,10 +189,22 @@ class QueryBertLikeEncoder(torch.nn.Module):
     """
     def __init__(self, origin: transformers.models.bert.modeling_bert.BertEncoder, num_layers: int=None, share_weights: bool=False):
         super().__init__()
-        if num_layers is None:
-            num_layers = len(origin.layer)
-        self.layer = torch.nn.ModuleList([QueryBertLikeLayer(layer, share_weights=share_weights) for layer in origin.layer[-num_layers:]])
+        self.num_layers = origin.config.num_hidden_layers if num_layers is None else num_layers
         
+        if isinstance(origin, transformers.models.albert.modeling_albert.AlbertTransformer):
+            assert len(origin.albert_layer_groups) == 1
+            assert len(origin.albert_layer_groups[0].albert_layers) == 1
+            self.layer = QueryAlbertLayer(origin.albert_layer_groups[0].albert_layers[0], share_weights=share_weights)
+        else:
+            self.layer = torch.nn.ModuleList([QueryBertLikeLayer(layer, share_weights=share_weights) for layer in origin.layer[-self.num_layers:]])
+        
+        
+    def _layers(self):
+        for i in range(self.num_layers):
+            if isinstance(self.layer, QueryAlbertLayer):
+                yield self.layer
+            else:
+                yield self.layer[i]
         
     def forward(self, 
                 query_states, 
@@ -130,11 +214,15 @@ class QueryBertLikeEncoder(torch.nn.Module):
                 output_attentions=False,
                 output_query_states=False, 
                 return_dict=True):
-        assert len(self.layer) + 1 == len(all_hidden_states)
+        assert len(all_hidden_states) == self.num_layers+1
         
         all_query_states = () if output_query_states else None
         all_self_attentions = () if output_attentions else None
-        for i, (layer_module, hidden_states) in enumerate(zip(self.layer, all_hidden_states[:-1])):
+        # The top query states are computed: 
+        #     (1) by the top Transformer block
+        #     (2) from the second-top query states and second-top hidden states (key/value states)
+        # Hence, the top hidden states are *not* used, because there is no more upper Transformer blocks 
+        for i, (layer_module, hidden_states) in enumerate(zip(self._layers(), all_hidden_states[:-1])):
             if output_query_states:
                 all_query_states = all_query_states + (query_states,)
             

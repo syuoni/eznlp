@@ -4,7 +4,7 @@ import torch
 
 from eznlp.dataset import Dataset
 from eznlp.model import EncoderConfig, BertLikeConfig, BoundarySelectionDecoderConfig, ExtractorConfig
-from eznlp.model.bert_like import subtokenize_for_bert_like
+from eznlp.model import BertLikePreProcessor
 from eznlp.training import Trainer
 
 
@@ -50,8 +50,7 @@ class TestModel(object):
         assert isinstance(self.config.name, str) and len(self.config.name) > 0
         
         
-    @pytest.mark.parametrize("use_biaffine", [True, False])
-    @pytest.mark.parametrize("affine_arch", ['FFN', 'LSTM'])
+    @pytest.mark.parametrize("red_arch", ['FFN', 'LSTM'])
     @pytest.mark.parametrize("size_emb_dim", [25, 0])
     @pytest.mark.parametrize("fl_gamma, sl_epsilon, sb_epsilon, sb_size", [(0.0, 0.0, 0.0, 1), 
                                                                            (2.0, 0.0, 0.0, 1), 
@@ -60,20 +59,11 @@ class TestModel(object):
                                                                            (0.0, 0.0, 0.1, 2), 
                                                                            (0.0, 0.0, 0.1, 3), 
                                                                            (0.0, 0.1, 0.1, 1)])
-    def test_model(self, use_biaffine, affine_arch, size_emb_dim, fl_gamma, sl_epsilon, sb_epsilon, sb_size, conll2004_demo, device):
-        self.config = ExtractorConfig(decoder=BoundarySelectionDecoderConfig(use_biaffine=use_biaffine, 
-                                                                             affine=EncoderConfig(arch=affine_arch), 
+    def test_model(self, red_arch, size_emb_dim, fl_gamma, sl_epsilon, sb_epsilon, sb_size, conll2004_demo, device):
+        self.config = ExtractorConfig(decoder=BoundarySelectionDecoderConfig(reduction=EncoderConfig(arch=red_arch), 
                                                                              size_emb_dim=size_emb_dim, 
                                                                              fl_gamma=fl_gamma, sl_epsilon=sl_epsilon, sb_epsilon=sb_epsilon, sb_size=sb_size))
         self._setup_case(conll2004_demo, device)
-        self._assert_batch_consistency()
-        self._assert_trainable()
-        
-        
-    def test_model_wo_prod(self, conll2004_demo, device):
-        self.config = ExtractorConfig(decoder=BoundarySelectionDecoderConfig(use_prod=False))
-        self._setup_case(conll2004_demo, device)
-        assert not hasattr(self.model.decoder, 'U')
         self._assert_batch_consistency()
         self._assert_trainable()
         
@@ -85,7 +75,8 @@ class TestModel(object):
                                       bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, from_subtokenized=from_subtokenized), 
                                       intermediate2=None)
         if from_subtokenized:
-            conll2004_demo = subtokenize_for_bert_like(conll2004_demo, tokenizer, verbose=False)
+            preprocessor = BertLikePreProcessor(tokenizer, verbose=False)
+            conll2004_demo = preprocessor.subtokenize_for_data(conll2004_demo)
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()

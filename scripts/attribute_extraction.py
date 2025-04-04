@@ -45,7 +45,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
     
     # Boundary selection (*)
     group_decoder.add_argument('--neg_sampling_rate', type=float, default=1.0, 
-                               help="Negative sampling rate")
+                               help="negative sampling rate")
     return parse_to_args(parser)
 
 

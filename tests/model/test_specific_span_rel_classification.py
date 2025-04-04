@@ -4,8 +4,9 @@ import torch
 
 from eznlp.dataset import Dataset
 from eznlp.model import EncoderConfig, BertLikeConfig, SpanBertLikeConfig
-from eznlp.model import SpecificSpanRelClsDecoderConfig, SpecificSpanSparseRelClsDecoderConfig
+from eznlp.model import SpecificSpanRelClsDecoderConfig, UnfilteredSpecificSpanRelClsDecoderConfig
 from eznlp.model import SpecificSpanExtractorConfig
+from eznlp.model import BertLikePreProcessor
 from eznlp.training import Trainer
 
 
@@ -25,7 +26,7 @@ class TestModel(object):
         assert delta_hidden.abs().max().item() < 1e-4
         
         # Check the consistency of query hidden states
-        for k in range(2, self.config.decoder.max_span_size+1):
+        for k in range(self.config.decoder.min_span_size, self.config.decoder.max_span_size+1):
             query012, query123 = states012['all_query_hidden'][k], states123['all_query_hidden'][k]
             delta_query = query012[1:, :min_step-k+1] - query123[:-1, :min_step-k+1]
             assert delta_query.abs().max().item() < 1e-4
@@ -60,39 +61,43 @@ class TestModel(object):
         
         
     @pytest.mark.slow
-    @pytest.mark.parametrize("num_layers, agg_mode, neg_sampling_rate, size_emb_dim", 
-                             [(3,  'max_pooling',  1.0, 0),  # Baseline
-                              (12, 'max_pooling',  1.0, 0),  # Number of layers
-                              (6,  'max_pooling',  1.0, 0), 
-                              (1,  'max_pooling',  1.0, 0), 
-                              (3,  'mean_pooling', 1.0, 0),  # Initial aggregation
-                              (3,  'multiplicative_attention', 1.0, 0), 
-                              (3,  'conv',         1.0, 0), 
-                              (3,  'max_pooling',  0.5, 0),  # Use negative sampling
-                              (3,  'max_pooling',  1.0, 25)])  # Use size embedding
-    @pytest.mark.parametrize("use_sparse", [False, True])
-    def test_model(self, num_layers, agg_mode, neg_sampling_rate, size_emb_dim, use_sparse, conll2004_demo, bert_with_tokenizer, device):
+    @pytest.mark.parametrize("use_unfiltered, num_layers, min_span_size, use_context, context_mode, fusing_mode, ck_loss_weight", 
+                             [(False, 3,  2, True,  'specific', 'affine', 0.0),  # Baseline
+                              (False, 12, 2, True,  'specific', 'affine', 0.0),  # Number of layers
+                              (False, 3,  1, True,  'specific', 'affine', 0.0),  # Minimum span size
+                              (False, 3,  2, False, 'specific', 'affine', 0.0),  # Context
+                              (False, 3,  2, True,  'shallow',  'affine', 0.0),
+                              (False, 3,  2, True,  'specific', 'concat', 0.0),  # Fusing mode
+                              (False, 3,  2, True,  'specific', 'affine', 0.5),  # Chunk loss weight
+                              (True,  3,  2, True,  'specific', 'affine', 0.0),  # Unfiltered chunk
+                              (True,  3,  1, True,  'specific', 'affine', 0.0),
+                              (True,  3,  2, True,  'specific', 'concat', 0.0)])
+    def test_model(self, use_unfiltered, num_layers, min_span_size, use_context, context_mode, fusing_mode, ck_loss_weight, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
-        if use_sparse:
-            decoder_config = SpecificSpanSparseRelClsDecoderConfig(neg_sampling_rate=neg_sampling_rate, size_emb_dim=size_emb_dim, max_span_size=3)
+        if use_unfiltered:
+            decoder_config = UnfilteredSpecificSpanRelClsDecoderConfig(fusing_mode=fusing_mode, min_span_size=min_span_size, max_span_size=3)
         else:
-            decoder_config = SpecificSpanRelClsDecoderConfig(neg_sampling_rate=neg_sampling_rate, size_emb_dim=size_emb_dim, max_span_size=3)
+            decoder_config = SpecificSpanRelClsDecoderConfig(use_context=use_context, context_mode=context_mode, fusing_mode=fusing_mode, ck_loss_weight=ck_loss_weight, min_span_size=min_span_size, max_span_size=3)
         self.config = SpecificSpanExtractorConfig(decoder=decoder_config, 
-                                                  bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False, output_hidden_states=True), 
-                                                  span_bert_like=SpanBertLikeConfig(bert_like=bert, freeze=False, num_layers=num_layers, share_weights_ext=True, share_weights_int=True, init_agg_mode=agg_mode), 
-                                                  intermediate2=EncoderConfig(arch='LSTM', hid_dim=400))
+                                                  bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False, from_subtokenized=True, output_hidden_states=True), 
+                                                  span_bert_like=SpanBertLikeConfig(bert_like=bert, freeze=False, num_layers=num_layers, share_weights_ext=True, share_weights_int=True), 
+                                                  intermediate2=EncoderConfig(arch='LSTM', hid_dim=200))
+        preprocessor = BertLikePreProcessor(tokenizer, verbose=False)
+        conll2004_demo = preprocessor.subtokenize_for_data(conll2004_demo)
         self._setup_case(conll2004_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
         
         
-    @pytest.mark.parametrize("use_sparse", [False, True])
-    def test_prediction_without_gold(self, use_sparse, conll2004_demo, bert_with_tokenizer, device):
+    @pytest.mark.parametrize("use_unfiltered", [False, True])
+    def test_prediction_without_gold(self, use_unfiltered, conll2004_demo, bert_with_tokenizer, device):
         bert, tokenizer = bert_with_tokenizer
-        self.config = SpecificSpanExtractorConfig(decoder='specific_span_sparse_rel' if use_sparse else 'specific_span_rel', 
-                                                  bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False, output_hidden_states=True), 
+        self.config = SpecificSpanExtractorConfig(decoder='unfiltered_specific_span_rel' if use_unfiltered else 'specific_span_rel', 
+                                                  bert_like=BertLikeConfig(tokenizer=tokenizer, bert_like=bert, freeze=False, from_subtokenized=True, output_hidden_states=True), 
                                                   span_bert_like=SpanBertLikeConfig(bert_like=bert), 
                                                   intermediate2=None)
+        preprocessor = BertLikePreProcessor(tokenizer, verbose=False)
+        conll2004_demo = preprocessor.subtokenize_for_data(conll2004_demo)
         self._setup_case(conll2004_demo, device)
         
         data_wo_gold = [{'tokens': entry['tokens'], 

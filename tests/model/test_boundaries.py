@@ -2,7 +2,7 @@
 import pytest
 import torch
 
-from eznlp.model import BoundarySelectionDecoderConfig, SpecificSpanRelClsDecoderConfig
+from eznlp.model import BoundarySelectionDecoderConfig, UnfilteredSpecificSpanRelClsDecoderConfig
 from eznlp.model.decoder.boundaries import _spans_from_upper_triangular, _spans_from_diagonals, _span_pairs_from_diagonals
 from eznlp.model.decoder.boundaries import _span2diagonal, _diagonal2span
 
@@ -118,7 +118,7 @@ def test_diag_boundaries_pair_obj(training, EAR_data_demo):
     entry['chunks_pred'] = []
     tokens, chunks, relations = entry['tokens'], entry['chunks'], entry['relations']
     
-    config = SpecificSpanRelClsDecoderConfig(max_span_size=3)
+    config = UnfilteredSpecificSpanRelClsDecoderConfig(max_span_size=3)
     config.build_vocab(EAR_data_demo)
     dbp_obj = config.exemplify(entry, training=training)['dbp_obj']
     
@@ -128,7 +128,7 @@ def test_diag_boundaries_pair_obj(training, EAR_data_demo):
     assert dbp_obj.relations == relations
     assert dbp_obj.dbp2label_id.size() == (num_spans, num_spans)
     
-    assert dbp_obj.dbp2label_id.sum() == sum(config.label2idx[label] for label, *_ in relations)
+    assert dbp_obj.dbp2label_id.sum().item() == sum(config.label2idx[label] for label, *_ in relations)
     assert all(dbp_obj.dbp2label_id[_span2diagonal(h_start, h_end, num_tokens), _span2diagonal(t_start, t_end, num_tokens)] == config.label2idx[label] 
                    for label, (_, h_start, h_end), (_, t_start, t_end) in relations)
     
