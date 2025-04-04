@@ -1,14 +1,6 @@
 # -*- coding: utf-8 -*-
-import torch
-import flair
-flair.device = torch.device('cpu')
-
-__version__ = '0.3.1'
-
+from . import io, model, nn, training, utils
 from .training import auto_device
 
-from eznlp import io
-from eznlp import nn
-from eznlp import model
-from eznlp import training
-from eznlp import utils
+__version__ = "0.3.1"
+__all__ = ["io", "nn", "model", "training", "utils", "auto_device"]

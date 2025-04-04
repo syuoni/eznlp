@@ -1,208 +1,301 @@
 # -*- coding: utf-8 -*-
-import os
-import sys
 import argparse
 import datetime
-import pdb
 import logging
+import os
+import pdb
 import pprint
-import numpy
+import sys
+
 import torch
+from utils import (
+    add_base_arguments,
+    build_trainer,
+    dataset2language,
+    header_format,
+    load_data,
+    load_pretrained,
+    load_vectors,
+    parse_to_args,
+)
 
 from eznlp import auto_device
-from eznlp.token import TokenSequence
-from eznlp.dataset import Dataset
 from eznlp.config import ConfigDict
-from eznlp.model import OneHotConfig, EncoderConfig
-from eznlp.model import ELMoConfig, BertLikeConfig, FlairConfig
-from eznlp.model import TextClassificationDecoderConfig
-from eznlp.model import ClassifierConfig
-from eznlp.model import BertLikePreProcessor
+from eznlp.dataset import Dataset
+from eznlp.model import (
+    BertLikeConfig,
+    BertLikePreProcessor,
+    ClassifierConfig,
+    ELMoConfig,
+    EncoderConfig,
+    FlairConfig,
+    OneHotConfig,
+    TextClassificationDecoderConfig,
+)
+from eznlp.token import TokenSequence
 from eznlp.training import Trainer, count_params, evaluate_text_classification
-
-from utils import add_base_arguments, parse_to_args
-from utils import load_data, dataset2language, load_pretrained, load_vectors, build_trainer, header_format
 
 
 def parse_arguments(parser: argparse.ArgumentParser):
     parser = add_base_arguments(parser)
-    
-    group_data = parser.add_argument_group('dataset')
-    group_data.add_argument('--dataset', type=str, default='imdb', 
-                            help="dataset name")
-    group_data.add_argument('--pre_truecase', default=False, action='store_true', 
-                            help="whether to pre-truecase data")
-    group_data.add_argument('--save_preds', default=False, action='store_true', 
-                            help="whether to save predictions on the test split (typically in case without ground truth)")
-    
-    group_decoder = parser.add_argument_group('decoder configurations')
-    group_decoder.add_argument('--agg_mode', type=str, default='multiplicative_attention', 
-                               help="aggregating mode")
-    
+
+    group_data = parser.add_argument_group("dataset")
+    group_data.add_argument("--dataset", type=str, default="imdb", help="dataset name")
+    group_data.add_argument(
+        "--pre_truecase",
+        default=False,
+        action="store_true",
+        help="whether to pre-truecase data",
+    )
+    group_data.add_argument(
+        "--save_preds",
+        default=False,
+        action="store_true",
+        help="whether to save predictions on the test split (typically in case without ground truth)",
+    )
+
+    group_decoder = parser.add_argument_group("decoder configurations")
+    group_decoder.add_argument(
+        "--agg_mode",
+        type=str,
+        default="multiplicative_attention",
+        help="aggregating mode",
+    )
+
     return parse_to_args(parser)
 
 
-
 def collect_TC_assembly_config(args: argparse.Namespace):
-    drop_rates = (0.0, 0.05, args.drop_rate) if args.use_locked_drop else (args.drop_rate, 0.0, 0.0)
-    
+    drop_rates = (
+        (0.0, 0.05, args.drop_rate)
+        if args.use_locked_drop
+        else (args.drop_rate, 0.0, 0.0)
+    )
+
     if args.emb_dim > 0:
         vectors = load_vectors(args.language, args.emb_dim)
-        ohots_config = ConfigDict({'text': OneHotConfig(field='text', min_freq=5, vectors=vectors, emb_dim=args.emb_dim, freeze=args.emb_freeze)})
+        ohots_config = ConfigDict(
+            {
+                "text": OneHotConfig(
+                    field="text",
+                    min_freq=5,
+                    vectors=vectors,
+                    emb_dim=args.emb_dim,
+                    freeze=args.emb_freeze,
+                )
+            }
+        )
     else:
         ohots_config = None
-    
+
     if args.use_interm1:
-        interm1_config = EncoderConfig(arch=args.enc_arch, hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
+        interm1_config = EncoderConfig(
+            arch=args.enc_arch,
+            hid_dim=args.hid_dim,
+            num_layers=args.num_layers,
+            in_drop_rates=drop_rates,
+        )
     else:
         interm1_config = None
-    
+
     if args.use_interm2:
-        interm2_config = EncoderConfig(arch=args.enc_arch, hid_dim=args.hid_dim, num_layers=args.num_layers, in_drop_rates=drop_rates)
+        interm2_config = EncoderConfig(
+            arch=args.enc_arch,
+            hid_dim=args.hid_dim,
+            num_layers=args.num_layers,
+            in_drop_rates=drop_rates,
+        )
     else:
         interm2_config = None
-    
-    if args.language.lower() == 'english' and args.use_elmo:
-        elmo_config = ELMoConfig(elmo=load_pretrained('elmo'))
+
+    if args.language.lower() == "english" and args.use_elmo:
+        elmo_config = ELMoConfig(elmo=load_pretrained("elmo"))
     else:
         elmo_config = None
-    
-    if args.language.lower() == 'english' and args.use_flair:
-        flair_fw_lm, flair_bw_lm = load_pretrained('flair')
-        flair_fw_config, flair_bw_config = FlairConfig(flair_lm=flair_fw_lm), FlairConfig(flair_lm=flair_bw_lm)
+
+    if args.language.lower() == "english" and args.use_flair:
+        flair_fw_lm, flair_bw_lm = load_pretrained("flair")
+        flair_fw_config, flair_bw_config = FlairConfig(
+            flair_lm=flair_fw_lm
+        ), FlairConfig(flair_lm=flair_bw_lm)
         if interm2_config is not None:
             interm2_config.in_proj = True
     else:
         flair_fw_config, flair_bw_config = None, None
-    
-    if args.bert_arch.lower() != 'none':
+
+    if args.bert_arch.lower() != "none":
         bert_like, tokenizer = load_pretrained(args.bert_arch, args)
-        bert_like_config = BertLikeConfig(tokenizer=tokenizer, bert_like=bert_like, arch=args.bert_arch, freeze=False, paired_inputs=args.paired_inputs)
+        bert_like_config = BertLikeConfig(
+            tokenizer=tokenizer,
+            bert_like=bert_like,
+            arch=args.bert_arch,
+            freeze=False,
+            paired_inputs=args.paired_inputs,
+        )
     else:
         bert_like_config = None
-    
-    return {'ohots': ohots_config, 
-            'intermediate1': interm1_config, 
-            'elmo': elmo_config, 
-            'flair_fw': flair_fw_config, 
-            'flair_bw': flair_bw_config, 
-            'bert_like': bert_like_config, 
-            'intermediate2': interm2_config, }
+
+    return {
+        "ohots": ohots_config,
+        "intermediate1": interm1_config,
+        "elmo": elmo_config,
+        "flair_fw": flair_fw_config,
+        "flair_bw": flair_bw_config,
+        "bert_like": bert_like_config,
+        "intermediate2": interm2_config,
+    }
 
 
 def build_TC_config(args: argparse.Namespace):
-    drop_rates = (0.0, 0.05, args.drop_rate) if args.use_locked_drop else (args.drop_rate, 0.0, 0.0)
-    decoder_config = TextClassificationDecoderConfig(agg_mode=args.agg_mode, in_drop_rates=drop_rates)
+    drop_rates = (
+        (0.0, 0.05, args.drop_rate)
+        if args.use_locked_drop
+        else (args.drop_rate, 0.0, 0.0)
+    )
+    decoder_config = TextClassificationDecoderConfig(
+        agg_mode=args.agg_mode, in_drop_rates=drop_rates
+    )
     return ClassifierConfig(**collect_TC_assembly_config(args), decoder=decoder_config)
 
 
 def process_TC_data(train_data, dev_data, test_data, args, config):
-    if config.bert_like is not None: 
-        preprocessor = BertLikePreProcessor(config.bert_like.tokenizer, model_max_length=args.bert_max_length, verbose=args.log_terminal)
-        
-        if getattr(args, 'pre_truecase', False):
-            assert not getattr(config.bert_like.tokenizer, 'do_lower_case', False)
-            train_data = preprocessor.truecase_for_data(train_data, )
-            dev_data   = preprocessor.truecase_for_data(dev_data)
-            test_data  = preprocessor.truecase_for_data(test_data)
-        
+    if config.bert_like is not None:
+        preprocessor = BertLikePreProcessor(
+            config.bert_like.tokenizer,
+            model_max_length=args.bert_max_length,
+            verbose=args.log_terminal,
+        )
+
+        if getattr(args, "pre_truecase", False):
+            assert not getattr(config.bert_like.tokenizer, "do_lower_case", False)
+            train_data = preprocessor.truecase_for_data(
+                train_data,
+            )
+            dev_data = preprocessor.truecase_for_data(dev_data)
+            test_data = preprocessor.truecase_for_data(test_data)
+
         # Truncate overlong sentences
         train_data = preprocessor.truncate_for_data(train_data)
-        dev_data   = preprocessor.truncate_for_data(dev_data)
-        test_data  = preprocessor.truncate_for_data(test_data)
-    
-    elif args.dataset in ('ChnSentiCorp', 'THUCNews_10'):
+        dev_data = preprocessor.truncate_for_data(dev_data)
+        test_data = preprocessor.truncate_for_data(test_data)
+
+    elif args.dataset in ("ChnSentiCorp", "THUCNews_10"):
         # Too long sentences even for RNN
         for data in [train_data, dev_data, test_data]:
             for entry in data:
-                if len(entry['tokens']) > 1200:
-                    entry['tokens'] = entry['tokens'][:300] + entry['tokens'][-900:]
-    
+                if len(entry["tokens"]) > 1200:
+                    entry["tokens"] = entry["tokens"][:300] + entry["tokens"][-900:]
+
     if config.bert_like is not None and config.bert_like.paired_inputs:
         logger.info("Paired text exists, concatenating as input...")
         for data in [train_data, dev_data, test_data]:
             for entry in data:
-                entry['tokens'] = entry['tokens'] + TokenSequence.from_tokenized_text([config.bert_like.tokenizer.sep_token]) + entry['paired_tokens']
-    
+                entry["tokens"] = (
+                    entry["tokens"]
+                    + TokenSequence.from_tokenized_text(
+                        [config.bert_like.tokenizer.sep_token]
+                    )
+                    + entry["paired_tokens"]
+                )
+
     return train_data, dev_data, test_data
 
 
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                     fromfile_prefix_chars='@')
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        fromfile_prefix_chars="@",
+    )
     args = parse_arguments(parser)
-    
+
     # Use micro-seconds to ensure different timestamps while adopting multiprocessing
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-    save_path =  f"cache/{args.dataset}-TC/{timestamp}"
+    save_path = f"cache/{args.dataset}-TC/{timestamp}"
     if not os.path.exists(save_path):
         os.makedirs(save_path)
-        
+
     handlers = [logging.FileHandler(f"{save_path}/training.log")]
     if args.log_terminal:
         handlers.append(logging.StreamHandler(sys.stdout))
-    logging.basicConfig(level=logging.INFO, 
-                        format="[%(asctime)s %(levelname)s] %(message)s", 
-                        datefmt="%Y-%m-%d %H:%M:%S", 
-                        handlers=handlers)
-    
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[%(asctime)s %(levelname)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        handlers=handlers,
+    )
+
     logger = logging.getLogger(__name__)
-    logger.info(header_format("Starting", sep='='))
+    logger.info(header_format("Starting", sep="="))
     logger.info(" ".join(sys.argv))
     logger.info(pprint.pformat(args.__dict__))
-    
-    
-    logger.info(header_format("Preparing", sep='-'))
+
+    logger.info(header_format("Preparing", sep="-"))
     device = auto_device()
-    if device.type.startswith('cuda'):
+    if device.type.startswith("cuda"):
         torch.cuda.set_device(device)
         temp = torch.randn(100).to(device)
-    
+
     train_data, dev_data, test_data = load_data(args)
     args.language = dataset2language[args.dataset]
-    args.paired_inputs = ('paired_tokens' in train_data[0])
-    
+    args.paired_inputs = "paired_tokens" in train_data[0]
+
     # train_data, dev_data, test_data = train_data[:1000], dev_data[:1000], test_data[:1000]
     config = build_TC_config(args)
-    train_data, dev_data, test_data = process_TC_data(train_data, dev_data, test_data, args, config)
-    
+    train_data, dev_data, test_data = process_TC_data(
+        train_data, dev_data, test_data, args, config
+    )
+
     train_set = Dataset(train_data, config, training=True)
     train_set.build_vocabs_and_dims(dev_data)
-    dev_set   = Dataset(dev_data,  train_set.config, training=False)
-    test_set  = Dataset(test_data, train_set.config, training=False)
-    
+    dev_set = Dataset(dev_data, train_set.config, training=False)
+    test_set = Dataset(test_data, train_set.config, training=False)
+
     logger.info(train_set.summary)
-    train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,  collate_fn=train_set.collate)
-    dev_loader   = torch.utils.data.DataLoader(dev_set,   batch_size=args.batch_size, shuffle=False, collate_fn=dev_set.collate)
-    
-    
-    logger.info(header_format("Building", sep='-'))
+    train_loader = torch.utils.data.DataLoader(
+        train_set,
+        batch_size=args.batch_size,
+        shuffle=True,
+        collate_fn=train_set.collate,
+    )
+    dev_loader = torch.utils.data.DataLoader(
+        dev_set, batch_size=args.batch_size, shuffle=False, collate_fn=dev_set.collate
+    )
+
+    logger.info(header_format("Building", sep="-"))
     model = config.instantiate().to(device)
     count_params(model)
-    
-    logger.info(header_format("Training", sep='-'))
+
+    logger.info(header_format("Training", sep="-"))
     trainer = build_trainer(model, device, len(train_loader), args)
-    if args.pdb: 
+    if args.pdb:
         pdb.set_trace()
-    
+
     torch.save(config, f"{save_path}/{config.name}-config.pth")
+
     def save_callback(model):
         torch.save(model, f"{save_path}/{config.name}.pth")
-    trainer.train_steps(train_loader=train_loader, dev_loader=dev_loader, num_epochs=args.num_epochs, 
-                        save_callback=save_callback, save_by_loss=False)
-    
-    logger.info(header_format("Evaluating", sep='-'))
+
+    trainer.train_steps(
+        train_loader=train_loader,
+        dev_loader=dev_loader,
+        num_epochs=args.num_epochs,
+        save_callback=save_callback,
+        save_by_loss=False,
+    )
+
+    logger.info(header_format("Evaluating", sep="-"))
     model = torch.load(f"{save_path}/{config.name}.pth", map_location=device)
     trainer = Trainer(model, device=device)
-    
+
     logger.info("Evaluating on dev-set")
     evaluate_text_classification(trainer, dev_set, batch_size=args.batch_size)
     logger.info("Evaluating on test-set")
-    evaluate_text_classification(trainer, test_set, batch_size=args.batch_size, save_preds=args.save_preds)
+    evaluate_text_classification(
+        trainer, test_set, batch_size=args.batch_size, save_preds=args.save_preds
+    )
     if args.save_preds:
         torch.save(test_data, f"{save_path}/test-data-with-preds.pth")
-    
+
     logger.info(" ".join(sys.argv))
     logger.info(pprint.pformat(args.__dict__))
-    logger.info(header_format("Ending", sep='='))
+    logger.info(header_format("Ending", sep="="))

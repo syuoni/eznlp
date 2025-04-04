@@ -4,7 +4,16 @@ from eznlp.nn.init import reinit_bert_like_
 
 def test_reinit_bert_like(bert_with_tokenizer):
     bert, tokenizer = bert_with_tokenizer
-    
-    assert abs(bert.encoder.layer[0].attention.self.query.weight.std().item() - 0.04311944171786308) < 1e-6
+
+    assert (
+        abs(
+            bert.encoder.layer[0].attention.self.query.weight.std().item()
+            - 0.04311944171786308
+        )
+        < 1e-6
+    )
     reinit_bert_like_(bert)
-    assert abs(bert.encoder.layer[0].attention.self.query.weight.std().item() - 0.0176) < 1e-3
+    assert (
+        abs(bert.encoder.layer[0].attention.self.query.weight.std().item() - 0.0176)
+        < 1e-3
+    )

@@ -1,5 +1,5 @@
 # Deep Span Representations for Named Entity Recognition
-This page describes the materials and code for "Deep Span Representations for Named Entity Recognition". 
+This page describes the materials and code for "Deep Span Representations for Named Entity Recognition".
 
 
 ## Setup
@@ -24,24 +24,17 @@ Setup an environment and install the dependencies and `eznlp` according to [READ
 ### Download pretrained language models
 Download the pretrained language models by `transformers` and save to `assets/transformers`.
 
-```python
-import transformers
 
-model_name_list = ["bert-base-uncased", 
-                   "bert-base-cased", 
-                   "bert-large-uncased", 
-                   "bert-large-cased", 
-                   "roberta-base", 
-                   "roberta-large", 
-                   "hfl/chinese-bert-wwm-ext", 
-                   "hfl/chinese-macbert-base", 
-                   "hfl/chinese-macbert-large"]
-
-for model_name in model_name_list:
-    tokenizer = transformers.AutoTokenizer.from_pretrained(model_name)
-    tokenizer.save_pretrained(f"assets/transformers/{model_name}")
-    model = transformers.AutoModelForPreTraining.from_pretrained(model_name)
-    model.save_pretrained(f"assets/transformers/{model_name}")
+```bash
+git clone https://huggingface.co/google-bert/bert-base-uncased  assets/transformers/bert-base-uncased
+git clone https://huggingface.co/google-bert/bert-base-cased    assets/transformers/bert-base-cased
+git clone https://huggingface.co/google-bert/bert-large-uncased assets/transformers/bert-large-uncased
+git clone https://huggingface.co/google-bert/bert-large-cased   assets/transformers/bert-large-cased
+git clone https://huggingface.co/FacebookAI/roberta-base        assets/transformers/roberta-base
+git clone https://huggingface.co/FacebookAI/roberta-large       assets/transformers/roberta-large
+git clone https://huggingface.co/hfl/chinese-bert-wwm-ext       assets/transformers/hfl/chinese-bert-wwm-ext
+git clone https://huggingface.co/hfl/chinese-macbert-base       assets/transformers/hfl/chinese-macbert-base
+git clone https://huggingface.co/hfl/chinese-macbert-large      assets/transformers/hfl/chinese-macbert-large
 ```
 
 
@@ -94,7 +87,7 @@ $ python scripts/entity_recognition.py @scripts/options/with_bert.opt \
 ```
 
 
-See more details for options: 
+See more details for options:
 
 ```bash
 $ python scripts/entity_recognition.py --help

@@ -23,6 +23,7 @@ class FocalLoss(nn.Module):
         >>> output = loss(input, target)
         >>> output.backward()
     """
+
     def __init__(self, gamma=0, alpha: List[float] = None, reduction="none"):
         super(FocalLoss, self).__init__()
         self.gamma = gamma
@@ -65,8 +66,8 @@ class FocalLoss(nn.Module):
         """
         probs = torch.sigmoid(x) if is_logits else x
         probs = probs.unsqueeze(-1)
-        probs = torch.cat([1-probs, probs], dim=-1)
-        logprob = torch.log(probs+1e-4)  # 1e-4 to prevent being rounded to 0 in fp16
+        probs = torch.cat([1 - probs, probs], dim=-1)
+        logprob = torch.log(probs + 1e-4)  # 1e-4 to prevent being rounded to 0 in fp16
         return logprob
 
     def __str__(self):

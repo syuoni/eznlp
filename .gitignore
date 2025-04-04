@@ -156,5 +156,3 @@ dmypy.json
 !/publications/framework/HwaMei-500.md
 !/publications/boundary-smoothing/slides.pdf
 !/publications/boundary-smoothing/poster.pdf
-
-/test_script.py
