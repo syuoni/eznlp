@@ -39,7 +39,7 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["eznlp"]
+packages = {find = {include = ["eznlp*"]}}
 
 [tool.setuptools.dynamic]
 version = {attr = "eznlp.__version__"}
