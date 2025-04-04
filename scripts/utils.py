@@ -11,9 +11,7 @@ import time
 import numpy
 import sklearn.model_selection
 import torch
-import allennlp.modules
 import transformers
-import flair
 
 from eznlp.token import Full2Half
 from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO, TextClsIO, KarpathyIO, BratIO, Src2TrgIO
@@ -118,8 +116,9 @@ def parse_to_args(parser: argparse.ArgumentParser):
     return args
 
 
-
+spacy.cli.download("en_core_web_sm")
 spacy_nlp_en = spacy.load("en_core_web_sm", disable=['tagger', 'parser', 'ner'])
+spacy.cli.download("de_core_news_sm")
 spacy_nlp_de = spacy.load("de_core_news_sm", disable=['tagger', 'parser', 'ner'])
 
 
@@ -534,14 +533,16 @@ def load_data(args: argparse.Namespace):
 
 def load_pretrained(pretrained_str, args: argparse.Namespace):
     if pretrained_str.lower() == 'elmo':
+        import allennlp.modules
         return allennlp.modules.Elmo(options_file="assets/allennlp/elmo_2x4096_512_2048cnn_2xhighway_options.json", 
                                      weight_file="assets/allennlp/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5", 
                                      num_output_representations=1)
         
     elif pretrained_str.lower() == 'flair':
+        import flair
         return (flair.models.LanguageModel.load_language_model("assets/flair/news-forward-0.4.1.pt"), 
                 flair.models.LanguageModel.load_language_model("assets/flair/news-backward-0.4.1.pt"))
-        
+
     elif args.language.lower() == 'english':
         if pretrained_str.lower().startswith('bert'):
             if 'wwm' in pretrained_str.lower():

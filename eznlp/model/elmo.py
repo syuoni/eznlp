@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from typing import List
 import torch
-import allennlp.modules
 
 from ..token import TokenSequence
 from ..config import Config
@@ -9,7 +8,7 @@ from ..config import Config
 
 class ELMoConfig(Config):
     def __init__(self, **kwargs):
-        self.elmo: allennlp.modules.Elmo = kwargs.pop('elmo')
+        self.elmo = kwargs.pop('elmo')
         self.out_dim = self.elmo.get_output_dim()
         
         self.arch = kwargs.pop('arch', 'ELMo')

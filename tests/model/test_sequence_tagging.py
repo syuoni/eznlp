@@ -120,7 +120,8 @@ class TestModel(object):
         self._setup_case(conll2003_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()
-        
+    
+    @pytest.mark.skip(reason="ELMo is not supported in the current version")
     @pytest.mark.parametrize("freeze", [False, True])
     def test_model_with_elmo(self, freeze, elmo, conll2003_demo, device):
         self.config = ExtractorConfig('sequence_tagging', ohots=None, elmo=ELMoConfig(elmo=elmo))
@@ -137,6 +138,7 @@ class TestModel(object):
         self._assert_batch_consistency()
         self._assert_trainable()
         
+    @pytest.mark.skip(reason="Flair is not supported in the current version")
     @pytest.mark.parametrize("freeze", [False, True])
     def test_model_with_flair(self, freeze, flair_fw_lm, flair_bw_lm, conll2003_demo, device):
         self.config = ExtractorConfig('sequence_tagging', ohots=None, 

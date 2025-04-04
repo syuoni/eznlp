@@ -4,9 +4,7 @@ import spacy
 import jieba
 import torch
 import torchvision
-import allennlp.modules
 import transformers
-import flair
 
 from eznlp import auto_device
 from eznlp.token import TokenSequence
@@ -38,12 +36,14 @@ def device(request):
         return torch.device(device_str)
 
 
-@pytest.fixture
+@pytest.fixture(scope='session')
 def spacy_nlp_en():
+    spacy.cli.download("en_core_web_sm")
     return spacy.load("en_core_web_sm", disable=['tagger', 'parser', 'ner'])
 
-@pytest.fixture
+@pytest.fixture(scope='session')
 def spacy_nlp_de():
+    spacy.cli.download("de_core_news_sm")
     return spacy.load("de_core_news_sm", disable=['tagger', 'parser', 'ner'])
 
 
@@ -130,6 +130,7 @@ def ctb50():
 
 @pytest.fixture
 def elmo():
+    import allennlp.modules
     return allennlp.modules.Elmo(options_file="assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_options.json", 
                                  weight_file="assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_weights.hdf5", 
                                  num_output_representations=1)
@@ -194,10 +195,12 @@ def bert_like_tokenizer(request, bert_tokenizer, roberta_tokenizer, albert_token
 
 @pytest.fixture
 def flair_fw_lm():
+    import flair
     return flair.models.LanguageModel.load_language_model("assets/flair/lm-mix-english-forward-v0.2rc.pt")
 
 @pytest.fixture
 def flair_bw_lm():
+    import flair
     return flair.models.LanguageModel.load_language_model("assets/flair/lm-mix-english-backward-v0.2rc.pt")
 
 @pytest.fixture(params=['fw', 'bw'])
@@ -227,7 +230,7 @@ def flickr8k_demo():
 @pytest.fixture
 def resnet18_with_trans():
     resnet = torchvision.models.resnet18(pretrained=False)
-    resnet.load_state_dict(torch.load("assets/resnet/resnet18-5c106cde.pth"))
+    resnet.load_state_dict(torch.load("assets/resnet/resnet18-5c106cde.pth", weights_only=False))
     
     # https://pytorch.org/vision/stable/models.html
     trans = torch.nn.Sequential(torchvision.transforms.Resize(256), 
@@ -240,7 +243,7 @@ def resnet18_with_trans():
 @pytest.fixture
 def vgg11_with_trans():
     vgg = torchvision.models.vgg11(pretrained=False)
-    vgg.load_state_dict(torch.load("assets/vgg/vgg11-bbd30ac9.pth"))
+    vgg.load_state_dict(torch.load("assets/vgg/vgg11-bbd30ac9.pth", weights_only=False))
     
     # https://pytorch.org/vision/stable/models.html
     trans = torch.nn.Sequential(torchvision.transforms.Resize(256), 

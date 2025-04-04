@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from typing import List
 import torch
-import flair
 
 from ..token import TokenSequence
 from ..nn.modules import SequenceGroupAggregating
@@ -10,7 +9,7 @@ from ..config import Config
 
 class FlairConfig(Config):
     def __init__(self, **kwargs):
-        self.flair_lm: flair.models.LanguageModel = kwargs.pop('flair_lm')
+        self.flair_lm = kwargs.pop('flair_lm')
         self.out_dim = self.flair_lm.hidden_size
         self.is_forward = self.flair_lm.is_forward_lm
         

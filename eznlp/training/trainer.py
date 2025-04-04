@@ -51,7 +51,7 @@ class Trainer(object):
         self.non_blocking = non_blocking
         self.grad_clip = grad_clip
         self.use_amp = use_amp
-        self.scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+        self.scaler = torch.amp.GradScaler(enabled=use_amp)
         
         
     def forward_batch(self, batch: Batch):
@@ -153,7 +153,7 @@ class Trainer(object):
         epoch_y_pred = [[] for k in range(self.num_metrics)]
         for batch in dataloader:
             batch = batch.to(self.device, non_blocking=self.non_blocking)
-            with torch.cuda.amp.autocast(enabled=self.use_amp):
+            with torch.amp.autocast(enabled=self.use_amp):
                 loss_with_possible_y_pred = self.forward_batch(batch)
             
             if self.num_metrics == 0:
@@ -257,7 +257,7 @@ class Trainer(object):
         while eidx < num_epochs:
             for batch in train_loader:
                 batch = batch.to(self.device, non_blocking=self.non_blocking)
-                with torch.cuda.amp.autocast(enabled=self.use_amp):
+                with torch.amp.autocast(device_type='cuda', enabled=self.use_amp):
                     loss_with_possible_y_pred = self.forward_batch(batch)
                     
                 if self.num_metrics == 0:

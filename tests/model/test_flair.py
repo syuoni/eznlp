@@ -2,15 +2,16 @@
 import pytest
 import os
 import torch
-import flair
 
 from eznlp.token import TokenSequence
 from eznlp.model import FlairConfig
 from eznlp.training import count_params
 
 
+@pytest.mark.skip(reason="Flair is not supported in the current version")
 @pytest.mark.parametrize("agg_mode", ['last', 'mean'])
 def test_flair_embeddings(agg_mode, flair_lm):
+    import flair
     batch_tokenized_text = [["I", "like", "it", "."], 
                             ["Do", "you", "love", "me", "?"], 
                             ["Sure", "!"], 
@@ -36,6 +37,7 @@ def test_flair_embeddings(agg_mode, flair_lm):
 
 
 
+@pytest.mark.skip(reason="Flair is not supported in the current version")
 @pytest.mark.parametrize("freeze", [True, False])
 @pytest.mark.parametrize("use_gamma", [True, False])
 def test_trainble_config(freeze, use_gamma, flair_lm):
@@ -51,6 +53,7 @@ def test_trainble_config(freeze, use_gamma, flair_lm):
 
 
 
+@pytest.mark.skip(reason="Flair is not supported in the current version")
 def test_serialization(flair_fw_lm):
     config = FlairConfig(flair_lm=flair_fw_lm)
     

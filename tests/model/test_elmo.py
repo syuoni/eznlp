@@ -7,6 +7,7 @@ from eznlp.model import ELMoConfig
 from eznlp.training import count_params
 
 
+@pytest.mark.skip(reason="ELMo is not supported in the current version")
 @pytest.mark.parametrize("mix_layers", ['trainable', 'top', 'average'])
 @pytest.mark.parametrize("use_gamma", [True, False])
 @pytest.mark.parametrize("freeze", [True, False])
@@ -25,7 +26,7 @@ def test_trainble_config(mix_layers, use_gamma, freeze, elmo):
     assert count_params(elmo_embedder) == expected_num_trainable_params
 
 
-
+@pytest.mark.skip(reason="ELMo is not supported in the current version")
 def test_serialization(elmo):
     config = ELMoConfig(elmo=elmo)
     

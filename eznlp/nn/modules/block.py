@@ -70,7 +70,7 @@ class ConvBlock(torch.nn.Module):
         # x: (batch, in_dim=channels, step)
         # mask: (batch, step)
         if mask is not None:
-            x.masked_fill_(mask.unsqueeze(1), 0)
+            x = x.masked_fill(mask.unsqueeze(1), 0)
         
         # conved: (batch, out_dim=channels, step)
         conved = self.activation(self.conv(self.dropout(x)))
