@@ -5,7 +5,7 @@ import re
 from collections import Counter
 import pandas
 
-from ..token import zh_char_re, zh_punct_re
+from ..token import zh_char_re
 
 
 class ChunksTagsTranslator(object):

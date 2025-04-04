@@ -9,7 +9,6 @@ import glob
 import logging
 import pprint
 import copy
-import numpy
 import torch
 
 from eznlp import auto_device
@@ -23,7 +22,7 @@ from eznlp.training.evaluation import _eval_ent
 from eznlp.utils.relation import detect_missing_symmetric
 
 from utils import add_base_arguments, parse_to_args
-from utils import load_data, dataset2language, load_pretrained, build_trainer, header_format
+from utils import load_data, dataset2language, build_trainer, header_format
 from entity_recognition import collect_IE_assembly_config, process_IE_data
 
 
@@ -126,7 +125,7 @@ def parse_arguments(parser: argparse.ArgumentParser):
 
 
 def build_RE_config(args: argparse.Namespace):
-    drop_rates = (0.0, 0.05, args.drop_rate) if args.use_locked_drop else (args.drop_rate, 0.0, 0.0)
+    (0.0, 0.05, args.drop_rate) if args.use_locked_drop else (args.drop_rate, 0.0, 0.0)
     reduction_config = EncoderConfig(arch=args.red_arch, hid_dim=args.red_dim, num_layers=args.red_num_layers, in_drop_rates=(0.0, 0.0, 0.0), hid_drop_rate=0.0)
 
     if args.rel_decoder == 'span_rel_classification':

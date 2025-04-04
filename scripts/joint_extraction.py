@@ -6,7 +6,6 @@ import datetime
 import pdb
 import logging
 import pprint
-import numpy
 import torch
 
 from eznlp import auto_device
@@ -20,7 +19,7 @@ from eznlp.model import ExtractorConfig
 from eznlp.training import Trainer, count_params, evaluate_joint_extraction
 
 from utils import add_base_arguments, parse_to_args
-from utils import load_data, dataset2language, load_pretrained, build_trainer, header_format
+from utils import load_data, dataset2language, build_trainer, header_format
 from entity_recognition import collect_IE_assembly_config, process_IE_data
 
 

@@ -6,7 +6,6 @@ import datetime
 import pdb
 import logging
 import pprint
-import numpy
 import torch
 import torchvision
 

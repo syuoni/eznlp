@@ -1,9 +1,7 @@
 # -*- coding: utf-8 -*-
-import os
 import argparse
 import logging
 import re
-import json
 import spacy
 import jieba
 import random
@@ -13,7 +11,6 @@ import sklearn.model_selection
 import torch
 import transformers
 
-from eznlp.token import Full2Half
 from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO, TextClsIO, KarpathyIO, BratIO, Src2TrgIO
 from eznlp.io import PostIO
 from eznlp.vectors import Vectors, GloVe

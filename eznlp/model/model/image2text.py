@@ -3,7 +3,6 @@ from typing import List
 
 from ...wrapper import Batch
 from ..embedder import OneHotConfig
-from ..image_encoder import ImageEncoderConfig
 from ..decoder import GeneratorConfig
 from .base import ModelConfigBase, ModelBase
 

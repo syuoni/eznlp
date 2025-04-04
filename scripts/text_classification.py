@@ -6,7 +6,6 @@ import datetime
 import pdb
 import logging
 import pprint
-import numpy
 import torch
 
 from eznlp import auto_device

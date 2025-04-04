@@ -71,7 +71,7 @@ class MaskedLMConfig(PreTrainingConfig):
         mlm_lab_ids = [self.mlm_label_mask_id] * len(mlm_tok_ids)
 
         num_spans = len(wwm_spans)
-        num_tokens = len(mlm_tok_ids)
+        len(mlm_tok_ids)
 
         # (1) Select which positions are masked
         ## (1.1) Prepare probabilities

@@ -3,7 +3,7 @@ import pytest
 import torch
 
 from eznlp.dataset import Dataset
-from eznlp.model import EncoderConfig, BertLikeConfig, SpanBertLikeConfig
+from eznlp.model import BertLikeConfig, SpanBertLikeConfig
 from eznlp.model import SequenceTaggingDecoderConfig, BoundarySelectionDecoderConfig
 from eznlp.model import SpanClassificationDecoderConfig, SpanAttrClassificationDecoderConfig, SpanRelClassificationDecoderConfig
 from eznlp.model import SpecificSpanClsDecoderConfig, SpecificSpanRelClsDecoderConfig, UnfilteredSpecificSpanRelClsDecoderConfig

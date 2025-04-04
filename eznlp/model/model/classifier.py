@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-from typing import List, Union
+from typing import List
 import torch
 
 from ...wrapper import Batch
 from ...nn.functional import mask2seq_lens
-from ...config import Config, ConfigDict
+from ...config import ConfigDict
 from ..embedder import OneHotConfig
 from ..encoder import EncoderConfig
 from ..nested_embedder import SoftLexiconConfig

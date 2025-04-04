@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import pytest
-import random
 import torch
 
 from eznlp.token import Token, LexiconTokenizer

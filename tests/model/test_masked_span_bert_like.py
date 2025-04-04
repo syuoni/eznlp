@@ -4,7 +4,6 @@ import copy
 import torch
 import transformers
 
-from eznlp.model.decoder.chunks import ChunkPairs
 from eznlp.model import SpanBertLikeConfig, MaskedSpanBertLikeConfig
 from eznlp.training import count_params
 

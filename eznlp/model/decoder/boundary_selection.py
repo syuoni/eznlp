@@ -9,7 +9,7 @@ import torch
 from ...wrapper import Batch
 from ...utils.chunk import detect_overlapping_level, filter_clashed_by_priority
 from ...nn.modules import CombinedDropout, SoftLabelCrossEntropyLoss
-from ...nn.init import reinit_embedding_, reinit_layer_
+from ...nn.init import reinit_embedding_
 from ...metrics import precision_recall_f1_report
 from ..encoder import EncoderConfig
 from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase

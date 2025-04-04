@@ -7,7 +7,6 @@ import pdb
 import glob
 import logging
 import pprint
-import numpy
 import torch
 import transformers
 

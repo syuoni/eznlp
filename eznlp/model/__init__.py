@@ -10,5 +10,11 @@ from .span_bert_like import SpanBertLikeConfig
 from .masked_span_bert_like import MaskedSpanBertLikeConfig
 from .flair import FlairConfig
 
-from .decoder import *
-from .model import *
+from .decoder import *  # noqa
+from .model import *  # noqa
+
+__all__ = [
+    'OneHotConfig', 'MultiHotConfig', 'NestedOneHotConfig', 'CharConfig', 'SoftLexiconConfig',
+    'EncoderConfig', 'ImageEncoderConfig', 'ELMoConfig', 'BertLikeConfig', 'BertLikePreProcessor',
+    'BertLikePostProcessor', 'SpanBertLikeConfig', 'MaskedSpanBertLikeConfig', 'FlairConfig',
+]

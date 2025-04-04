@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from typing import List, Union
-import torch
 
 from ...wrapper import Batch
 from ...config import Config

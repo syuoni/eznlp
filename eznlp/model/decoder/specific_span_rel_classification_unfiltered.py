@@ -8,7 +8,7 @@ import torch
 
 from ...wrapper import Batch
 from ...nn.modules import CombinedDropout, BiAffineFusor
-from ...nn.init import reinit_embedding_, reinit_layer_
+from ...nn.init import reinit_layer_
 from ...metrics import precision_recall_f1_report
 from ..encoder import EncoderConfig
 from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase

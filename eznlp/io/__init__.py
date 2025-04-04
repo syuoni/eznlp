@@ -8,3 +8,8 @@ from .chip import ChipIO
 from .src2trg import Src2TrgIO
 from .raw_text import RawTextIO
 from .processing import PostIO
+
+__all__ = [
+    'TabularIO', 'CategoryFolderIO', 'ConllIO', 'BratIO', 'JsonIO', 'SQuADIO',
+    'KarpathyIO', 'TextClsIO', 'ChipIO', 'Src2TrgIO', 'RawTextIO', 'PostIO'
+]

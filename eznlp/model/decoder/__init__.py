@@ -16,3 +16,14 @@ from .masked_span_rel_classification import MaskedSpanRelClsDecoderConfig
 from .masked_span_attr_classification import MaskedSpanAttrClsDecoderConfig
 
 from .generator import GeneratorConfig
+
+__all__ = [
+    'DecoderMixinBase', 'SingleDecoderConfigBase', 'DecoderBase',
+    'TextClassificationDecoderConfig', 'SequenceTaggingDecoderConfig',
+    'SpanClassificationDecoderConfig', 'SpanAttrClassificationDecoderConfig',
+    'SpanRelClassificationDecoderConfig', 'BoundarySelectionDecoderConfig',
+    'JointExtractionDecoderConfig', 'SpecificSpanClsDecoderConfig',
+    'SpecificSpanRelClsDecoderConfig', 'UnfilteredSpecificSpanRelClsDecoderConfig',
+    'MaskedSpanRelClsDecoderConfig', 'MaskedSpanAttrClsDecoderConfig',
+    'GeneratorConfig'
+]

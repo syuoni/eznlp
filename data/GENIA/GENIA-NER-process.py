@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from collections import Counter
 import tqdm
 import re
 import bs4

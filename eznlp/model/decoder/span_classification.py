@@ -6,12 +6,12 @@ import numpy
 import torch
 
 from ...wrapper import Batch
-from ...utils.chunk import detect_overlapping_level, filter_clashed_by_priority
+from ...utils.chunk import detect_overlapping_level
 from ...nn.modules import SequencePooling, SequenceAttention, CombinedDropout, SoftLabelCrossEntropyLoss, MultiKernelMaxMeanDiscrepancyLoss
 from ...nn.functional import seq_lens2mask
 from ...nn.init import reinit_embedding_, reinit_layer_
 from .base import SingleDecoderConfigBase, DecoderBase
-from .boundaries import Boundaries, MAX_SIZE_ID_COV_RATE, _spans_from_diagonals
+from .boundaries import MAX_SIZE_ID_COV_RATE, _spans_from_diagonals
 from .boundary_selection import BoundariesDecoderMixin
 
 logger = logging.getLogger(__name__)

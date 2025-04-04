@@ -8,7 +8,7 @@ from ..vocab import Vocab
 from ..nn.modules import SequencePooling
 from ..nn.functional import seq_lens2mask
 from .embedder import OneHotConfig, OneHotEmbedder
-from .encoder import EncoderConfig, RNNEncoder
+from .encoder import EncoderConfig
 
 
 class NestedOneHotConfig(OneHotConfig):
