@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-import pytest
 import jieba
+import pytest
 
 from eznlp.io import TabularIO
 

@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
-import pytest
 import os
+
+import pytest
 import torch
 
-from eznlp.token import TokenSequence
 from eznlp.model import FlairConfig
+from eznlp.token import TokenSequence
 from eznlp.training import count_params
 
 

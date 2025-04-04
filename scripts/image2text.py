@@ -1,23 +1,22 @@
 # -*- coding: utf-8 -*-
-import os
-import sys
 import argparse
 import datetime
-import pdb
 import logging
+import os
+import pdb
 import pprint
+import sys
+
 import torch
 import torchvision
+from utils import (add_base_arguments, build_trainer, dataset2language,
+                   header_format, load_data, load_vectors, parse_to_args)
 
 from eznlp import auto_device
 from eznlp.dataset import GenerationDataset
-from eznlp.model import ImageEncoderConfig, OneHotConfig, GeneratorConfig
-from eznlp.model import Image2TextConfig
+from eznlp.model import (GeneratorConfig, Image2TextConfig, ImageEncoderConfig,
+                         OneHotConfig)
 from eznlp.training import Trainer, count_params, evaluate_generation
-
-from utils import add_base_arguments, parse_to_args
-from utils import load_data, dataset2language, load_vectors, build_trainer, header_format
-
 
 
 def parse_arguments(parser: argparse.ArgumentParser):

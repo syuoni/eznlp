@@ -3,8 +3,9 @@ import pytest
 import torch
 
 from eznlp.dataset import GenerationDataset
+from eznlp.model import (EncoderConfig, GeneratorConfig, OneHotConfig,
+                         Text2TextConfig)
 from eznlp.training import Trainer
-from eznlp.model import OneHotConfig, EncoderConfig, GeneratorConfig, Text2TextConfig
 
 
 class TestModel(object):

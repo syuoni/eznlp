@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-import tqdm
 import pandas
+import tqdm
 
 from .base import IO
 

@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 from typing import List
+
 import torch
 
-from ..token import TokenSequence
 from ..config import Config
+from ..token import TokenSequence
 
 
 class ELMoConfig(Config):

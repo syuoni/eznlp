@@ -1,18 +1,19 @@
 # -*- coding: utf-8 -*-
-from typing import List
-from collections import Counter
 import logging
 import math
+from collections import Counter
+from typing import List
+
 import numpy
 import torch
 
-from ...wrapper import Batch
-from ...nn.modules import SequencePooling, SequenceAttention, CombinedDropout
+from ...metrics import precision_recall_f1_report
 from ...nn.functional import seq_lens2mask
 from ...nn.init import reinit_embedding_, reinit_layer_
-from ...metrics import precision_recall_f1_report
+from ...nn.modules import CombinedDropout, SequenceAttention, SequencePooling
+from ...wrapper import Batch
 from ..encoder import EncoderConfig
-from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
+from .base import DecoderBase, DecoderMixinBase, SingleDecoderConfigBase
 from .boundaries import MAX_SIZE_ID_COV_RATE
 from .chunks import ChunkSingles
 

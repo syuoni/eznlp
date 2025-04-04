@@ -1,25 +1,28 @@
 # -*- coding: utf-8 -*-
-from typing import List
-from collections import Counter
+import copy
 import itertools
 import logging
-import copy
 import math
+from collections import Counter
+from typing import List
+
 import numpy
 import torch
 
-from ...wrapper import Batch
-from ...nn.modules import SequencePooling, SequenceAttention, CombinedDropout
-from ...nn.modules import SoftLabelCrossEntropyLoss, BiAffineFusor, TriAffineFusor
-from ...nn.functional import seq_lens2mask
-from ...nn.init import reinit_embedding_, reinit_layer_, reinit_vector_parameter_
 from ...metrics import precision_recall_f1_report
+from ...nn.functional import seq_lens2mask
+from ...nn.init import (reinit_embedding_, reinit_layer_,
+                        reinit_vector_parameter_)
+from ...nn.modules import (BiAffineFusor, CombinedDropout, SequenceAttention,
+                           SequencePooling, SoftLabelCrossEntropyLoss,
+                           TriAffineFusor)
 from ...utils.chunk import chunk_pair_distance
 from ...utils.relation import INV_REL_PREFIX, detect_missing_symmetric
+from ...wrapper import Batch
 from ..encoder import EncoderConfig
-from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
+from .base import DecoderBase, DecoderMixinBase, SingleDecoderConfigBase
 from .boundaries import MAX_SIZE_ID_COV_RATE
-from .chunks import ChunkPairs, MAX_DIST_ID_COV_RATE, MAX_CP_DIST_TOL
+from .chunks import MAX_CP_DIST_TOL, MAX_DIST_ID_COV_RATE, ChunkPairs
 
 logger = logging.getLogger(__name__)
 

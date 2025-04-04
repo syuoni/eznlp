@@ -1,22 +1,24 @@
 # -*- coding: utf-8 -*-
-from typing import List
-from collections import Counter
-import logging
 import copy
+import logging
 import math
+from collections import Counter
+from typing import List
+
 import numpy
 import torch
 
-from ...wrapper import Batch
-from ...nn.modules import CombinedDropout
-from ...nn.modules import SoftLabelCrossEntropyLoss, BiAffineFusor, TriAffineFusor
-from ...nn.init import reinit_embedding_, reinit_layer_, reinit_vector_parameter_
+from ...nn.init import (reinit_embedding_, reinit_layer_,
+                        reinit_vector_parameter_)
+from ...nn.modules import (BiAffineFusor, CombinedDropout,
+                           SoftLabelCrossEntropyLoss, TriAffineFusor)
 from ...utils.chunk import chunk_pair_distance
 from ...utils.relation import INV_REL_PREFIX
+from ...wrapper import Batch
 from ..encoder import EncoderConfig
-from .base import SingleDecoderConfigBase, DecoderBase
+from .base import DecoderBase, SingleDecoderConfigBase
 from .boundaries import MAX_SIZE_ID_COV_RATE
-from .chunks import ChunkPairs, MAX_DIST_ID_COV_RATE
+from .chunks import MAX_DIST_ID_COV_RATE, ChunkPairs
 from .span_rel_classification import ChunkPairsDecoderMixin
 
 logger = logging.getLogger(__name__)

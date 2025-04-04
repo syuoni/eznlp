@@ -2,8 +2,8 @@
 import pytest
 import torch
 
+from eznlp.nn import SequenceGroupAggregating, SequencePooling
 from eznlp.nn.functional import seq_lens2mask
-from eznlp.nn import SequencePooling, SequenceGroupAggregating
 
 
 @pytest.mark.parametrize("mode, f_agg", [('mean', lambda x: x.mean(dim=0)),

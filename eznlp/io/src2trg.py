@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-from typing import Union, List
-import tqdm
 import re
+from typing import List, Union
+
+import tqdm
 
 from ..token import TokenSequence
 from .base import IO

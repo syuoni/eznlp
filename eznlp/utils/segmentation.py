@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-from typing import List
 import re
+from typing import List
 
 
 def segment_text_with_seps(text: str, seps: List[str], length: int=None):

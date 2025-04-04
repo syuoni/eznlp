@@ -3,8 +3,8 @@ import pytest
 import torch
 
 from eznlp.dataset import GenerationDataset
+from eznlp.model import GeneratorConfig, Image2TextConfig, ImageEncoderConfig
 from eznlp.training import Trainer
-from eznlp.model import ImageEncoderConfig, GeneratorConfig, Image2TextConfig
 
 
 class TestModel(object):

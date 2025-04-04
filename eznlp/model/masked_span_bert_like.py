@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
-from typing import List
 from collections import OrderedDict
+from typing import List
+
 import torch
 import transformers
 
-from ..nn.modules import SequencePooling, SequenceAttention
-from ..nn.modules import QueryBertLikeEncoder
-from ..nn.init import reinit_vector_parameter_, reinit_embedding_
 from ..config import Config
+from ..nn.init import reinit_embedding_, reinit_vector_parameter_
+from ..nn.modules import (QueryBertLikeEncoder, SequenceAttention,
+                          SequencePooling)
 
 
 class MaskedSpanBertLikeConfig(Config):

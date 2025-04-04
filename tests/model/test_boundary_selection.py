@@ -3,8 +3,9 @@ import pytest
 import torch
 
 from eznlp.dataset import Dataset
-from eznlp.model import EncoderConfig, BertLikeConfig, BoundarySelectionDecoderConfig, ExtractorConfig
-from eznlp.model import BertLikePreProcessor
+from eznlp.model import (BertLikeConfig, BertLikePreProcessor,
+                         BoundarySelectionDecoderConfig, EncoderConfig,
+                         ExtractorConfig)
 from eznlp.training import Trainer
 
 

@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import json
 
-
 task = 'ACE2004'
 partition = 'test'
 

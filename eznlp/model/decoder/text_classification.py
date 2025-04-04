@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
-from typing import List
 from collections import Counter
+from typing import List
+
 import torch
 
-from ...wrapper import Batch
-from ...nn.modules import SequencePooling, SequenceAttention, CombinedDropout
 from ...nn.init import reinit_layer_
-from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
+from ...nn.modules import CombinedDropout, SequenceAttention, SequencePooling
+from ...wrapper import Batch
+from .base import DecoderBase, DecoderMixinBase, SingleDecoderConfigBase
 
 
 class TextClassificationDecoderMixin(DecoderMixinBase):

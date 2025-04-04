@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import torch
 
+
 def _create_is_like(criterion):
     def _is_like(x):
         if criterion(x):

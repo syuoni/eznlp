@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from typing import Union, List
+from typing import List, Union
 
 from ..token import TokenSequence
 

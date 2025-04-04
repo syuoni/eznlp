@@ -3,7 +3,8 @@ import pytest
 import torch
 
 from eznlp.dataset import Dataset
-from eznlp.model import EncoderConfig, BertLikeConfig, SpanAttrClassificationDecoderConfig, ExtractorConfig
+from eznlp.model import (BertLikeConfig, EncoderConfig, ExtractorConfig,
+                         SpanAttrClassificationDecoderConfig)
 from eznlp.training import Trainer
 
 

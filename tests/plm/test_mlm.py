@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-import pytest
 import jieba
+import pytest
 import torch
 import transformers
 
+from eznlp.dataset import PreTrainingDataset
 from eznlp.io import RawTextIO
 from eznlp.plm import MaskedLMConfig
-from eznlp.dataset import PreTrainingDataset
 from eznlp.training import MaskedLMTrainer
 
 

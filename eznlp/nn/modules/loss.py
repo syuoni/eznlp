@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 import torch
 
-from ..functional import soft_label_cross_entropy, smooth_label_cross_entropy, focal_loss
+from ..functional import (focal_loss, smooth_label_cross_entropy,
+                          soft_label_cross_entropy)
 
 
 class SoftLabelCrossEntropyLoss(torch.nn.modules.loss._WeightedLoss):

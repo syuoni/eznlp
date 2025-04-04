@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
-import pytest
 import random
+
+import pytest
 import torch
 
 from eznlp.dataset import Dataset
-from eznlp.model import EncoderConfig, SequenceTaggingDecoderConfig, ExtractorConfig
+from eznlp.model import (EncoderConfig, ExtractorConfig,
+                         SequenceTaggingDecoderConfig)
 from eznlp.training import Trainer
 
 

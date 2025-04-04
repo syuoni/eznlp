@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-from typing import List, Mapping
-from collections import OrderedDict
 import logging
+from collections import OrderedDict
+from typing import List, Mapping
+
 import torch
 
 logger = logging.getLogger(__name__)

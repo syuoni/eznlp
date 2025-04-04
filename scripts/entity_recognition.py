@@ -1,29 +1,35 @@
 # -*- coding: utf-8 -*-
-import os
-import sys
 import argparse
 import datetime
-import pdb
 import logging
+import os
+import pdb
 import pprint
+import sys
+
 import numpy
 import torch
+from utils import (add_base_arguments, build_trainer, dataset2language,
+                   header_format, load_data, load_pretrained, load_vectors,
+                   parse_to_args, profile)
 
 from eznlp import auto_device
-from eznlp.token import LexiconTokenizer
-from eznlp.utils.chunk import FLAT, NESTED, detect_nested, _is_ordered_nested
-from eznlp.nn.init import reinit_bert_like_
-from eznlp.dataset import Dataset
 from eznlp.config import ConfigDict
-from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig, CharConfig, SoftLexiconConfig
-from eznlp.model import ELMoConfig, BertLikeConfig, SpanBertLikeConfig, MaskedSpanBertLikeConfig, FlairConfig
-from eznlp.model import SequenceTaggingDecoderConfig, SpanClassificationDecoderConfig, BoundarySelectionDecoderConfig, SpecificSpanClsDecoderConfig
-from eznlp.model import ExtractorConfig, SpecificSpanExtractorConfig
-from eznlp.model import BertLikePreProcessor, BertLikePostProcessor
+from eznlp.dataset import Dataset
+from eznlp.model import (BertLikeConfig, BertLikePostProcessor,
+                         BertLikePreProcessor, BoundarySelectionDecoderConfig,
+                         CharConfig, ELMoConfig, EncoderConfig,
+                         ExtractorConfig, FlairConfig,
+                         MaskedSpanBertLikeConfig, MultiHotConfig,
+                         OneHotConfig, SequenceTaggingDecoderConfig,
+                         SoftLexiconConfig, SpanBertLikeConfig,
+                         SpanClassificationDecoderConfig,
+                         SpecificSpanClsDecoderConfig,
+                         SpecificSpanExtractorConfig)
+from eznlp.nn.init import reinit_bert_like_
+from eznlp.token import LexiconTokenizer
 from eznlp.training import Trainer, count_params, evaluate_entity_recognition
-
-from utils import add_base_arguments, parse_to_args
-from utils import load_data, dataset2language, load_pretrained, load_vectors, build_trainer, header_format, profile
+from eznlp.utils.chunk import FLAT, NESTED, _is_ordered_nested, detect_nested
 
 
 def parse_arguments(parser: argparse.ArgumentParser):

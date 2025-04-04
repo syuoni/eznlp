@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
-import pytest
 import copy
+
+import pytest
 import torch
 
-from eznlp.model import SpanRelClassificationDecoderConfig, SpanAttrClassificationDecoderConfig
+from eznlp.model import (SpanAttrClassificationDecoderConfig,
+                         SpanRelClassificationDecoderConfig)
 from eznlp.utils.relation import detect_inverse
 
 

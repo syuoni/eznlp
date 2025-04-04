@@ -1,19 +1,21 @@
 # -*- coding: utf-8 -*-
-import pytest
 import os
-import string
 import random
+import string
+
 import numpy
 import pandas
+import pytest
 import torch
 import transformers
 
-from eznlp.token import TokenSequence
-from eznlp.model import BertLikeConfig, BertLikePreProcessor, BertLikePostProcessor
-from eznlp.model.bert_like import _is_punctuation, _subtokenize_word, _tokenized2nested
-from eznlp.training import count_params
 from eznlp.io import TabularIO
-
+from eznlp.model import (BertLikeConfig, BertLikePostProcessor,
+                         BertLikePreProcessor)
+from eznlp.model.bert_like import (_is_punctuation, _subtokenize_word,
+                                   _tokenized2nested)
+from eznlp.token import TokenSequence
+from eznlp.training import count_params
 
 
 def test_subtokenize_word(bert_like_tokenizer):

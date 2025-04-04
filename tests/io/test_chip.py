@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from eznlp.io import ChipIO
-from eznlp.utils.chunk import detect_overlapping_level, filter_clashed_by_priority, ARBITRARY
+from eznlp.utils.chunk import (ARBITRARY, detect_overlapping_level,
+                               filter_clashed_by_priority)
+
 
 class TestChipIO(object):
     """

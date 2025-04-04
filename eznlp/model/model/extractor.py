@@ -1,20 +1,20 @@
 # -*- coding: utf-8 -*-
 from typing import List, Union
+
 import torch
 
-from ...wrapper import Batch
 from ...config import ConfigDict
+from ...wrapper import Batch
+from ..decoder import (BoundarySelectionDecoderConfig,
+                       JointExtractionDecoderConfig,
+                       SequenceTaggingDecoderConfig, SingleDecoderConfigBase,
+                       SpanAttrClassificationDecoderConfig,
+                       SpanClassificationDecoderConfig,
+                       SpanRelClassificationDecoderConfig)
 from ..embedder import OneHotConfig
 from ..encoder import EncoderConfig
 from ..nested_embedder import SoftLexiconConfig
-from ..decoder import (SingleDecoderConfigBase,
-                       SequenceTaggingDecoderConfig,
-                       SpanClassificationDecoderConfig,
-                       SpanAttrClassificationDecoderConfig,
-                       SpanRelClassificationDecoderConfig,
-                       BoundarySelectionDecoderConfig,
-                       JointExtractionDecoderConfig)
-from .base import ModelConfigBase, ModelBase
+from .base import ModelBase, ModelConfigBase
 
 
 class ExtractorConfig(ModelConfigBase):

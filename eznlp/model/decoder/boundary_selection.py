@@ -1,19 +1,21 @@
 # -*- coding: utf-8 -*-
-from typing import List
-from collections import Counter
 import logging
 import math
+from collections import Counter
+from typing import List
+
 import numpy
 import torch
 
-from ...wrapper import Batch
-from ...utils.chunk import detect_overlapping_level, filter_clashed_by_priority
-from ...nn.modules import CombinedDropout, SoftLabelCrossEntropyLoss
-from ...nn.init import reinit_embedding_
 from ...metrics import precision_recall_f1_report
+from ...nn.init import reinit_embedding_
+from ...nn.modules import CombinedDropout, SoftLabelCrossEntropyLoss
+from ...utils.chunk import detect_overlapping_level, filter_clashed_by_priority
+from ...wrapper import Batch
 from ..encoder import EncoderConfig
-from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
-from .boundaries import Boundaries, MAX_SIZE_ID_COV_RATE, _spans_from_upper_triangular
+from .base import DecoderBase, DecoderMixinBase, SingleDecoderConfigBase
+from .boundaries import (MAX_SIZE_ID_COV_RATE, Boundaries,
+                         _spans_from_upper_triangular)
 
 logger = logging.getLogger(__name__)
 

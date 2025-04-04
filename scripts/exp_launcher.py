@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 import argparse
-import time
-import subprocess
-import multiprocessing
 import logging
+import multiprocessing
+import subprocess
+import time
+
 import numpy
+from utils import dataset2language
 
 from eznlp.training import OptionSampler
-from utils import dataset2language
 
 
 def call_command(command: str):

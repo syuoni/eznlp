@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
-import pytest
 import jieba
+import pytest
 
-from eznlp.io import JsonIO, SQuADIO, KarpathyIO, TextClsIO, BratIO
-from eznlp.utils.chunk import detect_overlapping_level, filter_clashed_by_priority, count_nested
-from eznlp.utils.chunk import FLAT, NESTED, ARBITRARY
+from eznlp.io import BratIO, JsonIO, KarpathyIO, SQuADIO, TextClsIO
+from eznlp.utils.chunk import (ARBITRARY, FLAT, NESTED, count_nested,
+                               detect_overlapping_level,
+                               filter_clashed_by_priority)
 
 
 class TestJsonIO(object):

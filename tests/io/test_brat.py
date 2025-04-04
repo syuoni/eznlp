@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 from collections import Counter
+
 import jieba
 import pytest
 
-from eznlp.io import ConllIO, BratIO, PostIO
+from eznlp.io import BratIO, ConllIO, PostIO
 
 
 class TestBratIO(object):

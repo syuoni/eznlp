@@ -1,15 +1,17 @@
 # -*- coding: utf-8 -*-
-from typing import List
 import itertools
+from typing import List
+
 import nltk
 import torch
 
+from ...nn.init import (reinit_gru_, reinit_layer_, reinit_lstm_,
+                        reinit_vector_parameter_)
+from ...nn.modules import (CombinedDropout, ConvBlock, SequenceAttention,
+                           SequencePooling, TransformerDecoderBlock)
 from ...wrapper import Batch
-from ...nn.modules import CombinedDropout, SequencePooling, SequenceAttention
-from ...nn.modules import ConvBlock, TransformerDecoderBlock
-from ...nn.init import reinit_layer_, reinit_lstm_, reinit_gru_, reinit_vector_parameter_
 from ..embedder import OneHotConfig, VocabMixin
-from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
+from .base import DecoderBase, DecoderMixinBase, SingleDecoderConfigBase
 
 
 class GeneratorMixin(DecoderMixinBase, VocabMixin):

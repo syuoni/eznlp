@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 from typing import List
+
 import torch
 
-from ..token import TokenSequence
-from ..nn.modules import SequenceGroupAggregating
 from ..config import Config
+from ..nn.modules import SequenceGroupAggregating
+from ..token import TokenSequence
 
 
 class FlairConfig(Config):

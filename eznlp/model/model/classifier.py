@@ -1,15 +1,16 @@
 # -*- coding: utf-8 -*-
 from typing import List
+
 import torch
 
-from ...wrapper import Batch
-from ...nn.functional import mask2seq_lens
 from ...config import ConfigDict
+from ...nn.functional import mask2seq_lens
+from ...wrapper import Batch
+from ..decoder import TextClassificationDecoderConfig
 from ..embedder import OneHotConfig
 from ..encoder import EncoderConfig
 from ..nested_embedder import SoftLexiconConfig
-from ..decoder import TextClassificationDecoderConfig
-from .base import ModelConfigBase, ModelBase
+from .base import ModelBase, ModelConfigBase
 
 
 class ClassifierConfig(ModelConfigBase):

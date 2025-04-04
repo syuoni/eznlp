@@ -5,11 +5,12 @@
 # description:
 # implementation of dice loss for NLP tasks.
 
+from typing import Optional
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
-from typing import Optional
 
 
 class DiceLoss(nn.Module):

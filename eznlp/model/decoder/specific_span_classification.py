@@ -1,16 +1,18 @@
 # -*- coding: utf-8 -*-
-from typing import Dict
-from collections import Counter
 import logging
 import math
+from collections import Counter
+from typing import Dict
+
 import numpy
 import torch
 
-from ...wrapper import Batch
-from ...utils.chunk import detect_overlapping_level
-from ...nn.modules import CombinedDropout, SoftLabelCrossEntropyLoss, MultiKernelMaxMeanDiscrepancyLoss
 from ...nn.init import reinit_embedding_, reinit_layer_
-from .base import SingleDecoderConfigBase, DecoderBase
+from ...nn.modules import (CombinedDropout, MultiKernelMaxMeanDiscrepancyLoss,
+                           SoftLabelCrossEntropyLoss)
+from ...utils.chunk import detect_overlapping_level
+from ...wrapper import Batch
+from .base import DecoderBase, SingleDecoderConfigBase
 from .boundaries import MAX_SIZE_ID_COV_RATE, _spans_from_diagonals
 from .boundary_selection import BoundariesDecoderMixin
 

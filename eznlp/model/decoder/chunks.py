@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
-from typing import List, Union
 import random
+from typing import List, Union
+
 import torch
 
-from ...wrapper import TargetWrapper
 from ...utils.chunk import chunk_pair_distance
 from ...utils.relation import detect_inverse
-from .base import SingleDecoderConfigBase, DecoderBase
-
+from ...wrapper import TargetWrapper
+from .base import DecoderBase, SingleDecoderConfigBase
 
 MAX_DIST_ID_COV_RATE = 0.975
 MAX_CP_DIST_TOL = 5

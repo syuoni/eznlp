@@ -2,7 +2,9 @@
 import torch
 import transformers
 
-from eznlp.nn.modules.query_bert_like import QueryBertLikeLayer, QueryAlbertLayer, QueryBertLikeEncoder
+from eznlp.nn.modules.query_bert_like import (QueryAlbertLayer,
+                                              QueryBertLikeEncoder,
+                                              QueryBertLikeLayer)
 
 
 def test_query_bert_like_layer(bert_like_with_tokenizer):

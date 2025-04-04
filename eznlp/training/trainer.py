@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
-import time
-import numpy
 import logging
+import time
+
+import numpy
 import torch
 
-from ..wrapper import Batch
 from ..dataset import Dataset
 from ..model.model import ModelBase
+from ..wrapper import Batch
 
 logger = logging.getLogger(__name__)
 

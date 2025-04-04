@@ -1,21 +1,23 @@
 # -*- coding: utf-8 -*-
 import argparse
 import logging
-import re
-import spacy
-import jieba
 import random
+import re
 import time
+
+import jieba
 import numpy
 import sklearn.model_selection
+import spacy
 import torch
 import transformers
 
-from eznlp.io import TabularIO, CategoryFolderIO, ConllIO, JsonIO, TextClsIO, KarpathyIO, BratIO, Src2TrgIO
-from eznlp.io import PostIO
-from eznlp.vectors import Vectors, GloVe
-from eznlp.training import Trainer, LRLambda, collect_params, check_param_groups
+from eznlp.io import (BratIO, CategoryFolderIO, ConllIO, JsonIO, KarpathyIO,
+                      PostIO, Src2TrgIO, TabularIO, TextClsIO)
 from eznlp.metrics import precision_recall_f1_report
+from eznlp.training import (LRLambda, Trainer, check_param_groups,
+                            collect_params)
+from eznlp.vectors import GloVe, Vectors
 
 logger = logging.getLogger(__name__)
 

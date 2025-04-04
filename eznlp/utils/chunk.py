@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
-from typing import List
 import re
+from typing import List
 
 from ..token import TokenSequence
 from . import find_ascending
-
 
 FLAT = 0       # Flat entities
 NESTED = 1     # Nested entities

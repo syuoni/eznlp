@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
-from typing import List
-import os
 import glob
-import re
 import logging
+import os
+import re
+from typing import List
+
 import numpy
 
-from ..utils.segmentation import segment_text_with_hierarchical_seps, segment_text_uniformly
 from ..utils import TextChunksTranslator
+from ..utils.segmentation import (segment_text_uniformly,
+                                  segment_text_with_hierarchical_seps)
 from .base import IO
 
 logger = logging.getLogger(__name__)

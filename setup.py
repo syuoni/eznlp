@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 import os
 import re
-from setuptools import setup, find_packages
+
+from setuptools import find_packages, setup
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 with open(os.path.join(HERE, "README.md"), encoding='utf-8') as f:

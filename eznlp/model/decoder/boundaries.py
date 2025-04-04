@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
-from typing import Union, Tuple, List
 import itertools
-import random
 import math
+import random
+from typing import List, Tuple, Union
+
 import torch
 
 from ...wrapper import TargetWrapper
-from .base import SingleDecoderConfigBase, DecoderBase
-
+from .base import DecoderBase, SingleDecoderConfigBase
 
 MAX_SIZE_ID_COV_RATE = 0.975
 

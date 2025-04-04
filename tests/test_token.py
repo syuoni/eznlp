@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-import pytest
 import pickle
 
-from eznlp.token import Full2Half
-from eznlp.token import zh_punct_re, zh_char_re
-from eznlp.token import Token, TokenSequence, LexiconTokenizer
+import pytest
+
+from eznlp.token import (Full2Half, LexiconTokenizer, Token, TokenSequence,
+                         zh_char_re, zh_punct_re)
 
 
 def test_full2half():

@@ -2,8 +2,8 @@
 import pytest
 import torch
 
-from eznlp.nn import MultiKernelMaxMeanDiscrepancyLoss
 import third_party.transferlearning.code.distance
+from eznlp.nn import MultiKernelMaxMeanDiscrepancyLoss
 
 
 class TestMKMMDLoss(object):

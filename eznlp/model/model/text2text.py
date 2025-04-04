@@ -2,10 +2,10 @@
 from typing import List
 
 from ...wrapper import Batch
+from ..decoder import GeneratorConfig
 from ..embedder import OneHotConfig
 from ..encoder import EncoderConfig
-from ..decoder import GeneratorConfig
-from .base import ModelConfigBase, ModelBase
+from .base import ModelBase, ModelConfigBase
 
 
 class Text2TextConfig(ModelConfigBase):

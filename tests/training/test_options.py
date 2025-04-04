@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-import pytest
 import numpy
+import pytest
 
 from eznlp.training import OptionSampler
+
 
 @pytest.mark.parametrize("lr_range, num_lrs", [(numpy.logspace(-3, -5, num=9, base=10).tolist(), 9),
                                                (numpy.logspace(-3, -5, num=99, base=10).tolist(), 99)])

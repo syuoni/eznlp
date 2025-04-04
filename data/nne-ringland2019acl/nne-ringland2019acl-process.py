@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import json
 
-
 for partition in ['train', 'dev', 'test']:
     with open(f"{partition}.txt") as f:
         lines = [line.strip() for line in f]

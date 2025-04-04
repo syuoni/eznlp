@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
-import os
-import glob
-import re
 import argparse
-import logging
 import datetime
+import glob
+import logging
+import os
+import re
 import zipfile
-import pandas
 
+import pandas
 
 dict_re = re.compile("\{[^\{\}]+\}")
 metrics_re = {'acc': re.compile("(?<=Accuracy: )\d+\.\d+(?=%)"),

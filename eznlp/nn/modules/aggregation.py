@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
-from typing import Union, List
+from typing import List, Union
+
 import torch
 
-from ..functional import sequence_pooling, rnn_last_selecting, sequence_group_aggregating
+from ..functional import (rnn_last_selecting, sequence_group_aggregating,
+                          sequence_pooling)
 
 
 class SequencePooling(torch.nn.Module):

@@ -1,18 +1,20 @@
 # -*- coding: utf-8 -*-
-from typing import List, Dict
-from collections import Counter
 import logging
 import math
+from collections import Counter
+from typing import Dict, List
+
 import numpy
 import torch
 
-from ...wrapper import Batch
-from ...nn.modules import CombinedDropout, BiAffineFusor
-from ...nn.init import reinit_layer_
 from ...metrics import precision_recall_f1_report
+from ...nn.init import reinit_layer_
+from ...nn.modules import BiAffineFusor, CombinedDropout
+from ...wrapper import Batch
 from ..encoder import EncoderConfig
-from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
-from .boundaries import DiagBoundariesPairs, MAX_SIZE_ID_COV_RATE, _span_pairs_from_diagonals
+from .base import DecoderBase, DecoderMixinBase, SingleDecoderConfigBase
+from .boundaries import (MAX_SIZE_ID_COV_RATE, DiagBoundariesPairs,
+                         _span_pairs_from_diagonals)
 
 logger = logging.getLogger(__name__)
 

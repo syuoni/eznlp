@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
-from typing import List, Iterable
+import re
+import string
 from collections import OrderedDict
 from functools import cached_property
-import string
-import re
+from typing import Iterable, List
+
 import hanziconv
-import spacy
 import jieba
 import numpy
-
+import spacy
 
 # "".join([chr(i) for i in range(8211, 8232)])
 # "".join([chr(i) for i in range(12289, 12352)])

@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
-from typing import Union, List
-import os
-import tqdm
 import logging
+import os
+from typing import List, Union
+
 import torch
+import tqdm
 
 logger = logging.getLogger(__name__)
 

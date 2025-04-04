@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-from typing import List
 import os
 import re
 from collections import Counter
+from typing import List
+
 import pandas
 
 from ..token import zh_char_re

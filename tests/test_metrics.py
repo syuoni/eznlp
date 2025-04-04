@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-import pytest
 import numpy
+import pytest
 
+from eznlp.io import ConllIO
 from eznlp.metrics import precision_recall_f1_report
 from eznlp.utils import ChunksTagsTranslator
-from eznlp.io import ConllIO
 
 
 class TestMetric(object):

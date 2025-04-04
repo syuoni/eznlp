@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-import pytest
 import os
+
+import pytest
 import torch
 
 from eznlp.model import ELMoConfig

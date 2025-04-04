@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-from typing import List
-import os
-import logging
 import json
+import logging
+import os
+from typing import List
 
 from ..utils import TextChunksTranslator
 from .base import IO

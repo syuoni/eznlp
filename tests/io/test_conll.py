@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 from collections import Counter
-import pytest
+
 import numpy
+import pytest
 import transformers
 
 from eznlp.io import ConllIO, PostIO

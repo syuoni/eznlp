@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
-from typing import List, Any
 import random
+from typing import Any, List
+
 import torch
 
-from .nn.functional import seq_lens2mask
-from .wrapper import Batch
 from .model.model import ModelConfigBase
+from .nn.functional import seq_lens2mask
 from .plm import PreTrainingConfig
+from .wrapper import Batch
 
 
 class Dataset(torch.utils.data.Dataset):

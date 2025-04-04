@@ -1,16 +1,17 @@
 # -*- coding: utf-8 -*-
-from typing import List
-from collections import Counter
 import logging
 import math
+from collections import Counter
+from typing import List
+
 import numpy
 import torch
 
-from ...wrapper import Batch
-from ...nn.modules import CombinedDropout
 from ...nn.init import reinit_embedding_, reinit_layer_
+from ...nn.modules import CombinedDropout
+from ...wrapper import Batch
 from ..encoder import EncoderConfig
-from .base import SingleDecoderConfigBase, DecoderBase
+from .base import DecoderBase, SingleDecoderConfigBase
 from .boundaries import MAX_SIZE_ID_COV_RATE
 from .span_attr_classification import ChunkSinglesDecoderMixin
 

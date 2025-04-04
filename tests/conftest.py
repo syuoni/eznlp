@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
+import jieba
 import pytest
 import spacy
-import jieba
 import torch
 import torchvision
 import transformers
 
 from eznlp import auto_device
+from eznlp.io import BratIO, ConllIO, JsonIO, KarpathyIO, Src2TrgIO, TabularIO
 from eznlp.token import TokenSequence
-from eznlp.vectors import Vectors, GloVe
-from eznlp.io import TabularIO, ConllIO, JsonIO, KarpathyIO, BratIO, Src2TrgIO
+from eznlp.vectors import GloVe, Vectors
 
 
 def pytest_addoption(parser):

@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
-import pytest
 import copy
+
+import pytest
 import torch
 import transformers
 
-from eznlp.model import SpanBertLikeConfig, MaskedSpanBertLikeConfig
+from eznlp.model import MaskedSpanBertLikeConfig, SpanBertLikeConfig
 from eznlp.training import count_params
 
 

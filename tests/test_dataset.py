@@ -2,10 +2,10 @@
 import pytest
 import torch
 
-from eznlp.token import Token
-from eznlp.dataset import Dataset
 from eznlp.config import ConfigDict
-from eznlp.model import OneHotConfig, MultiHotConfig, ExtractorConfig
+from eznlp.dataset import Dataset
+from eznlp.model import ExtractorConfig, MultiHotConfig, OneHotConfig
+from eznlp.token import Token
 
 
 def test_batch_to_cuda(conll2003_demo, device):

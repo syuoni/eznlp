@@ -2,8 +2,9 @@
 from typing import List, Union
 
 from ...wrapper import Batch
-from ..decoder import SingleDecoderConfigBase, MaskedSpanRelClsDecoderConfig, MaskedSpanAttrClsDecoderConfig
-from .base import ModelConfigBase, ModelBase
+from ..decoder import (MaskedSpanAttrClsDecoderConfig,
+                       MaskedSpanRelClsDecoderConfig, SingleDecoderConfigBase)
+from .base import ModelBase, ModelConfigBase
 
 
 class MaskedSpanExtractorConfig(ModelConfigBase):

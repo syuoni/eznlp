@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import pytest
 
-from eznlp.utils import find_ascending, assign_consecutive_to_buckets
+from eznlp.utils import assign_consecutive_to_buckets, find_ascending
 
 
 @pytest.mark.parametrize("v", [-500, -3, 0, 2, 2.5, 9, 1234.56])

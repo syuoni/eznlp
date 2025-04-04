@@ -2,9 +2,12 @@
 import pytest
 import torch
 
-from eznlp.model import BoundarySelectionDecoderConfig, UnfilteredSpecificSpanRelClsDecoderConfig
-from eznlp.model.decoder.boundaries import _spans_from_upper_triangular, _spans_from_diagonals, _span_pairs_from_diagonals
-from eznlp.model.decoder.boundaries import _span2diagonal, _diagonal2span
+from eznlp.model import (BoundarySelectionDecoderConfig,
+                         UnfilteredSpecificSpanRelClsDecoderConfig)
+from eznlp.model.decoder.boundaries import (_diagonal2span, _span2diagonal,
+                                            _span_pairs_from_diagonals,
+                                            _spans_from_diagonals,
+                                            _spans_from_upper_triangular)
 
 
 @pytest.mark.parametrize("sb_epsilon", [0.0, 0.1])

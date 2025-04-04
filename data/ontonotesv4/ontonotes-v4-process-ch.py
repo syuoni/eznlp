@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-import re
-import os
 import glob
+import os
+import re
+
 import eznlp
 
 translator = eznlp.utils.ChunksTagsTranslator(scheme='OntoNotes')

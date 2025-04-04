@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-from typing import List
 import random
+from typing import List
+
 import torch
 import transformers
 
 from ..nn.functional import seq_lens2mask
 from .base import PreTrainingConfig
-
 
 
 class MaskedLMConfig(PreTrainingConfig):

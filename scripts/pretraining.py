@@ -1,24 +1,22 @@
 # -*- coding: utf-8 -*-
-import os
-import sys
 import argparse
 import datetime
-import pdb
 import glob
 import logging
+import os
+import pdb
 import pprint
+import sys
+
 import torch
 import transformers
+from utils import add_base_arguments, header_format, parse_to_args
 
 from eznlp import auto_device
-from eznlp.io import RawTextIO
 from eznlp.dataset import PreTrainingDataset
+from eznlp.io import RawTextIO
 from eznlp.plm import MaskedLMConfig
-from eznlp.training import MaskedLMTrainer, LRLambda, count_params
-
-from utils import add_base_arguments, parse_to_args
-from utils import header_format
-
+from eznlp.training import LRLambda, MaskedLMTrainer, count_params
 
 """See: https://github.com/tczhangzhi/pytorch-distributed
 

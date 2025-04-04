@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 from typing import List, Union
+
 import torch
 
-from ...wrapper import Batch
 from ...config import Config
-from ...nn.modules import SmoothLabelCrossEntropyLoss, FocalLoss
+from ...nn.modules import FocalLoss, SmoothLabelCrossEntropyLoss
+from ...wrapper import Batch
 
 
 class DecoderMixinBase(object):

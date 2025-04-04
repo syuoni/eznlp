@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import torch
 
-from eznlp.nn.functional import seq_lens2mask, mask2seq_lens
+from eznlp.nn.functional import mask2seq_lens, seq_lens2mask
 
 
 def test_seq_lens2mask():

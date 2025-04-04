@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-from typing import List
-import tqdm
 import glob
+from typing import List
+
+import tqdm
 
 from .base import IO
 

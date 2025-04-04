@@ -4,7 +4,6 @@ import torch
 from ..init import reinit_layer_, reinit_vector_parameter_
 from ..utils import _nonlinearity2activation
 
-
 # TODO: Scaling factor for other scoring?
 
 class SequenceAttention(torch.nn.Module):

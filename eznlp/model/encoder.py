@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 import torch
 
-from ..nn.init import reinit_layer_, reinit_lstm_, reinit_gru_
-from ..nn.functional import mask2seq_lens
-from ..nn.modules import CombinedDropout
-from ..nn.modules import FeedForwardBlock, ConvBlock, TransformerEncoderBlock
 from ..config import Config
+from ..nn.functional import mask2seq_lens
+from ..nn.init import reinit_gru_, reinit_layer_, reinit_lstm_
+from ..nn.modules import (CombinedDropout, ConvBlock, FeedForwardBlock,
+                          TransformerEncoderBlock)
 
 
 class EncoderConfig(Config):

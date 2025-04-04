@@ -2,8 +2,8 @@
 import pytest
 import torch
 
+from eznlp.model import CharConfig, EncoderConfig, SoftLexiconConfig
 from eznlp.token import LexiconTokenizer
-from eznlp.model import EncoderConfig, CharConfig, SoftLexiconConfig
 
 
 class TestNestedOneHotEmbedder(object):

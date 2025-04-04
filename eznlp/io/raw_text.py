@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
-from typing import List
-import logging
-import tqdm
 import json
+import logging
+from typing import List
 
-from .base import IO
-from ..utils.transition import ChunksTagsTranslator, _token2wwm_tag
+import tqdm
+
 from ..utils.segmentation import segment_text_uniformly
+from ..utils.transition import ChunksTagsTranslator, _token2wwm_tag
+from .base import IO
 
 logger = logging.getLogger(__name__)
 

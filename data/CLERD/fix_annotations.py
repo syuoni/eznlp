@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
-import shutil
 import re
-
+import shutil
 
 for folder_name in ['ner', 'relation_extraction']:
     if os.path.exists(folder_name):

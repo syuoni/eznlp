@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
-import tqdm
 import re
-import bs4
 
-from eznlp.token import TokenSequence
+import bs4
+import tqdm
+
 from eznlp.io import JsonIO
+from eznlp.token import TokenSequence
 
 
 def parse_tag(tag: bs4.element.Tag):

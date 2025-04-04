@@ -1,15 +1,16 @@
 # -*- coding: utf-8 -*-
-from typing import List
 from collections import Counter
+from typing import List
+
 import torch
 
-from ...wrapper import TargetWrapper, Batch
-from ...utils import ChunksTagsTranslator
-from ...nn.utils import unpad_seqs
-from ...nn.modules import CombinedDropout, CRF
-from ...nn.init import reinit_layer_
 from ...metrics import precision_recall_f1_report
-from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
+from ...nn.init import reinit_layer_
+from ...nn.modules import CRF, CombinedDropout
+from ...nn.utils import unpad_seqs
+from ...utils import ChunksTagsTranslator
+from ...wrapper import Batch, TargetWrapper
+from .base import DecoderBase, DecoderMixinBase, SingleDecoderConfigBase
 
 
 class SequenceTaggingDecoderMixin(DecoderMixinBase):

@@ -1,27 +1,27 @@
 # -*- coding: utf-8 -*-
-import os
-import sys
 import argparse
+import copy
 import datetime
-import pdb
 import glob
 import logging
+import os
+import pdb
 import pprint
-import copy
+import sys
+
 import torch
+from entity_recognition import collect_IE_assembly_config, process_IE_data
+from utils import (add_base_arguments, build_trainer, dataset2language,
+                   header_format, load_data, parse_to_args)
 
 from eznlp import auto_device
 from eznlp.dataset import Dataset
-from eznlp.model import EncoderConfig
-from eznlp.model import SpanAttrClassificationDecoderConfig, MaskedSpanAttrClsDecoderConfig
-from eznlp.model import ExtractorConfig, MaskedSpanExtractorConfig
-from eznlp.model import BertLikePostProcessor
+from eznlp.model import (BertLikePostProcessor, EncoderConfig, ExtractorConfig,
+                         MaskedSpanAttrClsDecoderConfig,
+                         MaskedSpanExtractorConfig,
+                         SpanAttrClassificationDecoderConfig)
 from eznlp.training import Trainer, count_params, evaluate_attribute_extraction
 from eznlp.training.evaluation import _eval_ent
-
-from utils import add_base_arguments, parse_to_args
-from utils import load_data, dataset2language, build_trainer, header_format
-from entity_recognition import collect_IE_assembly_config, process_IE_data
 
 
 def parse_arguments(parser: argparse.ArgumentParser):

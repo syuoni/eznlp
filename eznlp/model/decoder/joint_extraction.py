@@ -1,17 +1,18 @@
 # -*- coding: utf-8 -*-
 from typing import List, Union
 
-from ...wrapper import Batch
 from ...config import Config
-from .base import DecoderMixinBase, SingleDecoderConfigBase, DecoderBase
-from .sequence_tagging import SequenceTaggingDecoderConfig
-from .span_classification import SpanClassificationDecoderConfig
-from .span_attr_classification import SpanAttrClassificationDecoderConfig
-from .span_rel_classification import SpanRelClassificationDecoderConfig
+from ...wrapper import Batch
+from .base import DecoderBase, DecoderMixinBase, SingleDecoderConfigBase
 from .boundary_selection import BoundarySelectionDecoderConfig
+from .sequence_tagging import SequenceTaggingDecoderConfig
+from .span_attr_classification import SpanAttrClassificationDecoderConfig
+from .span_classification import SpanClassificationDecoderConfig
+from .span_rel_classification import SpanRelClassificationDecoderConfig
 from .specific_span_classification import SpecificSpanClsDecoderConfig
 from .specific_span_rel_classification import SpecificSpanRelClsDecoderConfig
-from .specific_span_rel_classification_unfiltered import UnfilteredSpecificSpanRelClsDecoderConfig
+from .specific_span_rel_classification_unfiltered import \
+    UnfilteredSpecificSpanRelClsDecoderConfig
 
 
 class JointExtractionDecoderMixin(DecoderMixinBase):

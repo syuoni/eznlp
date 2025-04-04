@@ -2,8 +2,8 @@
 import pytest
 import torch
 
-from eznlp.nn import SmoothLabelCrossEntropyLoss, FocalLoss
 import third_party.dice_loss_for_NLP.loss
+from eznlp.nn import FocalLoss, SmoothLabelCrossEntropyLoss
 
 
 class TestFocalLoss(object):

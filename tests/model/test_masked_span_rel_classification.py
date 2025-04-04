@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
-import pytest
 import copy
+
+import pytest
 import torch
 
 from eznlp.dataset import Dataset
-from eznlp.model import EncoderConfig, BertLikeConfig, MaskedSpanBertLikeConfig, SpanBertLikeConfig
-from eznlp.model import MaskedSpanRelClsDecoderConfig, SpecificSpanClsDecoderConfig
-from eznlp.model import MaskedSpanExtractorConfig, SpecificSpanExtractorConfig
-from eznlp.model import BertLikePreProcessor
+from eznlp.model import (BertLikeConfig, BertLikePreProcessor, EncoderConfig,
+                         MaskedSpanBertLikeConfig, MaskedSpanExtractorConfig,
+                         MaskedSpanRelClsDecoderConfig, SpanBertLikeConfig,
+                         SpecificSpanClsDecoderConfig,
+                         SpecificSpanExtractorConfig)
 from eznlp.training import Trainer
 
 

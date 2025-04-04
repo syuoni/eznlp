@@ -1,15 +1,17 @@
 # -*- coding: utf-8 -*-
-from typing import List
-from collections import Counter
 import logging
+from collections import Counter
+from typing import List
+
 import torch
 
-from ..token import TokenSequence
-from ..nn import SinusoidPositionalEncoding
-from ..nn.init import reinit_embedding_, reinit_embedding_by_pretrained_, reinit_layer_
 from ..config import Config
-from ..vocab import Vocab
+from ..nn import SinusoidPositionalEncoding
+from ..nn.init import (reinit_embedding_, reinit_embedding_by_pretrained_,
+                       reinit_layer_)
+from ..token import TokenSequence
 from ..vectors import Vectors
+from ..vocab import Vocab
 
 logger = logging.getLogger(__name__)
 

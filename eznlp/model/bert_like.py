@@ -1,21 +1,21 @@
 # -*- coding: utf-8 -*-
-from typing import List
-from functools import cached_property
 import logging
-import unicodedata
 import re
-import tqdm
-import numpy
-import truecase
-import torch
-import transformers
+import unicodedata
+from functools import cached_property
+from typing import List
 
-from ..utils import find_ascending
-from ..token import TokenSequence
-from ..nn.modules import SequenceGroupAggregating, ScalarMix
-from ..nn.functional import seq_lens2mask
+import numpy
+import torch
+import tqdm
+import transformers
+import truecase
+
 from ..config import Config
-from ..utils import assign_consecutive_to_buckets
+from ..nn.functional import seq_lens2mask
+from ..nn.modules import ScalarMix, SequenceGroupAggregating
+from ..token import TokenSequence
+from ..utils import assign_consecutive_to_buckets, find_ascending
 
 logger = logging.getLogger(__name__)
 

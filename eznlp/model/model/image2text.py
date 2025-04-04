@@ -2,9 +2,9 @@
 from typing import List
 
 from ...wrapper import Batch
-from ..embedder import OneHotConfig
 from ..decoder import GeneratorConfig
-from .base import ModelConfigBase, ModelBase
+from ..embedder import OneHotConfig
+from .base import ModelBase, ModelConfigBase
 
 
 class Image2TextConfig(ModelConfigBase):

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 import itertools
-import random
-import math
 import logging
+import math
+import random
 
 logger = logging.getLogger(__name__)
 

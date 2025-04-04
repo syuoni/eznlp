@@ -2,13 +2,13 @@
 import pytest
 import torch
 
-from eznlp.token import Token, LexiconTokenizer
-from eznlp.dataset import Dataset
 from eznlp.config import ConfigDict
-from eznlp.model import OneHotConfig, MultiHotConfig, EncoderConfig
-from eznlp.model import CharConfig, SoftLexiconConfig
-from eznlp.model import ELMoConfig, BertLikeConfig, FlairConfig
-from eznlp.model import SequenceTaggingDecoderConfig, ExtractorConfig
+from eznlp.dataset import Dataset
+from eznlp.model import (BertLikeConfig, CharConfig, ELMoConfig, EncoderConfig,
+                         ExtractorConfig, FlairConfig, MultiHotConfig,
+                         OneHotConfig, SequenceTaggingDecoderConfig,
+                         SoftLexiconConfig)
+from eznlp.token import LexiconTokenizer, Token
 from eznlp.training import Trainer
 
 

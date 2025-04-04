@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 from typing import List
+
 import torch
 
-from ...wrapper import Batch
 from ...config import Config
+from ...wrapper import Batch
 
 
 class ModelConfigBase(Config):

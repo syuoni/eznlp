@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 import logging
+
 import nltk
 
-from ..utils.chunk import detect_nested
-from ..metrics import precision_recall_f1_report
 from ..dataset import Dataset
+from ..metrics import precision_recall_f1_report
+from ..utils.chunk import detect_nested
 from .trainer import Trainer
-
 
 logger = logging.getLogger(__name__)
 

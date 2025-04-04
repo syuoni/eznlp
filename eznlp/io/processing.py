@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-from typing import Union, List, Callable
+from typing import Callable, List, Union
+
 import tqdm
 
 

@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
-from typing import Union, List
 import logging
 import subprocess
-import torch
-import numpy
+from typing import List, Union
+
 import matplotlib
+import numpy
+import torch
 
 logger = logging.getLogger(__name__)
 

@@ -1,29 +1,32 @@
 # -*- coding: utf-8 -*-
-from collections import Counter
-import os
-import sys
 import argparse
+import copy
 import datetime
-import pdb
 import glob
 import logging
+import os
+import pdb
 import pprint
-import copy
+import sys
+from collections import Counter
+
 import torch
+from entity_recognition import collect_IE_assembly_config, process_IE_data
+from utils import (add_base_arguments, build_trainer, dataset2language,
+                   header_format, load_data, parse_to_args)
 
 from eznlp import auto_device
 from eznlp.dataset import Dataset
-from eznlp.model import EncoderConfig
-from eznlp.model import SpanRelClassificationDecoderConfig, SpecificSpanRelClsDecoderConfig, UnfilteredSpecificSpanRelClsDecoderConfig, MaskedSpanRelClsDecoderConfig
-from eznlp.model import ExtractorConfig, SpecificSpanExtractorConfig, MaskedSpanExtractorConfig
-from eznlp.model import BertLikePostProcessor
+from eznlp.model import (BertLikePostProcessor, EncoderConfig, ExtractorConfig,
+                         MaskedSpanExtractorConfig,
+                         MaskedSpanRelClsDecoderConfig,
+                         SpanRelClassificationDecoderConfig,
+                         SpecificSpanExtractorConfig,
+                         SpecificSpanRelClsDecoderConfig,
+                         UnfilteredSpecificSpanRelClsDecoderConfig)
 from eznlp.training import Trainer, count_params, evaluate_relation_extraction
 from eznlp.training.evaluation import _eval_ent
 from eznlp.utils.relation import detect_missing_symmetric
-
-from utils import add_base_arguments, parse_to_args
-from utils import load_data, dataset2language, build_trainer, header_format
-from entity_recognition import collect_IE_assembly_config, process_IE_data
 
 
 def parse_arguments(parser: argparse.ArgumentParser):

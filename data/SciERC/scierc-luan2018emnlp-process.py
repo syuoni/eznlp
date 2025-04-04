@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import json
 
-
 for partition in ['train', 'dev', 'test']:
     src_fn = f"json/{partition}.json"
     trg_fn = f"{partition}.json"

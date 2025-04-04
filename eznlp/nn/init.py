@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-from typing import List
 import functools
 import logging
+from typing import List
+
 import torch
 import transformers
 

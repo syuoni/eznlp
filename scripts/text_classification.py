@@ -1,26 +1,26 @@
 # -*- coding: utf-8 -*-
-import os
-import sys
 import argparse
 import datetime
-import pdb
 import logging
+import os
+import pdb
 import pprint
+import sys
+
 import torch
+from utils import (add_base_arguments, build_trainer, dataset2language,
+                   header_format, load_data, load_pretrained, load_vectors,
+                   parse_to_args)
 
 from eznlp import auto_device
-from eznlp.token import TokenSequence
-from eznlp.dataset import Dataset
 from eznlp.config import ConfigDict
-from eznlp.model import OneHotConfig, EncoderConfig
-from eznlp.model import ELMoConfig, BertLikeConfig, FlairConfig
-from eznlp.model import TextClassificationDecoderConfig
-from eznlp.model import ClassifierConfig
-from eznlp.model import BertLikePreProcessor
+from eznlp.dataset import Dataset
+from eznlp.model import (BertLikeConfig, BertLikePreProcessor,
+                         ClassifierConfig, ELMoConfig, EncoderConfig,
+                         FlairConfig, OneHotConfig,
+                         TextClassificationDecoderConfig)
+from eznlp.token import TokenSequence
 from eznlp.training import Trainer, count_params, evaluate_text_classification
-
-from utils import add_base_arguments, parse_to_args
-from utils import load_data, dataset2language, load_pretrained, load_vectors, build_trainer, header_format
 
 
 def parse_arguments(parser: argparse.ArgumentParser):

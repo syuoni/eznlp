@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
-from typing import List
 from collections import Counter
+from typing import List
+
 import torch
 
+from ..nn.functional import seq_lens2mask
+from ..nn.modules import SequencePooling
 from ..token import TokenSequence
 from ..vocab import Vocab
-from ..nn.modules import SequencePooling
-from ..nn.functional import seq_lens2mask
 from .embedder import OneHotConfig, OneHotEmbedder
 from .encoder import EncoderConfig
 

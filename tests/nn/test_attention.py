@@ -2,8 +2,8 @@
 import pytest
 import torch
 
-from eznlp.nn.functional import seq_lens2mask
 from eznlp.nn import SequenceAttention
+from eznlp.nn.functional import seq_lens2mask
 
 
 @pytest.mark.parametrize("num_heads", [1, 5])

@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
-from typing import List, Union
 from collections import OrderedDict
+from typing import List, Union
+
 import torch
 
 from ...config import ConfigList
 from ...wrapper import Batch
-from ..encoder import EncoderConfig
-from ..decoder import (SingleDecoderConfigBase,
+from ..decoder import (JointExtractionDecoderConfig, SingleDecoderConfigBase,
                        SpecificSpanClsDecoderConfig,
                        SpecificSpanRelClsDecoderConfig,
-                       UnfilteredSpecificSpanRelClsDecoderConfig,
-                       JointExtractionDecoderConfig)
-from .base import ModelConfigBase, ModelBase
+                       UnfilteredSpecificSpanRelClsDecoderConfig)
+from ..encoder import EncoderConfig
+from .base import ModelBase, ModelConfigBase
 
 
 class SpecificSpanExtractorConfig(ModelConfigBase):
