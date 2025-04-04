@@ -3,7 +3,7 @@ import pytest
 import torch
 
 from eznlp.dataset import Dataset
-from eznlp.model import BertLikeConfig, SpanAttrClassificationDecoderConfig, ExtractorConfig
+from eznlp.model import EncoderConfig, BertLikeConfig, SpanAttrClassificationDecoderConfig, ExtractorConfig
 from eznlp.training import Trainer
 
 
@@ -51,10 +51,12 @@ class TestModel(object):
         assert isinstance(self.config.name, str) and len(self.config.name) > 0
         
         
-    @pytest.mark.parametrize("agg_mode", ['max_pooling', 'multiplicative_attention'])
-    @pytest.mark.parametrize("label_emb_dim", [25, 0])
-    def test_model(self, agg_mode, label_emb_dim, HwaMei_demo, device):
-        self.config = ExtractorConfig(decoder=SpanAttrClassificationDecoderConfig(agg_mode=agg_mode, label_emb_dim=label_emb_dim))
+    @pytest.mark.parametrize("red_dim", [100, 0])
+    @pytest.mark.parametrize("ck_loss_weight", [0, 0.5])
+    @pytest.mark.parametrize("multilabel", [True, False])
+    def test_model(self, red_dim, ck_loss_weight, multilabel, HwaMei_demo, device):
+        self.config = ExtractorConfig(decoder=SpanAttrClassificationDecoderConfig(reduction=EncoderConfig(arch='FFN', hid_dim=red_dim, num_layers=1, in_drop_rates=(0.0, 0.0, 0.0), hid_drop_rate=0.0), 
+                                                                                  ck_loss_weight=ck_loss_weight, multilabel=multilabel))
         self._setup_case(HwaMei_demo, device)
         self._assert_batch_consistency()
         self._assert_trainable()

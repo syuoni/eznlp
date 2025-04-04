@@ -13,5 +13,6 @@ from .specific_span_classification import SpecificSpanClsDecoderConfig
 from .specific_span_rel_classification import SpecificSpanRelClsDecoderConfig
 from .specific_span_rel_classification_unfiltered import UnfilteredSpecificSpanRelClsDecoderConfig
 from .masked_span_rel_classification import MaskedSpanRelClsDecoderConfig
+from .masked_span_attr_classification import MaskedSpanAttrClsDecoderConfig
 
 from .generator import GeneratorConfig

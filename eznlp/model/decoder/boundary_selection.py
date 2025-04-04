@@ -126,12 +126,16 @@ class BoundarySelectionDecoderConfig(SingleDecoderConfigBase, BoundariesDecoderM
     @property
     def criterion(self):
         if self.sb_epsilon > 0:
-            return f"SB({self.sb_epsilon:.2f}, {self.sb_size})"
+            crit_name = f"SB({self.sb_epsilon:.2f}, {self.sb_size})"
+            return f"B{crit_name}" if self.multilabel else crit_name
         else:
             return super().criterion
         
     def instantiate_criterion(self, **kwargs):
-        if self.criterion.lower().startswith(('sb', 'sl')):
+        if self.multilabel:
+            # `BCEWithLogitsLoss` allows the target to be any continuous value in [0, 1]
+            return torch.nn.BCEWithLogitsLoss(**kwargs)
+        elif self.criterion.lower().startswith(('sb', 'sl')):
             # For boundary/label smoothing, the `Boundaries` object has been accordingly changed; 
             # hence, do not use `SmoothLabelCrossEntropyLoss`
             return SoftLabelCrossEntropyLoss(**kwargs)
@@ -161,6 +165,8 @@ class BoundarySelectionDecoderConfig(SingleDecoderConfigBase, BoundariesDecoderM
 class BoundarySelectionDecoder(DecoderBase, BoundariesDecoderMixin):
     def __init__(self, config: BoundarySelectionDecoderConfig):
         super().__init__()
+        self.multilabel = config.multilabel
+        self.conf_thresh = config.conf_thresh
         self.none_label = config.none_label
         self.idx2label = config.idx2label
         self.overlapping_level = config.overlapping_level
@@ -245,12 +251,31 @@ class BoundarySelectionDecoder(DecoderBase, BoundariesDecoderMixin):
         for curr_scores, boundaries_obj, curr_len in zip(batch_scores, batch.boundaries_objs, batch.seq_lens.cpu().tolist()):
             curr_non_mask = self._get_span_non_mask(curr_len)
             
-            confidences, label_ids = curr_scores[:curr_len, :curr_len][curr_non_mask].softmax(dim=-1).max(dim=-1)
-            labels = [self.idx2label[i] for i in label_ids.cpu().tolist()]
-            chunks = [(label, start, end) for label, (start, end) in zip(labels, _spans_from_upper_triangular(curr_len)) if label != self.none_label]
-            confidences = [conf for label, conf in zip(labels, confidences.cpu().tolist()) if label != self.none_label]
-            assert len(confidences) == len(chunks)
+            if not self.multilabel:
+                confidences, label_ids = curr_scores[:curr_len, :curr_len][curr_non_mask].softmax(dim=-1).max(dim=-1)
+                labels = [self.idx2label[i] for i in label_ids.cpu().tolist()]
+                chunks = [(label, start, end) for label, (start, end) in zip(labels, _spans_from_upper_triangular(curr_len)) if label != self.none_label]
+                confidences = [conf for label, conf in zip(labels, confidences.cpu().tolist()) if label != self.none_label]
+            else:
+                all_confidences = curr_scores[:curr_len, :curr_len][curr_non_mask].sigmoid()
+                # Zero-out all spans according to <none> labels
+                all_confidences[all_confidences[:,self.none_idx] > (1-self.conf_thresh)] = 0
+                # Zero-out <none> labels for all spans
+                all_confidences[:,self.none_idx] = 0
+                all_spans = list(_spans_from_upper_triangular(curr_len))
+                assert all_confidences.size(0) == len(all_spans)
+                
+                all_confidences_list = all_confidences.cpu().tolist()
+                pos_entries = torch.nonzero(all_confidences > self.conf_thresh).cpu().tolist()
+                # In the early training stage, the chunk-decoder may produce too many predicted chunks
+                MAX_NUM_CHUNKS = 500
+                if len(pos_entries) > MAX_NUM_CHUNKS:
+                    pos_entries = pos_entries[:MAX_NUM_CHUNKS]
+                
+                chunks = [(self.idx2label[i], *all_spans[sidx]) for sidx, i in pos_entries]
+                confidences = [all_confidences_list[sidx][i] for sidx, i in pos_entries]
             
+            assert len(confidences) == len(chunks)
             chunks = self._filter(chunks, confidences, boundaries_obj)
             batch_chunks.append(chunks)
         return batch_chunks

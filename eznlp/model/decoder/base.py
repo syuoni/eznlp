@@ -47,6 +47,9 @@ class SingleDecoderConfigBase(Config):
     def __init__(self, **kwargs):
         self.in_dim = kwargs.pop('in_dim', None)
         
+        # whether to allow multi-label prediction
+        self.multilabel = kwargs.pop('multilabel', False)
+        self.conf_thresh = kwargs.pop('conf_thresh', 0.5)
         # focal loss `gamma`: 0 fallback to cross entropy
         self.fl_gamma = kwargs.pop('fl_gamma', 0.0) 
         # label smoothing `epsilon`: 0 fallback to cross entropy
@@ -55,25 +58,27 @@ class SingleDecoderConfigBase(Config):
         
     @property
     def criterion(self):
-        if getattr(self, 'multihot', False):
-            return "BCE"
-        
-        elif self.fl_gamma > 0:
-            return f"FL({self.fl_gamma:.2f})"
+        if self.fl_gamma > 0:
+            crit_name = f"FL({self.fl_gamma:.2f})"
         elif self.sl_epsilon > 0:
-            return f"SL({self.sl_epsilon:.2f})"
+            crit_name = f"SL({self.sl_epsilon:.2f})"
         else:
-            return "CE"
+            crit_name = "CE"
+        return f"B{crit_name}" if self.multilabel else crit_name
         
     def instantiate_criterion(self, **kwargs):
-        if self.criterion.lower().startswith('bce'):
-            return torch.nn.BCEWithLogitsLoss(**kwargs)
-        elif self.criterion.lower().startswith('fl'):
-            return FocalLoss(gamma=self.fl_gamma, **kwargs)
-        elif self.criterion.lower().startswith('sl'):
-            return SmoothLabelCrossEntropyLoss(epsilon=self.sl_epsilon, **kwargs)
+        if self.criterion.lower().startswith('b'):
+            if self.criterion.lower().startswith('bce'):
+                return torch.nn.BCEWithLogitsLoss(**kwargs)
+            else:
+                raise ValueError(f"Not implemented criterion: {self.criterion}")
         else:
-            return torch.nn.CrossEntropyLoss(**kwargs)
+            if self.criterion.lower().startswith('fl'):
+                return FocalLoss(gamma=self.fl_gamma, **kwargs)
+            elif self.criterion.lower().startswith('sl'):
+                return SmoothLabelCrossEntropyLoss(epsilon=self.sl_epsilon, **kwargs)
+            else:
+                return torch.nn.CrossEntropyLoss(**kwargs)
 
 
 

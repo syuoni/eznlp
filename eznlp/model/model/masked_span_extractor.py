@@ -1,12 +1,8 @@
 # -*- coding: utf-8 -*-
 from typing import List, Union
-from collections import OrderedDict
-import torch
 
-from ...config import ConfigList
 from ...wrapper import Batch
-from ..encoder import EncoderConfig
-from ..decoder import SingleDecoderConfigBase, MaskedSpanRelClsDecoderConfig
+from ..decoder import SingleDecoderConfigBase, MaskedSpanRelClsDecoderConfig, MaskedSpanAttrClsDecoderConfig
 from .base import ModelConfigBase, ModelBase
 
 
@@ -19,11 +15,13 @@ class MaskedSpanExtractorConfig(ModelConfigBase):
         self.bert_like = kwargs.pop('bert_like')
         self.masked_span_bert_like = kwargs.pop('masked_span_bert_like')
         
-        if isinstance(decoder, MaskedSpanRelClsDecoderConfig):
+        if isinstance(decoder, SingleDecoderConfigBase):
             self.decoder = decoder
         elif isinstance(decoder, str):
             if decoder.lower().startswith('masked_span_rel'):
                 self.decoder = MaskedSpanRelClsDecoderConfig()
+            elif decoder.lower().startswith('masked_span_attr'):
+                self.decoder = MaskedSpanAttrClsDecoderConfig()
             else:
                 raise ValueError(f"Invalid `decoder`: {decoder}")
         
@@ -38,8 +36,8 @@ class MaskedSpanExtractorConfig(ModelConfigBase):
     def build_vocabs_and_dims(self, *partitions):
         self.decoder.in_dim = self.bert_like.out_dim
         self.decoder.build_vocab(*partitions)
-        self.masked_span_bert_like.max_size_id = self.decoder.max_size_id
-        self.masked_span_bert_like.max_dist_id = self.decoder.max_dist_id
+        self.masked_span_bert_like.max_size_id = getattr(self.decoder, 'max_size_id', -1)
+        self.masked_span_bert_like.max_dist_id = getattr(self.decoder, 'max_dist_id', -1)
         
         
     def exemplify(self, entry: dict, training: bool=True):
@@ -85,6 +83,7 @@ class MaskedSpanExtractor(ModelBase):
         bert_hidden, all_bert_hidden = self.bert_like(**batch.bert_like)
         all_last_query_states = self.masked_span_bert_like(all_bert_hidden, **batch.masked_span_bert_like)
         
-        return {'full_hidden': bert_hidden, 
-                'span_query_hidden': all_last_query_states['span_query_state'], 
-                'ctx_query_hidden': all_last_query_states['ctx_query_state']}
+        states = {'full_hidden': bert_hidden, 'span_query_hidden': all_last_query_states['span_query_state']}
+        if 'ctx_query_state' in all_last_query_states:
+            states['ctx_query_hidden'] = all_last_query_states['ctx_query_state']
+        return states
