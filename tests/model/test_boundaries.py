@@ -12,11 +12,11 @@ from eznlp.model.decoder.boundaries import _span2diagonal, _diagonal2span
 def test_boundaries_obj(sb_epsilon, sl_epsilon, EAR_data_demo):
     entry = EAR_data_demo[0]
     tokens, chunks = entry['tokens'], entry['chunks']
-    
+
     config = BoundarySelectionDecoderConfig(sb_epsilon=sb_epsilon, sl_epsilon=sl_epsilon)
     config.build_vocab(EAR_data_demo)
     boundaries_obj = config.exemplify(entry)['boundaries_obj']
-    
+
     num_tokens, num_chunks = len(tokens), len(chunks)
     assert boundaries_obj.chunks == chunks
     if sb_epsilon == 0 and sl_epsilon == 0:
@@ -25,16 +25,16 @@ def test_boundaries_obj(sb_epsilon, sl_epsilon, EAR_data_demo):
     else:
         assert all(boundaries_obj.label_ids[start, end-1].argmax() == config.label2idx[label] for label, start, end in chunks)
         labels_retr = [config.idx2label[i] for i in boundaries_obj.label_ids[torch.arange(num_tokens) >= torch.arange(num_tokens).unsqueeze(-1)].argmax(dim=-1).tolist()]
-        
+
         assert (boundaries_obj.label_ids.sum(dim=-1) - 1).abs().max().item() < 1e-6
         if sb_epsilon == 0:
             assert (boundaries_obj.label_ids[:, :, config.none_idx] < 1).sum().item() == num_chunks
         else:
             assert (boundaries_obj.label_ids[:, :, config.none_idx] < 1).sum().item() > num_chunks
-    
+
     chunks_retr = [(label, start, end) for label, (start, end) in zip(labels_retr, _spans_from_upper_triangular(num_tokens)) if label != config.none_label]
     assert set(chunks_retr) == set(chunks)
-    
+
     config.in_dim = 200
     decoder = config.instantiate()
     # \sum_{k=0}^{N-1} k(N-k), where N is `num_tokens`
@@ -46,18 +46,18 @@ def test_boundaries_obj(sb_epsilon, sl_epsilon, EAR_data_demo):
 @pytest.mark.parametrize("sb_epsilon", [0.1, 0.5])
 @pytest.mark.parametrize("sb_size", [1, 2, 3])
 def test_boundaries_obj_for_boundary_smoothing(sb_epsilon, sb_size):
-    entry = {'tokens': list("abcdef"), 
+    entry = {'tokens': list("abcdef"),
              'chunks': [('EntA', 0, 1), ('EntA', 0, 4), ('EntB', 0, 5), ('EntA', 3, 5), ('EntA', 4, 5)]}
     config = BoundarySelectionDecoderConfig(sb_epsilon=sb_epsilon, sb_size=sb_size)
     config.build_vocab([entry])
     boundaries_obj = config.exemplify(entry)['boundaries_obj']
-    
+
     num_tokens, num_chunks = len(entry['tokens']), len(entry['chunks'])
     span_sizes = torch.arange(num_tokens) - torch.arange(num_tokens).unsqueeze(-1) + 1
     assert (boundaries_obj.label_ids.sum(dim=-1) - 1).abs().max().item() < 1e-6
     assert (boundaries_obj.label_ids[:, :, 1:].sum() - num_chunks).abs().max().item() < 1e-6
     assert (boundaries_obj.label_ids[span_sizes<=0] - torch.tensor([1.0, 0.0, 0.0])).abs().max().item() < 1e-6
-    
+
     if sb_size == 1:
         assert (boundaries_obj.label_ids[0, 0] - torch.tensor([(1/4)*sb_epsilon, 1-(1/4)*sb_epsilon, 0.0])).abs().max().item() < 1e-6
         assert (boundaries_obj.label_ids[0, 3] - torch.tensor([(1/2)*sb_epsilon, 1-(3/4)*sb_epsilon, (1/4)*sb_epsilon])).abs().max().item() < 1e-6
@@ -84,15 +84,15 @@ def test_boundaries_obj_for_boundary_smoothing(sb_epsilon, sb_size):
 @pytest.mark.parametrize("nested_sampling_rate", [1.0, 0.5, 0.0])
 @pytest.mark.parametrize("training", [True, False])
 def test_boundaries_obj_for_neg_sampling(neg_sampling_rate, neg_sampling_surr_rate, nested_sampling_rate, training):
-    entry = {'tokens': list("abcdefhijk"), 
+    entry = {'tokens': list("abcdefhijk"),
              'chunks': [('EntA', 0, 1), ('EntA', 0, 4), ('EntB', 0, 5), ('EntA', 3, 5), ('EntA', 4, 5)]}
-    config = BoundarySelectionDecoderConfig(neg_sampling_rate=neg_sampling_rate, 
-                                            neg_sampling_surr_rate=neg_sampling_surr_rate, 
-                                            nested_sampling_rate=nested_sampling_rate, 
+    config = BoundarySelectionDecoderConfig(neg_sampling_rate=neg_sampling_rate,
+                                            neg_sampling_surr_rate=neg_sampling_surr_rate,
+                                            nested_sampling_rate=nested_sampling_rate,
                                             neg_sampling_surr_size=3)
     config.build_vocab([entry])
     boundaries_obj = config.exemplify(entry, training=training)['boundaries_obj']
-    
+
     if (not training) or (neg_sampling_rate == 1 and nested_sampling_rate == 1):
         assert not hasattr(boundaries_obj, 'non_mask')
     else:
@@ -101,9 +101,9 @@ def test_boundaries_obj_for_neg_sampling(neg_sampling_rate, neg_sampling_surr_ra
         # Nested: 10
         # Surrounding & Nested: 10
         # Others: 25
-        num_non_mask = (5 + 
-                        10 * (neg_sampling_rate + (1-neg_sampling_rate)*neg_sampling_surr_rate) * nested_sampling_rate + 
-                        15 * (neg_sampling_rate + (1-neg_sampling_rate)*neg_sampling_surr_rate) + 
+        num_non_mask = (5 +
+                        10 * (neg_sampling_rate + (1-neg_sampling_rate)*neg_sampling_surr_rate) * nested_sampling_rate +
+                        15 * (neg_sampling_rate + (1-neg_sampling_rate)*neg_sampling_surr_rate) +
                         25 * neg_sampling_rate)
         if all(r in (0, 1) for r in [neg_sampling_rate, neg_sampling_surr_rate, nested_sampling_rate]):
             assert boundaries_obj.non_mask.sum().item() == num_non_mask
@@ -117,21 +117,21 @@ def test_diag_boundaries_pair_obj(training, EAR_data_demo):
     entry = EAR_data_demo[0]
     entry['chunks_pred'] = []
     tokens, chunks, relations = entry['tokens'], entry['chunks'], entry['relations']
-    
+
     config = UnfilteredSpecificSpanRelClsDecoderConfig(max_span_size=3)
     config.build_vocab(EAR_data_demo)
     dbp_obj = config.exemplify(entry, training=training)['dbp_obj']
-    
+
     num_tokens = len(tokens)
     num_spans = (num_tokens-1) * 3  # max_span_size=3
     assert dbp_obj.chunks == (chunks if training else [])
     assert dbp_obj.relations == relations
     assert dbp_obj.dbp2label_id.size() == (num_spans, num_spans)
-    
+
     assert dbp_obj.dbp2label_id.sum().item() == sum(config.label2idx[label] for label, *_ in relations)
-    assert all(dbp_obj.dbp2label_id[_span2diagonal(h_start, h_end, num_tokens), _span2diagonal(t_start, t_end, num_tokens)] == config.label2idx[label] 
+    assert all(dbp_obj.dbp2label_id[_span2diagonal(h_start, h_end, num_tokens), _span2diagonal(t_start, t_end, num_tokens)] == config.label2idx[label]
                    for label, (_, h_start, h_end), (_, t_start, t_end) in relations)
-    
+
     labels_retr = [config.idx2label[i] for i in dbp_obj.dbp2label_id.flatten().tolist()]
     relations_retr = []
     for label, ((h_start, h_end), (t_start, t_end)) in zip(labels_retr, _span_pairs_from_diagonals(num_tokens, 3)):
@@ -142,7 +142,7 @@ def test_diag_boundaries_pair_obj(training, EAR_data_demo):
     if training:
         assert set(relations_retr) == set(relations)
     else:
-        assert len(relations_retr) == 0  # `dbp_obj.chunks` is empty 
+        assert len(relations_retr) == 0  # `dbp_obj.chunks` is empty
 
 
 
@@ -151,8 +151,8 @@ def test_spans_from_upper_triangular(seq_len):
     assert len(list(_spans_from_upper_triangular(seq_len))) == (seq_len+1)*seq_len // 2
 
 
-@pytest.mark.parametrize("seq_len, max_span_size", [(5, 1),   (5, 5), 
-                                                    (10, 1),  (10, 5), (10, 10), 
+@pytest.mark.parametrize("seq_len, max_span_size", [(5, 1),   (5, 5),
+                                                    (10, 1),  (10, 5), (10, 10),
                                                     (100, 1), (100, 10), (100, 100)])
 def test_spans_from_diagonals(seq_len, max_span_size):
     assert len(list(_spans_from_diagonals(seq_len, max_span_size))) == (seq_len*2-max_span_size+1)*max_span_size // 2

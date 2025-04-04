@@ -14,3 +14,4 @@ spacy
 jieba
 openpyxl
 pytorch-crf
+pytest

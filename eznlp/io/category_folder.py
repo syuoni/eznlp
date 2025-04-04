@@ -7,21 +7,21 @@ from .base import IO
 
 
 class CategoryFolderIO(IO):
-    """An IO interface of text files in category-specific folders. 
-    
+    """An IO interface of text files in category-specific folders.
+
     """
-    def __init__(self, 
-                 categories: List[str], 
-                 tokenize_callback=None, 
-                 mapping=None, 
-                 encoding=None, 
-                 verbose: bool=True, 
+    def __init__(self,
+                 categories: List[str],
+                 tokenize_callback=None,
+                 mapping=None,
+                 encoding=None,
+                 verbose: bool=True,
                  **token_kwargs):
         self.categories = categories
         self.mapping = {} if mapping is None else mapping
         super().__init__(is_tokenized=False, tokenize_callback=tokenize_callback, encoding=encoding, verbose=verbose, **token_kwargs)
-        
-        
+
+
     def read(self, folder_path):
         data = []
         for label in self.categories:
@@ -31,8 +31,8 @@ class CategoryFolderIO(IO):
                     raw_text = f.read()
                 for pattern, repl in self.mapping.items():
                     raw_text = raw_text.replace(pattern, repl)
-                    
+
                 tokens = self._build_tokens(raw_text)
                 data.append({'tokens': tokens, 'label': label})
-                
+
         return data

@@ -11,12 +11,12 @@ def test_locked_dropout(dropout_rate):
     MAX_LEN = 200
     HID_DIM = 500
     x = torch.ones(BATCH_SIZE, MAX_LEN, HID_DIM)
-    
+
     dropout = LockedDropout(p=dropout_rate)
     dropout.eval()
     x_locked_dropouted = dropout(x)
     assert (x_locked_dropouted == x).all().item()
-    
+
     dropout.train()
     x_locked_dropouted = dropout(x)
     assert set(x_locked_dropouted.sum(dim=1).long().flatten().tolist()) == {0, int(round(MAX_LEN/(1-dropout_rate)))}
@@ -30,12 +30,12 @@ def test_word_dropout(dropout_rate):
     MAX_LEN = 200
     HID_DIM = 500
     x = torch.ones(BATCH_SIZE, MAX_LEN, HID_DIM)
-    
+
     dropout = WordDropout(p=dropout_rate, keep_exp=True)
     dropout.eval()
     x_word_dropouted = dropout(x)
     assert (x_word_dropouted == x).all().item()
-    
+
     dropout.train()
     x_word_dropouted = dropout(x)
     assert set(x_word_dropouted.sum(dim=2).long().flatten().tolist()) == {0, int(round(HID_DIM/(1-dropout_rate)))}

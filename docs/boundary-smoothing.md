@@ -1,5 +1,5 @@
 # Boundary Smoothing for Named Entity Recognition
-This page describes the materials and code for "Boundary Smoothing for Named Entity Recognition". 
+This page describes the materials and code for "Boundary Smoothing for Named Entity Recognition".
 
 
 ## Setup
@@ -71,7 +71,7 @@ $ python scripts/entity_recognition.py @scripts/options/with_bert.opt \
 ```
 
 
-See more details for options: 
+See more details for options:
 
 ```bash
 $ python scripts/entity_recognition.py --help

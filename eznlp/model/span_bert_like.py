@@ -14,15 +14,15 @@ class SpanBertLikeConfig(Config):
     def __init__(self, **kwargs):
         self.bert_like: transformers.PreTrainedModel = kwargs.pop('bert_like')
         self.hid_dim = self.bert_like.config.hidden_size
-        
+
         self.arch = kwargs.pop('arch', 'BERT')
         self.freeze = kwargs.pop('freeze', True)
-        
+
         self.num_layers = kwargs.pop('num_layers', None)
         if self.num_layers is None:
             self.num_layers = self.bert_like.config.num_hidden_layers
         assert 0 < self.num_layers <= self.bert_like.config.num_hidden_layers
-        
+
         self.min_span_size = kwargs.pop('min_span_size', None)
         self.max_span_size = kwargs.pop('max_span_size', None)
         self.use_init_size_emb = kwargs.pop('use_init_size_emb', False)
@@ -32,20 +32,20 @@ class SpanBertLikeConfig(Config):
         self.init_agg_mode = kwargs.pop('init_agg_mode', 'max_pooling')
         self.init_drop_rate = kwargs.pop('init_drop_rate', 0.2)
         super().__init__(**kwargs)
-        
+
     @property
     def name(self):
         return f"{self.arch}({self.num_layers})"
-        
+
     @property
     def out_dim(self):
         return self.hid_dim
-        
+
     def __getstate__(self):
         state = self.__dict__.copy()
         state['bert_like'] = None
         return state
-        
+
     def instantiate(self):
         return SpanBertLikeEncoder(self)
 
@@ -66,56 +66,56 @@ class SpanBertLikeEncoder(torch.nn.Module):
                 conv.weight.data.fill_(1/k)
                 conv.bias.data.zero_()
                 convs.append(conv)
-            
+
             # `self.init_aggregating[k-self.min_span_size]` for span size `k`
             self.init_aggregating = torch.nn.ModuleList(convs)
-        
+
         self.dropout = torch.nn.Dropout(config.init_drop_rate)
-        
+
         if config.use_init_size_emb:
             self.size_embedding = torch.nn.Embedding(config.max_size_id+1, config.hid_dim)
             reinit_embedding_(self.size_embedding)
-            
+
             self.register_buffer('_span_size_ids', torch.arange(config.max_span_size))
             self._span_size_ids.masked_fill_(self._span_size_ids > config.max_size_id, config.max_size_id)
-        
+
         if config.share_weights_int:
             # Share the module across all span sizes
             self.query_bert_like = QueryBertLikeEncoder(config.bert_like.encoder, num_layers=config.num_layers, share_weights=config.share_weights_ext)
         else:
-            # `ModuleDict` only accepts string keys. See https://github.com/pytorch/pytorch/issues/11714 
+            # `ModuleDict` only accepts string keys. See https://github.com/pytorch/pytorch/issues/11714
             # `self.query_bert_like[k-self.min_span_size]` for span size `k`
-            self.query_bert_like = torch.nn.ModuleList([QueryBertLikeEncoder(config.bert_like.encoder, num_layers=config.num_layers, share_weights=False) 
+            self.query_bert_like = torch.nn.ModuleList([QueryBertLikeEncoder(config.bert_like.encoder, num_layers=config.num_layers, share_weights=False)
                                                             for k in range(config.min_span_size, config.max_span_size+1)])
-        
+
         self.freeze = config.freeze
         self.num_layers = config.num_layers
         self.min_span_size = config.min_span_size
         self.max_span_size = config.max_span_size
         self.share_weights_ext = config.share_weights_ext
         self.share_weights_int = config.share_weights_int
-        
+
     @property
     def freeze(self):
         return self._freeze
-        
+
     @freeze.setter
     def freeze(self, freeze: bool):
         self._freeze = freeze
         self.query_bert_like.requires_grad_(not freeze)
-        
-        
+
+
     def forward(self, all_hidden_states: List[torch.Tensor]):
         # Remove the unused layers of hidden states
         all_hidden_states = all_hidden_states[-(self.num_layers+1):]
         batch_size, num_steps, hid_dim = all_hidden_states[0].size()
-        
+
         all_last_query_states = OrderedDict()
         for k in range(self.min_span_size, min(self.max_span_size, num_steps)+1):
             # reshaped_states: List of (B, L, H) -> (B, L-K+1, H, K) -> (B, L-K+1, K, H) -> (B*(L-K+1), K, H)
-            reshaped_states = [hidden_states.unfold(dimension=1, size=k, step=1).permute(0, 1, 3, 2).flatten(end_dim=1) 
+            reshaped_states = [hidden_states.unfold(dimension=1, size=k, step=1).permute(0, 1, 3, 2).flatten(end_dim=1)
                                    for hidden_states in all_hidden_states]
-            
+
             if isinstance(self.init_aggregating, (SequencePooling, SequenceAttention)):
                 # query_states: (B*(L-K+1), 1, H)
                 # query_states = reshaped_states[0].mean(dim=1, keepdim=True)
@@ -124,19 +124,19 @@ class SpanBertLikeEncoder(torch.nn.Module):
                 query_states = self.init_aggregating[k-self.min_span_size](self.dropout(all_hidden_states[0].permute(0, 2, 1))).permute(0, 2, 1)
                 # query_states: (B, L-K+1, H) -> (B*(L-K+1), 1, H)
                 query_states = query_states.flatten(end_dim=1).unsqueeze(1)
-            
+
             if hasattr(self, 'size_embedding'):
                 # size_embedded: (hid_dim, )
                 size_embedded = self.size_embedding(self._span_size_ids[k-1])
-                # apply dropout after expanding the embedding tensor 
+                # apply dropout after expanding the embedding tensor
                 query_states = query_states + self.dropout(size_embedded.expand_as(query_states))
-            
+
             if self.share_weights_int:
                 query_outs = self.query_bert_like(query_states, reshaped_states)
             else:
-                query_outs = self.query_bert_like[k-self.min_span_size](query_states, reshaped_states) 
-            
+                query_outs = self.query_bert_like[k-self.min_span_size](query_states, reshaped_states)
+
             # query_states: (B, L-K+1, H)
             all_last_query_states[k] = query_outs['last_query_state'].view(batch_size, -1, hid_dim)
-        
+
         return all_last_query_states

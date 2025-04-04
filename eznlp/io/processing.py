@@ -10,29 +10,29 @@ def _make_tuple_mapping(type_mapping: Union[Callable, dict]=None, aux_check: Cal
 
         if type_mapping is None:
             return x
-        
+
         if callable(type_mapping):
             x_type = type_mapping(x[0])
         elif isinstance(type_mapping, dict):
             x_type = type_mapping.get(x[0], None)
         return (x_type, *x[1:]) if x_type is not None else None
-    
+
     return tuple_mapping
 
 
 class PostIO(object):
-    """Post-IO processing methods. 
-    
+    """Post-IO processing methods.
+
     `PostIO` can be used to:
         (1) *drop* chunks with overlong spans;
-        (2) *drop* or *merge* chunks, attributes or relations of specific types; 
+        (2) *drop* or *merge* chunks, attributes or relations of specific types;
         (3) *absorb* specific type of attributes into chunk-type, or *exclude* it;
-        (4) *infer* relations given specific grouping relation-types.  
-    
+        (4) *infer* relations given specific grouping relation-types.
+
     Notes
     -----
-    All methods make a **shallow copy** of input `data` before processing. 
-    Hence, do not use inplace modification like ``entry['chunks'].append`` or ``entry['chunks'].extend`` in the code. 
+    All methods make a **shallow copy** of input `data` before processing.
+    Hence, do not use inplace modification like ``entry['chunks'].append`` or ``entry['chunks'].extend`` in the code.
     """
     def __init__(self, verbose: bool=True):
         self.verbose = verbose
@@ -40,7 +40,7 @@ class PostIO(object):
 
     def map_chunks(self, data: List[dict], chunk_type_mapping: Union[Callable, dict]=None, max_span_size: int=None):
         data = [{k: v for k, v in entry.items()} for entry in data]
-        chunk_mapping = _make_tuple_mapping(chunk_type_mapping, 
+        chunk_mapping = _make_tuple_mapping(chunk_type_mapping,
                                             aux_check=(lambda ck: ck[2]-ck[1] <= max_span_size) if max_span_size is not None else None)
 
         for entry in tqdm.tqdm(data, disable=not self.verbose, ncols=100, desc="Chunk mapping"):
@@ -49,7 +49,7 @@ class PostIO(object):
             if 'attributes' in entry:
                 entry['attributes'] = [(attr_type, chunk_mapping(ck)) for attr_type, ck in entry['attributes'] if chunk_mapping(ck) is not None]
             if 'relations' in entry:
-                entry['relations'] = [(rel_type, chunk_mapping(head), chunk_mapping(tail)) 
+                entry['relations'] = [(rel_type, chunk_mapping(head), chunk_mapping(tail))
                                           for rel_type, head, tail in entry['relations']
                                           if chunk_mapping(head) is not None and chunk_mapping(tail) is not None]
         return data
@@ -81,7 +81,7 @@ class PostIO(object):
 
     def absorb_attributes(self, data: List[dict], absorb_attr_types: List[str]):
         data = [{k: v for k, v in entry.items()} for entry in data]
-        
+
         for entry in tqdm.tqdm(data, disable=not self.verbose, ncols=100, desc="Attribute absorbing"):
             chunk2attrs = {ck: [] for ck in entry['chunks']}
             for attr_type, chunk in entry['attributes']:
@@ -98,13 +98,13 @@ class PostIO(object):
 
     def exclude_attributes(self, data: List[dict]):
         data = [{k: v for k, v in entry.items()} for entry in data]
-        
+
         for entry in tqdm.tqdm(data, disable=not self.verbose, ncols=100, desc="Attribute excluding"):
             new_attributes = []
             for ck in entry['chunks']:
                 for attr_type in ck[0].split(self.attr_sep)[1:]:
                     new_attributes.append((attr_type, ck))
-            
+
             chunk2new_chunk = {ck: (ck[0].split(self.attr_sep)[0], *ck[1:]) for ck in entry['chunks']}
             entry['chunks'] = [chunk2new_chunk[ck] for ck in entry['chunks']]
             entry['attributes'] = [(attr_type, chunk2new_chunk[ck]) for attr_type, ck in entry['attributes'] + new_attributes]
@@ -153,7 +153,7 @@ class PostIO(object):
 
     def infer_relations(self, data: List[dict], group_rel_types: List[str]):
         data = [{k: v for k, v in entry.items()} for entry in data]
-        
+
         for entry in tqdm.tqdm(data, disable=not self.verbose, ncols=100, desc="Relation inferring"):
             chunk2group = self._build_chunk2group(entry, group_rel_types)
             new_relations = self._detect_relations(entry, group_rel_types, chunk2group)

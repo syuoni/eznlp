@@ -1,6 +1,6 @@
 # Easy Natural Language Processing
 
-Overparameterized neural networks are lazy (Chizat et al., 2019), so we design structures and objectives that can be easily optimized. 
+Overparameterized neural networks are lazy (Chizat et al., 2019), so we design structures and objectives that can be easily optimized.
 
 `eznlp` is a `PyTorch`-based package for neural natural language processing, currently supporting the following tasks:
 
@@ -11,10 +11,10 @@ Overparameterized neural networks are lazy (Chizat et al., 2019), so we design s
 * Machine Translation
 * Image Captioning
 
-This repository also maintains the code of our papers: 
-* Check this [link](docs/deep-span.md) for "Deep Span Representations for Named Entity Recognition" accepted to *Findings of ACL 2023*. 
-* Check this [link](docs/boundary-smoothing.md) for "Boundary Smoothing for Named Entity Recognition" in *ACL 2022*. 
-* Check the [annotation scheme](publications/framework/scheme.pdf) and [HwaMei-500](publications/framework/HwaMei-500.md) dataset described in "A Unified Framework of Medical Information Annotation and Extraction for Chinese Clinical Text" on *Artificial Intelligence in Medicine*. 
+This repository also maintains the code of our papers:
+* Check this [link](docs/deep-span.md) for "Deep Span Representations for Named Entity Recognition" accepted to *Findings of ACL 2023*.
+* Check this [link](docs/boundary-smoothing.md) for "Boundary Smoothing for Named Entity Recognition" in *ACL 2022*.
+* Check the [annotation scheme](publications/framework/scheme.pdf) and [HwaMei-500](publications/framework/HwaMei-500.md) dataset described in "A Unified Framework of Medical Information Annotation and Extraction for Chinese Clinical Text" on *Artificial Intelligence in Medicine*.
 
 
 ## Installation
@@ -26,9 +26,9 @@ $ conda activate eznlp
 
 ### Install dependencies
 ```bash
-$ conda install numpy=1.18.5 pandas=1.0.5 xlrd=1.2.0 matplotlib=3.2.2 
-$ conda install pytorch=1.7.1 torchvision=0.8.2 torchtext=0.8.1 {cpuonly|cudatoolkit=10.2|cudatoolkit=11.0} -c pytorch 
-$ pip install -r requirements.txt 
+$ conda install numpy=1.18.5 pandas=1.0.5 xlrd=1.2.0 matplotlib=3.2.2
+$ conda install pytorch=1.7.1 torchvision=0.8.2 torchtext=0.8.1 {cpuonly|cudatoolkit=10.2|cudatoolkit=11.0} -c pytorch
+$ pip install -r requirements.txt
 ```
 
 ### Install `eznlp`
@@ -67,7 +67,7 @@ $ python scripts/attribute_extraction.py --dataset <dataset> [options]
 
 
 ## Citation
-If you find our code useful, please cite the following papers: 
+If you find our code useful, please cite the following papers:
 
 ```
 @inproceedings{zhu2023deep,
@@ -113,4 +113,4 @@ If you find our code useful, please cite the following papers:
 
 
 ## References
-* Chizat, L., Oyallon, E., and Bach, F. On lazy training in differentiable programming. In *NeurIPS 2019*. 
+* Chizat, L., Oyallon, E., and Bach, F. On lazy training in differentiable programming. In *NeurIPS 2019*.

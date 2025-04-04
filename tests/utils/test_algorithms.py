@@ -10,7 +10,7 @@ def test_find_ascending(v):
     sequence = list(range(N))
     find, idx = find_ascending(sequence, v)
     sequence.insert(idx, v)
-    
+
     assert find == (v in list(range(N)))
     assert len(sequence) == N + 1
     assert all(sequence[i] <= sequence[i+1] for i in range(N))

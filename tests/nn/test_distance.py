@@ -14,7 +14,7 @@ class TestMKMMDLoss(object):
         x2 = torch.randn(20, 100)
         benchmark_mmd = third_party.transferlearning.code.distance.MMD_loss(kernel_num=num_kernels, kernel_mul=multiplier)
         benchmark_res = benchmark_mmd(x1, x2)
-        
+
         mmd = MultiKernelMaxMeanDiscrepancyLoss(num_kernels=num_kernels, multiplier=multiplier)
         mmd_res = mmd(x1, x2)
         assert (mmd_res - benchmark_res).abs().max().item() < 1e-5

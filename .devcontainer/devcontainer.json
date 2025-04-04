@@ -1,0 +1,37 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the README at:
+    // https://github.com/microsoft/vscode-dev-containers/tree/v0.245.2/containers/docker-existing-dockerfile
+    {
+      "name": "eznlp devcontainer",
+      "dockerComposeFile": [
+        "docker-compose.yml"
+      ],
+      "service": "eznlp-dev",
+      "remoteUser": "enweiz",
+      "workspaceFolder": "/workspace/eznlp",
+      "mounts": [
+        "source=${localWorkspaceFolder}/..,target=${containerWorkspaceFolder}/..,type=bind,consistency=consistent",
+      ],
+      "customizations": {
+        "vscode": {
+          "extensions": [
+            // Python
+            "ms-python.python",
+            "eeyore.yapf",
+            // "GitHub.vscode-pull-request-github"
+            "eamodio.gitlens"
+          ]
+        }
+      },
+      "features": {
+        "ghcr.io/devcontainers/features/common-utils:2": {
+          "username": "enweiz",
+          "installZsh": true,
+          "installOhMyZsh": true,
+          "configureZshAsDefaultShell": true,
+          "upgradePackages": false
+        },
+        "ghcr.io/devcontainers/features/git:1": {
+          "version": "latest"
+        }
+      }
+    }

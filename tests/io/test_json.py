@@ -9,23 +9,23 @@ from eznlp.utils.chunk import FLAT, NESTED, ARBITRARY
 
 class TestJsonIO(object):
     """
-    
+
     References
     ----------
     [1] Lu and Roth. 2015. Joint Mention Extraction and Classification with Mention Hypergraphs. EMNLP 2015.
     [2] Eberts and Ulges. 2019. Span-based joint entity and relation extraction with Transformer pre-training. ECAI 2020.
-    [3] Luan et al. 2019. A general framework for information extraction using dynamic span graphs. NAACL 2019. 
-    [4] Zhong and Chen. 2020. A frustratingly easy approach for joint entity and relation extraction. NAACL 2020. 
-    [5] Li et al. 2022. Unified Named Entity Recognition asWord-Word Relation Classification. AAAI 2022. 
-    [6] Shen et al. 2022. Parallel Instance Query Network for Named Entity Recognition. ACL 2022. 
-    [7] Ringland et al. 2019. NNE: A Dataset for Nested Named Entity Recognition in English Newswire. ACL 2019. 
+    [3] Luan et al. 2019. A general framework for information extraction using dynamic span graphs. NAACL 2019.
+    [4] Zhong and Chen. 2020. A frustratingly easy approach for joint entity and relation extraction. NAACL 2020.
+    [5] Li et al. 2022. Unified Named Entity Recognition asWord-Word Relation Classification. AAAI 2022.
+    [6] Shen et al. 2022. Parallel Instance Query Network for Named Entity Recognition. ACL 2022.
+    [7] Ringland et al. 2019. NNE: A Dataset for Nested Named Entity Recognition in English Newswire. ACL 2019.
     """
     def test_ace2004(self):
         io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end')
         train_data = io.read("data/ace-lu2015emnlp/ACE2004/train.json")
         dev_data   = io.read("data/ace-lu2015emnlp/ACE2004/dev.json")
         test_data  = io.read("data/ace-lu2015emnlp/ACE2004/test.json")
-        
+
         assert len(train_data) == 6_799
         assert sum(len(ex['chunks']) for ex in train_data) == 22_207
         assert max(ck[2]-ck[1] for ex in train_data for ck in ex['chunks']) == 57
@@ -35,17 +35,17 @@ class TestJsonIO(object):
         assert len(test_data) == 879
         assert sum(len(ex['chunks']) for ex in test_data) == 3_031
         assert max(ck[2]-ck[1] for ex in test_data for ck in ex['chunks']) == 43
-        
+
         assert sum(count_nested(ex['chunks']) for ex in train_data+dev_data+test_data) == 7_832
         assert max(end-start for ex in train_data+dev_data+test_data for _, start, end in ex['chunks']) == 57
-        
-        
+
+
     def test_ace2005(self):
         io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end')
         train_data = io.read("data/ace-lu2015emnlp/ACE2005/train.json")
         dev_data   = io.read("data/ace-lu2015emnlp/ACE2005/dev.json")
         test_data  = io.read("data/ace-lu2015emnlp/ACE2005/test.json")
-        
+
         assert len(train_data) == 7_336
         assert sum(len(ex['chunks']) for ex in train_data) == 24_687
         assert max(ck[2]-ck[1] for ex in train_data for ck in ex['chunks']) == 49
@@ -55,106 +55,106 @@ class TestJsonIO(object):
         assert len(test_data) == 1_047
         assert sum(len(ex['chunks']) for ex in test_data) == 3_027
         assert max(ck[2]-ck[1] for ex in test_data for ck in ex['chunks']) == 27
-        
+
         assert sum(count_nested(ex['chunks']) for ex in train_data+dev_data+test_data) == 7_460
         assert max(end-start for ex in train_data+dev_data+test_data for _, start, end in ex['chunks']) == 49
-        
-        
+
+
     def test_genia(self):
         io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', retain_keys=['doc_key', 'bibliomisc'])
         train_data = io.read("data/genia/term.train.json")
         dev_data   = io.read("data/genia/term.dev.json")
         test_data  = io.read("data/genia/term.test.json")
-        
+
         assert len(train_data) == 15_023
         assert sum(len(ex['chunks']) for ex in train_data) == 46_164
         assert len(dev_data) == 1_669
         assert sum(len(ex['chunks']) for ex in dev_data) == 4_371
         assert len(test_data) == 1_854
         assert sum(len(ex['chunks']) for ex in test_data) == 5_511
-        
+
         assert sum(count_nested(ex['chunks']) for ex in train_data+dev_data+test_data) == 5_431
         # According to the original annotation, 31 spans may have 2 entity labels
         assert sum(len(set([(s, e) for _, s, e in ex['chunks']])) for ex in train_data+dev_data+test_data) == 56_015
         assert max(end-start for ex in train_data+dev_data+test_data for _, start, end in ex['chunks']) == 18
-        
+
         assert len(set([ex['doc_key'] for ex in train_data+dev_data+test_data])) == 2_000
-        
-        
+
+
     def test_genia_yu2020acl(self):
         io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end')
         train_data = io.read("data/genia-yu2020acl/train_dev.json")
         test_data  = io.read("data/genia-yu2020acl/test.json")
-        
+
         assert len(train_data) == 16_692
         assert sum(len(ex['chunks']) for ex in train_data) == 50_509
         assert len(test_data) == 1_854
         assert sum(len(ex['chunks']) for ex in test_data) == 5_506
-        
+
         assert max(end-start for ex in train_data+test_data for _, start, end in ex['chunks']) == 18
-        
-        
+
+
     def test_kbp2017_shen2022acl(self):
         io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', retain_keys=['org_id'])
         train_data = io.read("data/kbp2017-shen2022acl/kbp17_train_context.json")
         dev_data   = io.read("data/kbp2017-shen2022acl/kbp17_dev_context.json")
         test_data  = io.read("data/kbp2017-shen2022acl/kbp17_test_context.json")
-        
+
         assert len(train_data) == 10_546
         assert sum(len(ex['chunks']) for ex in train_data) == 31_235  # 31_236 reported in Shen et al. (2022), due to a duplicated entity
         assert len(dev_data) == 545
         assert sum(len(ex['chunks']) for ex in dev_data) == 1_879
         assert len(test_data) == 4_267
         assert sum(len(ex['chunks']) for ex in test_data) == 12_600  # 12_601 reported in Shen et al. (2022), due to a duplicated entity
-        
+
         assert sum(count_nested(ex['chunks']) for ex in train_data+dev_data+test_data) == 7_479
         assert max(end-start for ex in train_data+dev_data+test_data for _, start, end in ex['chunks']) == 49
-        
+
         assert len(set([ex['org_id'] for ex in train_data+dev_data+test_data])) == 619
-        
-        
+
+
     def test_nne_ringland2019acl(self):
         io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end')
         train_data = io.read("data/nne-ringland2019acl/train.json")
         dev_data   = io.read("data/nne-ringland2019acl/dev.json")
         test_data  = io.read("data/nne-ringland2019acl/test.json")
-        
+
         assert len(train_data) == 43_457
         assert sum(len(ex['chunks']) for ex in train_data) == 248_136
         assert len(dev_data) == 1_989
         assert sum(len(ex['chunks']) for ex in dev_data) == 10_463
         assert len(test_data) == 3_762
         assert sum(len(ex['chunks']) for ex in test_data) == 21_196
-        
+
         # Multiple entities may have the same span but different types
         assert sum([len(ex['chunks']) - len(set((s, e) for _, s, e in ex['chunks'])) for ex in train_data]) == 16_996
         assert sum([len(ex['chunks']) - len(set((s, e) for _, s, e in ex['chunks'])) for ex in dev_data]) == 801
         assert sum([len(ex['chunks']) - len(set((s, e) for _, s, e in ex['chunks'])) for ex in test_data]) == 1612
-        
+
         assert max(end-start for ex in train_data+dev_data+test_data for _, start, end in ex['chunks']) == 16
-        
-        
+
+
     def test_nne_shen2022acl(self):
         io = JsonIO(text_key='tokens', chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', retain_keys=['org_id'])
         train_data = io.read("data/nne-shen2022acl/nne_train_context.json")
         dev_data   = io.read("data/nne-shen2022acl/nne_dev_context.json")
         test_data  = io.read("data/nne-shen2022acl/nne_test_context.json")
-        
+
         assert len(train_data) == 43_457
         assert sum(len(ex['chunks']) for ex in train_data) == 248_136
         assert len(dev_data) == 1_989
         assert sum(len(ex['chunks']) for ex in dev_data) == 10_463
         assert len(test_data) == 3_762
         assert sum(len(ex['chunks']) for ex in test_data) == 21_196
-        
+
         assert max(end-start for ex in train_data+dev_data+test_data for _, start, end in ex['chunks']) == 16
-        
-        
+
+
     def test_ace2004_rel(self):
         io = JsonIO(relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail')
         train_data = io.read("data/ace-luan2019naacl/ace04/cv0.train.json")
         test_data  = io.read("data/ace-luan2019naacl/ace04/cv0.test.json")
-        
+
         # #train + #test = 8683
         assert len(train_data) == 6_898
         assert sum(len(ex['chunks']) for ex in train_data) == 18_065
@@ -162,14 +162,14 @@ class TestJsonIO(object):
         assert len(test_data) == 1_785
         assert sum(len(ex['chunks']) for ex in test_data) == 4_670
         assert sum(len(ex['relations']) for ex in test_data) == 795
-        
-        
+
+
     def test_ace2005_rel(self):
         io = JsonIO(relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail')
         train_data = io.read("data/ace-luan2019naacl/ace05/train.json")
         dev_data   = io.read("data/ace-luan2019naacl/ace05/dev.json")
         test_data  = io.read("data/ace-luan2019naacl/ace05/test.json")
-        
+
         assert len(train_data) == 10_051
         assert sum(len(ex['chunks']) for ex in train_data) == 26_473
         assert sum(len(ex['relations']) for ex in train_data) == 4_788
@@ -179,22 +179,22 @@ class TestJsonIO(object):
         assert len(test_data) == 2_050
         assert sum(len(ex['chunks']) for ex in test_data) == 5_476
         assert sum(len(ex['relations']) for ex in test_data) == 1_151
-        
-        
+
+
     def test_conll2004(self):
-        json_io = JsonIO(text_key='tokens', 
-                         chunk_key='entities', 
-                         chunk_type_key='type', 
-                         chunk_start_key='start', 
-                         chunk_end_key='end', 
-                         relation_key='relations', 
-                         relation_type_key='type', 
-                         relation_head_key='head', 
+        json_io = JsonIO(text_key='tokens',
+                         chunk_key='entities',
+                         chunk_type_key='type',
+                         chunk_start_key='start',
+                         chunk_end_key='end',
+                         relation_key='relations',
+                         relation_type_key='type',
+                         relation_head_key='head',
                          relation_tail_key='tail')
         train_data = json_io.read("data/conll2004/conll04_train.json")
         dev_data   = json_io.read("data/conll2004/conll04_dev.json")
         test_data  = json_io.read("data/conll2004/conll04_test.json")
-        
+
         assert len(train_data) == 922
         assert sum(len(ex['chunks']) for ex in train_data) == 3_377
         assert sum(len(ex['relations']) for ex in train_data) == 1_283
@@ -204,26 +204,26 @@ class TestJsonIO(object):
         assert len(test_data) == 288
         assert sum(len(ex['chunks']) for ex in test_data) == 1_079
         assert sum(len(ex['relations']) for ex in test_data) == 422
-        
+
         assert max(detect_overlapping_level(ex['chunks']) for ex in train_data+dev_data+test_data) == FLAT
         assert all(filter_clashed_by_priority(ex['chunks'], allow_level=FLAT) == ex['chunks'] for ex in train_data+dev_data+test_data)
-        
-        
+
+
     def test_SciERC(self):
-        json_io = JsonIO(text_key='tokens', 
-                         chunk_key='entities', 
-                         chunk_type_key='type', 
-                         chunk_start_key='start', 
-                         chunk_end_key='end', 
-                         relation_key='relations', 
-                         relation_type_key='type', 
-                         relation_head_key='head', 
-                         relation_tail_key='tail', 
+        json_io = JsonIO(text_key='tokens',
+                         chunk_key='entities',
+                         chunk_type_key='type',
+                         chunk_start_key='start',
+                         chunk_end_key='end',
+                         relation_key='relations',
+                         relation_type_key='type',
+                         relation_head_key='head',
+                         relation_tail_key='tail',
                          encoding='utf-8')
         train_data = json_io.read("data/SciERC/train.json")
         dev_data   = json_io.read("data/SciERC/dev.json")
         test_data  = json_io.read("data/SciERC/test.json")
-        
+
         assert len(train_data) == 1_861
         assert sum(len(ex['chunks']) for ex in train_data) == 5_598
         assert sum(len(ex['relations']) for ex in train_data) == 3_215  # 4 duplicated relations dropped here
@@ -233,67 +233,67 @@ class TestJsonIO(object):
         assert len(test_data) == 551
         assert sum(len(ex['chunks']) for ex in test_data) == 1_685
         assert sum(len(ex['relations']) for ex in test_data) == 974
-        
+
         assert max(detect_overlapping_level(ex['chunks']) for ex in train_data+dev_data+test_data) == NESTED
         assert all(filter_clashed_by_priority(ex['chunks'], allow_level=NESTED) == ex['chunks'] for ex in train_data+dev_data+test_data)
-        
-        
+
+
     def test_SciERC_eberts2020ecai(self):
-        json_io = JsonIO(text_key='tokens', 
-                         chunk_key='entities', 
-                         chunk_type_key='type', 
-                         chunk_start_key='start', 
-                         chunk_end_key='end', 
-                         relation_key='relations', 
-                         relation_type_key='type', 
-                         relation_head_key='head', 
+        json_io = JsonIO(text_key='tokens',
+                         chunk_key='entities',
+                         chunk_type_key='type',
+                         chunk_start_key='start',
+                         chunk_end_key='end',
+                         relation_key='relations',
+                         relation_type_key='type',
+                         relation_head_key='head',
                          relation_tail_key='tail')
         train_data = json_io.read("data/SciERC-eberts2020ecai/scierc_train.json")
         dev_data   = json_io.read("data/SciERC-eberts2020ecai/scierc_dev.json")
         test_data  = json_io.read("data/SciERC-eberts2020ecai/scierc_test.json")
-        
+
         assert len(train_data) == 1_861
         assert len(dev_data) == 275
         assert len(test_data) == 551
-        
-        
+
+
     def test_ADE(self):
-        json_io = JsonIO(text_key='tokens', 
-                         chunk_key='entities', 
-                         chunk_type_key='type', 
-                         chunk_start_key='start', 
-                         chunk_end_key='end', 
-                         relation_key='relations', 
-                         relation_type_key='type', 
-                         relation_head_key='head', 
+        json_io = JsonIO(text_key='tokens',
+                         chunk_key='entities',
+                         chunk_type_key='type',
+                         chunk_start_key='start',
+                         chunk_end_key='end',
+                         relation_key='relations',
+                         relation_type_key='type',
+                         relation_head_key='head',
                          relation_tail_key='tail')
         data = json_io.read("data/ADE/ade_full.json")
-        
+
         assert len(data) == 4_272
         assert sum(len(ex['chunks']) for ex in data) == 10_839
         assert sum(len(ex['relations']) for ex in data) == 6_821
-        
+
         assert max(detect_overlapping_level(ex['chunks']) for ex in data) == NESTED
         assert all(filter_clashed_by_priority(ex['chunks'], allow_level=NESTED) == ex['chunks'] for ex in data)
-        
-        
+
+
     def test_yidu_s4k(self):
-        io = JsonIO(is_tokenized=False, 
-                    tokenize_callback='char', 
-                    text_key='originalText', 
-                    chunk_key='entities', 
-                    chunk_type_key='label_type', 
-                    chunk_start_key='start_pos', 
-                    chunk_end_key='end_pos', 
-                    is_whole_piece=False, 
+        io = JsonIO(is_tokenized=False,
+                    tokenize_callback='char',
+                    text_key='originalText',
+                    chunk_key='entities',
+                    chunk_type_key='label_type',
+                    chunk_start_key='start_pos',
+                    chunk_end_key='end_pos',
+                    is_whole_piece=False,
                     encoding='utf-8-sig')
         train_data1, train_errors1, train_mismatches1 = io.read("data/yidu_s4k/subtask1_training_part1.txt", return_errors=True)
         train_data2, train_errors2, train_mismatches2 = io.read("data/yidu_s4k/subtask1_training_part2.txt", return_errors=True)
-        train_data,  train_errors,  train_mismatches  = (train_data1 + train_data2, 
-                                                         train_errors1 + train_errors2, 
+        train_data,  train_errors,  train_mismatches  = (train_data1 + train_data2,
+                                                         train_errors1 + train_errors2,
                                                          train_mismatches1 + train_mismatches2)
         test_data,   test_errors,   test_mismatches   = io.read("data/yidu_s4k/subtask1_test_set_with_answer.json", return_errors=True)
-        
+
         assert len(train_data) == 1_000
         assert sum(len(ex['chunks']) for ex in train_data) == 17_653
         assert len(train_errors) == 0
@@ -302,19 +302,19 @@ class TestJsonIO(object):
         assert sum(len(ex['chunks']) for ex in test_data) == 6_002
         assert len(test_errors) == 0
         assert len(test_mismatches) == 0
-        
+
         assert max(detect_overlapping_level(ex['chunks']) for ex in train_data+test_data) == FLAT
         assert all(filter_clashed_by_priority(ex['chunks'], allow_level=FLAT) == ex['chunks'] for ex in train_data+test_data)
-        
-        
+
+
     def test_cmeee(self):
-        io = JsonIO(is_tokenized=False, tokenize_callback='char', text_key='text', 
-                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start_idx', chunk_end_key='end_idx', 
+        io = JsonIO(is_tokenized=False, tokenize_callback='char', text_key='text',
+                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start_idx', chunk_end_key='end_idx',
                     encoding='utf-8')
         train_data, train_errors, train_mismatches = io.read("data/cblue/CMeEE/CMeEE_train_vz.json", return_errors=True)
         dev_data,   dev_errors,   dev_mismatches   = io.read("data/cblue/CMeEE/CMeEE_dev_vz.json", return_errors=True)
         test_data  = io.read("data/cblue/CMeEE/CMeEE_test_vz.json")
-        
+
         assert len(train_data) == 15_000
         assert sum(len(ex['chunks']) for ex in train_data) == 61_796
         assert len(train_errors) == 0
@@ -324,20 +324,20 @@ class TestJsonIO(object):
         assert len(dev_errors) == 0
         assert len(dev_mismatches) == 0
         assert len(test_data) == 3_000
-        
+
         assert max(detect_overlapping_level(ex['chunks']) for ex in train_data+dev_data) == ARBITRARY
         assert all(filter_clashed_by_priority(ex['chunks'], allow_level=ARBITRARY) == ex['chunks'] for ex in train_data+dev_data)
-        
-        
+
+
     def test_cmeie(self):
-        io = JsonIO(is_tokenized=False, tokenize_callback='char', text_key='text', 
-                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end', 
-                    relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
+        io = JsonIO(is_tokenized=False, tokenize_callback='char', text_key='text',
+                    chunk_key='entities', chunk_type_key='type', chunk_start_key='start', chunk_end_key='end',
+                    relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail',
                     encoding='utf-8')
         train_data = io.read("data/cblue/CMeIE/CMeIE_train_vz.json")
         dev_data   = io.read("data/cblue/CMeIE/CMeIE_dev_vz.json")
         test_data  = io.read("data/cblue/CMeIE/CMeIE_test_vz.json")
-        
+
         assert len(train_data) == 14_339
         assert sum(len(ex['chunks']) for ex in train_data) == 57_880
         assert sum(len(ex['relations']) for ex in train_data) == 43_629
@@ -350,12 +350,12 @@ class TestJsonIO(object):
 
 @pytest.mark.parametrize("is_whole_piece", [False, True])
 def test_read_write_consistency(is_whole_piece):
-    brat_io = BratIO(tokenize_callback='char', 
-                     has_ins_space=True, ins_space_tokenize_callback=jieba.cut, max_len=200, 
+    brat_io = BratIO(tokenize_callback='char',
+                     has_ins_space=True, ins_space_tokenize_callback=jieba.cut, max_len=200,
                      parse_attrs=True, parse_relations=True, encoding='utf-8')
-    json_io = JsonIO(is_tokenized=True, 
-                     attribute_key='attributes', attribute_type_key='type', attribute_chunk_key='entity', 
-                     relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail', 
+    json_io = JsonIO(is_tokenized=True,
+                     attribute_key='attributes', attribute_type_key='type', attribute_chunk_key='entity',
+                     relation_key='relations', relation_type_key='type', relation_head_key='head', relation_tail_key='tail',
                      is_whole_piece=is_whole_piece, encoding='utf-8')
 
     src_fn = "data/HwaMei/demo.txt"
@@ -374,7 +374,7 @@ class TestSQuADIO(object):
         io = SQuADIO(tokenize_callback=spacy_nlp_en, verbose=False)
         train_data, train_errors, train_mismatches = io.read("data/SQuAD/train-v2.0.json", return_errors=True)
         dev_data,   dev_errors,   dev_mismatches   = io.read("data/SQuAD/dev-v2.0.json", return_errors=True)
-        
+
         assert len(train_data) == 130_319
         assert len(train_errors) == 0
         assert len(train_mismatches) == 1_009
@@ -388,31 +388,31 @@ class TestKarpathyIO(object):
     """
     References
     ----------
-    [1] Karpathy, et al. 2015. Deep visual-semantic alignments for generating image descriptions. CVPR 2015. 
+    [1] Karpathy, et al. 2015. Deep visual-semantic alignments for generating image descriptions. CVPR 2015.
     [2] Vinyals, et al. 2015. Show and tell: A neural image caption generator. CVPR 2015.
     """
     def test_flickr8k(self):
         io = KarpathyIO(img_folder="data/flickr8k/Flicker8k_Dataset")
         train_data, dev_data, test_data = io.read("data/flickr8k/flickr8k-karpathy2015cvpr.json")
-        
+
         assert len(train_data) == 6_000
         assert len(dev_data) == 1_000
         assert len(test_data) == 1_000
-        
-        
+
+
     def test_flickr30k(self):
         io = KarpathyIO(img_folder="data/flickr30k/flickr30k-images")
         train_data, dev_data, test_data = io.read("data/flickr30k/flickr30k-karpathy2015cvpr.json")
-        
+
         assert len(train_data) == 29_000
         assert len(dev_data) == 1_014
         assert len(test_data) == 1_000
-        
-        
+
+
     def test_mscoco(self):
         io = KarpathyIO(img_folder="data/mscoco/data2014")
         train_data, dev_data, test_data = io.read("data/mscoco/mscoco-karpathy2015cvpr.json")
-        
+
         assert len(train_data) == 113_287
         assert len(dev_data) == 5_000
         assert len(test_data) == 5_000
@@ -423,7 +423,7 @@ class TestTextClsIO(object):
     """
     References
     ----------
-    [1] Zhang et al. 2021. CBLUE: A Chinese Biomedical Language Understanding Evaluation Benchmark. 
+    [1] Zhang et al. 2021. CBLUE: A Chinese Biomedical Language Understanding Evaluation Benchmark.
     [2] https://github.com/CBLUEbenchmark/CBLUE
     [3] https://tianchi.aliyun.com/dataset/dataDetail?dataId=113223
     """
@@ -432,51 +432,51 @@ class TestTextClsIO(object):
         train_data = io.read("data/cblue/CHIP-CTC/CHIP-CTC_train.json")
         dev_data   = io.read("data/cblue/CHIP-CTC/CHIP-CTC_dev.json")
         test_data  = io.read("data/cblue/CHIP-CTC/CHIP-CTC_test.json")
-        
+
         assert len(train_data) == 22_962
         assert len(dev_data) == 7_682
         assert len(test_data) == 10_192  # 10_000?
-        
-        
+
+
     def test_chip_sts(self):
         io = TextClsIO(is_tokenized=False, tokenize_callback=jieba.tokenize, text_key='text1', paired_text_key='text2', mapping={" ": ""}, encoding='utf-8')
         train_data = io.read("data/cblue/CHIP-STS/CHIP-STS_train.json")
         dev_data   = io.read("data/cblue/CHIP-STS/CHIP-STS_dev.json")
         test_data  = io.read("data/cblue/CHIP-STS/CHIP-STS_test.json")
-        
+
         assert len(train_data) == 16_000
         assert len(dev_data) == 4_000
         assert len(test_data) == 10_000
-        
-        
+
+
     def test_kuake_qic(self):
         io = TextClsIO(is_tokenized=False, tokenize_callback=jieba.tokenize, text_key='query', mapping={" ": ""}, encoding='utf-8')
         train_data = io.read("data/cblue/KUAKE-QIC/KUAKE-QIC_train.json")
         dev_data   = io.read("data/cblue/KUAKE-QIC/KUAKE-QIC_dev.json")
         test_data  = io.read("data/cblue/KUAKE-QIC/KUAKE-QIC_test.json")
-        
+
         assert len(train_data) == 6_931
         assert len(dev_data) == 1_955
         assert len(test_data) == 1_994  # 1_944?
-        
-        
+
+
     def test_kuake_qtr(self):
         io = TextClsIO(is_tokenized=False, tokenize_callback=jieba.tokenize, text_key='query', paired_text_key='title', mapping={" ": ""}, encoding='utf-8')
         train_data = io.read("data/cblue/KUAKE-QTR/KUAKE-QTR_train.json")
         dev_data   = io.read("data/cblue/KUAKE-QTR/KUAKE-QTR_dev.json")
         test_data  = io.read("data/cblue/KUAKE-QTR/KUAKE-QTR_test.json")
-        
+
         assert len(train_data) == 24_174
         assert len(dev_data) == 2_913
         assert len(test_data) == 5_465
-        
-        
+
+
     def test_kuake_qqr(self):
         io = TextClsIO(is_tokenized=False, tokenize_callback=jieba.tokenize, text_key='query1', paired_text_key='query2', mapping={" ": ""}, encoding='utf-8')
         train_data = io.read("data/cblue/KUAKE-QQR/KUAKE-QQR_train.json")
         dev_data   = io.read("data/cblue/KUAKE-QQR/KUAKE-QQR_dev.json")
         test_data  = io.read("data/cblue/KUAKE-QQR/KUAKE-QQR_test.json")
-        
+
         assert len(train_data) == 15_000
         assert len(dev_data) == 1_599  # 1_600
         assert len(test_data) == 1_596

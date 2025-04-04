@@ -4,7 +4,7 @@ from eznlp.utils.chunk import detect_overlapping_level, filter_clashed_by_priori
 
 class TestChipIO(object):
     """
-    
+
     References
     ----------
     [1] http://www.cips-chip.org.cn/2020/eval1
@@ -13,7 +13,7 @@ class TestChipIO(object):
         io = ChipIO(tokenize_callback='char', sep='|||', encoding='utf-8')
         train_data, train_errors, train_mismatches = io.read("data/chip2020/task1/train_data.txt", return_errors=True)
         dev_data,   dev_errors,   dev_mismatches   = io.read("data/chip2020/task1/val_data.txt", return_errors=True)
-        
+
         assert len(train_data) == 15_000
         assert sum(len(ex['chunks']) for ex in train_data) == 61_796
         assert len(train_errors) == 0
@@ -22,6 +22,6 @@ class TestChipIO(object):
         assert sum(len(ex['chunks']) for ex in dev_data) == 20_300
         assert len(dev_errors) == 0
         assert len(dev_mismatches) == 0
-        
+
         assert max(detect_overlapping_level(ex['chunks']) for data in [train_data, dev_data] for ex in data) == ARBITRARY
         assert all(filter_clashed_by_priority(ex['chunks'], allow_level=ARBITRARY) == ex['chunks'] for data in [train_data, dev_data] for ex in data)

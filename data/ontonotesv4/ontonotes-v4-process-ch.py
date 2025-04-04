@@ -37,7 +37,7 @@ print(len(files))
 
 # Che et al. (2013)
 # This corpus includes about 400 document pairs (chtb 0001-0325, ectb 1001-1078).
-# We used odd numbered documents as development data and even numbered documents as test data. 
+# We used odd numbered documents as development data and even numbered documents as test data.
 # We used all other portions of the named entity annotated corpus as training data.
 dev_files = [fn for fn in files if os.path.basename(fn).startswith('chtb') and int(re.search('\d+', os.path.basename(fn)).group()) % 2 == 1]
 test_files = [fn for fn in files if os.path.basename(fn).startswith('chtb') and int(re.search('\d+', os.path.basename(fn)).group()) % 2 == 0]
@@ -51,7 +51,7 @@ for split_name, split_files in zip(['dev', 'test', 'train'], [dev_files, test_fi
                 doc = f.readlines()
             assert doc[0].startswith("<DOC")
             assert doc[-1].startswith("</DOC")
-            
+
             doc_name = '/'.join(files[0].split('\\')[1:]).replace('.name', '')
             wf.write("#begin document ({})\n".format(doc_name))
             for sent in doc[1:-1]:

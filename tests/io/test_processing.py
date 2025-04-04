@@ -4,9 +4,9 @@ import pytest
 from eznlp.io import PostIO
 
 
-@pytest.mark.parametrize("absorb_attr_types", [[], 
-                                               ['Analyzed'], 
-                                               ['Analyzed', 'Denied'], 
+@pytest.mark.parametrize("absorb_attr_types", [[],
+                                               ['Analyzed'],
+                                               ['Analyzed', 'Denied'],
                                                ['Unconfirmed', 'Analyzed', 'Denied']])
 def test_absorb_attributes(absorb_attr_types, HwaMei_demo):
     data = HwaMei_demo
@@ -26,8 +26,8 @@ def test_absorb_attributes(absorb_attr_types, HwaMei_demo):
     assert all(entry['relations'] == entry_retr['relations'] for entry, entry_retr in zip(data, data_retr))
 
 
-@pytest.mark.parametrize("group_rel_types", [[], 
-                                             ['Group_DS', 'Group_Test'], 
+@pytest.mark.parametrize("group_rel_types", [[],
+                                             ['Group_DS', 'Group_Test'],
                                              ['Group_DS', 'Group_Test', 'Syn_Treat']])
 def test_infer_relations(group_rel_types, HwaMei_demo):
     data = HwaMei_demo

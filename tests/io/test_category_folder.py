@@ -15,7 +15,6 @@ class TestCategoryFolderIO(object):
         folder_io = CategoryFolderIO(categories=["pos", "neg"], mapping={"<br />": "\n"}, tokenize_callback=spacy_nlp_en, encoding='utf-8', case_mode='lower')
         train_data = folder_io.read("data/imdb/train")
         test_data  = folder_io.read("data/imdb/test")
-        
+
         assert len(train_data) == 25_000
         assert len(test_data) == 25_000
-        

@@ -15,17 +15,17 @@ def parse_tag(tag: bs4.element.Tag):
             assert subtag.name == 'cons'
             start = len(tokenized)
             sub_tokenized, sub_chunks = parse_tag(subtag)
-            
+
             if 'sem' in subtag.attrs:
                 curr_chunk = (subtag['sem'], start, start + len(sub_tokenized), sub_tokenized)
                 chunks.append(curr_chunk)
             # else:
             #     print(subtag)
-            
+
             sub_chunks = [(sck[0], start+sck[1], start+sck[2], sck[3]) for sck in sub_chunks]
             chunks.extend(sub_chunks)
             tokenized.extend(sub_tokenized)
-            
+
         else:
             assert isinstance(subtag, bs4.element.NavigableString)
             if len(text := str(subtag).strip()) > 0:
@@ -50,14 +50,14 @@ for doc in tqdm.tqdm(corpus):
             tokenized, chunks = parse_tag(sent)
             assert "" not in tokenized
             assert all(ck[3] == tokenized[ck[1]:ck[2]] for ck in chunks)
-            
-            data.append({'bibliomisc': bibliomisc, 
-                         'doc_key': f"genia_3.02_article_{doc_key}", 
-                         'tokens': TokenSequence.from_tokenized_text(tokenized), 
+
+            data.append({'bibliomisc': bibliomisc,
+                         'doc_key': f"genia_3.02_article_{doc_key}",
+                         'tokens': TokenSequence.from_tokenized_text(tokenized),
                          'chunks': [(ck[0], ck[1], ck[2]) for ck in chunks]})
-        
+
         doc_key += 1
-        
+
     else:
         assert not doc.endswith("</article>")
 
