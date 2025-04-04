@@ -9,17 +9,19 @@ from eznlp.training import count_params
 
 
 @pytest.mark.skip(reason="ELMo is not supported in the current version")
-@pytest.mark.parametrize("mix_layers", ['trainable', 'top', 'average'])
+@pytest.mark.parametrize("mix_layers", ["trainable", "top", "average"])
 @pytest.mark.parametrize("use_gamma", [True, False])
 @pytest.mark.parametrize("freeze", [True, False])
 def test_trainble_config(mix_layers, use_gamma, freeze, elmo):
-    elmo_config = ELMoConfig(elmo=elmo, freeze=freeze, mix_layers=mix_layers, use_gamma=use_gamma)
+    elmo_config = ELMoConfig(
+        elmo=elmo, freeze=freeze, mix_layers=mix_layers, use_gamma=use_gamma
+    )
     elmo_embedder = elmo_config.instantiate()
 
     expected_num_trainable_params = 0
     if not freeze:
         expected_num_trainable_params += count_params(elmo, return_trainable=False) - 4
-    if mix_layers.lower() == 'trainable':
+    if mix_layers.lower() == "trainable":
         expected_num_trainable_params += 3
     if use_gamma:
         expected_num_trainable_params += 1

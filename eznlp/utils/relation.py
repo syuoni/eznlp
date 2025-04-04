@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from typing import List
 
-INV_REL_PREFIX = 'INV-'
+INV_REL_PREFIX = "INV-"
 
 
 def detect_missing_symmetric(relations: List[tuple], sym_rel_labels: List[str]):

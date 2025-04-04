@@ -11,17 +11,26 @@ from .span_classification import SpanClassificationDecoderConfig
 from .span_rel_classification import SpanRelClassificationDecoderConfig
 from .specific_span_classification import SpecificSpanClsDecoderConfig
 from .specific_span_rel_classification import SpecificSpanRelClsDecoderConfig
-from .specific_span_rel_classification_unfiltered import \
-    UnfilteredSpecificSpanRelClsDecoderConfig
+from .specific_span_rel_classification_unfiltered import (
+    UnfilteredSpecificSpanRelClsDecoderConfig,
+)
 from .text_classification import TextClassificationDecoderConfig
 
 __all__ = [
-    'DecoderMixinBase', 'SingleDecoderConfigBase', 'DecoderBase',
-    'TextClassificationDecoderConfig', 'SequenceTaggingDecoderConfig',
-    'SpanClassificationDecoderConfig', 'SpanAttrClassificationDecoderConfig',
-    'SpanRelClassificationDecoderConfig', 'BoundarySelectionDecoderConfig',
-    'JointExtractionDecoderConfig', 'SpecificSpanClsDecoderConfig',
-    'SpecificSpanRelClsDecoderConfig', 'UnfilteredSpecificSpanRelClsDecoderConfig',
-    'MaskedSpanRelClsDecoderConfig', 'MaskedSpanAttrClsDecoderConfig',
-    'GeneratorConfig'
+    "DecoderMixinBase",
+    "SingleDecoderConfigBase",
+    "DecoderBase",
+    "TextClassificationDecoderConfig",
+    "SequenceTaggingDecoderConfig",
+    "SpanClassificationDecoderConfig",
+    "SpanAttrClassificationDecoderConfig",
+    "SpanRelClassificationDecoderConfig",
+    "BoundarySelectionDecoderConfig",
+    "JointExtractionDecoderConfig",
+    "SpecificSpanClsDecoderConfig",
+    "SpecificSpanRelClsDecoderConfig",
+    "UnfilteredSpecificSpanRelClsDecoderConfig",
+    "MaskedSpanRelClsDecoderConfig",
+    "MaskedSpanAttrClsDecoderConfig",
+    "GeneratorConfig",
 ]

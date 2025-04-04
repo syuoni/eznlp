@@ -13,7 +13,10 @@ class MultiKernelMaxMeanDiscrepancyLoss(torch.nn.Module):
     [2] https://github.com/jindongwang/transferlearning/blob/master/code/distance/mmd_pytorch.py
     [3] https://github.com/ZongxianLee/MMD_Loss.Pytorch
     """
-    def __init__(self, num_kernels: int=5, multiplier: float=2.0, sigma: float=None):
+
+    def __init__(
+        self, num_kernels: int = 5, multiplier: float = 2.0, sigma: float = None
+    ):
         super().__init__()
         self.num_kernels = num_kernels
         self.multiplier = multiplier
@@ -25,7 +28,12 @@ class MultiKernelMaxMeanDiscrepancyLoss(torch.nn.Module):
 
         x = torch.cat([x1, x2], dim=0)
         # kernels: (num1+num2, num1+num2)
-        kernels = multi_rbf_kernels(x, num_kernels=self.num_kernels, multiplier=self.multiplier, sigma=self.sigma)
+        kernels = multi_rbf_kernels(
+            x,
+            num_kernels=self.num_kernels,
+            multiplier=self.multiplier,
+            sigma=self.sigma,
+        )
 
         k11 = kernels[:num1, :num1].mean()
         k12 = kernels[:num1, num1:].mean()
@@ -38,7 +46,7 @@ class MultiKernelMaxMeanDiscrepancyLoss(torch.nn.Module):
         elif num2 == 0:
             return k11
         else:
-            return (k11 - k12 - k21 + k22)
+            return k11 - k12 - k21 + k22
 
     def extra_repr(self):
         return f"num_kernels={self.num_kernels}, multiplier={self.multiplier}, sigma={self.sigma}"

@@ -16,7 +16,7 @@ def _parse_line(line: bytes):
 
 def _infer_shape(path: str, skiprows: List[int]):
     vec_dim = None
-    with open(path, 'rb') as f:
+    with open(path, "rb") as f:
         for i, line in enumerate(f):
             if i in skiprows:
                 continue
@@ -24,10 +24,12 @@ def _infer_shape(path: str, skiprows: List[int]):
                 w, vector = _parse_line(line)
                 vec_dim = len(vector)
 
-    return i+1, vec_dim
+    return i + 1, vec_dim
 
 
-def _load_from_file(path: str, encoding=None, skiprows: Union[int, List[int]]=None, verbose=False):
+def _load_from_file(
+    path: str, encoding=None, skiprows: Union[int, List[int]] = None, verbose=False
+):
     logger.info(f"Loading vectors from {path}")
     if skiprows is None:
         skiprows = []
@@ -37,9 +39,15 @@ def _load_from_file(path: str, encoding=None, skiprows: Union[int, List[int]]=No
 
     words, vectors = [], []
     num_lines, vec_dim = _infer_shape(path, skiprows)
-    with open(path, 'rb') as f:
+    with open(path, "rb") as f:
         num_bad_lines = 0
-        for i, line in tqdm.tqdm(enumerate(f), total=num_lines, disable=not verbose, ncols=100, desc="Loading vectors"):
+        for i, line in tqdm.tqdm(
+            enumerate(f),
+            total=num_lines,
+            disable=not verbose,
+            ncols=100,
+            desc="Loading vectors",
+        ):
             if i in skiprows:
                 continue
             try:
@@ -60,16 +68,16 @@ def _load_from_file(path: str, encoding=None, skiprows: Union[int, List[int]]=No
     return words, vectors
 
 
-
 class Vectors(object):
     def __init__(self, itos: List[str], vectors: torch.FloatTensor, unk_init=None):
         if len(itos) != vectors.size(0):
-            raise ValueError(f"Vocaburaly size {len(itos)} does not match vector size {vectors.size(0)}")
+            raise ValueError(
+                f"Vocaburaly size {len(itos)} does not match vector size {vectors.size(0)}"
+            )
 
         self.itos = itos
         self.vectors = vectors
         self.unk_init = torch.zeros if unk_init is None else unk_init
-
 
     @property
     def itos(self):
@@ -133,11 +141,11 @@ class Vectors(object):
         return cls(itos, vectors)
 
 
-
 class GloVe(Vectors):
     """
     https://nlp.stanford.edu/projects/glove/
     """
+
     def __init__(self, path: str, encoding=None, **kwargs):
         if os.path.exists(f"{path}.pt"):
             itos, vectors = self.load_from_cache(path)
@@ -153,10 +161,13 @@ class Senna(Vectors):
         if os.path.exists(f"{path}.pt"):
             itos, vectors = self.load_from_cache(path)
         else:
-            with open(f"{path}/hash/words.lst", 'r') as f:
+            with open(f"{path}/hash/words.lst", "r") as f:
                 itos = [w.strip() for w in f.readlines()]
-            with open(f"{path}/embeddings/embeddings.txt", 'r') as f:
-                vectors = [[float(v) for v in vector.strip().split()] for vector in f.readlines()]
+            with open(f"{path}/embeddings/embeddings.txt", "r") as f:
+                vectors = [
+                    [float(v) for v in vector.strip().split()]
+                    for vector in f.readlines()
+                ]
 
             vectors = torch.tensor(vectors)
             self.save_to_cache(path, itos, vectors)

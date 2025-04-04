@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import json
 
-for partition in ['train', 'dev', 'test']:
+for partition in ["train", "dev", "test"]:
     src_fn = f"json/{partition}.json"
     trg_fn = f"{partition}.json"
 
@@ -12,19 +12,30 @@ for partition in ['train', 'dev', 'test']:
     for ex in data:
         curr_start = 0
 
-        for k in range(len(ex['sentences'])):
+        for k in range(len(ex["sentences"])):
             new_ex = {}
-            new_ex['doc_key'] = ex['doc_key']
-            new_ex['tokens'] = ex['sentences'][k]
-            new_ex['entities'] = [{'start': ent[0]-curr_start, 'end': ent[1]-curr_start+1, 'type': ent[2]} for ent in ex['ner'][k]]
+            new_ex["doc_key"] = ex["doc_key"]
+            new_ex["tokens"] = ex["sentences"][k]
+            new_ex["entities"] = [
+                {
+                    "start": ent[0] - curr_start,
+                    "end": ent[1] - curr_start + 1,
+                    "type": ent[2],
+                }
+                for ent in ex["ner"][k]
+            ]
 
-            spans = [(ent['start'], ent['end']) for ent in new_ex['entities']]
-            new_ex['relations'] = [{'type': rel[4],
-                                    'head': spans.index((rel[0]-curr_start, rel[1]-curr_start+1)),
-                                    'tail': spans.index((rel[2]-curr_start, rel[3]-curr_start+1))} for rel in ex['relations'][k]]
+            spans = [(ent["start"], ent["end"]) for ent in new_ex["entities"]]
+            new_ex["relations"] = [
+                {
+                    "type": rel[4],
+                    "head": spans.index((rel[0] - curr_start, rel[1] - curr_start + 1)),
+                    "tail": spans.index((rel[2] - curr_start, rel[3] - curr_start + 1)),
+                }
+                for rel in ex["relations"][k]
+            ]
             new_data.append(new_ex)
-            curr_start += len(new_ex['tokens'])
+            curr_start += len(new_ex["tokens"])
 
-
-    with open(trg_fn, 'w', encoding='utf-8') as f:
+    with open(trg_fn, "w", encoding="utf-8") as f:
         json.dump(new_data, f, ensure_ascii=False)

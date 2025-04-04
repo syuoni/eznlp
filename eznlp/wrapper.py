@@ -12,6 +12,7 @@ def _create_is_like(criterion):
             return all(criterion(xi) or _is_like(xi) for xi in x.values())
         else:
             return False
+
     return _is_like
 
 
@@ -25,17 +26,19 @@ def _create_apply(criterion, func):
             return {k: _apply(xi) for k, xi in x.items()}
         else:
             return x
+
     return _apply
 
 
 _is_string_like = _create_is_like(lambda x: isinstance(x, str))
-_is_tensor_like = _create_is_like(lambda x: isinstance(x, (torch.Tensor, TensorWrapper)))
-
+_is_tensor_like = _create_is_like(
+    lambda x: isinstance(x, (torch.Tensor, TensorWrapper))
+)
 
 
 class TensorWrapper(object):
-    """A wrapper of tensors.
-    """
+    """A wrapper of tensors."""
+
     def __init__(self, **kwargs):
         self.add_attributes(**kwargs)
 
@@ -48,7 +51,6 @@ class TensorWrapper(object):
                 setattr(self, name, possible_attr)
             else:
                 raise TypeError(f"Invalid input to `TensorWrapper`: {possible_attr}")
-
 
     def _apply_to_tensors(self, func):
         """Apply `func` to all tensors registered in this `TensorWrapper`.
@@ -65,13 +67,16 @@ class TensorWrapper(object):
 
         This function must return `self`.
         """
+
         def _adaptive_func(x):
             if isinstance(x, torch.Tensor):
                 return func(x)
             else:
                 return x._apply_to_tensors(func)
 
-        _apply = _create_apply(lambda x: isinstance(x, (torch.Tensor, TensorWrapper)), _adaptive_func)
+        _apply = _create_apply(
+            lambda x: isinstance(x, (torch.Tensor, TensorWrapper)), _adaptive_func
+        )
 
         for name, attr in self.__dict__.items():
             if _is_tensor_like(attr):
@@ -89,16 +94,14 @@ class TensorWrapper(object):
         return self._apply_to_tensors(lambda x: x.cuda(*args, **kwargs))
 
 
-
 class Batch(TensorWrapper):
-    """A wrapper of batch.
-    """
+    """A wrapper of batch."""
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
     def __repr__(self):
         return "Batch with attributes: {}".format(", ".join(self.__dict__))
-
 
 
 class TargetWrapper(TensorWrapper):
@@ -113,5 +116,6 @@ class TargetWrapper(TensorWrapper):
         However, some **attributes that will not be used in decoding** may contain information of the ground truth for computing evaluation loss.
     (2) Do NOT check the attributes (being tensors or not) for a target object.
     """
-    def __init__(self, training: bool=True):
+
+    def __init__(self, training: bool = True):
         self.training = training

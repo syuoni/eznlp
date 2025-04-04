@@ -4,6 +4,8 @@ from .chunk import TextChunksTranslator
 from .transition import ChunksTagsTranslator
 
 __all__ = [
-    'find_ascending', 'assign_consecutive_to_buckets', 'ChunksTagsTranslator',
-    'TextChunksTranslator'
+    "find_ascending",
+    "assign_consecutive_to_buckets",
+    "ChunksTagsTranslator",
+    "TextChunksTranslator",
 ]

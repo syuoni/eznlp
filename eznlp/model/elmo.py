@@ -9,18 +9,17 @@ from ..token import TokenSequence
 
 class ELMoConfig(Config):
     def __init__(self, **kwargs):
-        self.elmo = kwargs.pop('elmo')
+        self.elmo = kwargs.pop("elmo")
         self.out_dim = self.elmo.get_output_dim()
 
-        self.arch = kwargs.pop('arch', 'ELMo')
-        self.freeze = kwargs.pop('freeze', True)
+        self.arch = kwargs.pop("arch", "ELMo")
+        self.freeze = kwargs.pop("freeze", True)
 
-        self.lstm_stateful = kwargs.pop('lstm_stateful', False)
-        self.mix_layers = kwargs.pop('mix_layers', 'trainable')
-        self.use_gamma = kwargs.pop('use_gamma', True)
+        self.lstm_stateful = kwargs.pop("lstm_stateful", False)
+        self.mix_layers = kwargs.pop("mix_layers", "trainable")
+        self.use_gamma = kwargs.pop("use_gamma", True)
 
         super().__init__(**kwargs)
-
 
     @property
     def name(self):
@@ -28,20 +27,20 @@ class ELMoConfig(Config):
 
     def __getstate__(self):
         state = self.__dict__.copy()
-        state['elmo'] = None
+        state["elmo"] = None
         return state
 
-
     def exemplify(self, tokens: TokenSequence):
-        return {'tokenized_raw_text': tokens.raw_text}
+        return {"tokenized_raw_text": tokens.raw_text}
 
     def batchify(self, batch_ex: List[dict]):
-        batch_tokenized_raw_text = [ex['tokenized_raw_text'] for ex in batch_ex]
-        return {'char_ids': allennlp.modules.elmo.batch_to_ids(batch_tokenized_raw_text)}
+        batch_tokenized_raw_text = [ex["tokenized_raw_text"] for ex in batch_ex]
+        return {
+            "char_ids": allennlp.modules.elmo.batch_to_ids(batch_tokenized_raw_text)
+        }
 
     def instantiate(self):
         return ELMoEmbedder(self)
-
 
 
 class ELMoEmbedder(torch.nn.Module):
@@ -66,6 +65,7 @@ class ELMoEmbedder(torch.nn.Module):
     [1] Peters et al. 2018. Deep contextualized word representations.
     [2] https://github.com/allenai/allennlp/issues/2398
     """
+
     def __init__(self, config: ELMoConfig):
         super().__init__()
         self.elmo = config.elmo
@@ -78,15 +78,14 @@ class ELMoEmbedder(torch.nn.Module):
         # Register ELMo configurations
         self.elmo._elmo_lstm._elmo_lstm.stateful = self.lstm_stateful
 
-        if self.mix_layers.lower() != 'trainable':
+        if self.mix_layers.lower() != "trainable":
             self.elmo.scalar_mix_0.scalar_parameters.requires_grad_(False)
-            if self.mix_layers.lower() == 'top':
+            if self.mix_layers.lower() == "top":
                 for scalar_param in self.elmo.scalar_mix_0.scalar_parameters[:-1]:
                     scalar_param.data.fill_(-9e10)
 
         if not self.use_gamma:
             self.elmo.scalar_mix_0.gamma.requires_grad_(False)
-
 
     @property
     def freeze(self):
@@ -97,7 +96,6 @@ class ELMoEmbedder(torch.nn.Module):
         self._freeze = freeze
         self.elmo._elmo_lstm.requires_grad_(not freeze)
 
-
     def forward(self, char_ids: torch.LongTensor):
         # TODO: use `word_inputs`?
         elmo_outs = self.elmo(inputs=char_ids)
@@ -106,4 +104,4 @@ class ELMoEmbedder(torch.nn.Module):
         if not self.lstm_stateful:
             self.elmo._elmo_lstm._elmo_lstm.reset_states()
 
-        return elmo_outs['elmo_representations'][0]
+        return elmo_outs["elmo_representations"][0]

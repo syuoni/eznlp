@@ -13,11 +13,23 @@ from eznlp.vectors import GloVe, Vectors
 
 
 def pytest_addoption(parser):
-    parser.addoption('--device', type=str, default='auto', help="device to run tests (`auto`, `cpu` or `cuda:x`)")
-    parser.addoption('--runslow', default=False, action='store_true', help="whether to run slow tests")
+    parser.addoption(
+        "--device",
+        type=str,
+        default="auto",
+        help="device to run tests (`auto`, `cpu` or `cuda:x`)",
+    )
+    parser.addoption(
+        "--runslow",
+        default=False,
+        action="store_true",
+        help="whether to run slow tests",
+    )
+
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "slow: mark test as slow")
+
 
 def pytest_collection_modifyitems(config, items):
     if not config.getoption("--runslow"):
@@ -27,127 +39,184 @@ def pytest_collection_modifyitems(config, items):
                 item.add_marker(skip_slow)
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def device(request):
-    device_str = request.config.getoption('--device')
-    if device_str == 'auto':
+    device_str = request.config.getoption("--device")
+    if device_str == "auto":
         return auto_device()
     else:
         return torch.device(device_str)
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def spacy_nlp_en():
     spacy.cli.download("en_core_web_sm")
-    return spacy.load("en_core_web_sm", disable=['tagger', 'parser', 'ner'])
+    return spacy.load("en_core_web_sm", disable=["tagger", "parser", "ner"])
 
-@pytest.fixture(scope='session')
+
+@pytest.fixture(scope="session")
 def spacy_nlp_de():
     spacy.cli.download("de_core_news_sm")
-    return spacy.load("de_core_news_sm", disable=['tagger', 'parser', 'ner'])
+    return spacy.load("de_core_news_sm", disable=["tagger", "parser", "ner"])
 
 
 @pytest.fixture
 def conll2003_demo():
-    return ConllIO(text_col_id=0,
-                   tag_col_id=3,
-                   scheme='BIO1',
-                   verbose=False).read("data/conll2003/demo.eng.train")
+    return ConllIO(text_col_id=0, tag_col_id=3, scheme="BIO1", verbose=False).read(
+        "data/conll2003/demo.eng.train"
+    )
+
 
 @pytest.fixture
 def ResumeNER_demo():
-    return ConllIO(text_col_id=0,
-                   tag_col_id=1,
-                   scheme='BMES',
-                   encoding='utf-8',
-                   token_sep="",
-                   pad_token="",
-                   verbose=False).read("data/ResumeNER/demo.train.char.bmes")
+    return ConllIO(
+        text_col_id=0,
+        tag_col_id=1,
+        scheme="BMES",
+        encoding="utf-8",
+        token_sep="",
+        pad_token="",
+        verbose=False,
+    ).read("data/ResumeNER/demo.train.char.bmes")
+
 
 @pytest.fixture
 def yelp_full_demo(spacy_nlp_en):
-    return TabularIO(text_col_id=1,
-                     label_col_id=0,
-                     sep=",",
-                     mapping={"\\n": "\n", '\\"': '"'},
-                     tokenize_callback=spacy_nlp_en,
-                     case_mode='lower',
-                     verbose=False).read("data/yelp_review_full/demo.train.csv")
+    return TabularIO(
+        text_col_id=1,
+        label_col_id=0,
+        sep=",",
+        mapping={"\\n": "\n", '\\"': '"'},
+        tokenize_callback=spacy_nlp_en,
+        case_mode="lower",
+        verbose=False,
+    ).read("data/yelp_review_full/demo.train.csv")
+
 
 @pytest.fixture
 def conll2004_demo():
-    return JsonIO(text_key='tokens',
-                  chunk_key='entities',
-                  chunk_type_key='type',
-                  chunk_start_key='start',
-                  chunk_end_key='end',
-                  relation_key='relations',
-                  relation_type_key='type',
-                  relation_head_key='head',
-                  relation_tail_key='tail',
-                  verbose=False).read("data/conll2004/demo.conll04_train.json")
+    return JsonIO(
+        text_key="tokens",
+        chunk_key="entities",
+        chunk_type_key="type",
+        chunk_start_key="start",
+        chunk_end_key="end",
+        relation_key="relations",
+        relation_type_key="type",
+        relation_head_key="head",
+        relation_tail_key="tail",
+        verbose=False,
+    ).read("data/conll2004/demo.conll04_train.json")
 
 
 @pytest.fixture
 def HwaMei_demo():
-    return BratIO(tokenize_callback='char',
-                  has_ins_space=True,
-                  ins_space_tokenize_callback=jieba.cut,
-                  parse_attrs=True,
-                  parse_relations=True,
-                  line_sep="\r\n",
-                  max_len=100,
-                  encoding='utf-8',
-                  token_sep="",
-                  pad_token="").read("data/HwaMei/demo.ChaFangJiLu.txt")
+    return BratIO(
+        tokenize_callback="char",
+        has_ins_space=True,
+        ins_space_tokenize_callback=jieba.cut,
+        parse_attrs=True,
+        parse_relations=True,
+        line_sep="\r\n",
+        max_len=100,
+        encoding="utf-8",
+        token_sep="",
+        pad_token="",
+    ).read("data/HwaMei/demo.ChaFangJiLu.txt")
 
 
 @pytest.fixture
 def EAR_data_demo():
-    tokenized_raw_text = ["This", "is", "a", "-3.14", "demo", ".",
-                          "Those", "are", "an", "APPLE", "and", "some", "glass", "bottles", ".",
-                          "This", "is", "a", "very", "very", "very", "very", "very", "long", "entity", "?"]
+    tokenized_raw_text = [
+        "This",
+        "is",
+        "a",
+        "-3.14",
+        "demo",
+        ".",
+        "Those",
+        "are",
+        "an",
+        "APPLE",
+        "and",
+        "some",
+        "glass",
+        "bottles",
+        ".",
+        "This",
+        "is",
+        "a",
+        "very",
+        "very",
+        "very",
+        "very",
+        "very",
+        "long",
+        "entity",
+        "?",
+    ]
     tokens = TokenSequence.from_tokenized_text(tokenized_raw_text)
-    chunks = [('EntA', 4, 5), ('EntB', 9, 10), ('EntB', 12, 14), ('EntC', 18, 25)]
-    attributes = [('AttrA', chunks[0]),
-                  ('AttrB', chunks[1]),
-                  ('AttrA', chunks[2]),
-                  ('AttrC', chunks[2])]
-    relations = [('RelA', chunks[0], chunks[1]),
-                 ('RelA', chunks[0], chunks[2]),
-                 ('RelB', chunks[1], chunks[2]),
-                 ('RelB', chunks[2], chunks[1])]
-    return [{'tokens': tokens, 'chunks': chunks, 'attributes': attributes, 'relations': relations}]
+    chunks = [("EntA", 4, 5), ("EntB", 9, 10), ("EntB", 12, 14), ("EntC", 18, 25)]
+    attributes = [
+        ("AttrA", chunks[0]),
+        ("AttrB", chunks[1]),
+        ("AttrA", chunks[2]),
+        ("AttrC", chunks[2]),
+    ]
+    relations = [
+        ("RelA", chunks[0], chunks[1]),
+        ("RelA", chunks[0], chunks[2]),
+        ("RelB", chunks[1], chunks[2]),
+        ("RelB", chunks[2], chunks[1]),
+    ]
+    return [
+        {
+            "tokens": tokens,
+            "chunks": chunks,
+            "attributes": attributes,
+            "relations": relations,
+        }
+    ]
 
 
 @pytest.fixture
 def glove100():
-    return GloVe("assets/vectors/glove.6B.100d.txt", encoding='utf-8')
+    return GloVe("assets/vectors/glove.6B.100d.txt", encoding="utf-8")
+
 
 @pytest.fixture
 def ctb50():
-    return Vectors.load("assets/vectors/ctb.50d.vec", encoding='utf-8')
+    return Vectors.load("assets/vectors/ctb.50d.vec", encoding="utf-8")
+
 
 @pytest.fixture
 def elmo():
     import allennlp.modules
-    return allennlp.modules.Elmo(options_file="assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_options.json",
-                                 weight_file="assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_weights.hdf5",
-                                 num_output_representations=1)
+
+    return allennlp.modules.Elmo(
+        options_file="assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_options.json",
+        weight_file="assets/allennlp/elmo_2x1024_128_2048cnn_1xhighway_weights.hdf5",
+        num_output_representations=1,
+    )
 
 
 BERT_PATH = "assets/transformers/bert-base-uncased"
 ROBERTA_PATH = "assets/transformers/roberta-base"
 ALBERT_PATH = "assets/transformers/albert-base-v2"
 
+
 @pytest.fixture
 def bert_with_tokenizer():
-    return (transformers.BertModel.from_pretrained(BERT_PATH),
-            transformers.BertTokenizer.from_pretrained(BERT_PATH))
+    return (
+        transformers.BertModel.from_pretrained(BERT_PATH),
+        transformers.BertTokenizer.from_pretrained(BERT_PATH),
+    )
+
 
 @pytest.fixture
 def bert_tokenizer():
     return transformers.BertTokenizer.from_pretrained(BERT_PATH)
+
 
 @pytest.fixture
 def roberta_with_tokenizer():
@@ -157,67 +226,92 @@ def roberta_with_tokenizer():
     https://github.com/huggingface/transformers/issues/1196
     https://github.com/pytorch/fairseq/blob/master/fairseq/models/roberta/hub_interface.py#L38-L56
     """
-    return (transformers.RobertaModel.from_pretrained(ROBERTA_PATH),
-            transformers.RobertaTokenizer.from_pretrained(ROBERTA_PATH, add_prefix_space=True))
+    return (
+        transformers.RobertaModel.from_pretrained(ROBERTA_PATH),
+        transformers.RobertaTokenizer.from_pretrained(
+            ROBERTA_PATH, add_prefix_space=True
+        ),
+    )
+
 
 @pytest.fixture
 def roberta_tokenizer():
-    return transformers.RobertaTokenizer.from_pretrained(ROBERTA_PATH, add_prefix_space=True)
+    return transformers.RobertaTokenizer.from_pretrained(
+        ROBERTA_PATH, add_prefix_space=True
+    )
+
 
 @pytest.fixture
 def albert_with_tokenizer():
-    """ALBERT by default uses dropout rate of 0.
-    """
-    return (transformers.AlbertModel.from_pretrained(ALBERT_PATH),
-            transformers.AlbertTokenizer.from_pretrained(ALBERT_PATH))
+    """ALBERT by default uses dropout rate of 0."""
+    return (
+        transformers.AlbertModel.from_pretrained(ALBERT_PATH),
+        transformers.AlbertTokenizer.from_pretrained(ALBERT_PATH),
+    )
+
 
 @pytest.fixture
 def albert_tokenizer():
     return transformers.AlbertTokenizer.from_pretrained(ALBERT_PATH)
 
-@pytest.fixture(params=['bert', 'roberta', 'albert'])
-def bert_like_with_tokenizer(request, bert_with_tokenizer, roberta_with_tokenizer, albert_with_tokenizer):
-    if request.param == 'bert':
+
+@pytest.fixture(params=["bert", "roberta", "albert"])
+def bert_like_with_tokenizer(
+    request, bert_with_tokenizer, roberta_with_tokenizer, albert_with_tokenizer
+):
+    if request.param == "bert":
         return bert_with_tokenizer
-    elif request.param == 'roberta':
+    elif request.param == "roberta":
         return roberta_with_tokenizer
-    elif request.param == 'albert':
+    elif request.param == "albert":
         return albert_with_tokenizer
 
-@pytest.fixture(params=['bert', 'roberta', 'albert'])
+
+@pytest.fixture(params=["bert", "roberta", "albert"])
 def bert_like_tokenizer(request, bert_tokenizer, roberta_tokenizer, albert_tokenizer):
-    if request.param == 'bert':
+    if request.param == "bert":
         return bert_tokenizer
-    elif request.param == 'roberta':
+    elif request.param == "roberta":
         return roberta_tokenizer
-    elif request.param == 'albert':
+    elif request.param == "albert":
         return albert_tokenizer
+
 
 @pytest.fixture
 def flair_fw_lm():
     import flair
-    return flair.models.LanguageModel.load_language_model("assets/flair/lm-mix-english-forward-v0.2rc.pt")
+
+    return flair.models.LanguageModel.load_language_model(
+        "assets/flair/lm-mix-english-forward-v0.2rc.pt"
+    )
+
 
 @pytest.fixture
 def flair_bw_lm():
     import flair
-    return flair.models.LanguageModel.load_language_model("assets/flair/lm-mix-english-backward-v0.2rc.pt")
 
-@pytest.fixture(params=['fw', 'bw'])
+    return flair.models.LanguageModel.load_language_model(
+        "assets/flair/lm-mix-english-backward-v0.2rc.pt"
+    )
+
+
+@pytest.fixture(params=["fw", "bw"])
 def flair_lm(request, flair_fw_lm, flair_bw_lm):
-    if request.param == 'fw':
+    if request.param == "fw":
         return flair_fw_lm
-    elif request.param == 'bw':
+    elif request.param == "bw":
         return flair_bw_lm
 
 
 @pytest.fixture
 def multi30k_demo(spacy_nlp_en, spacy_nlp_de):
-    return Src2TrgIO(tokenize_callback=spacy_nlp_de,
-                     trg_tokenize_callback=spacy_nlp_en,
-                     encoding='utf-8',
-                     case_mode='Lower',
-                     number_mode='None').read("data/multi30k/demo.train.de", "data/multi30k/demo.train.en")
+    return Src2TrgIO(
+        tokenize_callback=spacy_nlp_de,
+        trg_tokenize_callback=spacy_nlp_en,
+        encoding="utf-8",
+        case_mode="Lower",
+        number_mode="None",
+    ).read("data/multi30k/demo.train.de", "data/multi30k/demo.train.en")
 
 
 @pytest.fixture
@@ -230,13 +324,18 @@ def flickr8k_demo():
 @pytest.fixture
 def resnet18_with_trans():
     resnet = torchvision.models.resnet18(pretrained=False)
-    resnet.load_state_dict(torch.load("assets/resnet/resnet18-5c106cde.pth", weights_only=False))
+    resnet.load_state_dict(
+        torch.load("assets/resnet/resnet18-5c106cde.pth", weights_only=False)
+    )
 
     # https://pytorch.org/vision/stable/models.html
-    trans = torch.nn.Sequential(torchvision.transforms.Resize(256),
-                                torchvision.transforms.CenterCrop(224),
-                                torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                                                 std =[0.229, 0.224, 0.225]))
+    trans = torch.nn.Sequential(
+        torchvision.transforms.Resize(256),
+        torchvision.transforms.CenterCrop(224),
+        torchvision.transforms.Normalize(
+            mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+        ),
+    )
     return resnet, trans
 
 
@@ -246,8 +345,11 @@ def vgg11_with_trans():
     vgg.load_state_dict(torch.load("assets/vgg/vgg11-bbd30ac9.pth", weights_only=False))
 
     # https://pytorch.org/vision/stable/models.html
-    trans = torch.nn.Sequential(torchvision.transforms.Resize(256),
-                                torchvision.transforms.CenterCrop(224),
-                                torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                                                 std =[0.229, 0.224, 0.225]))
+    trans = torch.nn.Sequential(
+        torchvision.transforms.Resize(256),
+        torchvision.transforms.CenterCrop(224),
+        torchvision.transforms.Normalize(
+            mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+        ),
+    )
     return vgg, trans

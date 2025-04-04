@@ -15,15 +15,23 @@ class ModelConfigBase(Config):
       ├─encoder
       └─embedder
     """
+
     _all_names = []
 
     @property
     def valid(self):
-        return all(getattr(self, name) is None or getattr(self, name).valid for name in self._all_names)
+        return all(
+            getattr(self, name) is None or getattr(self, name).valid
+            for name in self._all_names
+        )
 
     @property
     def name(self):
-        return self._name_sep.join(getattr(self, name).name for name in self._all_names if getattr(self, name) is not None)
+        return self._name_sep.join(
+            getattr(self, name).name
+            for name in self._all_names
+            if getattr(self, name) is not None
+        )
 
     def __repr__(self):
         return self._repr_config_attrs(self.__dict__)
@@ -31,7 +39,7 @@ class ModelConfigBase(Config):
     def build_vocabs_and_dims(self, *partitions):
         raise NotImplementedError("Not Implemented `build_vocabs_and_dims`")
 
-    def exemplify(self, entry: dict, training: bool=True):
+    def exemplify(self, entry: dict, training: bool = True):
         raise NotImplementedError("Not Implemented `exemplify`")
 
     def batchify(self, batch_examples: List[dict]):
@@ -39,7 +47,6 @@ class ModelConfigBase(Config):
 
     def instantiate(self):
         raise NotImplementedError("Not Implemented `instantiate`")
-
 
 
 class ModelBase(torch.nn.Module):
@@ -55,7 +62,7 @@ class ModelBase(torch.nn.Module):
     def forward2states(self, batch: Batch):
         raise NotImplementedError("Not Implemented `forward2states`")
 
-    def forward(self, batch: Batch, return_states: bool=False):
+    def forward(self, batch: Batch, return_states: bool = False):
         states = self.forward2states(batch)
         losses = self.decoder(batch, **states)
 
@@ -64,7 +71,6 @@ class ModelBase(torch.nn.Module):
             return losses, states
         else:
             return losses
-
 
     def decode(self, batch: Batch, **states):
         if len(states) == 0:

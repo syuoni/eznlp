@@ -10,6 +10,16 @@ from .src2trg import Src2TrgIO
 from .tabular import TabularIO
 
 __all__ = [
-    'TabularIO', 'CategoryFolderIO', 'ConllIO', 'BratIO', 'JsonIO', 'SQuADIO',
-    'KarpathyIO', 'TextClsIO', 'ChipIO', 'Src2TrgIO', 'RawTextIO', 'PostIO'
+    "TabularIO",
+    "CategoryFolderIO",
+    "ConllIO",
+    "BratIO",
+    "JsonIO",
+    "SQuADIO",
+    "KarpathyIO",
+    "TextClsIO",
+    "ChipIO",
+    "Src2TrgIO",
+    "RawTextIO",
+    "PostIO",
 ]

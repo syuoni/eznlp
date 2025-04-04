@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-from .bert_like import (BertLikeConfig, BertLikePostProcessor,
-                        BertLikePreProcessor)
+from .bert_like import BertLikeConfig, BertLikePostProcessor, BertLikePreProcessor
 from .decoder import *  # noqa
 from .elmo import ELMoConfig
 from .embedder import MultiHotConfig, OneHotConfig
@@ -13,7 +12,18 @@ from .nested_embedder import CharConfig, NestedOneHotConfig, SoftLexiconConfig
 from .span_bert_like import SpanBertLikeConfig
 
 __all__ = [
-    'OneHotConfig', 'MultiHotConfig', 'NestedOneHotConfig', 'CharConfig', 'SoftLexiconConfig',
-    'EncoderConfig', 'ImageEncoderConfig', 'ELMoConfig', 'BertLikeConfig', 'BertLikePreProcessor',
-    'BertLikePostProcessor', 'SpanBertLikeConfig', 'MaskedSpanBertLikeConfig', 'FlairConfig',
+    "OneHotConfig",
+    "MultiHotConfig",
+    "NestedOneHotConfig",
+    "CharConfig",
+    "SoftLexiconConfig",
+    "EncoderConfig",
+    "ImageEncoderConfig",
+    "ELMoConfig",
+    "BertLikeConfig",
+    "BertLikePreProcessor",
+    "BertLikePostProcessor",
+    "SpanBertLikeConfig",
+    "MaskedSpanBertLikeConfig",
+    "FlairConfig",
 ]

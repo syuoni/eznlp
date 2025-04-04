@@ -3,7 +3,7 @@ import re
 from typing import List
 
 
-def segment_text_with_seps(text: str, seps: List[str], length: int=None):
+def segment_text_with_seps(text: str, seps: List[str], length: int = None):
     """Segment text with a list of separators.
 
     Notes
@@ -41,7 +41,9 @@ def segment_text_with_seps(text: str, seps: List[str], length: int=None):
             yield (end, len(text))
 
 
-def segment_text_with_hierarchical_seps(text: str, hie_seps: List[List[str]], length: int=None):
+def segment_text_with_hierarchical_seps(
+    text: str, hie_seps: List[List[str]], length: int = None
+):
     """Segment text with hierarchical lists of separators.
 
     Notes
@@ -57,12 +59,14 @@ def segment_text_with_hierarchical_seps(text: str, hie_seps: List[List[str]], le
             if length is not None and end - start <= length:
                 yield (start, end)
             else:
-                for sub_start, sub_end in segment_text_with_hierarchical_seps(text[start:end], hie_seps[1:], length=length):
+                for sub_start, sub_end in segment_text_with_hierarchical_seps(
+                    text[start:end], hie_seps[1:], length=length
+                ):
                     # Add offset to the spans from sub-spans
-                    yield (start+sub_start, start+sub_end)
+                    yield (start + sub_start, start + sub_end)
 
 
-def segment_text_uniformly(text: str, num_spans: int=None, max_span_size: int=None):
+def segment_text_uniformly(text: str, num_spans: int = None, max_span_size: int = None):
     assert not (num_spans is None and max_span_size is None)
 
     if num_spans is None:
@@ -72,6 +76,6 @@ def segment_text_uniformly(text: str, num_spans: int=None, max_span_size: int=No
 
     span_size = len(text) / num_spans
     for i in range(num_spans):
-        start = int(span_size* i    + 0.5)
-        end   = int(span_size*(i+1) + 0.5)
+        start = int(span_size * i + 0.5)
+        end = int(span_size * (i + 1) + 0.5)
         yield (start, end)

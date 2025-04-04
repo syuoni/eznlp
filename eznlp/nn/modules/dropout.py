@@ -3,7 +3,7 @@ import torch
 
 
 class CombinedDropout(torch.nn.Module):
-    def __init__(self, p: float=0.0, word_p: float=0.05, locked_p: float=0.5):
+    def __init__(self, p: float = 0.0, word_p: float = 0.05, locked_p: float = 0.5):
         super().__init__()
         if p > 0:
             self.dropout = torch.nn.Dropout(p)
@@ -13,11 +13,11 @@ class CombinedDropout(torch.nn.Module):
             self.locked_dropout = LockedDropout(locked_p)
 
     def forward(self, x: torch.Tensor):
-        if hasattr(self, 'dropout'):
+        if hasattr(self, "dropout"):
             x = self.dropout(x)
-        if hasattr(self, 'word_dropout'):
+        if hasattr(self, "word_dropout"):
             x = self.word_dropout(x)
-        if hasattr(self, 'locked_dropout'):
+        if hasattr(self, "locked_dropout"):
             x = self.locked_dropout(x)
         return x
 
@@ -31,10 +31,13 @@ class LockedDropout(torch.nn.Module):
     ----------
     https://github.com/flairNLP/flair/blob/master/flair/nn.py
     """
-    def __init__(self, p: float=0.5):
+
+    def __init__(self, p: float = 0.5):
         super().__init__()
         if p < 0 or p >= 1:
-            raise ValueError(f"dropout probability has to be between 0 and 1, but got {p}")
+            raise ValueError(
+                f"dropout probability has to be between 0 and 1, but got {p}"
+            )
         self.p = p
 
     def forward(self, x: torch.Tensor):
@@ -42,7 +45,9 @@ class LockedDropout(torch.nn.Module):
             return x
 
         # x: (batch, step, hidden)
-        m = torch.empty(x.size(0), 1, x.size(2), device=x.device).bernoulli(p=1-self.p)
+        m = torch.empty(x.size(0), 1, x.size(2), device=x.device).bernoulli(
+            p=1 - self.p
+        )
         return x * m / (1 - self.p)
 
     def extra_repr(self):
@@ -58,10 +63,13 @@ class WordDropout(torch.nn.Module):
     ----------
     https://github.com/flairNLP/flair/blob/master/flair/nn.py
     """
-    def __init__(self, p: float=0.05, keep_exp=False):
+
+    def __init__(self, p: float = 0.05, keep_exp=False):
         super().__init__()
         if p < 0 or p >= 1:
-            raise ValueError(f"dropout probability has to be between 0 and 1, but got {p}")
+            raise ValueError(
+                f"dropout probability has to be between 0 and 1, but got {p}"
+            )
         self.p = p
         self.keep_exp = keep_exp
 
@@ -70,7 +78,9 @@ class WordDropout(torch.nn.Module):
             return x
 
         # x: (batch, step, hidden)
-        m = torch.empty(x.size(0), x.size(1), 1, device=x.device).bernoulli(p=1-self.p)
+        m = torch.empty(x.size(0), x.size(1), 1, device=x.device).bernoulli(
+            p=1 - self.p
+        )
         # Do NOT adjust values to keep the expectation, according to flair implementation.
         if self.keep_exp:
             return x * m / (1 - self.p)

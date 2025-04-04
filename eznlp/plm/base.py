@@ -5,17 +5,17 @@ from ..config import Config
 
 
 class PreTrainingConfig(Config):
-    """Configurations for LM pretraining, e.g., masked LM, left-to-right LM.
+    """Configurations for LM pretraining, e.g., masked LM, left-to-right LM."""
 
-    """
     def __init__(self, **kwargs):
-        self.tokenizer: transformers.PreTrainedTokenizer = kwargs.pop('tokenizer')
+        self.tokenizer: transformers.PreTrainedTokenizer = kwargs.pop("tokenizer")
         self.stoi = self.tokenizer.get_vocab()
         self.special_ids = list(set(self.tokenizer.all_special_ids))
-        self.non_special_ids = [idx for idx in self.stoi.values() if idx not in self.special_ids]
+        self.non_special_ids = [
+            idx for idx in self.stoi.values() if idx not in self.special_ids
+        ]
 
         super().__init__(**kwargs)
-
 
     @property
     def cls_id(self):

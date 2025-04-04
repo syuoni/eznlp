@@ -2,7 +2,4 @@
 from .base import PreTrainingConfig
 from .mlm import MaskedLMConfig
 
-__all__ = [
-    'PreTrainingConfig',
-    'MaskedLMConfig'
-]
+__all__ = ["PreTrainingConfig", "MaskedLMConfig"]

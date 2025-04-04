@@ -8,7 +8,15 @@ class Vocab(object):
 
     This class is modified based on `torchtext.vocab.Vocab` of version 0.8.1.
     """
-    def __init__(self, counter: Counter, max_size=None, min_freq=1, specials=('<unk>', '<pad>'), specials_first=True):
+
+    def __init__(
+        self,
+        counter: Counter,
+        max_size=None,
+        min_freq=1,
+        specials=("<unk>", "<pad>"),
+        specials_first=True,
+    ):
         self.freqs = counter
 
         counter = counter.copy()
@@ -38,7 +46,6 @@ class Vocab(object):
 
         self.itos = itos
 
-
     @property
     def itos(self):
         return self._itos
@@ -49,7 +56,7 @@ class Vocab(object):
         self.stoi = {w: i for i, w in enumerate(itos)}
 
     def __getitem__(self, token):
-        return self.stoi.get(token, self.stoi.get('<unk>'))
+        return self.stoi.get(token, self.stoi.get("<unk>"))
 
     def __len__(self):
         return len(self.itos)

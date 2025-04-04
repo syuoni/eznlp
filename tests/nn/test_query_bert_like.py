@@ -2,9 +2,11 @@
 import torch
 import transformers
 
-from eznlp.nn.modules.query_bert_like import (QueryAlbertLayer,
-                                              QueryBertLikeEncoder,
-                                              QueryBertLikeLayer)
+from eznlp.nn.modules.query_bert_like import (
+    QueryAlbertLayer,
+    QueryBertLikeEncoder,
+    QueryBertLikeLayer,
+)
 
 
 def test_query_bert_like_layer(bert_like_with_tokenizer):
@@ -22,7 +24,6 @@ def test_query_bert_like_layer(bert_like_with_tokenizer):
     assert query_bert_like_layer(x, x[:, :5])[0].size(1) == 10
 
 
-
 def test_query_bert_like_encoder(bert_like_with_tokenizer):
     bert_like, tokenizer = bert_like_with_tokenizer
     query_encoder = QueryBertLikeEncoder(bert_like.encoder)
@@ -32,9 +33,16 @@ def test_query_bert_like_encoder(bert_like_with_tokenizer):
     x = bert_like.embeddings(x_ids)
     if isinstance(bert_like, transformers.AlbertModel):
         x = bert_like.encoder.embedding_hidden_mapping_in(x)
-    query_enc_outs = query_encoder(x, bert_outs['hidden_states'], output_query_states=True)
-    assert (query_enc_outs['last_query_state'] - bert_outs['last_hidden_state']).abs().max().item() < 1e-6
-    assert (torch.stack(query_enc_outs['query_states']) - torch.stack(bert_outs['hidden_states'])).abs().max().item() < 1e-6
+    query_enc_outs = query_encoder(
+        x, bert_outs["hidden_states"], output_query_states=True
+    )
+    assert (
+        query_enc_outs["last_query_state"] - bert_outs["last_hidden_state"]
+    ).abs().max().item() < 1e-6
+    assert (
+        torch.stack(query_enc_outs["query_states"])
+        - torch.stack(bert_outs["hidden_states"])
+    ).abs().max().item() < 1e-6
 
-    query_enc_outs = query_encoder(x[:, :5], bert_outs['hidden_states'])
-    assert query_enc_outs['last_query_state'].size(1) == 5
+    query_enc_outs = query_encoder(x[:, :5], bert_outs["hidden_states"])
+    assert query_enc_outs["last_query_state"].size(1) == 5

@@ -23,18 +23,21 @@ class Trainer(object):
     ----------
     [1] https://pytorch.org/tutorials/recipes/recipes/amp_recipe.html
     """
-    def __init__(self,
-                 model: ModelBase,
-                 optimizer: torch.optim.Optimizer=None,
-                 scheduler: torch.optim.lr_scheduler._LRScheduler=None,
-                 schedule_by_step: bool=False,
-                 num_grad_acc_steps: int=None,
-                 device: torch.device=None,
-                 non_blocking: bool=False,
-                 grad_clip: float=None,
-                 use_amp: bool=False):
+
+    def __init__(
+        self,
+        model: ModelBase,
+        optimizer: torch.optim.Optimizer = None,
+        scheduler: torch.optim.lr_scheduler._LRScheduler = None,
+        schedule_by_step: bool = False,
+        num_grad_acc_steps: int = None,
+        device: torch.device = None,
+        non_blocking: bool = False,
+        grad_clip: float = None,
+        use_amp: bool = False,
+    ):
         self.model = model
-        if hasattr(self.model, 'decoder'):
+        if hasattr(self.model, "decoder"):
             self.num_metrics = self.model.decoder.num_metrics
         else:
             self.num_metrics = 0
@@ -44,7 +47,11 @@ class Trainer(object):
             assert not isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau)
         self.scheduler = scheduler
         self.schedule_by_step = schedule_by_step
-        self.num_grad_acc_steps = num_grad_acc_steps if isinstance(num_grad_acc_steps, int) and num_grad_acc_steps > 0 else 1
+        self.num_grad_acc_steps = (
+            num_grad_acc_steps
+            if isinstance(num_grad_acc_steps, int) and num_grad_acc_steps > 0
+            else 1
+        )
         self.num_steps = 0
 
         assert device is not None
@@ -53,7 +60,6 @@ class Trainer(object):
         self.grad_clip = grad_clip
         self.use_amp = use_amp
         self.scaler = torch.amp.GradScaler(enabled=use_amp)
-
 
     def forward_batch(self, batch: Batch):
         """
@@ -72,7 +78,6 @@ class Trainer(object):
             return loss
         else:
             return loss, *self.model.decoder._unsqueezed_decode(batch, **states)
-
 
     def backward_batch(self, loss: torch.Tensor):
         """
@@ -109,14 +114,19 @@ class Trainer(object):
 
         # `scheduler` follows the "nominal" steps
         # `scheduler.step()` before `optimizer.step()` will raise warnings
-        if self.scheduler is not None and self.schedule_by_step and self.num_steps >= self.num_grad_acc_steps:
+        if (
+            self.scheduler is not None
+            and self.schedule_by_step
+            and self.num_steps >= self.num_grad_acc_steps
+        ):
             self.scheduler.step()
 
-
-    def predict(self, dataset: Dataset, batch_size: int=32, beam_size: int=1):
+    def predict(self, dataset: Dataset, batch_size: int = 32, beam_size: int = 1):
         assert self.num_metrics == 1 or beam_size <= 1
 
-        dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, collate_fn=dataset.collate)
+        dataloader = torch.utils.data.DataLoader(
+            dataset, batch_size=batch_size, shuffle=False, collate_fn=dataset.collate
+        )
 
         self.model.eval()
         set_y_pred = [[] for k in range(self.num_metrics)]
@@ -127,7 +137,9 @@ class Trainer(object):
                 # `dataset` may not have ground-truths, so avoid computing loss here
                 if beam_size <= 1:
                     states = self.model.forward2states(batch)
-                    batch_y_pred = self.model.decoder._unsqueezed_decode(batch, **states)
+                    batch_y_pred = self.model.decoder._unsqueezed_decode(
+                        batch, **states
+                    )
                     for k in range(self.num_metrics):
                         set_y_pred[k].extend(batch_y_pred[k])
                 else:
@@ -139,7 +151,6 @@ class Trainer(object):
             return set_y_pred[0]
         else:
             return set_y_pred
-
 
     def train_epoch(self, dataloader: torch.utils.data.DataLoader):
         """
@@ -154,7 +165,7 @@ class Trainer(object):
         epoch_y_pred = [[] for k in range(self.num_metrics)]
         for batch in dataloader:
             batch = batch.to(self.device, non_blocking=self.non_blocking)
-            with torch.amp.autocast(device_type='cuda', enabled=self.use_amp):
+            with torch.amp.autocast(device_type="cuda", enabled=self.use_amp):
                 loss_with_possible_y_pred = self.forward_batch(batch)
 
             if self.num_metrics == 0:
@@ -173,9 +184,9 @@ class Trainer(object):
         if self.num_metrics == 0:
             return numpy.mean(epoch_losses)
         else:
-            return numpy.mean(epoch_losses), *self.model.decoder._unsqueezed_evaluate(epoch_y_gold, epoch_y_pred)
-
-
+            return numpy.mean(epoch_losses), *self.model.decoder._unsqueezed_evaluate(
+                epoch_y_gold, epoch_y_pred
+            )
 
     def eval_epoch(self, dataloader: torch.utils.data.DataLoader):
         self.model.eval()
@@ -203,19 +214,21 @@ class Trainer(object):
         if self.num_metrics == 0:
             return numpy.mean(epoch_losses)
         else:
-            return numpy.mean(epoch_losses), *self.model.decoder._unsqueezed_evaluate(epoch_y_gold, epoch_y_pred)
+            return numpy.mean(epoch_losses), *self.model.decoder._unsqueezed_evaluate(
+                epoch_y_gold, epoch_y_pred
+            )
 
-
-
-    def train_steps(self,
-                    train_loader: torch.utils.data.DataLoader,
-                    dev_loader: torch.utils.data.DataLoader=None,
-                    num_epochs: int=10,
-                    max_steps: int=None,
-                    disp_every_steps: int=None,
-                    eval_every_steps: int=None,
-                    save_callback=None,
-                    save_by_loss: bool=True):
+    def train_steps(
+        self,
+        train_loader: torch.utils.data.DataLoader,
+        dev_loader: torch.utils.data.DataLoader = None,
+        num_epochs: int = 10,
+        max_steps: int = None,
+        disp_every_steps: int = None,
+        eval_every_steps: int = None,
+        save_callback=None,
+        save_by_loss: bool = True,
+    ):
         """Train model by steps with optionally early-stop.
 
         Parameters
@@ -238,10 +251,16 @@ class Trainer(object):
             Whether to save by loss or other metrics. The metric must hold that it is better if higher, e.g., accuracy or F1.
         """
         max_steps = numpy.inf if max_steps is None else max_steps
-        disp_every_steps = len(train_loader) if disp_every_steps is None else disp_every_steps
-        eval_every_steps = disp_every_steps  if eval_every_steps is None else eval_every_steps
+        disp_every_steps = (
+            len(train_loader) if disp_every_steps is None else disp_every_steps
+        )
+        eval_every_steps = (
+            disp_every_steps if eval_every_steps is None else eval_every_steps
+        )
         if eval_every_steps % disp_every_steps != 0:
-            raise ValueError(f"`eval_every_steps` {eval_every_steps} should be multiples of `disp_every_steps` {disp_every_steps}")
+            raise ValueError(
+                f"`eval_every_steps` {eval_every_steps} should be multiples of `disp_every_steps` {disp_every_steps}"
+            )
 
         self.model.train()
 
@@ -258,7 +277,7 @@ class Trainer(object):
         while eidx < num_epochs:
             for batch in train_loader:
                 batch = batch.to(self.device, non_blocking=self.non_blocking)
-                with torch.amp.autocast(device_type='cuda', enabled=self.use_amp):
+                with torch.amp.autocast(device_type="cuda", enabled=self.use_amp):
                     loss_with_possible_y_pred = self.forward_batch(batch)
 
                 if self.num_metrics == 0:
@@ -274,20 +293,28 @@ class Trainer(object):
                 self.backward_batch(loss)
                 train_losses.append(loss.item())
 
-                if (sidx+1) % disp_every_steps == 0:
+                if (sidx + 1) % disp_every_steps == 0:
                     elapsed_secs = int(time.time() - t0)
-                    lrs = [group['lr'] for group in self.optimizer.param_groups]
-                    disp_running_info(eidx=eidx, sidx=sidx, lrs=lrs,
-                                      elapsed_secs=elapsed_secs,
-                                      loss=numpy.mean(train_losses),
-                                      metric=self.model.decoder._unsqueezed_evaluate(train_y_gold, train_y_pred) if self.num_metrics>0 else None,
-                                      partition='train')
+                    lrs = [group["lr"] for group in self.optimizer.param_groups]
+                    disp_running_info(
+                        eidx=eidx,
+                        sidx=sidx,
+                        lrs=lrs,
+                        elapsed_secs=elapsed_secs,
+                        loss=numpy.mean(train_losses),
+                        metric=self.model.decoder._unsqueezed_evaluate(
+                            train_y_gold, train_y_pred
+                        )
+                        if self.num_metrics > 0
+                        else None,
+                        partition="train",
+                    )
                     train_losses = []
                     train_y_gold = [[] for k in range(self.num_metrics)]
                     train_y_pred = [[] for k in range(self.num_metrics)]
                     t0 = time.time()
 
-                if (sidx+1) % eval_every_steps == 0 and dev_loader is not None:
+                if (sidx + 1) % eval_every_steps == 0 and dev_loader is not None:
                     loss_with_possible_metric = self.eval_epoch(dev_loader)
                     if self.num_metrics == 0:
                         dev_loss = loss_with_possible_metric
@@ -295,28 +322,35 @@ class Trainer(object):
                         dev_loss, *dev_metric = loss_with_possible_metric
 
                     elapsed_secs = int(time.time() - t0)
-                    disp_running_info(elapsed_secs=elapsed_secs,
-                                      loss=dev_loss,
-                                      metric=dev_metric if self.num_metrics>0 else None,
-                                      partition='dev')
+                    disp_running_info(
+                        elapsed_secs=elapsed_secs,
+                        loss=dev_loss,
+                        metric=dev_metric if self.num_metrics > 0 else None,
+                        partition="dev",
+                    )
 
                     if dev_loss < best_dev_loss:
                         best_dev_loss = dev_loss
                         if (save_callback is not None) and save_by_loss:
                             save_callback(self.model)
 
-                    if self.num_metrics > 0 and numpy.mean(dev_metric) > best_dev_metric:
+                    if (
+                        self.num_metrics > 0
+                        and numpy.mean(dev_metric) > best_dev_metric
+                    ):
                         best_dev_metric = numpy.mean(dev_metric)
                         if (save_callback is not None) and (not save_by_loss):
                             save_callback(self.model)
 
                     if self.scheduler is not None and not self.schedule_by_step:
-                        if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                        if isinstance(
+                            self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau
+                        ):
                             if save_by_loss:
-                                assert self.scheduler.mode == 'min'
+                                assert self.scheduler.mode == "min"
                                 self.scheduler.step(dev_loss)
                             else:
-                                assert self.scheduler.mode == 'max'
+                                assert self.scheduler.mode == "max"
                                 self.scheduler.step(numpy.mean(dev_metric))
                         else:
                             self.scheduler.step()
@@ -324,13 +358,13 @@ class Trainer(object):
                     self.model.train()
                     t0 = time.time()
 
-                if (sidx+1) % eval_every_steps == 0 and dev_loader is None:
+                if (sidx + 1) % eval_every_steps == 0 and dev_loader is None:
                     # Always save the model if `dev_loader` is None
                     # Save multiple models by accordlingly defining `save_callback`
                     if save_callback is not None:
                         save_callback(self.model)
 
-                if (sidx+1) >= max_steps:
+                if (sidx + 1) >= max_steps:
                     done_training = True
                     break
                 sidx += 1
@@ -340,8 +374,15 @@ class Trainer(object):
             eidx += 1
 
 
-
-def disp_running_info(eidx=None, sidx=None, lrs=None, elapsed_secs=None, loss=None, metric=None, partition='train'):
+def disp_running_info(
+    eidx=None,
+    sidx=None,
+    lrs=None,
+    elapsed_secs=None,
+    loss=None,
+    metric=None,
+    partition="train",
+):
     disp_text = []
     if eidx is not None:
         disp_text.append(f"Epoch: {eidx+1}")
@@ -352,11 +393,11 @@ def disp_running_info(eidx=None, sidx=None, lrs=None, elapsed_secs=None, loss=No
     if len(disp_text) > 0:
         logger.info(" | ".join(disp_text))
 
-    if partition.lower().startswith('train'):
+    if partition.lower().startswith("train"):
         partition = "Train"
-    elif partition.lower().startswith('dev'):
+    elif partition.lower().startswith("dev"):
         partition = "Dev. "
-    elif partition.lower().startswith('test'):
+    elif partition.lower().startswith("test"):
         partition = "Test "
     else:
         raise ValueError("Invalid partition {partition}")
@@ -365,7 +406,9 @@ def disp_running_info(eidx=None, sidx=None, lrs=None, elapsed_secs=None, loss=No
     assert loss is not None
     disp_text.append(f"\t{partition} Loss: {loss:.3f}")
     if metric is not None:
-        disp_text.append(f"{partition} Metrics: " + "/".join(f"{m*100:.2f}%" for m in metric))
+        disp_text.append(
+            f"{partition} Metrics: " + "/".join(f"{m*100:.2f}%" for m in metric)
+        )
     else:
         disp_text.append(f"{partition} PPL: {numpy.exp(loss):.3f}")
     if elapsed_secs is not None:

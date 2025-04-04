@@ -9,26 +9,29 @@ from ..config import Config
 
 class ImageEncoderConfig(Config):
     def __init__(self, **kwargs):
-        self.arch = kwargs.pop('arch', 'ResNet')
-        self.in_channels = kwargs.pop('in_channels', 3)
-        self.transforms: torch.nn.Module = kwargs.pop('transforms')
-        self.backbone: torch.nn.Module = kwargs.pop('backbone')
+        self.arch = kwargs.pop("arch", "ResNet")
+        self.in_channels = kwargs.pop("in_channels", 3)
+        self.transforms: torch.nn.Module = kwargs.pop("transforms")
+        self.backbone: torch.nn.Module = kwargs.pop("backbone")
 
-        if self.arch.lower() == 'vgg':
+        if self.arch.lower() == "vgg":
             self.out_dim = self.backbone.features[-3].out_channels
-        elif self.arch.lower() == 'resnet':
-            last_convs = [conv for key, conv in self.backbone.layer3[-1]._modules.items() if key.startswith('conv')]
+        elif self.arch.lower() == "resnet":
+            last_convs = [
+                conv
+                for key, conv in self.backbone.layer3[-1]._modules.items()
+                if key.startswith("conv")
+            ]
             self.out_dim = last_convs[-1].out_channels
         else:
             raise ValueError(f"Invalid image encoder architecture {self.arch}")
 
-        self.freeze = kwargs.pop('freeze', True)
-        self.use_cache = kwargs.pop('use_cache', True)
+        self.freeze = kwargs.pop("freeze", True)
+        self.use_cache = kwargs.pop("use_cache", True)
 
-        self.height = kwargs.pop('height', 14)
-        self.width = kwargs.pop('width', 14)
+        self.height = kwargs.pop("height", 14)
+        self.width = kwargs.pop("width", 14)
         super().__init__(**kwargs)
-
 
     @property
     def name(self):
@@ -36,9 +39,8 @@ class ImageEncoderConfig(Config):
 
     def __getstate__(self):
         state = self.__dict__.copy()
-        state['backbone'] = None
+        state["backbone"] = None
         return state
-
 
     def _read_image(self, img_path: str):
         img = torchvision.io.read_image(img_path).float().div(255)
@@ -47,29 +49,26 @@ class ImageEncoderConfig(Config):
             img = img.expand(self.in_channels, -1, -1)
         return img
 
-
-    def exemplify(self, entry: dict, training: bool=True):
+    def exemplify(self, entry: dict, training: bool = True):
         if self.use_cache:
-            if 'img' not in entry:
-                entry['img'] = self._read_image(entry['img_path'])
-            img = entry['img']
+            if "img" not in entry:
+                entry["img"] = self._read_image(entry["img_path"])
+            img = entry["img"]
         else:
-            img = self._read_image(entry['img_path'])
+            img = self._read_image(entry["img_path"])
 
         # `transforms` may include random augmentation
-        return {'img': self.transforms(img)}
-
+        return {"img": self.transforms(img)}
 
     def batchify(self, batch_examples: List[dict]):
         # The cached `img` will not be passed to cuda device
-        return {'img': torch.stack([ex['img'] for ex in batch_examples])}
+        return {"img": torch.stack([ex["img"] for ex in batch_examples])}
 
     def instantiate(self):
-        if self.arch.lower() == 'vgg':
+        if self.arch.lower() == "vgg":
             return VGGEncoder(self)
-        elif self.arch.lower() == 'resnet':
+        elif self.arch.lower() == "resnet":
             return ResNetEncoder(self)
-
 
 
 class ImageEncoder(torch.nn.Module):
@@ -93,7 +92,6 @@ class ImageEncoder(torch.nn.Module):
         return self.pool(self._forward_backbone(x))
 
 
-
 class VGGEncoder(ImageEncoder):
     def __init__(self, config: ImageEncoderConfig):
         super().__init__(config)
@@ -104,7 +102,6 @@ class VGGEncoder(ImageEncoder):
         # return self.backbone.features(x)
         # (224, 224) -> (14, 14)
         return self.backbone.features[:-1](x)
-
 
 
 class ResNetEncoder(ImageEncoder):

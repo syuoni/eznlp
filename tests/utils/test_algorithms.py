@@ -13,8 +13,7 @@ def test_find_ascending(v):
 
     assert find == (v in list(range(N)))
     assert len(sequence) == N + 1
-    assert all(sequence[i] <= sequence[i+1] for i in range(N))
-
+    assert all(sequence[i] <= sequence[i + 1] for i in range(N))
 
 
 def test_assign_consecutive_to_buckets1():
@@ -28,7 +27,7 @@ def test_assign_consecutive_to_buckets1():
 
 def test_assign_consecutive_to_buckets2():
     N = 10
-    values = list(range(1, N+1))
+    values = list(range(1, N + 1))
     buckets = assign_consecutive_to_buckets(values, 7)
     assert buckets == [4, 1, 1, 1, 1, 1, 1]
     buckets = assign_consecutive_to_buckets(values, 5)

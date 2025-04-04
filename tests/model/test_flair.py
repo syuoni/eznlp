@@ -10,32 +10,43 @@ from eznlp.training import count_params
 
 
 @pytest.mark.skip(reason="Flair is not supported in the current version")
-@pytest.mark.parametrize("agg_mode", ['last', 'mean'])
+@pytest.mark.parametrize("agg_mode", ["last", "mean"])
 def test_flair_embeddings(agg_mode, flair_lm):
     import flair
-    batch_tokenized_text = [["I", "like", "it", "."],
-                            ["Do", "you", "love", "me", "?"],
-                            ["Sure", "!"],
-                            ["Future", "it", "out"]]
+
+    batch_tokenized_text = [
+        ["I", "like", "it", "."],
+        ["Do", "you", "love", "me", "?"],
+        ["Sure", "!"],
+        ["Future", "it", "out"],
+    ]
 
     flair_emb = flair.embeddings.FlairEmbeddings(flair_lm)
-    flair_sentences = [flair.data.Sentence(" ".join(sent), use_tokenizer=False) for sent in batch_tokenized_text]
+    flair_sentences = [
+        flair.data.Sentence(" ".join(sent), use_tokenizer=False)
+        for sent in batch_tokenized_text
+    ]
     flair_emb.embed(flair_sentences)
-    expected = torch.nn.utils.rnn.pad_sequence([torch.stack([tok.embedding for tok in sent]) for sent in flair_sentences],
-                                               batch_first=True,
-                                               padding_value=0.0)
+    expected = torch.nn.utils.rnn.pad_sequence(
+        [torch.stack([tok.embedding for tok in sent]) for sent in flair_sentences],
+        batch_first=True,
+        padding_value=0.0,
+    )
 
     flair_config = FlairConfig(flair_lm=flair_lm, agg_mode=agg_mode)
     flair_embedder = flair_config.instantiate()
 
-
-    batch_tokens = [TokenSequence.from_tokenized_text(tokenized_text) for tokenized_text in batch_tokenized_text]
-    batch_flair_ins = flair_config.batchify([flair_config.exemplify(tokens) for tokens in batch_tokens])
-    if agg_mode.lower() == 'last':
+    batch_tokens = [
+        TokenSequence.from_tokenized_text(tokenized_text)
+        for tokenized_text in batch_tokenized_text
+    ]
+    batch_flair_ins = flair_config.batchify(
+        [flair_config.exemplify(tokens) for tokens in batch_tokens]
+    )
+    if agg_mode.lower() == "last":
         assert (flair_embedder(**batch_flair_ins) == expected).all().item()
     else:
         assert (flair_embedder(**batch_flair_ins) != expected).any().item()
-
 
 
 @pytest.mark.skip(reason="Flair is not supported in the current version")
@@ -51,7 +62,6 @@ def test_trainble_config(freeze, use_gamma, flair_lm):
     if use_gamma:
         expected_num_trainable_params += 1
     assert count_params(flair_embedder) == expected_num_trainable_params
-
 
 
 @pytest.mark.skip(reason="Flair is not supported in the current version")

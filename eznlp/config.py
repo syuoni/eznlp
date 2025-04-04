@@ -8,13 +8,13 @@ import torch
 logger = logging.getLogger(__name__)
 
 
-def _add_indents(config_str: str, num_spaces: int=2):
-    lines = config_str.split('\n')
+def _add_indents(config_str: str, num_spaces: int = 2):
+    lines = config_str.split("\n")
     if len(lines) == 1:
         return config_str
     else:
-        lines = [lines[0]] + [' '*num_spaces + line for line in lines[1:]]
-        return '\n'.join(lines)
+        lines = [lines[0]] + [" " * num_spaces + line for line in lines[1:]]
+        return "\n".join(lines)
 
 
 class Config(object):
@@ -26,12 +26,14 @@ class Config(object):
     `Config` are NOT suggested to be registered as attribute of the corresponding model or assembly.
     """
 
-    _name_sep = '-'
+    _name_sep = "-"
 
     def __init__(self, **kwargs):
         if len(kwargs) > 0:
-            logger.warning(f"Some configurations are set without checking: {kwargs}, "
-                           "which may be never used.")
+            logger.warning(
+                f"Some configurations are set without checking: {kwargs}, "
+                "which may be never used."
+            )
             for key, attr in kwargs.items():
                 setattr(self, key, attr)
 
@@ -52,15 +54,17 @@ class Config(object):
         return self._repr_non_config_attrs(self.__dict__)
 
     def _repr_non_config_attrs(self, attr_dict: dict):
-        main_str = self.__class__.__name__ + '('
-        main_str += ', '.join(f"{key}={attr}" for key, attr in attr_dict.items())
-        main_str += ')'
+        main_str = self.__class__.__name__ + "("
+        main_str += ", ".join(f"{key}={attr}" for key, attr in attr_dict.items())
+        main_str += ")"
         return main_str
 
     def _repr_config_attrs(self, attr_dict: dict):
-        main_str = self.__class__.__name__ + '(\n'
-        main_str += '\n'.join(f"  ({key}): {_add_indents(repr(attr))}" for key, attr in attr_dict.items())
-        main_str += '\n)'
+        main_str = self.__class__.__name__ + "(\n"
+        main_str += "\n".join(
+            f"  ({key}): {_add_indents(repr(attr))}" for key, attr in attr_dict.items()
+        )
+        main_str += "\n)"
         return main_str
 
     def instantiate(self):
@@ -68,7 +72,7 @@ class Config(object):
 
 
 class ConfigList(Config):
-    def __init__(self, config_list: List[Config]=None):
+    def __init__(self, config_list: List[Config] = None):
         if config_list is None:
             config_list = []
         elif not isinstance(config_list, list):
@@ -76,7 +80,6 @@ class ConfigList(Config):
 
         assert all(isinstance(c, Config) for c in config_list)
         self.config_list = config_list
-
 
     @property
     def valid(self):
@@ -116,7 +119,7 @@ class ConfigList(Config):
 
 
 class ConfigDict(Config):
-    def __init__(self, config_dict: Mapping[str, Config]=None):
+    def __init__(self, config_dict: Mapping[str, Config] = None):
         if config_dict is None:
             config_dict = {}
         # NOTE: `torch.nn.ModuleDict` is an **ordered** dictionary
@@ -126,10 +129,11 @@ class ConfigDict(Config):
         assert all(isinstance(c, Config) for c in config_dict.values())
         self.config_dict = config_dict
 
-
     @property
     def valid(self):
-        return len(self.config_dict) > 0 and all(c.valid for c in self.config_dict.values())
+        return len(self.config_dict) > 0 and all(
+            c.valid for c in self.config_dict.values()
+        )
 
     @property
     def name(self):
@@ -160,7 +164,9 @@ class ConfigDict(Config):
 
     def instantiate(self):
         # NOTE: The order should be consistent here and in the corresponding `forward`.
-        return torch.nn.ModuleDict([(k, c.instantiate()) for k, c in self.config_dict.items()])
+        return torch.nn.ModuleDict(
+            [(k, c.instantiate()) for k, c in self.config_dict.items()]
+        )
 
     def __repr__(self):
         return self._repr_config_attrs(self.config_dict)

@@ -3,8 +3,7 @@ import torch
 
 
 def pad_seqs(seqs, padding_value=0.0, length=None):
-    """Pad a list of list, making it prepared as a tensor.
-    """
+    """Pad a list of list, making it prepared as a tensor."""
     # Alternative: `torch.nn.utils.rnn.pad_sequence` which pads a list of tensors.
     maxlen = max(len(s) for s in seqs)
     length = maxlen if length is None else max(length, maxlen)
@@ -16,7 +15,7 @@ def pad_seqs(seqs, padding_value=0.0, length=None):
         # Each sequence is a sequence of indexes
         padding_item = padding_value
 
-    return [s + [padding_item for _ in range(length-len(s))] for s in seqs]
+    return [s + [padding_item for _ in range(length - len(s))] for s in seqs]
 
 
 def unpad_seqs(seqs, seq_lens):
@@ -33,19 +32,18 @@ def unpad_seqs(seqs, seq_lens):
     return [seq[:seq_len] for seq, seq_len in zip(seqs.cpu().tolist(), seq_lens)]
 
 
-
 def _nonlinearity2activation(nonlinearity: str, **kwargs):
-    if nonlinearity.lower() in ('linear', 'identidy'):
+    if nonlinearity.lower() in ("linear", "identidy"):
         return torch.nn.Identidy()
-    elif nonlinearity.lower() == 'sigmoid':
+    elif nonlinearity.lower() == "sigmoid":
         return torch.nn.Sigmoid()
-    elif nonlinearity.lower() == 'tanh':
+    elif nonlinearity.lower() == "tanh":
         return torch.nn.Tanh()
-    elif nonlinearity.lower() == 'relu':
+    elif nonlinearity.lower() == "relu":
         return torch.nn.ReLU()
-    elif nonlinearity.lower() in ('leaky_relu', 'leakyrelu'):
+    elif nonlinearity.lower() in ("leaky_relu", "leakyrelu"):
         return torch.nn.LeakyReLU(**kwargs)
-    elif nonlinearity.lower() == 'glu':
+    elif nonlinearity.lower() == "glu":
         return torch.nn.GLU(**kwargs)
     else:
         raise ValueError(f"Invalid nonlinearity {nonlinearity}")
