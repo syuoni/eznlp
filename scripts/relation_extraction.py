@@ -417,7 +417,7 @@ if __name__ == "__main__":
     if len(args.train_chunks_pred_path) > 0:
         logger.info("Jackknifed chunks are provided, using merged chunks for training")
         train_data_pred = torch.load(
-            f"{args.train_chunks_pred_path}/train.data.pred.pth"
+            f"{args.train_chunks_pred_path}/train.data.pred.pth", weights_only=False
         )
         logger.info("Evaluating jackknifed chunks on train-set")
         set_chunks_pred = [entry["chunks_pred"] for entry in train_data_pred]
@@ -432,7 +432,9 @@ if __name__ == "__main__":
 
     if len(args.test_chunks_pred_path) > 0:
         logger.info("Predicted chunks are provided, performing end-to-end evaluation")
-        dev_data_pred = torch.load(f"{args.test_chunks_pred_path}/dev.data.pred.pth")
+        dev_data_pred = torch.load(
+            f"{args.test_chunks_pred_path}/dev.data.pred.pth", weights_only=False
+        )
         logger.info("Evaluating predicted chunks on dev-set")
         set_chunks_pred = [entry["chunks_pred"] for entry in dev_data_pred]
         set_chunks_gold = [entry["chunks"] for entry in dev_data]
@@ -440,7 +442,9 @@ if __name__ == "__main__":
         for entry, entry_pred in zip(dev_data, dev_data_pred):
             entry["chunks_pred"] = entry_pred["chunks_pred"]
 
-        test_data_pred = torch.load(f"{args.test_chunks_pred_path}/test.data.pred.pth")
+        test_data_pred = torch.load(
+            f"{args.test_chunks_pred_path}/test.data.pred.pth", weights_only=False
+        )
         logger.info("Evaluating predicted chunks on test-set")
         set_chunks_pred = [entry["chunks_pred"] for entry in test_data_pred]
         set_chunks_gold = [entry["chunks"] for entry in test_data]
@@ -536,7 +540,9 @@ if __name__ == "__main__":
         ck_model_file_path = glob.glob(f"{args.bert_load_from_ck_path}/*-config.pth")[
             0
         ].replace("-config", "")
-        ck_model = torch.load(ck_model_file_path, map_location="cpu")
+        ck_model = torch.load(
+            ck_model_file_path, map_location="cpu", weights_only=False
+        )
         bert_like = copy.deepcopy(ck_model.bert_like.bert_like)
         config.bert_like.bert_like = bert_like
         config.masked_span_bert_like.bert_like = bert_like
@@ -581,7 +587,9 @@ if __name__ == "__main__":
     )
 
     logger.info(header_format("Evaluating", sep="-"))
-    model = torch.load(f"{save_path}/{config.name}.pth", map_location=device)
+    model = torch.load(
+        f"{save_path}/{config.name}.pth", map_location=device, weights_only=False
+    )
     trainer = Trainer(model, device=device)
 
     logger.info("Evaluating on dev-set")

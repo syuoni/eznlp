@@ -113,10 +113,14 @@ def collect_I2T_assembly_config(args: argparse.Namespace):
 
     if args.img_arch.lower() == "vgg":
         backbone = torchvision.models.vgg19(pretrained=False)
-        backbone.load_state_dict(torch.load("assets/vgg/vgg19-dcbb9e9d.pth"))
+        backbone.load_state_dict(
+            torch.load("assets/vgg/vgg19-dcbb9e9d.pth", weights_only=False)
+        )
     else:
         backbone = torchvision.models.resnet101(pretrained=False)
-        backbone.load_state_dict(torch.load("assets/resnet/resnet101-5d3b4d8f.pth"))
+        backbone.load_state_dict(
+            torch.load("assets/resnet/resnet101-5d3b4d8f.pth", weights_only=False)
+        )
 
     # https://pytorch.org/vision/stable/models.html
     trans = torch.nn.Sequential(
@@ -253,7 +257,9 @@ if __name__ == "__main__":
     )
 
     logger.info(header_format("Evaluating", sep="-"))
-    model = torch.load(f"{save_path}/{config.name}.pth", map_location=device)
+    model = torch.load(
+        f"{save_path}/{config.name}.pth", map_location=device, weights_only=False
+    )
     trainer = Trainer(model, device=device)
 
     logger.info("Evaluating on dev-set")

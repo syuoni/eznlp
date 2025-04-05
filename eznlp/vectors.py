@@ -128,7 +128,7 @@ class Vectors(object):
     @staticmethod
     def load_from_cache(path: str):
         logger.info(f"Loading vectors from {path}.pt")
-        itos, vectors = torch.load(f"{path}.pt")
+        itos, vectors = torch.load(f"{path}.pt", weights_only=False)
         return itos, vectors
 
     @classmethod
