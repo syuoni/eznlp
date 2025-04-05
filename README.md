@@ -1,6 +1,6 @@
 # Easy Natural Language Processing
 
-Overparameterized neural networks are lazy (Chizat et al., 2019), so we design structures and objectives that can be easily optimized.
+Overparameterized neural networks are often described as lazy (Chizat et al., 2019), which motivates us to design architectures and objectives that are easier to optimize.
 
 `eznlp` is a `PyTorch`-based package for neural natural language processing, currently supporting the following tasks:
 
@@ -11,60 +11,59 @@ Overparameterized neural networks are lazy (Chizat et al., 2019), so we design s
 * Machine Translation
 * Image Captioning
 
-This repository also maintains the code of our papers:
-* Check this [link](docs/deep-span.md) for "Deep Span Representations for Named Entity Recognition" accepted to *Findings of ACL 2023*.
-* Check this [link](docs/boundary-smoothing.md) for "Boundary Smoothing for Named Entity Recognition" in *ACL 2022*.
-* Check the [annotation scheme](publications/framework/scheme.pdf) and [HwaMei-500](publications/framework/HwaMei-500.md) dataset described in "A Unified Framework of Medical Information Annotation and Extraction for Chinese Clinical Text" on *Artificial Intelligence in Medicine*.
-
+This repository also contains code for our published papers:
+* See [this link](docs/deep-span.md) for *Deep Span Representations for Named Entity Recognition*, presented at *Findings of ACL 2023*.
+* See [this link](docs/boundary-smoothing.md) for *Boundary Smoothing for Named Entity Recognition*, presented at *ACL 2022*.
+* See the [annotation scheme](publications/framework/scheme.pdf) and [HwaMei-500](publications/framework/HwaMei-500.md) dataset described in *A Unified Framework of Medical Information Annotation and Extraction for Chinese Clinical Text* published in *Artificial Intelligence in Medicine*.
 
 ## Installation
-### Create an environment
+
+### Create an Environment
+
+We recommend using Docker. The latest tested image is `pytorch/pytorch:2.6.0-cuda12.6-cudnn9-devel`.
 ```bash
-$ conda create --name eznlp python=3.8
+$ docker run --rm -it --gpus=all --mount type=bind,source=${PWD},target=/workspace/eznlp --workdir /workspace/eznlp pytorch/pytorch:2.6.0-cuda12.6-cudnn9-devel
+```
+
+Alternatively, you can create a virtual environment. For example:
+```bash
+$ conda create --name eznlp python=3.11
 $ conda activate eznlp
 ```
 
-### Install dependencies
-```bash
-$ conda install numpy=1.18.5 pandas=1.0.5 xlrd=1.2.0 matplotlib=3.2.2
-$ conda install pytorch=1.7.1 torchvision=0.8.2 torchtext=0.8.1 {cpuonly|cudatoolkit=10.2|cudatoolkit=11.0} -c pytorch
-$ pip install -r requirements.txt
-```
-
 ### Install `eznlp`
-* From source (recommended)
+
+If you wish to use `eznlp` as a package, install it from PyPI:
 ```bash
-$ python setup.py sdist
-$ pip install dist/eznlp-<version>.tar.gz --no-deps
+$ pip install eznlp
 ```
 
-* With `pip`
+If you plan to develop on this project, install it in editable mode:
 ```bash
-$ pip install eznlp --no-deps
+$ pip install -e .
 ```
-
 
 ## Running the Code
-### Text classification
+
+### Text Classification
 ```bash
 $ python scripts/text_classification.py --dataset <dataset> [options]
 ```
 
-### Entity recognition
+### Entity Recognition
 ```bash
 $ python scripts/entity_recognition.py --dataset <dataset> [options]
 ```
 
-### Relation extraction
+### Relation Extraction
 ```bash
 $ python scripts/relation_extraction.py --dataset <dataset> [options]
 ```
 
-### Attribute extraction
+### Attribute Extraction
 ```bash
 $ python scripts/attribute_extraction.py --dataset <dataset> [options]
 ```
-
 
 ## Citation
 If you find our code useful, please cite the following papers:
