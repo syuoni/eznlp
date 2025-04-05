@@ -9,14 +9,13 @@
       "remoteUser": "enweiz",
       "workspaceFolder": "/workspace/eznlp",
       "mounts": [
-        "source=${localWorkspaceFolder}/..,target=${containerWorkspaceFolder}/..,type=bind,consistency=consistent",
+        "source=${localWorkspaceFolder},target=${containerWorkspaceFolder},type=bind,consistency=consistent",
       ],
       "customizations": {
         "vscode": {
           "extensions": [
             // Python
             "ms-python.python",
-            "eeyore.yapf",
             // "GitHub.vscode-pull-request-github"
             "eamodio.gitlens"
           ]

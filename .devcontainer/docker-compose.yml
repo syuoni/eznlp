@@ -23,7 +23,6 @@ services:
           devices:
             - driver: nvidia
               count: "all"
-              # device_ids: ['0', '5', '6', '7']
               capabilities: [gpu]
 
     # Overrides default command so things don't shut down after the process ends.
