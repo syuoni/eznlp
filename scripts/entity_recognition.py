@@ -809,7 +809,9 @@ if __name__ == "__main__":
     # torch.save(model, f"{save_path}/{config.name}.fv.pth")
 
     logger.info(header_format("Evaluating", sep="-"))
-    model = torch.load(f"{save_path}/{config.name}.pth", map_location=device)
+    model = torch.load(
+        f"{save_path}/{config.name}.pth", map_location=device, weights_only=False
+    )
     trainer = Trainer(model, device=device)
 
     if args.remove_nested:

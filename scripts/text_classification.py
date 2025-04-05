@@ -284,7 +284,9 @@ if __name__ == "__main__":
     )
 
     logger.info(header_format("Evaluating", sep="-"))
-    model = torch.load(f"{save_path}/{config.name}.pth", map_location=device)
+    model = torch.load(
+        f"{save_path}/{config.name}.pth", map_location=device, weights_only=False
+    )
     trainer = Trainer(model, device=device)
 
     logger.info("Evaluating on dev-set")
